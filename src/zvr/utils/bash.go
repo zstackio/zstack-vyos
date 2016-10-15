@@ -16,7 +16,7 @@ type Bash struct {
 }
 
 func (b *Bash) build() {
-	if (b.Command == nil) {
+	if (b.Command == "") {
 		panic(errors.New("Command cannot be nil"))
 	}
 
@@ -44,14 +44,16 @@ func (b *Bash) Run() error {
 	b.build()
 	ret, so, se := b.RunWithReturn()
 	if ret != 0 {
-		return errors.New(fmt.Errorf("failed to exectue the command[%s]\nreturn code:%d\nstdout:%s\nstderr:%s\n",
-			b.Command, ret, so, se))
+		return fmt.Errorf("failed to exectue the command[%s]\nreturn code:%d\nstdout:%s\nstderr:%s\n",
+			b.Command, ret, so, se)
 	}
 
 	return nil
 }
 
 func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string) {
+	b.build()
+
 	var so, se bytes.Buffer
 	cmd := exec.Command("bash", "-c", b.Command)
 	cmd.Stdout = &so
@@ -74,6 +76,10 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string) {
 	stderr = string(se.Bytes())
 
 	return
+}
+
+func NewBash() *Bash {
+	return &Bash{}
 }
 
 

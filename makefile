@@ -9,17 +9,10 @@ BUILD_DIR=build/out/zvr
 TARGET_DIR=target/package/zvr
 SOURCE_DIR=$(shell pwd)/src/zvr
 
-.PHONY: all clean build package
-all:
-	$(MAKE) -C $(SOURCE_DIR)
+LIB_DIRS=$(shell cd src; ls -d zvr/*/; cd - > /dev/null)
 
-build: all
-	@mkdir -p $(BUILD_DIR)
-	cp -f $(SOURCE_DIR)/zvr.out $(BUILD_DIR)/zvr
+debug:
+	echo $(LIB_DIRS)
 
-clean:
-	$(MAKE) -C src/zvr/ clean
-	$(RM) -r $(BUILD_DIR) $(TARGET_DIR)
-
-package: build
-	$(GO) run package.go -conf package-config.json
+IDE:
+	$(GO) install $(LIB_DIRS)
