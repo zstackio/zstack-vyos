@@ -10,6 +10,10 @@ TARGET_DIR=target/package/zvr
 SOURCE_DIR=$(shell pwd)/src/zvr
 
 LIB_DIRS=$(shell cd src; ls -d zvr/*/; cd - > /dev/null)
+DEPS=github.com/Sirupsen/logrus github.com/pkg/errors
+
+deps:
+	$(GO) get $(DEPS)
 
 debug:
 	echo $(LIB_DIRS)

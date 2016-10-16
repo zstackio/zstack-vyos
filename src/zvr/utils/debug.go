@@ -1,6 +1,10 @@
 package utils
 
-import "fmt"
+import (
+	"fmt"
+	log "github.com/Sirupsen/logrus"
+	"github.com/pkg/errors"
+)
 
 func Assert(expression bool, msg string)  {
 	if !expression {
@@ -10,8 +14,9 @@ func Assert(expression bool, msg string)  {
 
 func LogError(args...interface{})  {
 	for _, arg := range args {
-		if arg.(error) {
-			//TODO: logging error here
+		if e, ok := arg.(error); ok {
+			err := errors.Wrap(e, "UNHANDLED ERROR, PLEASE REPORT A BUG TO US")
+			log.Warn(fmt.Sprintf("%+v\n", err))
 		}
 	}
 }

@@ -8,11 +8,13 @@ import (
 	"os"
 	"time"
 	"encoding/json"
+	log "github.com/Sirupsen/logrus"
 )
 
 type commandHandlerWrap struct {
 	path string
 	handler http.HandlerFunc
+	async bool
 }
 
 type options struct {
@@ -28,6 +30,14 @@ type ReplyHeader struct {
 }
 
 type CommandContext struct {
+	responseWriter http.ResponseWriter
+	request *http.Request
+}
+
+func (ctx *CommandContext) GetCommand(cmd interface{}) {
+	if err := utils.JsonDecodeHttpRequest(ctx.request, cmd); err != nil {
+		panic(nil)
+	}
 }
 
 type CommandHandler interface {
@@ -42,6 +52,11 @@ var (
 	interceptors map[string][]HttpInterceptor = make(map[string][]HttpInterceptor, 0)
 )
 
+const (
+	CALLBACK_URL = "callbackurl"
+	TASK_UUID = "taskuuid"
+)
+
 func RegisterHttpInterceptor(path string, ic HttpInterceptor)  {
 	if ics, ok := interceptors[path]; !ok {
 		ics := make([]HttpInterceptor, 0)
@@ -52,7 +67,15 @@ func RegisterHttpInterceptor(path string, ic HttpInterceptor)  {
 	}
 }
 
-func RegisterCommandHandler(path string, chandler CommandHandler) {
+func RegisterSyncCommandHandler(path string, chandler CommandHandler)  {
+	registerCommandHandler(path, chandler, false)
+}
+
+func RegisterAsyncCommandHandler(path string, chandler CommandHandler) {
+	registerCommandHandler(path, chandler, true)
+}
+
+func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 	utils.Assert(path != nil, "path cannot be nil")
 	utils.Assert(chandler != nil, "chandler cannot be nil")
 
@@ -62,11 +85,41 @@ func RegisterCommandHandler(path string, chandler CommandHandler) {
 
 	w := &commandHandlerWrap{
 		path: path,
+		async: async,
 	}
 
 	inner := func(w http.ResponseWriter, req *http.Request) {
-		ctx := &CommandContext{}
-		chandler.handleCommand(ctx)
+		ctx := &CommandContext{
+			responseWriter: w,
+			request: req,
+		}
+
+		if !async {
+			rsp := chandler.handleCommand(ctx)
+			if rsp != nil {
+				b, err := json.Marshal(&rsp)
+				if err != nil {
+					panic(err)
+				}
+
+				w.WriteHeader(http.StatusOK)
+				utils.LogError(fmt.Fprint(w, string(b)))
+			} else {
+				w.WriteHeader(http.StatusOK)
+				utils.LogError(fmt.Fprint(w, ""))
+			}
+
+			return
+		}
+
+		callbackURL := req.Header.Get(CALLBACK_URL)
+		taskUuid := req.Header.Get(TASK_UUID)
+		utils.Retry(func() {
+			rsp := chandler.handleCommand(ctx)
+			return utils.HttpPostForObject(callbackURL, map[string]string{
+				TASK_UUID: taskUuid,
+			}, rsp, nil)
+		}, 15, 1)
 	}
 
 	for _, ics := range interceptors {
@@ -85,7 +138,7 @@ func RegisterCommandHandler(path string, chandler CommandHandler) {
 
 				body, err := json.Marshal(reply)
 				if err != nil {
-					//TODO: logging error
+					utils.LogError(err)
 					w.WriteHeader(http.StatusInternalServerError)
 					utils.LogError(fmt.Fprintf(w, fmt.Sprintf("%s", err)))
 					return
@@ -127,6 +180,44 @@ func Start()  {
 }
 
 func dispatch(w http.ResponseWriter, req *http.Request) {
+	path := req.URL.Path
+	wrap, ok := commandHandlers[path]
+	if !ok {
+		log.Warnf("no plugin registered the path[%s], drop it", path)
+		w.WriteHeader(http.StatusNotFound)
+		utils.LogError(fmt.Fprintf(w, "no plugin registered the path[%s]", path))
+		return
+	}
+
+	if !wrap.async {
+		wrap.handler(w, req)
+		return
+	}
+
+	callbackURL := req.Header.Get(CALLBACK_URL)
+	if callbackURL == "" {
+		err := fmt.Sprintf("no '%s' found in the HTTP header but the plugin registers the path[%s]" +
+				" as an async command", CALLBACK_URL, path)
+		log.Warn(err)
+		w.WriteHeader(http.StatusBadRequest)
+		utils.LogError(fmt.Fprint(w, err))
+		return
+	}
+
+	taskUuid := req.Header.Get(TASK_UUID)
+	if taskUuid == "" {
+		err := fmt.Sprintf("no '%s' found in the HTTP header but the plugin registers the path[%s]" +
+				" as an async command", taskUuid, path)
+		log.Warn(err)
+		w.WriteHeader(http.StatusBadRequest)
+		utils.LogError(fmt.Fprint(w, err))
+		return
+	}
+
+	// for async command, reply first and then handle
+	w.WriteHeader(http.StatusOK)
+	utils.LogError(fmt.Fprint(w, ""))
+	wrap.handler(w, req)
 }
 
 func startServer() {
