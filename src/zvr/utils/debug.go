@@ -8,7 +8,7 @@ import (
 
 func Assert(expression bool, msg string)  {
 	if !expression {
-		panic(fmt.Errorf(msg))
+		panic(errors.New(msg))
 	}
 }
 

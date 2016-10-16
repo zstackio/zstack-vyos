@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"bytes"
 	"io/ioutil"
+	"github.com/Sirupsen/logrus"
 )
 
 func HttpPostWithoutHeaders(url string, obj interface{}) ([]byte, error) {
@@ -37,9 +38,16 @@ func HttpPostForObjectWithoutHeaders(url string, obj interface{}, retObj interfa
 }
 
 func HttpPost(url string, headers map[string]string, obj interface{}) ([]byte, error) {
-	b, err := json.Marshal(obj)
-	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("unable to do HTTP post to %v", url))
+	var b []byte
+	var err error
+
+	if (obj != nil) {
+		b, err = json.Marshal(obj)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("unable to do HTTP post to %v", url))
+		}
+	} else {
+		b = []byte("")
 	}
 
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(b))
@@ -54,6 +62,7 @@ func HttpPost(url string, headers map[string]string, obj interface{}) ([]byte, e
 	}
 
 	c := &http.Client{}
+	logrus.Debugf("post to %s, body: %s", url, string(b))
 	rsp, err := c.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("unable to do HTTP post to %v", url))

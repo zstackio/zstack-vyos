@@ -36,18 +36,16 @@ type CommandContext struct {
 
 func (ctx *CommandContext) GetCommand(cmd interface{}) {
 	if err := utils.JsonDecodeHttpRequest(ctx.request, cmd); err != nil {
-		panic(nil)
+		panic(err)
 	}
 }
 
-type CommandHandler interface {
-	handleCommand(ctx *CommandContext) interface{}
-}
+type CommandHandler func(ctx *CommandContext) interface{}
 
 type HttpInterceptor func(http.HandlerFunc) http.HandlerFunc
 
 var (
-	commandHandlers map[string]commandHandlerWrap = make(map[string]commandHandlerWrap)
+	commandHandlers map[string]*commandHandlerWrap = make(map[string]*commandHandlerWrap)
 	commandOptions = &options{}
 	interceptors map[string][]HttpInterceptor = make(map[string][]HttpInterceptor, 0)
 )
@@ -58,13 +56,13 @@ const (
 )
 
 func RegisterHttpInterceptor(path string, ic HttpInterceptor)  {
-	if ics, ok := interceptors[path]; !ok {
-		ics := make([]HttpInterceptor, 0)
-		append(ics, ic)
-		interceptors[path] = ics
-	} else {
-		append(ics, ic)
+	ics, ok := interceptors[path]
+	if !ok {
+		ics = make([]HttpInterceptor, 0)
 	}
+
+	ics = append(ics, ic)
+	interceptors[path] = ics
 }
 
 func RegisterSyncCommandHandler(path string, chandler CommandHandler)  {
@@ -76,7 +74,7 @@ func RegisterAsyncCommandHandler(path string, chandler CommandHandler) {
 }
 
 func registerCommandHandler(path string, chandler CommandHandler, async bool) {
-	utils.Assert(path != nil, "path cannot be nil")
+	utils.Assert(path != "", "path cannot be nil")
 	utils.Assert(chandler != nil, "chandler cannot be nil")
 
 	if _, ok := commandHandlers[path]; ok {
@@ -95,31 +93,29 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 		}
 
 		if !async {
-			rsp := chandler.handleCommand(ctx)
+			rsp := chandler(ctx)
+			body := ""
+
 			if rsp != nil {
 				b, err := json.Marshal(&rsp)
 				if err != nil {
 					panic(err)
 				}
-
-				w.WriteHeader(http.StatusOK)
-				utils.LogError(fmt.Fprint(w, string(b)))
-			} else {
-				w.WriteHeader(http.StatusOK)
-				utils.LogError(fmt.Fprint(w, ""))
+				body = string(b)
 			}
 
-			return
+			w.WriteHeader(http.StatusOK)
+			utils.LogError(fmt.Fprint(w, body))
+		} else {
+			callbackURL := req.Header.Get(CALLBACK_URL)
+			taskUuid := req.Header.Get(TASK_UUID)
+			rsp := chandler(ctx)
+			utils.Retry(func() error {
+				return utils.HttpPostForObject(callbackURL, map[string]string{
+					TASK_UUID: taskUuid,
+				}, rsp, nil)
+			}, 15, 1)
 		}
-
-		callbackURL := req.Header.Get(CALLBACK_URL)
-		taskUuid := req.Header.Get(TASK_UUID)
-		utils.Retry(func() {
-			rsp := chandler.handleCommand(ctx)
-			return utils.HttpPostForObject(callbackURL, map[string]string{
-				TASK_UUID: taskUuid,
-			}, rsp, nil)
-		}, 15, 1)
 	}
 
 	for _, ics := range interceptors {
@@ -135,6 +131,8 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 					Success: false,
 					Error: fmt.Sprintf("%v", err),
 				}
+
+				log.Warnf("command of the path[%s] fails, %v", path, err)
 
 				body, err := json.Marshal(reply)
 				if err != nil {
@@ -152,6 +150,7 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 		inner(w, req)
 	}
 
+	log.Debugf("a command path[%s] is registered", path)
 	commandHandlers[path] = w
 }
 
@@ -164,8 +163,8 @@ func abortOnWrongOption(msg string) {
 func parseCommandOptions()  {
 	flag.StringVar(&commandOptions.ip, "ip", "", "The IP address the server listens on")
 	flag.UintVar(&commandOptions.port, "port", 7272, "The port the server listens on")
-	flag.UintVar(&commandOptions.readTimeout, "readtimeout", 10*time.Second, "The socket read timeout")
-	flag.UintVar(&commandOptions.writeTimeout, "readtimeout", 10*time.Second, "The socket write timeout")
+	flag.UintVar(&commandOptions.readTimeout, "readtimeout", 10, "The socket read timeout")
+	flag.UintVar(&commandOptions.writeTimeout, "readtimeout", 10, "The socket write timeout")
 
 	flag.Parse()
 
@@ -177,6 +176,12 @@ func parseCommandOptions()  {
 func Start()  {
 	parseCommandOptions()
 	startServer()
+}
+
+type dispatcher func(w http.ResponseWriter, req *http.Request)
+
+func (d dispatcher) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	d(w, req)
 }
 
 func dispatch(w http.ResponseWriter, req *http.Request) {
@@ -196,7 +201,7 @@ func dispatch(w http.ResponseWriter, req *http.Request) {
 
 	callbackURL := req.Header.Get(CALLBACK_URL)
 	if callbackURL == "" {
-		err := fmt.Sprintf("no '%s' found in the HTTP header but the plugin registers the path[%s]" +
+		err := fmt.Sprintf("no field '%s' found in the HTTP header but the plugin registers the path[%s]" +
 				" as an async command", CALLBACK_URL, path)
 		log.Warn(err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -206,8 +211,8 @@ func dispatch(w http.ResponseWriter, req *http.Request) {
 
 	taskUuid := req.Header.Get(TASK_UUID)
 	if taskUuid == "" {
-		err := fmt.Sprintf("no '%s' found in the HTTP header but the plugin registers the path[%s]" +
-				" as an async command", taskUuid, path)
+		err := fmt.Sprintf("no field '%s' found in the HTTP header but the plugin registers the path[%s]" +
+				" as an async command", TASK_UUID, path)
 		log.Warn(err)
 		w.WriteHeader(http.StatusBadRequest)
 		utils.LogError(fmt.Fprint(w, err))
@@ -223,10 +228,14 @@ func dispatch(w http.ResponseWriter, req *http.Request) {
 func startServer() {
 	server := &http.Server{
 		Addr: fmt.Sprintf("%v:%v", commandOptions.ip, commandOptions.port),
-		ReadTimeout: commandOptions.readTimeout,
-		WriteTimeout: commandOptions.writeTimeout,
-		Handler: dispatch,
+		ReadTimeout: time.Duration(commandOptions.readTimeout) * time.Second,
+		WriteTimeout: time.Duration(commandOptions.writeTimeout) * time.Second,
+		Handler: dispatcher(dispatch),
 	}
 
 	server.ListenAndServe()
+}
+
+func init()  {
+	log.SetLevel(log.DebugLevel)
 }
