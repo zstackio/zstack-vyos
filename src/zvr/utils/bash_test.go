@@ -10,17 +10,17 @@ func TestBash(t *testing.T)  {
 	b.Command = "ls"
 	b.Run()
 
-	ret, so, se := b.RunWithReturn()
+	ret, so, se, err := b.RunWithReturn()
 	fmt.Printf("%v, %v, %v", ret, so, se)
 
 	b = NewBash()
 	b.Command = "ls a"
-	err := b.Run()
+	err = b.Run()
 	if err == nil {
 		t.Fatal("error cannot be null")
 	}
 
-	ret, so, se = b.RunWithReturn()
+	ret, so, se, err = b.RunWithReturn()
 	if ret == 0 {
 		t.Fatal("the command should fail")
 	}
@@ -32,7 +32,7 @@ func TestBash(t *testing.T)  {
 		"File": "b",
 	}
 
-	ret, so, se = b.RunWithReturn()
+	ret, so, se, err = b.RunWithReturn()
 	if ret == 0 {
 		t.Fatal("the command should fail")
 	}

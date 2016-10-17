@@ -24,7 +24,7 @@ type options struct {
 	writeTimeout uint
 }
 
-type ReplyHeader struct {
+type CommandResponseHeader struct {
 	Success bool `json:"success"`
 	Error string `json:"error"`
 }
@@ -110,6 +110,11 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 			callbackURL := req.Header.Get(CALLBACK_URL)
 			taskUuid := req.Header.Get(TASK_UUID)
 			rsp := chandler(ctx)
+
+			if rsp == nil {
+				rsp = CommandResponseHeader{ Success: true }
+			}
+
 			utils.Retry(func() error {
 				return utils.HttpPostForObject(callbackURL, map[string]string{
 					TASK_UUID: taskUuid,
@@ -127,7 +132,7 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 	w.handler = func(w http.ResponseWriter, req *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				reply := ReplyHeader{
+				reply := CommandResponseHeader{
 					Success: false,
 					Error: fmt.Sprintf("%v", err),
 				}

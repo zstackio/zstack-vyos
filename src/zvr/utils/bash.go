@@ -5,8 +5,8 @@ import (
 	"text/template"
 	"os/exec"
 	"syscall"
-	"errors"
 	"fmt"
+	"github.com/pkg/errors"
 )
 
 type Bash struct {
@@ -15,21 +15,19 @@ type Bash struct {
 	Arguments map[string]string
 }
 
-func (b *Bash) build() {
-	if (b.Command == "") {
-		panic(errors.New("Command cannot be nil"))
-	}
+func (b *Bash) build() error {
+	Assert(b.Command != "", "Command cannot be emptry string")
 
 	if (b.Arguments != nil) {
 		tmpl, err := template.New("script").Parse(b.Command)
 		if err != nil {
-			panic(err)
+			return err
 		}
 
 		var buf bytes.Buffer
 		err = tmpl.Execute(&buf, b.Arguments)
 		if err != nil {
-			panic(err)
+			return err
 		}
 
 		b.Command = buf.String()
@@ -38,21 +36,32 @@ func (b *Bash) build() {
 	if b.PipeFail {
 		b.Command = fmt.Sprintf("set -o pipefail; %s", b.Command)
 	}
+
+	return nil
 }
 
 func (b *Bash) Run() error {
-	b.build()
-	ret, so, se := b.RunWithReturn()
+	if err := b.build(); err != nil {
+		return err
+	}
+
+	ret, so, se, err := b.RunWithReturn()
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("failed to execute the command[%s] because of an internal errro",  b.Command))
+	}
+
 	if ret != 0 {
-		return fmt.Errorf("failed to exectue the command[%s]\nreturn code:%d\nstdout:%s\nstderr:%s\n",
-			b.Command, ret, so, se)
+		return errors.New(fmt.Sprintf("failed to exectue the command[%s]\nreturn code:%d\nstdout:%s\nstderr:%s\n",
+			b.Command, ret, so, se))
 	}
 
 	return nil
 }
 
-func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string) {
-	b.build()
+func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
+	if err = b.build(); err != nil {
+		return -1, "", "", err
+	}
 
 	var so, se bytes.Buffer
 	cmd := exec.Command("bash", "-c", b.Command)
