@@ -4,6 +4,7 @@ import (
 	"zvr"
 	"github.com/pkg/errors"
 	"fmt"
+	"strings"
 )
 
 const (
@@ -42,13 +43,32 @@ func addDhcpHandler(ctx *zvr.CommandContext) {
 }
 
 func addDhcp(infos []dhcpInfo) {
+	parser := zvr.NewParserFromShowConfiguration()
+
+	commands := make([]string, 0)
 	for _, info := range infos {
 		nicname, ok := zvr.FindNicNameByMac(info.VrNicMac)
 		if !ok {
 			panic(errors.Errorf("cannot find the nic with mac[%s] on the virtual router", info.VrNicMac))
 		}
 
-		subnetName := fmt.Sprintf("%s_subnet", nicname)
+		netName := fmt.Sprintf("%s_subnet", nicname)
+		_, ok = parser.GetValue(fmt.Sprintf("service dhcp-server shared-network-name %s authoritative", netName))
+		if !ok {
+			commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s authoritative enable", netName))
+		}
+
+		cidr, err := zvr.NetmaskToCIDR(info.Netmask)
+		if err != nil {
+			panic(err)
+		}
+
+		subnet := fmt.Sprintf("%s/%s", info.Ip, cidr)
+		serverName := strings.Replace(info.Mac, ":", "_", -1)
+		commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s ip-address %s",
+			netName, subnet, serverName, info.Ip))
+		commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s mac-address %s",
+			netName, subnet, serverName, strings.ToLower(info.Mac)))
 	}
 }
 
