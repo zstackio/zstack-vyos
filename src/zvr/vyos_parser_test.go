@@ -17,6 +17,14 @@ interfaces {
         smp_affinity auto
         speed auto
     }
+    ethernet eth1 {
+        address 172.20.14.209/16
+        description main
+        duplex auto
+        hw-id fa:da:21:1f:1a:00
+        smp_affinity auto
+        speed auto
+    }
     loopback lo {
     }
 }
@@ -83,6 +91,8 @@ system {
     }
     time-zone UTC
 }
+
+ABC E
 `
 	p := VyosParser{}
 	p.Parse(text)
@@ -100,7 +110,11 @@ system {
 	c, ok = p.GetConfig("interfaces", "ethernet", "eth0", "Asdfasdf")
 	utils.Assert(!ok, "fail")
 
-	value, ok := p.GetValue("time-zone")
+	value, ok := p.GetValue("system", "time-zone")
+	utils.Assert(ok, "fail")
+	fmt.Println(value)
+
+	value, ok = p.GetValue("ABC")
 	utils.Assert(ok, "fail")
 	fmt.Println(value)
 }

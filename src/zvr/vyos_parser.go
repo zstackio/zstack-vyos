@@ -57,6 +57,20 @@ type VyosConfig struct {
 }
 
 func (c *VyosConfig) GetValue(keys ...string) (string, bool) {
+	if len(keys) == 1 {
+		key := keys[0]
+		value := c.data[key]
+		if value == nil {
+			return "", false
+		}
+
+		if v, ok := value.(string); ok {
+			return v, true
+		} else {
+			return "", false
+		}
+	}
+
 	var current interface{} = c.data
 	for _, key := range keys {
 		m, ok := current.(map[string]interface{})
@@ -103,7 +117,8 @@ func (c *VyosConfig) GetConfig(keys ...string) (*VyosConfig, bool) {
 func (parser *VyosParser) GetValue(keys ...string) (string, bool) {
 	if (len(keys) == 1) {
 		utils.Assert(parser.parsed, "you must call Parse() before GetValue()")
-
+		c := &VyosConfig{ data: parser.data }
+		return c.GetValue(keys...)
 	}
 
 	mainKeys := keys[:len(keys)-1]
@@ -138,23 +153,34 @@ func (parser *VyosParser) Parse(text string) {
 
 	offset := 0
 	parser.data = make(map[string]interface{})
-	var current map[string]interface{}
+	current := parser.data
+	stack := &utils.Stack{}
 	for i := 0; i < len(words); i += offset {
 		o, role, keys, value := matchToken(words[i:])
 		offset = o
 		if role == ROOT {
-			current = make(map[string]interface{})
-			parser.data[keys[0]] = current
+			stack.Push(current)
+			current[keys[0]] = make(map[string]interface{})
+			current = current[keys[0]].(map[string]interface{})
 		} else if role == KEY_VALUE {
 			current[keys[0]] = value
 		} else if role == ROOT_ATTRIBUTE {
+			stack.Push(current)
+
 			for _, key := range keys {
-				current[key] = make(map[string]interface{})
-				current = current[key].(map[string]interface{})
+				if c, ok := current[key]; !ok {
+					current[key] = make(map[string]interface{})
+					current = current[key].(map[string]interface{})
+				} else {
+					current = c.(map[string]interface{})
+				}
 			}
 		} else if role == CLOSE {
-			current = make(map[string]interface{})
+			current = stack.Pop().(map[string]interface{})
 		}
 	}
+
+	//txt, _ := json.Marshal(parser.data)
+	//fmt.Println(string(txt))
 }
 
