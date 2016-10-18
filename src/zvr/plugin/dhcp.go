@@ -1,6 +1,10 @@
 package plugin
 
-import "zvr"
+import (
+	"zvr"
+	"github.com/pkg/errors"
+	"fmt"
+)
 
 const (
 	ADD_DHCP_PATH = "/adddhcp"
@@ -38,6 +42,14 @@ func addDhcpHandler(ctx *zvr.CommandContext) {
 }
 
 func addDhcp(infos []dhcpInfo) {
+	for _, info := range infos {
+		nicname, ok := zvr.FindNicNameByMac(info.VrNicMac)
+		if !ok {
+			panic(errors.Errorf("cannot find the nic with mac[%s] on the virtual router", info.VrNicMac))
+		}
+
+		subnetName := fmt.Sprintf("%s_subnet", nicname)
+	}
 }
 
 func rebuildAllDhcp(infos []dhcpInfo) {

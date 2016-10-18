@@ -101,12 +101,12 @@ ABC E
 `
 	p := VyosParser{}
 	p.Parse(text)
-	addr, ok := p.GetValue("interfaces", "ethernet", "eth0", "address")
+	addr, ok := p.GetValue("interfaces ethernet eth0 address")
 	utils.Assert(ok, "fail")
 	utils.Assert("172.20.14.209/16" == addr, "not equal")
 	fmt.Println(addr)
 
-	c, ok := p.GetConfig("interfaces", "ethernet", "eth0")
+	c, ok := p.GetConfig("interfaces ethernet eth0")
 	utils.Assert(ok, "fail")
 
 	addr, ok = c.GetValue("address")
@@ -114,10 +114,10 @@ ABC E
 	utils.Assert("172.20.14.209/16" == addr, "not equal")
 	fmt.Println(addr)
 
-	c, ok = p.GetConfig("interfaces", "ethernet", "eth0", "Asdfasdf")
+	c, ok = p.GetConfig("interfaces ethernet eth0 Asdfasdf")
 	utils.Assert(!ok, "fail")
 
-	value, ok := p.GetValue("system", "time-zone")
+	value, ok := p.GetValue("system time-zone")
 	utils.Assert(ok, "fail")
 	utils.Assert("UTC" == value, "not equal")
 	fmt.Println(value)
@@ -127,7 +127,7 @@ ABC E
 	utils.Assert("E" == value, "not equal")
 	fmt.Println(value)
 
-	value, ok = p.GetValue("nat", "source", "rule", "100", "source", "address")
+	value, ok = p.GetValue("nat source rule 100 source address")
 	utils.Assert(ok, "fail")
 	utils.Assert("192.168.0.0/24" == value, "not equal")
 	fmt.Println(value)

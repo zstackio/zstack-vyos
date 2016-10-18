@@ -13,6 +13,11 @@ type Bash struct {
 	Command string
 	PipeFail bool
 	Arguments map[string]string
+
+	retCode int
+	stdout string
+	stderr string
+	err error
 }
 
 func (b *Bash) build() error {
@@ -41,10 +46,6 @@ func (b *Bash) build() error {
 }
 
 func (b *Bash) Run() error {
-	if err := b.build(); err != nil {
-		return err
-	}
-
 	ret, so, se, err := b.RunWithReturn()
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("failed to execute the command[%s] because of an internal errro",  b.Command))
@@ -60,6 +61,7 @@ func (b *Bash) Run() error {
 
 func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 	if err = b.build(); err != nil {
+		b.err = err
 		return -1, "", "", err
 	}
 
@@ -84,7 +86,23 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 	stdout = string(so.Bytes())
 	stderr = string(se.Bytes())
 
+	b.retCode = retCode
+	b.stdout = stdout
+	b.stderr = stderr
+
 	return
+}
+
+func (bash *Bash) PanicIfError() {
+	if bash.err != nil {
+		panic(errors.New(fmt.Sprintf("shell failure[command: %v], internal error: %v",
+			bash.Command, bash.err)))
+	}
+
+	if bash.retCode != 0 {
+		panic(errors.New(fmt.Sprintf("shell failure[command: %v, return code: %v, stdout: %v, stdin: %v",
+			bash.Command, bash.retCode, bash.stdout, bash.stderr)))
+	}
 }
 
 func NewBash() *Bash {

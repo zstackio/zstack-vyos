@@ -69,7 +69,11 @@ func (c *VyosConfig) Keys() []string {
 	return keys
 }
 
-func (c *VyosConfig) GetValue(keys ...string) (string, bool) {
+func (c *VyosConfig) GetValue(key string) (string, bool) {
+	return c.getValue(strings.Split(key, " ")...)
+}
+
+func (c *VyosConfig) getValue(keys ...string) (string, bool) {
 	if len(keys) == 1 {
 		key := keys[0]
 		value := c.data[key]
@@ -104,7 +108,11 @@ func (c *VyosConfig) GetValue(keys ...string) (string, bool) {
 	}
 }
 
-func (c *VyosConfig) GetConfig(keys ...string) (*VyosConfig, bool) {
+func (c *VyosConfig) GetConfig(key string) (*VyosConfig, bool) {
+	return c.getConfig(strings.Split(key, " ")...)
+}
+
+func (c *VyosConfig) getConfig(keys ...string) (*VyosConfig, bool) {
 	var current interface{} = c.data
 	for _, key := range keys {
 		m, ok := current.(map[string]interface{})
@@ -127,26 +135,34 @@ func (c *VyosConfig) GetConfig(keys ...string) (*VyosConfig, bool) {
 	}
 }
 
-func (parser *VyosParser) GetValue(keys ...string) (string, bool) {
+func (parser *VyosParser) GetValue(key string) (string, bool) {
+	return parser.getValue(strings.Split(key, " ")...)
+}
+
+func (parser *VyosParser) getValue(keys ...string) (string, bool) {
 	if (len(keys) == 1) {
 		utils.Assert(parser.parsed, "you must call Parse() before GetValue()")
 		c := &VyosConfig{ data: parser.data }
-		return c.GetValue(keys...)
+		return c.getValue(keys...)
 	}
 
 	mainKeys := keys[:len(keys)-1]
-	if c, ok := parser.GetConfig(mainKeys...); ok {
-		return c.GetValue([]string{keys[len(keys)-1]}...)
+	if c, ok := parser.getConfig(mainKeys...); ok {
+		return c.getValue([]string{keys[len(keys)-1]}...)
 	} else {
 		return "", false
 	}
 }
 
-func (parser *VyosParser) GetConfig(keys ...string) (*VyosConfig, bool) {
+func (parser *VyosParser) GetConfig(key string) (*VyosConfig, bool) {
+	return parser.getConfig(strings.Split(key, " ")...)
+}
+
+func (parser *VyosParser) getConfig(keys ...string) (*VyosConfig, bool) {
 	utils.Assert(parser.parsed, "you must call Parse() before GetConfig()")
 
 	c := VyosConfig{ data: parser.data}
-	return c.GetConfig(keys...)
+	return c.getConfig(keys...)
 }
 
 func (parser *VyosParser) Parse(text string) {
@@ -195,5 +211,21 @@ func (parser *VyosParser) Parse(text string) {
 
 	//txt, _ := json.Marshal(parser.data)
 	//fmt.Println(string(txt))
+}
+
+var configurationSource = func() string {
+	bash := utils.Bash{
+		Command: "show configuration",
+	}
+
+	_, o, _, _ := bash.RunWithReturn()
+	bash.PanicIfError()
+	return o
+}
+
+func NewParserFromShowConfiguration() *VyosParser {
+	p := &VyosParser{}
+	p.Parse(configurationSource())
+	return p
 }
 
