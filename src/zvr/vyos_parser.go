@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"fmt"
 	"zvr/utils"
+	//"encoding/json"
 )
 
 type VyosParser struct {
@@ -54,6 +55,18 @@ func matchToken(words []string) (int, role, []string, string) {
 
 type VyosConfig struct {
 	data map[string]interface{}
+}
+
+func (c *VyosConfig) Size() int {
+	return len(c.data)
+}
+
+func (c *VyosConfig) Keys() []string {
+	keys := make([]string, 0)
+	for k := range c.data {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func (c *VyosConfig) GetValue(keys ...string) (string, bool) {

@@ -6,7 +6,7 @@ import (
 	"zvr/utils"
 )
 
-func TestVyosParser1(t *testing.T) {
+func TestVyosParser(t *testing.T) {
 	text := `
 interfaces {
     ethernet eth0 {
@@ -17,15 +17,20 @@ interfaces {
         smp_affinity auto
         speed auto
     }
-    ethernet eth1 {
-        address 172.20.14.209/16
-        description main
-        duplex auto
-        hw-id fa:da:21:1f:1a:00
-        smp_affinity auto
-        speed auto
-    }
     loopback lo {
+    }
+}
+nat {
+    source {
+        rule 100 {
+            outbound-interface eth0
+            source {
+                address 192.168.0.0/24
+            }
+            translation {
+                address masquerade
+            }
+        }
     }
 }
 protocols {
@@ -98,6 +103,7 @@ ABC E
 	p.Parse(text)
 	addr, ok := p.GetValue("interfaces", "ethernet", "eth0", "address")
 	utils.Assert(ok, "fail")
+	utils.Assert("172.20.14.209/16" == addr, "not equal")
 	fmt.Println(addr)
 
 	c, ok := p.GetConfig("interfaces", "ethernet", "eth0")
@@ -105,6 +111,7 @@ ABC E
 
 	addr, ok = c.GetValue("address")
 	utils.Assert(ok, "fail")
+	utils.Assert("172.20.14.209/16" == addr, "not equal")
 	fmt.Println(addr)
 
 	c, ok = p.GetConfig("interfaces", "ethernet", "eth0", "Asdfasdf")
@@ -112,10 +119,17 @@ ABC E
 
 	value, ok := p.GetValue("system", "time-zone")
 	utils.Assert(ok, "fail")
+	utils.Assert("UTC" == value, "not equal")
 	fmt.Println(value)
 
 	value, ok = p.GetValue("ABC")
 	utils.Assert(ok, "fail")
+	utils.Assert("E" == value, "not equal")
+	fmt.Println(value)
+
+	value, ok = p.GetValue("nat", "source", "rule", "100", "source", "address")
+	utils.Assert(ok, "fail")
+	utils.Assert("192.168.0.0/24" == value, "not equal")
 	fmt.Println(value)
 }
 
