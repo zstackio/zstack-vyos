@@ -2,7 +2,7 @@ package plugin
 
 import (
 	"testing"
-	"zvr"
+	"zvr/server"
 	"fmt"
 	"strings"
 )
@@ -51,7 +51,7 @@ func TestDHCPRebuildEntry(t *testing.T) {
 		fmt.Println(script)
 	}
 
-	zvr.ConfigurationSourceFunc = func() string {
+	server.ConfigurationSourceFunc = func() string {
 		return `
 interfaces {
     ethernet eth0 {
@@ -110,7 +110,7 @@ func TestDHCPRemoveEntry(t *testing.T) {
 		fmt.Println(script)
 	}
 
-	zvr.ConfigurationSourceFunc = func() string {
+	server.ConfigurationSourceFunc = func() string {
 		return `
 interfaces {
     ethernet eth0 {
@@ -172,7 +172,7 @@ func TestDHCPAddEntry(t *testing.T) {
 		fmt.Println(script)
 	}
 
-	zvr.ConfigurationSourceFunc = func() string {
+	server.ConfigurationSourceFunc = func() string {
 		return `
 interfaces {
     ethernet eth0 {

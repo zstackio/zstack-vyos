@@ -1,4 +1,4 @@
-package zvr
+package server
 
 import (
 	"strings"

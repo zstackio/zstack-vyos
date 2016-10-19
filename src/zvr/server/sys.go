@@ -1,9 +1,14 @@
-package zvr
+package server
 
 import (
 	"strings"
 	"zvr/utils"
 	"fmt"
+	"sync"
+)
+
+var (
+	vyosScriptLock = &sync.Mutex{}
 )
 
 func FindNicNameByMacFromConfiguration(mac, configuration string) (string, bool) {
@@ -34,6 +39,9 @@ func FindNicNameByMac(mac string) (string, bool) {
 }
 
 func RunVyosScript(command string, args map[string]string) {
+	vyosScriptLock.Lock()
+	defer vyosScriptLock.Unlock()
+
 	template := `SET=${vyatta_sbindir}/my_set
 DELETE=${vyatta_sbindir}/my_delete
 COPY=${vyatta_sbindir}/my_copy

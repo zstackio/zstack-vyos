@@ -1,11 +1,11 @@
 package plugin
 
 import (
-	"zvr"
 	"github.com/pkg/errors"
 	"fmt"
 	"strings"
 	"zvr/utils"
+	"zvr/server"
 )
 
 const (
@@ -34,7 +34,7 @@ type removeDhcpCmd struct {
 	DhcpEntries []dhcpInfo `json:"dhcpEntries"`
 }
 
-func addDhcpHandler(ctx *zvr.CommandContext) interface{} {
+func addDhcpHandler(ctx *server.CommandContext) interface{} {
 	cmd := &addDhcpCmd{}
 	ctx.GetCommand(cmd)
 
@@ -60,7 +60,7 @@ func makeServerName(mac string) string {
 }
 
 func makeDhcpCommands(infos []dhcpInfo) []string {
-	parser := zvr.NewParserFromShowConfiguration()
+	parser := server.NewParserFromShowConfiguration()
 
 	macs := make(map[string]dhcpInfo)
 	for _, info := range infos {
@@ -132,7 +132,7 @@ func makeDhcpCommands(infos []dhcpInfo) []string {
 }
 
 func infoToNetNameAndSubnet(info dhcpInfo) (string, string) {
-	nicname, ok := zvr.FindNicNameByMac(info.VrNicMac); utils.PanicIfError(ok, errors.Errorf("cannot find the nic with mac[%s] on the virtual router", info.VrNicMac))
+	nicname, ok := server.FindNicNameByMac(info.VrNicMac); utils.PanicIfError(ok, errors.Errorf("cannot find the nic with mac[%s] on the virtual router", info.VrNicMac))
 	subnet, err := utils.GetNetworkNumber(info.Ip, info.Netmask); utils.PanicOnError(err)
 
 	return makeLanName(nicname), subnet
@@ -144,7 +144,7 @@ func rebuildAllDhcp(infos []dhcpInfo) {
 }
 
 func makeRemoveDhcpCommands(infos []dhcpInfo) []string {
-	parser := zvr.NewParserFromShowConfiguration()
+	parser := server.NewParserFromShowConfiguration()
 	commands := make([]string, 0)
 
 	for _, info := range infos {
@@ -160,7 +160,7 @@ func makeRemoveDhcpCommands(infos []dhcpInfo) []string {
 	return commands
 }
 
-func removeDhcpHandler(ctx *zvr.CommandContext) interface{} {
+func removeDhcpHandler(ctx *server.CommandContext) interface{} {
 	cmd := &removeDhcpCmd{}
 	ctx.GetCommand(cmd)
 
@@ -173,10 +173,10 @@ func removeDhcpHandler(ctx *zvr.CommandContext) interface{} {
 }
 
 var runVyosScript = func(script string, args map[string]string)  {
-	zvr.RunVyosScript(script, args)
+	server.RunVyosScript(script, args)
 }
 
 func init()  {
-	zvr.RegisterAsyncCommandHandler(ADD_DHCP_PATH, addDhcpHandler)
-	zvr.RegisterAsyncCommandHandler(REMOVE_DHCP_PATH, removeDhcpHandler)
+	server.RegisterAsyncCommandHandler(ADD_DHCP_PATH, addDhcpHandler)
+	server.RegisterAsyncCommandHandler(REMOVE_DHCP_PATH, removeDhcpHandler)
 }

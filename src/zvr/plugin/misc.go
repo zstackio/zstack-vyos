@@ -1,6 +1,6 @@
 package plugin
 
-import "zvr"
+import "zvr/server"
 
 const (
 	INIT_PATH = "/init"
@@ -21,23 +21,23 @@ var (
 	initConfig = &InitConfig{}
 )
 
-func initHandler(ctx *zvr.CommandContext) interface{} {
+func initHandler(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(initConfig)
 	return nil
 }
 
-func pingHandler(ctx *zvr.CommandContext) interface{} {
+func pingHandler(ctx *server.CommandContext) interface{} {
 	return pingRsp{ Uuid: initConfig.Uuid }
 }
 
-func echoHandler(ctx *zvr.CommandContext) interface{} {
+func echoHandler(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
 func init()  {
-	zvr.RegisterAsyncCommandHandler(INIT_PATH, initHandler)
-	zvr.RegisterAsyncCommandHandler(PING_PATH, pingHandler)
-	zvr.RegisterSyncCommandHandler(ECHO_PATH, echoHandler)
+	server.RegisterAsyncCommandHandler(INIT_PATH, initHandler)
+	server.RegisterAsyncCommandHandler(PING_PATH, pingHandler)
+	server.RegisterSyncCommandHandler(ECHO_PATH, echoHandler)
 }
 
 func GetInitConfig() *InitConfig {
