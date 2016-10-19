@@ -42,8 +42,8 @@ func matchToken(words []string) (int, role, []string, string) {
 		return next, ROOT, []string{ws[0]}, ""
 	} else if  length > 2 && ws[length-1] == "{" {
 		return next, ROOT_ATTRIBUTE, ws[:length-1], ""
-	} else if length == 2 && ws[length-1] != "{" && ws[length-1] != "}" {
-		return next, KEY_VALUE, []string{ws[0]}, ws[1]
+	} else if length >= 2 && ws[length-1] != "{" && ws[length-1] != "}" {
+		return next, KEY_VALUE, []string{ws[0]}, strings.Join(ws[1:], " ")
 	} else if length == 1 && ws[0] == "}" {
 		return next, CLOSE, nil, ""
 	} else if length == 0 {
@@ -213,7 +213,7 @@ func (parser *VyosParser) Parse(text string) {
 	//fmt.Println(string(txt))
 }
 
-var configurationSource = func() string {
+var ConfigurationSourceFunc = func() string {
 	bash := utils.Bash{
 		Command: "show configuration",
 	}
@@ -224,12 +224,12 @@ var configurationSource = func() string {
 }
 
 func VyosShowConfiguration() string {
-	return configurationSource()
+	return ConfigurationSourceFunc()
 }
 
 func NewParserFromShowConfiguration() *VyosParser {
 	p := &VyosParser{}
-	p.Parse(configurationSource())
+	p.Parse(ConfigurationSourceFunc())
 	return p
 }
 

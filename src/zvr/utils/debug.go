@@ -13,7 +13,7 @@ func Assert(expression bool, msg string)  {
 }
 
 func PanicIfError(ok bool, err error) {
-	if ok {
+	if !ok {
 		panic(err)
 	}
 }

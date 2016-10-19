@@ -4,7 +4,6 @@ import (
 	"strings"
 	"zvr/utils"
 	"fmt"
-	"strconv"
 )
 
 func FindNicNameByMacFromConfiguration(mac, configuration string) (string, bool) {
@@ -72,25 +71,3 @@ trap atexit EXIT SIGHUP SIGINT SIGTERM
 	bash.PanicIfError()
 }
 
-func NetmaskToCIDR(netmask string) (int, error) {
-	countBit := func(num uint) int {
-		count := uint(0)
-		var i uint
-		for i = 31; i>0; i-- {
-			count += ((num << i) >> uint(31)) & uint(1)
-		}
-
-		return int(count)
-	}
-
-	cidr := 0
-	for _, o := range strings.Split(netmask, ".") {
-		num, err := strconv.ParseUint(o, 10, 32)
-		if err != nil {
-			return -1, err
-		}
-		cidr += countBit(uint(num))
-	}
-
-	return cidr, nil
-}

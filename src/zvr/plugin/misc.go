@@ -40,6 +40,6 @@ func init()  {
 	zvr.RegisterSyncCommandHandler(ECHO_PATH, echoHandler)
 }
 
-func GetInitConfig()  {
+func GetInitConfig() *InitConfig {
 	return initConfig
 }

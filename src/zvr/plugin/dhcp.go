@@ -34,7 +34,7 @@ type removeDhcpCmd struct {
 	DhcpEntries []dhcpInfo `json:"dhcpEntries"`
 }
 
-func addDhcpHandler(ctx *zvr.CommandContext) {
+func addDhcpHandler(ctx *zvr.CommandContext) interface{} {
 	cmd := &addDhcpCmd{}
 	ctx.GetCommand(cmd)
 
@@ -85,23 +85,21 @@ func makeDhcpCommands(infos []dhcpInfo) []string {
 		_, ok = parser.GetValue(fmt.Sprintf("service dhcp-server shared-network-name %s subnet %s static-mapping %s ip-address",
 			netName, subnet, serverName))
 		if !ok {
-			commands = append(fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s ip-address %s",
+			commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s ip-address %s",
 				netName, subnet, serverName, info.Gateway))
 		}
 
 		_, ok = parser.GetValue(fmt.Sprintf("service dhcp-server shared-network-name %s subnet %s static-mapping %s mac-address",
 			netName, subnet, serverName))
 		if !ok {
-			commands = append(fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s mac-address %s",
+			commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s mac-address %s",
 				netName, subnet, serverName, info.VrNicMac))
 		}
 	}
 
 	for _, info := range infos {
-		cidr, err := zvr.NetmaskToCIDR(info.Netmask); utils.PanicOnError(err)
-
 		netName := subnetNames[info.VrNicMac]
-		subnet := fmt.Sprintf("%s/%s", info.Ip, cidr)
+		subnet, err := utils.GetNetworkNumber(info.Ip, info.Netmask); utils.PanicOnError(err)
 		serverName := makeServerName(info.Mac)
 		commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s ip-address %s",
 			netName, subnet, serverName, info.Ip))
@@ -115,7 +113,7 @@ func makeDhcpCommands(infos []dhcpInfo) []string {
 				commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s static-mapping-parameters \"%s\"",
 					netName, subnet, serverName, fmt.Sprintf("option host-name &quot;%s&quot;;", info.Hostname)))
 			}
-			if info.Dns {
+			if info.Dns != nil {
 				commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s static-mapping-parameters \"%s\"",
 					netName, subnet, serverName, fmt.Sprintf("option domain-name-servers %s;", strings.Join(info.Dns, ","))))
 			}
@@ -135,40 +133,21 @@ func makeDhcpCommands(infos []dhcpInfo) []string {
 
 func infoToNetNameAndSubnet(info dhcpInfo) (string, string) {
 	nicname, ok := zvr.FindNicNameByMac(info.VrNicMac); utils.PanicIfError(ok, errors.Errorf("cannot find the nic with mac[%s] on the virtual router", info.VrNicMac))
-	cidr, err := zvr.NetmaskToCIDR(info.Netmask); utils.PanicOnError(err)
-	subnet := fmt.Sprintf("%s/%s", info.Ip, cidr)
+	subnet, err := utils.GetNetworkNumber(info.Ip, info.Netmask); utils.PanicOnError(err)
 
 	return makeLanName(nicname), subnet
 }
 
 func rebuildAllDhcp(infos []dhcpInfo) {
-	commands := make([]string, 0)
-
-	// delete all existing subnets
-	parser := zvr.NewParserFromShowConfiguration()
-	for _, info := range infos {
-		netName, subnet := infoToNetNameAndSubnet(info)
-		if _, ok := parser.GetConfig(fmt.Sprintf("service dhcp-server shared-network-name %s subnet %s",
-			netName, subnet)); ok {
-			commands = append(commands, fmt.Sprintf("$DELETE service dhcp-server shared-network-name %s subnet %s", netName, subnet))
-		}
-	}
-
-	if len(commands) != 0 {
-		commands = append(commands, makeDhcpCommands(infos)...)
-	}
-
+	commands := append(makeRemoveDhcpCommands(infos), makeDhcpCommands(infos)...)
 	runVyosScript(strings.Join(commands, "\n"), nil)
 }
 
-func removeDhcpHandler(ctx *zvr.CommandContext) {
-	cmd := &removeDhcpCmd{}
-	ctx.GetCommand(cmd)
-
+func makeRemoveDhcpCommands(infos []dhcpInfo) []string {
 	parser := zvr.NewParserFromShowConfiguration()
 	commands := make([]string, 0)
 
-	for _, info := range cmd.DhcpEntries {
+	for _, info := range infos {
 		netName, subnet := infoToNetNameAndSubnet(info)
 		serverName := makeServerName(info.Mac)
 		if _, ok := parser.GetConfig(fmt.Sprintf("service dhcp-server shared-network-name %s subnet %s static-mapping %s",
@@ -178,12 +157,22 @@ func removeDhcpHandler(ctx *zvr.CommandContext) {
 		}
 	}
 
+	return commands
+}
+
+func removeDhcpHandler(ctx *zvr.CommandContext) interface{} {
+	cmd := &removeDhcpCmd{}
+	ctx.GetCommand(cmd)
+
+	commands := makeRemoveDhcpCommands(cmd.DhcpEntries)
 	if len(commands) != 0 {
 		runVyosScript(strings.Join(commands, "\n"), nil)
 	}
+
+	return nil
 }
 
-func runVyosScript(script string, args map[string]string)  {
+var runVyosScript = func(script string, args map[string]string)  {
 	zvr.RunVyosScript(script, args)
 }
 
