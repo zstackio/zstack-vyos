@@ -12,6 +12,18 @@ func Assert(expression bool, msg string)  {
 	}
 }
 
+func PanicIfError(ok bool, err error) {
+	if ok {
+		panic(err)
+	}
+}
+
+func PanicOnError(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
 func LogError(args...interface{})  {
 	for _, arg := range args {
 		if e, ok := arg.(error); ok {

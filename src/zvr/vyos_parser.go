@@ -223,9 +223,19 @@ var configurationSource = func() string {
 	return o
 }
 
+func VyosShowConfiguration() string {
+	return configurationSource()
+}
+
 func NewParserFromShowConfiguration() *VyosParser {
 	p := &VyosParser{}
 	p.Parse(configurationSource())
+	return p
+}
+
+func NewParserFromConfiguration(text string) *VyosParser {
+	p := &VyosParser{}
+	p.Parse(text)
 	return p
 }
 

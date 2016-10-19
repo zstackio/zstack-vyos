@@ -63,4 +63,3 @@ func TestNetmaskToCIDR(t *testing.T) {
 	cidr, _ = NetmaskToCIDR("255.255.255.255")
 	utils.Assert(cidr == 32, fmt.Sprint(cidr))
 }
-

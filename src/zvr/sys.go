@@ -7,8 +7,8 @@ import (
 	"strconv"
 )
 
-func FindNicNameByMac(mac string) (string, bool) {
-	parser := NewParserFromShowConfiguration()
+func FindNicNameByMacFromConfiguration(mac, configuration string) (string, bool) {
+	parser := NewParserFromConfiguration(configuration)
 
 	config, ok := parser.GetConfig("interfaces ethernet")
 	if !ok {
@@ -28,6 +28,10 @@ func FindNicNameByMac(mac string) (string, bool) {
 	}
 
 	return "", false
+}
+
+func FindNicNameByMac(mac string) (string, bool) {
+	return FindNicNameByMacFromConfiguration(mac, VyosShowConfiguration())
 }
 
 func RunVyosScript(command string, args map[string]string) {
