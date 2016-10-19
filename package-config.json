@@ -1,0 +1,9 @@
+{
+    "projects": {
+        "zvr": {
+            "dir": "target/package",
+            "installer": "scripts/install.sh",
+            "location": "target/"
+        }
+    }
+}

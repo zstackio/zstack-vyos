@@ -5,25 +5,23 @@ endif
 export GO=$(GOROOT)/bin/go
 export GOPATH=$(shell pwd)
 
-BUILD_DIR=build/out/zvr
 TARGET_DIR=target
-SOURCE_DIR=$(shell pwd)/src/zvr
+PKG_DIR=$(TARGET_DIR)/package
 
-LIB_DIRS=$(shell cd src; ls -d zvr/*/; cd - > /dev/null)
 DEPS=github.com/Sirupsen/logrus github.com/pkg/errors
 
-build:
+build: deps
 	mkdir -p $(TARGET_DIR)
 	$(GO) build -o $(TARGET_DIR)/zvr zvr
 
 deps:
 	$(GO) get $(DEPS)
 
-debug:
-	echo $(LIB_DIRS)
-
 clean:
 	rm -rf target/
 
-IDE:
-	$(GO) install $(LIB_DIRS)
+package: clean build
+	mkdir -p $(PKG_DIR)
+	cp -f $(TARGET_DIR)/zvr $(PKG_DIR)
+	cp -f scripts/zstack-virtualrouteragent $(PKG_DIR)
+	$(GO) run package.go -conf package-config.json

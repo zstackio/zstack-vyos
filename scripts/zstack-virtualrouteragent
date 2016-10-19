@@ -1,0 +1,120 @@
+#!/bin/bash
+
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+DIR=$(dirname $(readlink -f "$0"))
+SERVER=/opt/vyatta/sbin/zvr
+PIDFILE=/var/run/zstack/zvr.pid
+LOGFILE=/var/log/zstack/zvr.log
+
+if [ $# -eq 0 ]; then
+    echo "usage: $0 [start|stop|restart|status]"
+    exit 1
+fi
+
+err_exit() {
+    echo $1
+    exit 1
+}
+
+PID_DIR=`dirname $PIDFILE`; mkdir -p $PID_DIR
+#LOG_DIR=`dirname $LOGFILE`; mkdir -p $LOG_DIR
+
+ETH0_IP=`ip route | grep eth0 | awk '{printf $9}'`
+if [ x$ETH0_IP == "x" ]; then
+   err_exit "unable to get the IP of eth0"
+fi
+
+get_pid() {
+    if [ ! -f $PIDFILE ]; then
+        pgrep zvr
+        return
+    fi
+
+    pid=`cat $PIDFILE`
+    ps -p $pid > /dev/null && echo $pid || echo ""
+}
+
+check_status() {
+    pid=$(get_pid)
+
+    if [ x$pid = x"" ]; then
+        # stopped
+        return 1
+    else
+        # running
+        return 0
+    fi
+}
+
+server_status() {
+    check_status
+    ret=$?
+    if [ $ret -eq 0 ]; then
+        pid=$(get_pid)
+        echo "zstack virtual router agent [PID:$pid] is running"
+    elif [ $ret -eq 1 ]; then
+        echo "zstack virtual router agent is stopped"
+    fi
+
+    exit $ret
+}
+
+do_start() {
+    old_pid=$1
+    if [ x$old_pid != x"" ]; then
+        # kill hanged daemon
+        kill -9 $old_pid
+    fi
+
+    su - vyos -c "nohup $SERVER -ip $ETH0_IP -logfile $LOGFILE >/var/log/zvrboot.log 2>&1 < /dev/null &"
+    echo $! > $PIDFILE
+    disown
+    sleep 1
+
+    check_status > /dev/null || err_exit "unable to start zstack virtual router agent"
+
+    # turn on server and agent port from firewall
+    /sbin/iptables -I INPUT -p tcp --dport 7272 -j ACCEPT
+
+    exit 0
+}
+
+start_server() {
+    check_status
+    ret=$?
+    if [ $ret -eq 0 ]; then
+        pid=$(get_pid)
+        echo "zstack virtual router agent [PID:$pid] is running already"
+    elif [ $ret -eq 1 ]; then
+        do_start ""
+    fi
+}
+
+do_stop() {
+    pid=$(get_pid)
+    if [ x$pid != x"" ]; then
+        kill -SIGINT $pid
+        sleep 1
+        kill -SIGTERM $pid 2> /dev/null
+    fi
+}
+
+stop_server() {
+    check_status
+    ret=$?
+    if [ $ret -ne 0 ]; then
+        echo "zstack virtual router agent stopped already"
+	return
+    fi
+
+    do_stop
+}
+
+CMD="$1"
+case "$CMD" in
+    start) start_server ;;
+    stop) stop_server ;;
+    status) server_status ;;
+    restart) stop_server; start_server;;
+esac
