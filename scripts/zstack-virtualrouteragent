@@ -6,7 +6,7 @@ DIR=$(dirname $(readlink -f "$0"))
 SERVER=/opt/vyatta/sbin/zvr
 HOMDIR=/home/vyos/zvr
 LOGFILE=$HOMDIR/zvr.log
-BOOTLOG=$HOMDIR/zvrboot.log
+BOOTLOG=$HOMDIR/zvrstartup.log
 
 if [ $# -eq 0 ]; then
     echo "usage: $0 [start|stop|restart|status]"
