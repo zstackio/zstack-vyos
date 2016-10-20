@@ -4,14 +4,9 @@ import (
 	"net/http"
 	"fmt"
 	"zvr/utils"
-	"flag"
-	"os"
 	"time"
 	"encoding/json"
 	log "github.com/Sirupsen/logrus"
-	//"io"
-	"io"
-	"strings"
 )
 
 type commandHandlerWrap struct {
@@ -20,13 +15,14 @@ type commandHandlerWrap struct {
 	async bool
 }
 
-type options struct {
-	ip string
-	port uint
-	readTimeout uint
-	writeTimeout uint
-	logFile string
+type Options struct {
+	Ip           string
+	Port         uint
+	ReadTimeout  uint
+	WriteTimeout uint
+	LogFile      string
 }
+
 
 type CommandResponseHeader struct {
 	Success bool `json:"success"`
@@ -50,14 +46,18 @@ type HttpInterceptor func(http.HandlerFunc) http.HandlerFunc
 
 var (
 	commandHandlers map[string]*commandHandlerWrap = make(map[string]*commandHandlerWrap)
-	commandOptions = &options{}
 	interceptors map[string][]HttpInterceptor = make(map[string][]HttpInterceptor, 0)
+	commandOptions Options
 )
 
 const (
 	CALLBACK_URL = "callbackurl"
 	TASK_UUID = "taskuuid"
 )
+
+func SetOptions(o Options) {
+	commandOptions = o
+}
 
 func RegisterHttpInterceptor(path string, ic HttpInterceptor)  {
 	ics, ok := interceptors[path]
@@ -163,32 +163,9 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 	commandHandlers[path] = w
 }
 
-func abortOnWrongOption(msg string) {
-	fmt.Println(msg)
-	flag.Usage()
-	os.Exit(1)
-}
 
-func parseCommandOptions()  {
-	flag.StringVar(&commandOptions.ip, "ip", "", "The IP address the server listens on")
-	flag.UintVar(&commandOptions.port, "port", 7272, "The port the server listens on")
-	flag.UintVar(&commandOptions.readTimeout, "readtimeout", 10, "The socket read timeout")
-	flag.UintVar(&commandOptions.writeTimeout, "writetimeout", 10, "The socket write timeout")
-	flag.StringVar(&commandOptions.logFile, "logfile", "zvr.log", "The log file path")
-
-	flag.Parse()
-
-	if commandOptions.ip == "" {
-		abortOnWrongOption("error: the options 'ip' is required")
-	}
-
-	logFile, err := utils.CreateFileIfNotExists(commandOptions.logFile, os.O_WRONLY|os.O_APPEND, 0666); utils.PanicOnError(err)
-	multi := io.MultiWriter(logFile, os.Stdout)
-	log.SetOutput(multi)
-}
 
 func Start()  {
-	parseCommandOptions()
 	startServer()
 }
 
@@ -241,50 +218,12 @@ func dispatch(w http.ResponseWriter, req *http.Request) {
 
 func startServer() {
 	server := &http.Server{
-		Addr: fmt.Sprintf("%v:%v", commandOptions.ip, commandOptions.port),
-		ReadTimeout: time.Duration(commandOptions.readTimeout) * time.Second,
-		WriteTimeout: time.Duration(commandOptions.writeTimeout) * time.Second,
+		Addr: fmt.Sprintf("%v:%v", commandOptions.Ip, commandOptions.Port),
+		ReadTimeout: time.Duration(commandOptions.ReadTimeout) * time.Second,
+		WriteTimeout: time.Duration(commandOptions.WriteTimeout) * time.Second,
 		Handler: dispatcher(dispatch),
 	}
 
 	log.Debugln("everything looks good, the agent starts ...")
 	server.ListenAndServe()
-}
-
-type logFormatter struct {
-}
-
-func (f *logFormatter) Format(entry *log.Entry) ([]byte, error) {
-	timestampFormat := log.DefaultTimestampFormat
-
-	var msg string
-	if len(entry.Data) > 0 {
-		data := make(log.Fields, len(entry.Data))
-		for k, v := range entry.Data {
-			switch v := v.(type) {
-			case error:
-				data[k] = v.Error()
-			default:
-				data[k] = v
-			}
-		}
-
-		jsondata, err := json.Marshal(data)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to marshal fields to JSON, %v", err)
-		}
-
-		msg = fmt.Sprintf("%v %v %v %v", entry.Time.Format(timestampFormat),
-			strings.ToUpper(entry.Level.String()), entry.Message, string(jsondata))
-	} else {
-		msg = fmt.Sprintf("%v %v %v", entry.Time.Format(timestampFormat),
-			strings.ToUpper(entry.Level.String()), entry.Message)
-	}
-
-	return append([]byte(msg), '\n'), nil
-}
-
-func init()  {
-	log.SetLevel(log.DebugLevel)
-	log.SetFormatter(&logFormatter{})
 }

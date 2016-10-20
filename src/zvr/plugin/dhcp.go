@@ -176,7 +176,8 @@ var runVyosScript = func(script string, args map[string]string)  {
 	server.RunVyosScript(script, args)
 }
 
-func init()  {
+
+func DhcpEntryPoint() {
 	server.RegisterAsyncCommandHandler(ADD_DHCP_PATH, addDhcpHandler)
 	server.RegisterAsyncCommandHandler(REMOVE_DHCP_PATH, removeDhcpHandler)
 }

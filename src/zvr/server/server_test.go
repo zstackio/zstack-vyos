@@ -10,8 +10,8 @@ import (
 )
 
 func startMockServer()  {
-	commandOptions.ip = "127.0.0.1"
-	commandOptions.port = 8989
+	commandOptions.Ip = "127.0.0.1"
+	commandOptions.Port = 8989
 	go func() {
 		startServer()
 	}()

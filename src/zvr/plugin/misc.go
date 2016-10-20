@@ -34,7 +34,7 @@ func echoHandler(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
-func init()  {
+func MiscEntryPoint() {
 	server.RegisterAsyncCommandHandler(INIT_PATH, initHandler)
 	server.RegisterAsyncCommandHandler(PING_PATH, pingHandler)
 	server.RegisterSyncCommandHandler(ECHO_PATH, echoHandler)
@@ -43,3 +43,4 @@ func init()  {
 func GetInitConfig() *InitConfig {
 	return initConfig
 }
+

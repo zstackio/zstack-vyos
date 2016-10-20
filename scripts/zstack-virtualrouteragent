@@ -4,8 +4,9 @@ export PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
 DIR=$(dirname $(readlink -f "$0"))
 SERVER=/opt/vyatta/sbin/zvr
-PIDFILE=/var/run/zstack/zvr.pid
-LOGFILE=/var/log/zstack/zvr.log
+HOMDIR=/home/vyos/zvr
+LOGFILE=$HOMDIR/zvr.log
+BOOTLOG=$HOMDIR/zvrboot.log
 
 if [ $# -eq 0 ]; then
     echo "usage: $0 [start|stop|restart|status]"
@@ -17,8 +18,7 @@ err_exit() {
     exit 1
 }
 
-PID_DIR=`dirname $PIDFILE`; mkdir -p $PID_DIR
-#LOG_DIR=`dirname $LOGFILE`; mkdir -p $LOG_DIR
+LOG_DIR=`dirname $LOGFILE`; mkdir -p $LOG_DIR
 
 ETH0_IP=`ip route | grep eth0 | awk '{printf $9}'`
 if [ x$ETH0_IP == "x" ]; then
@@ -26,13 +26,7 @@ if [ x$ETH0_IP == "x" ]; then
 fi
 
 get_pid() {
-    if [ ! -f $PIDFILE ]; then
-        pgrep zvr
-        return
-    fi
-
-    pid=`cat $PIDFILE`
-    ps -p $pid > /dev/null && echo $pid || echo ""
+    pgrep zvr
 }
 
 check_status() {
@@ -67,15 +61,14 @@ do_start() {
         kill -9 $old_pid
     fi
 
-    su - vyos -c "nohup $SERVER -ip $ETH0_IP -logfile $LOGFILE >/var/log/zvrboot.log 2>&1 < /dev/null &"
-    echo $! > $PIDFILE
-    disown
-    sleep 1
+    chown -R vyos:users $HOMDIR
+    su - vyos -c "nohup $SERVER -ip $ETH0_IP -logfile $LOGFILE >$BOOTLOG 2>&1 < /dev/null &"
 
+    sleep 1
     check_status > /dev/null || err_exit "unable to start zstack virtual router agent"
 
-    # turn on server and agent port from firewall
-    /sbin/iptables -I INPUT -p tcp --dport 7272 -j ACCEPT
+    # open port
+    /sbin/iptables-save | grep -- 'INPUT -p tcp -m tcp --dport 7272 -j ACCEPT' >/dev/null || /sbin/iptables -I INPUT -p tcp --dport 7272 -j ACCEPT
 
     exit 0
 }
