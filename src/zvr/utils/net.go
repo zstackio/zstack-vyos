@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"fmt"
 	"github.com/pkg/errors"
+	"io/ioutil"
+	"path/filepath"
 )
 
 func NetmaskToCIDR(netmask string) (int, error) {
@@ -53,4 +55,37 @@ func GetNetworkNumber(ip, netmask string) (string, error) {
 	}
 
 	return fmt.Sprintf("%v.%v.%v.%v/%v", ipInByte[0], ipInByte[1], ipInByte[2], ipInByte[3], cidr), nil
+}
+
+type Nic struct {
+	Name string
+	Mac string
+}
+
+func GetAllNics() (map[string]Nic, error) {
+	const ROOT = "/sys/class/net"
+
+	files, err := ioutil.ReadDir(ROOT)
+	if err != nil {
+		return nil, err
+	}
+
+	nics := make(map[string]Nic)
+	for _, f := range files {
+		if !f.IsDir() || f.Name() == "lo" {
+			continue
+		}
+
+		macfile := filepath.Join(ROOT, f.Name(), "address")
+		mac, err := ioutil.ReadFile(macfile)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("unable to read the mac file[%s]", macfile))
+		}
+		nics[f.Name()] = Nic{
+			Name: f.Name(),
+			Mac: string(mac),
+		}
+	}
+
+	return nics, nil
 }

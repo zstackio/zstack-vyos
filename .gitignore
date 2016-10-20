@@ -26,3 +26,6 @@ _testmain.go
 *.iml
 zvr.log
 target/
+src/github.com/
+src/golang.org/
+bin/

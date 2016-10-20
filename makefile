@@ -10,9 +10,13 @@ PKG_DIR=$(TARGET_DIR)/package
 
 DEPS=github.com/Sirupsen/logrus github.com/pkg/errors
 
-build: deps
+zvr: deps
 	mkdir -p $(TARGET_DIR)
-	$(GO) build -o $(TARGET_DIR)/zvr zvr
+	$(GO) build -o $(TARGET_DIR)/zvr src/zvr/zvr.go
+
+zvrboot: deps
+	mkdir -p $(TARGET_DIR)
+	$(GO) build -o $(TARGET_DIR)/zvrboot src/zvr/zvrboot.go
 
 deps:
 	$(GO) get $(DEPS)
@@ -20,7 +24,7 @@ deps:
 clean:
 	rm -rf target/
 
-package: clean build
+package: clean zvr zvrboot
 	mkdir -p $(PKG_DIR)
 	cp -f $(TARGET_DIR)/zvr $(PKG_DIR)
 	cp -f scripts/zstack-virtualrouteragent $(PKG_DIR)
