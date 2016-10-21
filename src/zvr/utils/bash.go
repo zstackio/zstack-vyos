@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"fmt"
 	"github.com/pkg/errors"
+	"github.com/Sirupsen/logrus"
 )
 
 type Bash struct {
@@ -66,6 +67,7 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 	}
 
 	var so, se bytes.Buffer
+	logrus.Debugf("shell: %s", b.Command)
 	cmd := exec.Command("bash", "-c", b.Command)
 	cmd.Stdout = &so
 	cmd.Stderr = &se

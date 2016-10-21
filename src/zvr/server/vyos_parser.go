@@ -215,7 +215,7 @@ func (parser *VyosParser) Parse(text string) {
 
 var ConfigurationSourceFunc = func() string {
 	bash := utils.Bash{
-		Command: "show configuration",
+		Command: "/bin/cli-shell-api showCfg",
 	}
 
 	_, o, _, _ := bash.RunWithReturn()

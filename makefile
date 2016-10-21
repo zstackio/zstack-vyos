@@ -8,6 +8,7 @@ export GOPATH=$(shell pwd)
 TARGET_DIR=target
 PKG_ZVR_DIR=$(TARGET_DIR)/pkg-zvr
 PKG_ZVRBOOT_DIR=$(TARGET_DIR)/pkg-zvrboot
+PKG_TAR_DIR=$(TARGET_DIR)/pkg-tar
 
 DEPS=github.com/Sirupsen/logrus github.com/pkg/errors
 
@@ -32,3 +33,12 @@ package: clean zvr zvrboot
 	cp -f scripts/zstack-virtualrouteragent $(PKG_ZVR_DIR)
 	cp -f $(TARGET_DIR)/zvrboot $(PKG_ZVRBOOT_DIR)
 	$(GO) run package.go -conf package-config.json
+
+tar: zvr zvrboot
+	rm -rf $(PKG_TAR_DIR)
+	mkdir -p $(PKG_TAR_DIR)
+	cp -f $(TARGET_DIR)/zvr $(PKG_TAR_DIR)
+	cp -f scripts/zstack-virtualrouteragent $(PKG_TAR_DIR)
+	cp -f $(TARGET_DIR)/zvrboot $(PKG_TAR_DIR)
+	tar czf $(TARGET_DIR)/zvr.tar.gz -C $(PKG_TAR_DIR) .
+
