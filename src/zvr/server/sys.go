@@ -41,7 +41,8 @@ func FindNicNameByMac(mac string) (string, bool) {
 }
 
 func RunVyosScriptAsUserVyos(command string) {
-	template := `SET=${vyatta_sbindir}/my_set
+	template := `vyatta_sbindir=/opt/vyatta/sbin
+SET=${vyatta_sbindir}/my_set
 DELETE=${vyatta_sbindir}/my_delete
 COPY=${vyatta_sbindir}/my_copy
 MOVE=${vyatta_sbindir}/my_move
@@ -75,15 +76,18 @@ trap atexit EXIT SIGHUP SIGINT SIGTERM
 	defer os.Remove(tmpfile.Name())
 
 	err = ioutil.WriteFile(tmpfile.Name(), []byte(command), 0777); utils.PanicOnError(err)
+	tmpfile.Sync()
+	tmpfile.Close()
 	bash := utils.Bash{
-		Command: fmt.Sprintf(`su - vyos -c "%v"`, tmpfile.Name()),
+		Command: fmt.Sprintf(`chown vyos:users %s; chmod +x %s; su - vyos -c %v`, tmpfile.Name(), tmpfile.Name(), tmpfile.Name()),
 	}
 	bash.Run()
 	bash.PanicIfError()
 }
 
 func RunVyosScript(command string, args map[string]string) {
-	template := `SET=${vyatta_sbindir}/my_set
+	template := `vyatta_sbindir=/opt/vyatta/sbin
+SET=${vyatta_sbindir}/my_set
 DELETE=${vyatta_sbindir}/my_delete
 COPY=${vyatta_sbindir}/my_copy
 MOVE=${vyatta_sbindir}/my_move

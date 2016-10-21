@@ -64,7 +64,8 @@ chmod +x /etc/init.d/zstack-virtualrouteragent
 mkdir -p /home/vyos/zvr
 chown vyos:users /home/vyos/zvr
 chown vyos:users /opt/vyatta/sbin/zvr
-/sbin/zvrboot >/home/vyos/zvr/zvrboot.log 2>&1 < /dev/null
+/sbin/zvrboot >/home/vyos/zvr/zvrboot.log 2>&1 < /dev/null &
+exit 0
 END
 _EOF_
 

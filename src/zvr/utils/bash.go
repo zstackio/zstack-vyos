@@ -102,7 +102,7 @@ func (bash *Bash) PanicIfError() {
 	}
 
 	if bash.retCode != 0 {
-		panic(errors.New(fmt.Sprintf("shell failure[command: %v, return code: %v, stdout: %v, stdin: %v",
+		panic(errors.New(fmt.Sprintf("shell failure[command: %v, return code: %v, stdout: %v, stderr: %v",
 			bash.Command, bash.retCode, bash.stdout, bash.stderr)))
 	}
 }

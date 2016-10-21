@@ -77,6 +77,18 @@ func configureVyos()  {
 	vyos := server.NewParserFromShowConfiguration()
 	commands := make([]string, 0)
 
+	sshkey := bootstrapInfo["publicKey"].(string)
+	utils.Assert(sshkey != "", "cannot find 'publicKey' in bootstrap info")
+	sshkeyparts := strings.Split(sshkey, " ")
+	sshtype := sshkeyparts[0]
+	key := sshkeyparts[1]
+	id := sshkeyparts[2]
+
+	commands = append(commands, fmt.Sprintf("$SET system login user vyos authentication public-keys %s key %s",
+		id, key))
+	commands = append(commands, fmt.Sprintf("$SET system login user vyos authentication public-keys %s type %s",
+		id, sshtype))
+
 	nicsByMac := make(map[string]utils.Nic)
 	nicsByNames, err := utils.GetAllNics(); utils.PanicOnError(err)
 	for _, nic := range nicsByNames {
