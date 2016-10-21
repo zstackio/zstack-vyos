@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"io/ioutil"
 	"path/filepath"
+	"encoding/json"
 )
 
 func NetmaskToCIDR(netmask string) (int, error) {
@@ -62,6 +63,11 @@ type Nic struct {
 	Mac string
 }
 
+func (nic Nic) String() string {
+	s, _ := json.Marshal(nic)
+	return string(s)
+}
+
 func GetAllNics() (map[string]Nic, error) {
 	const ROOT = "/sys/class/net"
 
@@ -72,7 +78,7 @@ func GetAllNics() (map[string]Nic, error) {
 
 	nics := make(map[string]Nic)
 	for _, f := range files {
-		if !f.IsDir() || f.Name() == "lo" {
+		if f.IsDir() || f.Name() == "lo" {
 			continue
 		}
 
@@ -83,7 +89,7 @@ func GetAllNics() (map[string]Nic, error) {
 		}
 		nics[f.Name()] = Nic{
 			Name: f.Name(),
-			Mac: string(mac),
+			Mac: strings.TrimSpace(string(mac)),
 		}
 	}
 

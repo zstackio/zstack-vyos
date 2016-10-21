@@ -91,7 +91,7 @@ func configureVyos()  {
 		commands = append(commands, fmt.Sprintf("$SET interfaces ethernet %s speed auto", nicname))
 	}
 
-	mgmtNic := bootstrapInfo["managementNic"].(map[string]string)
+	mgmtNic := bootstrapInfo["managementNic"].(map[string]interface{})
 	if mgmtNic == nil {
 		panic(errors.New("no field 'managementNic' in bootstrap info"))
 	}
@@ -104,14 +104,15 @@ func configureVyos()  {
 	mgmtMac, ok := mgmtNic["mac"]; utils.PanicIfError(ok, errors.New("cannot find 'mac' field for the management nic"))
 	mgmtNetmask, ok := mgmtNic["netmask"]; utils.PanicIfError(ok, errors.New("cannot find 'netmask' field for the management nic"))
 	mgmtIp, ok := mgmtNic["ip"]; utils.PanicIfError(ok, errors.New("cannot find 'ip' field for the management nic"))
-	mn, ok := nicsByMac[mgmtMac]; utils.PanicIfError(ok, fmt.Errorf("the management nic mac is not '%s'", mgmtMac))
+	mn, ok := nicsByMac[mgmtMac.(string)]; utils.PanicIfError(ok, fmt.Errorf("cannot find the management nic[mac:%s]", mgmtMac))
 	utils.PanicIfError(mn.Name == "eth0", fmt.Errorf("the management nic is not eth0 but %s", mn.Name))
 	_, ok = mgmtNic["isDefaultRoute"]
-	setNic("eth0", mgmtIp, mgmtNetmask, ok)
+	setNic("eth0", mgmtIp.(string), mgmtNetmask.(string), ok)
 
-	otherNics := bootstrapInfo["additionalNics"].([]map[string]interface{})
+	otherNics := bootstrapInfo["additionalNics"].([]interface{})
 	if otherNics != nil {
-		for _, onic:= range otherNics {
+		for _, o := range otherNics {
+			onic := o.(map[string]interface{})
 			mac, ok := onic["mac"]; utils.PanicIfError(ok, errors.New("cannot find 'mac' field for the nic"))
 			netmask, ok := onic["netmask"]; utils.PanicIfError(ok, fmt.Errorf("cannot find 'netmask' field for the nic[mac:%s]", mac))
 			ip, ok := onic["ip"]; utils.PanicIfError(ok, fmt.Errorf("cannot find 'ip' field for the nic[mac:%s]", mac))
@@ -140,9 +141,10 @@ func configureVyos()  {
 	}
 
 	// arping to advocate our mac addresses
-	arping("eth0", mgmtIp, mgmtNic["gateway"])
+	arping("eth0", mgmtIp.(string), mgmtNic["gateway"].(string))
 	if otherNics != nil {
-		for _, onic := range otherNics {
+		for _, o := range otherNics {
+			onic := o.(map[string]interface{})
 			mac, _ := onic["mac"]
 			n, _ := nicsByMac[mac.(string)]
 			arping(n.Name, onic["ip"].(string), onic["gateway"].(string))

@@ -39,3 +39,9 @@ func TestGetNetworkNumber(t *testing.T) {
 	Assert(err == nil, "error")
 	Assert("172.20.14.0/24" == network, network)
 }
+
+func TestGetAllNics(t *testing.T) {
+	nics, err := GetAllNics()
+	Assert(err == nil, "error")
+	fmt.Println(nics)
+}
