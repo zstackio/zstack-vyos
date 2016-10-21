@@ -83,9 +83,6 @@ trap atexit EXIT SIGHUP SIGINT SIGTERM
 }
 
 func RunVyosScript(command string, args map[string]string) {
-	vyosScriptLock.Lock()
-	defer vyosScriptLock.Unlock()
-
 	template := `SET=${vyatta_sbindir}/my_set
 DELETE=${vyatta_sbindir}/my_delete
 COPY=${vyatta_sbindir}/my_copy
@@ -121,5 +118,13 @@ trap atexit EXIT SIGHUP SIGINT SIGTERM
 	}
 	bash.Run()
 	bash.PanicIfError()
+}
+
+func VyosLock(fn CommandHandler) CommandHandler {
+	return func(ctx *CommandContext) interface{} {
+		vyosScriptLock.Lock()
+		defer vyosScriptLock.Unlock()
+		return fn(ctx)
+	}
 }
 

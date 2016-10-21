@@ -12,6 +12,7 @@ import (
 func loadPlugins()  {
 	plugin.DhcpEntryPoint()
 	plugin.MiscEntryPoint()
+	plugin.DnsEntryPoint()
 }
 
 func abortOnWrongOption(msg string) {

@@ -178,6 +178,6 @@ var runVyosScript = func(script string, args map[string]string)  {
 
 
 func DhcpEntryPoint() {
-	server.RegisterAsyncCommandHandler(ADD_DHCP_PATH, addDhcpHandler)
-	server.RegisterAsyncCommandHandler(REMOVE_DHCP_PATH, removeDhcpHandler)
+	server.RegisterAsyncCommandHandler(ADD_DHCP_PATH, server.VyosLock(addDhcpHandler))
+	server.RegisterAsyncCommandHandler(REMOVE_DHCP_PATH, server.VyosLock(removeDhcpHandler))
 }
