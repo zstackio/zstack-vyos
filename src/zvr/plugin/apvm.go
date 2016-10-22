@@ -1,4 +1,4 @@
-package main
+package plugin
 
 import (
 	"zvr/utils"
@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	REFRESH_FIREWALL_PATH = "/appliancevm/refreshfirewall"
-	ECHO_PATH = "/appliancevm/echo"
-	INIT_PATH = "/appliancevm/init"
+	APVM_REFRESH_FIREWALL_PATH = "/appliancevm/refreshfirewall"
+	APVM_ECHO_PATH = "/appliancevm/echo"
+	APVM_INIT_PATH = "/appliancevm/init"
 	BOOTSTRAP_INFO_CACHE = "/var/lib/zstack/bootstrap-info.json"
 )
 
@@ -23,7 +23,7 @@ type firewallRule struct {
 	EndPort string `json:"endPort"`
 	AllowCidr string `json:"allowCidr"`
 	SourceIp string `json:"sourceIp"`
- 	DestIp string `json:"destIp"`
+	DestIp string `json:"destIp"`
 	NicMac string `json:"nicMac"`
 }
 
@@ -31,7 +31,7 @@ type refreshFirewallCmd struct {
 	Rules []firewallRule
 }
 
-func refreshFirewallHandler(ctx *server.CommandContext) interface{} {
+func apvmRefreshFirewallHandler(ctx *server.CommandContext) interface{} {
 	cmd := &refreshFirewallCmd{}
 	ctx.GetCommand(cmd)
 
@@ -55,14 +55,14 @@ func refreshFirewallHandler(ctx *server.CommandContext) interface{} {
 	content, err := ioutil.ReadFile(BOOTSTRAP_INFO_CACHE); utils.PanicOnError(err)
 	info := make(map[string]interface{})
 	utils.PanicOnError(json.Unmarshal(content, info))
-	sshport := info["sshport"].(int)
+	sshport := info["sshPort"].(float64)
 	utils.Assert(sshport != 0, "sshport not found in bootstrap info")
 	commands = append(commands, "$SET firewall name sshon default action accept")
-	commands = append(commands, fmt.Sprintf("$SET firewall name sshon rule 1 destination port %v", sshport))
+	commands = append(commands, fmt.Sprintf("$SET firewall name sshon rule 1 destination port %v", int(sshport)))
 	commands = append(commands, "$SET interfaces ethernet eth0 firewall local name sshon")
 
 	commands = append(commands, "$SET firewall name sshoff default action reject")
-	commands = append(commands, fmt.Sprintf("$SET firewall name sshoff rule 1 destination port %v", sshport))
+	commands = append(commands, fmt.Sprintf("$SET firewall name sshoff rule 1 destination port %v", int(sshport)))
 	for _, nic := range nics {
 		if nic.Name == "eth0" {
 			continue
@@ -137,43 +137,17 @@ func refreshFirewallHandler(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
-func echoHandler(ctx *server.CommandContext) interface{} {
+func apvmEchoHandler(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
-func initHandler(ctx *server.CommandContext) interface{} {
+func apvmInitHandler(ctx *server.CommandContext) interface{} {
 	// nothing to do
 	return nil
 }
 
-var apvmoptions server.Options
-
-func configureApvmFirewall() {
-	parser := server.NewParserFromShowConfiguration()
-
-	commands := make([]string, 0)
-	if _, ok := parser.GetConfig("firewall name apvm"); !ok {
-		commands = append(commands, fmt.Sprintf("$SET firewall name apvm rule 1 destination port %v", apvmoptions.Port))
-		commands = append(commands, "$SET firewall name apvm rule 1 action accept")
-	}
-	if _, ok := parser.GetValue("interfaces ethernet eth0 firewall local name apvm"); !ok {
-		commands = append(commands, "$SET interfaces ethernet eth0 firewall local name apvm")
-	}
-
-	if len(commands) > 0 {
-		server.RunVyosScript(strings.Join(commands, "\n"), nil)
-	}
-}
-
-func main()  {
-	apvmoptions = parseCommandOptions(7759)
-	server.SetOptions(apvmoptions)
-	utils.InitLog(apvmoptions.LogFile, false)
-
-	server.RegisterAsyncCommandHandler(REFRESH_FIREWALL_PATH, server.VyosLock(refreshFirewallHandler))
-	server.RegisterAsyncCommandHandler(ECHO_PATH, echoHandler)
-	server.RegisterAsyncCommandHandler(INIT_PATH, initHandler)
-
-	configureApvmFirewall()
-	server.Start()
+func ApvmEntryPoint() {
+	server.RegisterSyncCommandHandler(APVM_ECHO_PATH, apvmEchoHandler)
+	server.RegisterAsyncCommandHandler(APVM_REFRESH_FIREWALL_PATH, server.VyosLock(apvmRefreshFirewallHandler))
+	server.RegisterAsyncCommandHandler(APVM_INIT_PATH, apvmInitHandler)
 }

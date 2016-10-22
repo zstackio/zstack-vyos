@@ -7,6 +7,7 @@ import (
 	"sync"
 	"io/ioutil"
 	"os"
+	"github.com/Sirupsen/logrus"
 )
 
 var (
@@ -60,10 +61,12 @@ echo $session_env
 eval $session_env
 $API setupSession
 
-set -e
 %s
 $COMMIT
-set +e
+if [ $? -ne 0 ]; then
+	echo "fail to commit"
+	exit 1
+fi
 
 function atexit() {
     $API teardownSession
@@ -78,6 +81,7 @@ trap atexit EXIT SIGHUP SIGINT SIGTERM
 	err = ioutil.WriteFile(tmpfile.Name(), []byte(command), 0777); utils.PanicOnError(err)
 	tmpfile.Sync()
 	tmpfile.Close()
+	logrus.Debugln(command)
 	bash := utils.Bash{
 		Command: fmt.Sprintf(`chown vyos:users %s; chmod +x %s; su - vyos -c %v`, tmpfile.Name(), tmpfile.Name(), tmpfile.Name()),
 	}
@@ -105,10 +109,12 @@ echo $session_env
 eval $session_env
 $API setupSession
 
-set -e
 %s
 $COMMIT
-set +e
+if [ $? -ne 0 ]; then
+	echo "fail to commit"
+	exit 1
+fi
 
 function atexit() {
     $API teardownSession

@@ -63,16 +63,6 @@ func parseBootInfo() {
 	}, time.Duration(300)*time.Second, time.Duration(1)*time.Second)
 }
 
-func installSshkey() {
-	sshkey := bootstrapInfo["publicKey"].(string)
-	utils.Assert(sshkey != "", "cannot find 'publicKey' in bootstrap info")
-	err := utils.MkdirForFile(SSH_AUTHORIZED_FILE, 0600); utils.PanicOnError(err)
-	err = ioutil.WriteFile(SSH_AUTHORIZED_FILE, []byte(sshkey), 0600)
-	b := utils.Bash{ Command: fmt.Sprintf("chmod 0600 %v", SSH_AUTHORIZED_FILE) }
-	b.Run()
-	b.PanicIfError()
-}
-
 func configureVyos()  {
 	vyos := server.NewParserFromShowConfiguration()
 	commands := make([]string, 0)
@@ -143,7 +133,8 @@ func configureVyos()  {
 	if _, ok := vyos.GetConfig("service ssh"); ok {
 		commands = append(commands, "$DELETE service ssh")
 	}
-	commands = append(commands, "$SET service ssh port 22")
+	sshport := bootstrapInfo["sshPort"].(float64)
+	commands = append(commands, fmt.Sprintf("$SET service ssh port %v", int(sshport)))
 
 	server.RunVyosScriptAsUserVyos(strings.Join(commands, "\n"))
 
@@ -164,14 +155,6 @@ func configureVyos()  {
 	}
 }
 
-func startApvm()  {
-	b := utils.Bash{
-		Command: "/etc/init.d/zstack-appliancevm restart",
-	}
-	b.Run()
-	b.PanicIfError()
-}
-
 func startZvr()  {
 	b := utils.Bash{
 		Command: "/etc/init.d/zstack-virtualrouteragent restart",
@@ -185,9 +168,7 @@ func main() {
 	waitIptablesServiceOnline()
 	waitVirtioPortOnline()
 	parseBootInfo()
-	installSshkey()
 	configureVyos()
-	startApvm()
 	startZvr()
 	log.Debugf("successfully configured the sysmtem and bootstrap the zstack virtual router agents")
 }
