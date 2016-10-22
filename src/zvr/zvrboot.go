@@ -164,6 +164,14 @@ func configureVyos()  {
 	}
 }
 
+func startApvm()  {
+	b := utils.Bash{
+		Command: "/etc/init.d/zstack-appliancevm restart",
+	}
+	b.Run()
+	b.PanicIfError()
+}
+
 func startZvr()  {
 	b := utils.Bash{
 		Command: "/etc/init.d/zstack-virtualrouteragent restart",
@@ -179,6 +187,7 @@ func main() {
 	parseBootInfo()
 	installSshkey()
 	configureVyos()
+	startApvm()
 	startZvr()
-	log.Debugf("successfully configured the sysmtem and bootstrap the zstack virtual router agent")
+	log.Debugf("successfully configured the sysmtem and bootstrap the zstack virtual router agents")
 }

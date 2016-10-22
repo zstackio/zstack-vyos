@@ -95,3 +95,20 @@ func GetAllNics() (map[string]Nic, error) {
 
 	return nics, nil
 }
+
+func GetNicNameByIp(ip string) (string, error) {
+	bash := Bash{
+		Command: fmt.Sprintf("ip addr | grep -w %s", ip),
+	}
+	ret, o, _, err := bash.RunWithReturn()
+	if err != nil {
+		return "", err
+	}
+	if ret != 0 {
+		return "", errors.New(fmt.Sprintf("no nic with the IP[%s] found in the system", ip))
+	}
+
+	o = strings.TrimSpace(o)
+	os := strings.Split(o, " ")
+	return os[len(os)-1], nil
+}

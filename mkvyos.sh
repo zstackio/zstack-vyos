@@ -48,23 +48,30 @@ tar xzf $2 -C $tmpdir
 ZVR=$tmpdir/zvr
 ZVRBOOT=$tmpdir/zvrboot
 ZVRSCRIPT=$tmpdir/zstack-virtualrouteragent
+APVM=$tmpdir/apvm
+APVMSCRIPT=$tmpdir/zstack-appliancevm
 
 guestfish <<_EOF_
 add $1
 run
 mount /dev/sda1 /
 upload $ZVR /opt/vyatta/sbin/zvr
-upload $ZVRBOOT /sbin/zvrboot
+upload $ZVRBOOT /opt/vyatta/zvrboot
 upload $ZVRSCRIPT /etc/init.d/zstack-virtualrouteragent
+upload $APVM /opt/vyatta/sbin/apvm
+upload $APVMSCRIPT /etc/init.d/zstack-appliancevm
 upload -<<END /opt/vyatta/etc/config/scripts/vyatta-postconfig-bootup.script
 #!/bin/bash
 chmod +x /sbin/zvrboot
 chmod +x /opt/vyatta/sbin/zvr
 chmod +x /etc/init.d/zstack-virtualrouteragent
+chmod +x /opt/vyatta/sbin/apvm
+chmod +x /etc/init.d/zstack-appliancevm
 mkdir -p /home/vyos/zvr
 chown vyos:users /home/vyos/zvr
 chown vyos:users /opt/vyatta/sbin/zvr
-/sbin/zvrboot >/home/vyos/zvr/zvrboot.log 2>&1 < /dev/null &
+chown vyos:users /opt/vyatta/sbin/apvm
+/opt/vyatta/zvrboot >/home/vyos/zvr/zvrboot.log 2>&1 < /dev/null &
 exit 0
 END
 _EOF_

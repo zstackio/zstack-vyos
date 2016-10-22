@@ -3,10 +3,10 @@
 export PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
 DIR=$(dirname $(readlink -f "$0"))
-SERVER=/opt/vyatta/sbin/zvr
+SERVER=/opt/vyatta/sbin/apvm
 HOMDIR=/home/vyos/zvr
-LOGFILE=$HOMDIR/zvr.log
-BOOTLOG=$HOMDIR/zvrstartup.log
+LOGFILE=$HOMDIR/apvm.log
+BOOTLOG=$HOMDIR/apvmstartup.log
 
 if [ $# -eq 0 ]; then
     echo "usage: $0 [start|stop|restart|status]"
@@ -26,7 +26,7 @@ if [ x$ETH0_IP == "x" ]; then
 fi
 
 get_pid() {
-    pgrep zvr
+    pgrep apvm
 }
 
 check_status() {

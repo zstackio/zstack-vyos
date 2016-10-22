@@ -10,6 +10,12 @@
             "dir": "target/pkg-zvrboot",
             "installer": "scripts/install-zvrboot.sh",
             "location": "target/"
+	},
+
+	"apvm": {
+            "dir": "target/pkg-apvm",
+            "installer": "scripts/install-apvm.sh",
+            "location": "target/"
 	}
     }
 }
