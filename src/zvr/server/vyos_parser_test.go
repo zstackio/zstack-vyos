@@ -236,8 +236,17 @@ ABC E
 	_, ok = tree.Get("interfaces ethernet eth0")
 	utils.Assert(ok, "fail")
 
+	value, ok := tree.Get("ABC"); utils.Assert(value.Value() == "E", "E")
+
 	tree.Set("interfaces ethernet eth1 address 172.20.14.209/16")
+	tree.Set("interfaces ethernet eth1 address 172.20.14.209/16")
+	tree.Set("interfaces ethernet eth1 address 172.20.14.210/16")
 	tree.Delete("interfaces ethernet eth0 address")
+	tree.Delete("interfaces ethernet eth0 address")
+	tree.Delete("system login user vyos authentication plaintext-password")
+	tree.Set("system login user vyos authentication plaintext-password xxx")
+	tree.Set("protocols static route 0.0.0.0/0 next-hop 172.20.0.1 distance 2")
 	fmt.Println(tree.CommandsAsString())
+	fmt.Println(tree.String())
 }
 

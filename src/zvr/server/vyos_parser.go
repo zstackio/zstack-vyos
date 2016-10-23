@@ -286,10 +286,21 @@ func (n *VyosConfigNode) String() string {
 	}
 }
 
-func (n *VyosConfigNode) Value() string {
+func (n *VyosConfigNode) isValueNode() bool {
+	return n.childrenIndex == nil && n.children == nil
+}
+
+func (n *VyosConfigNode) isKeyNode() bool {
 	if len(n.children) != 1 {
-		panic(errors.New(fmt.Sprintf("the node[%s] is not a leaf node, it has %v child node", n.String(), len(n.children))))
+		return false
 	}
+
+	c := n.children[0]
+	return c.isValueNode()
+}
+
+func (n *VyosConfigNode) Value() string {
+	utils.Assert(n.isKeyNode(), fmt.Sprintf("the node[%s] is not a key node", n.String()))
 
 	c := n.children[0]
 	return c.name
@@ -362,7 +373,6 @@ func (t *VyosConfigTree) has(config...string) bool {
 
 	current := t.Root
 	for _, c := range config {
-		fmt.Printf("yyy: %s\n", c)
 		current = current.childrenIndex[c]
 		if current == nil {
 			return false
@@ -379,16 +389,34 @@ func (t *VyosConfigTree) Has(config string) bool {
 func (t *VyosConfigTree) Set(config string) bool {
 	t.init()
 	cs := strings.Split(config, " ")
-	if t.has(cs...) {
+	key := strings.Join(cs[:len(cs)-1], " ")
+	value := cs[len(cs)-1]
+	keyNode, ok := t.Get(key)
+	if ok {
+		utils.Assert(keyNode.isKeyNode(), fmt.Sprintf("the node[%s] is not a key node, cannot call set on it", keyNode.String()))
+
+		// the key found
+		cvalue := keyNode.Value()
+		if (value != cvalue) {
+			keyNode.deleteNode(cvalue)
+			keyNode.addNode(value)
+			// the value is changed, delete the old one
+			t.changeCommands = append(t.changeCommands, fmt.Sprintf("$DELETE %s", key))
+			t.changeCommands = append(t.changeCommands, fmt.Sprintf("$SET %s", config))
+			return true
+		} else {
+			// the value is unchanged
+			return false
+		}
+	} else {
+		// the key not found
+		current := t.Root
+		for _, c := range cs {
+			current = current.addNode(c)
+		}
+		t.changeCommands = append(t.changeCommands, fmt.Sprintf("$SET %s", config))
 		return true
 	}
-
-	current := t.Root
-	for _, c := range cs {
-		current = current.addNode(c)
-	}
-	t.changeCommands = append(t.changeCommands, fmt.Sprintf("$SET %s", config))
-	return true
 }
 
 func (t *VyosConfigTree) Get(config string) (*VyosConfigNode, bool) {
@@ -412,7 +440,6 @@ func (t *VyosConfigTree) Delete(config string) bool {
 		return false
 	}
 
-	fmt.Println("xxxxxxxxxxxxxxxxxxxxxxxxx")
 	current.deleteSelf()
 	t.changeCommands = append(t.changeCommands, fmt.Sprintf("$DELETE %s", config))
 	return true
@@ -447,8 +474,8 @@ func (t *VyosConfigTree) String() string {
 					}
 					return strings.Join(ss, " ")
 				}())
-
 				path.Pop()
+
 				return
 			}
 
