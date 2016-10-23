@@ -10,12 +10,12 @@ import (
 	"fmt"
 	"zvr/server"
 	"strings"
+	"os"
 )
 
 const (
 	VIRTIO_PORT_PATH = "/dev/virtio-ports/applianceVm.vport"
-	BOOTSTRAP_INFO_CACHE = "/var/lib/zstack/bootstrap-info.json"
-	SSH_AUTHORIZED_FILE = "/root/.ssh/authorized_keys"
+	BOOTSTRAP_INFO_CACHE = "/home/vyos/zvr/bootstrap-info.json"
 )
 
 var bootstrapInfo map[string]interface{} = make(map[string]interface{})
@@ -58,6 +58,7 @@ func parseBootInfo() {
 
 		err = utils.MkdirForFile(BOOTSTRAP_INFO_CACHE, 0666); utils.PanicOnError(err)
 		err = ioutil.WriteFile(BOOTSTRAP_INFO_CACHE, content, 0666); utils.PanicOnError(err)
+		err = os.Chmod(BOOTSTRAP_INFO_CACHE, 0777); utils.PanicOnError(err)
 		log.Debugf("recieved bootstrap info:\n%s", string(content))
 		return true
 	}, time.Duration(300)*time.Second, time.Duration(1)*time.Second)
@@ -134,7 +135,47 @@ func configureVyos()  {
 		commands = append(commands, "$DELETE service ssh")
 	}
 	sshport := bootstrapInfo["sshPort"].(float64)
+	utils.Assert(sshport != 0, "sshport not found in bootstrap info")
 	commands = append(commands, fmt.Sprintf("$SET service ssh port %v", int(sshport)))
+
+	// configure firewall
+	nics, err := utils.GetAllNics(); utils.PanicOnError(err)
+	commands = append(commands, "$SET firewall name default default-action reject")
+
+	for _, nic := range nics {
+		commands = append(commands, server.MakeFirewallLocalRules(nic.Name,
+			"rule 1 action accept",
+			"rule 1 state established enable",
+			"rule 1 state related enable",
+			"rule 2 action accept",
+			"rule 2 protocl icmp",
+		))
+
+		commands = append(commands, server.MakeFirewallInRules(nic.Name,
+			"rule 1 action accept",
+			"rule 1 state established enable",
+			"rule 1 state related enable",
+			"rule 2 action accept",
+			"rule 2 protocol icmp",
+		))
+	}
+
+	// only allow ssh traffic on eth0, disable on others
+	commands = append(commands, fmt.Sprintf("$SET firewall name sshon rule 1 destination port %v", int(sshport)))
+	commands = append(commands, "$SET firewall name sshon rule 1 protocol tcp")
+	commands = append(commands, "$SET firewall name sshon rule 1 action accept")
+	commands = append(commands, "$SET interfaces ethernet eth0 firewall local name sshon")
+
+	commands = append(commands, fmt.Sprintf("$SET firewall name sshoff rule 1 destination port %v", int(sshport)))
+	commands = append(commands, "$SET firewall name sshoff rule 1 protocol tcp")
+	commands = append(commands, "$SET firewall name sshoff rule 1 action reject")
+	for _, nic := range nics {
+		if nic.Name == "eth0" {
+			continue
+		}
+
+		commands = append(commands, fmt.Sprintf("$SET interfaces ethernet %v firewall local name sshoff", nic.Name))
+	}
 
 	server.RunVyosScriptAsUserVyos(strings.Join(commands, "\n"))
 

@@ -28,3 +28,24 @@ func (s *Stack) Pop() (value interface{}) {
 
 	return nil
 }
+
+func (s *Stack) Slice() []interface{} {
+	ret := make([]interface{}, 0)
+	c := s.top
+	for {
+		if c == nil {
+			return ret
+		}
+
+		ret = append(ret, c.value)
+		c = c.next
+	}
+}
+
+func (s *Stack) ReverseSlice() []interface{} {
+	sl := s.Slice()
+	for i, j := 0, len(sl)-1; i < j; i, j = i+1, j-1 {
+		sl[i], sl[j] = sl[j], sl[i]
+	}
+	return sl
+}

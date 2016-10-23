@@ -56,7 +56,7 @@ func configureZvrFirewall() {
 	}
 
 	if len(commands) > 0 {
-		server.RunVyosScriptAsUserVyos(strings.Join(commands, "\n"))
+		server.RunVyosScript(strings.Join(commands, "\n"), nil)
 	}
 }
 

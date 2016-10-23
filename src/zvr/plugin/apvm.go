@@ -4,8 +4,6 @@ import (
 	"zvr/utils"
 	"zvr/server"
 	"fmt"
-	"io/ioutil"
-	"encoding/json"
 	"github.com/pkg/errors"
 	"strings"
 )
@@ -14,13 +12,12 @@ const (
 	APVM_REFRESH_FIREWALL_PATH = "/appliancevm/refreshfirewall"
 	APVM_ECHO_PATH = "/appliancevm/echo"
 	APVM_INIT_PATH = "/appliancevm/init"
-	BOOTSTRAP_INFO_CACHE = "/var/lib/zstack/bootstrap-info.json"
 )
 
 type firewallRule struct {
 	Protocol string `json:"protocol"`
-	StartPort string `json:"startPort"`
-	EndPort string `json:"endPort"`
+	StartPort int `json:"startPort"`
+	EndPort int `json:"endPort"`
 	AllowCidr string `json:"allowCidr"`
 	SourceIp string `json:"sourceIp"`
 	DestIp string `json:"destIp"`
@@ -37,39 +34,6 @@ func apvmRefreshFirewallHandler(ctx *server.CommandContext) interface{} {
 
 	commands := make([]string, 0)
 	nics, err := utils.GetAllNics(); utils.PanicOnError(err)
-
-	commands = append(commands, "$SET firewall name default default-action drop")
-	count := 1
-	commands = append(commands, fmt.Sprintf("$SET firewall name default rule %v action accept", count))
-	commands = append(commands, fmt.Sprintf("$SET firewall name default rule %v state established enable", count))
-	commands = append(commands, fmt.Sprintf("$SET firewall name default rule %v state state related enable", count))
-	count ++
-	commands = append(commands, fmt.Sprintf("$SET firewall name default rule %v action accept", count))
-	commands = append(commands, fmt.Sprintf("$SET firewall name default rule %v protocol icmp", count))
-	for _, nic := range nics {
-		commands = append(commands, fmt.Sprintf("$SET interfaces ethernet %s firewall local name default", nic.Name))
-		commands = append(commands, fmt.Sprintf("$SET interfaces ethernet %s firewall in name default", nic.Name))
-	}
-
-	// only allow ssh traffic on eth0, disable on others
-	content, err := ioutil.ReadFile(BOOTSTRAP_INFO_CACHE); utils.PanicOnError(err)
-	info := make(map[string]interface{})
-	utils.PanicOnError(json.Unmarshal(content, info))
-	sshport := info["sshPort"].(float64)
-	utils.Assert(sshport != 0, "sshport not found in bootstrap info")
-	commands = append(commands, "$SET firewall name sshon default action accept")
-	commands = append(commands, fmt.Sprintf("$SET firewall name sshon rule 1 destination port %v", int(sshport)))
-	commands = append(commands, "$SET interfaces ethernet eth0 firewall local name sshon")
-
-	commands = append(commands, "$SET firewall name sshoff default action reject")
-	commands = append(commands, fmt.Sprintf("$SET firewall name sshoff rule 1 destination port %v", int(sshport)))
-	for _, nic := range nics {
-		if nic.Name == "eth0" {
-			continue
-		}
-
-		commands = append(commands, fmt.Sprintf("$SET interfaces ethernet %v firewall local name sshoff", nic.Name))
-	}
 
 	// configure rule for each interface
 	ruleByNicnames := make(map[string][]firewallRule)

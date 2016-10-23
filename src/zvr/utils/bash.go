@@ -67,7 +67,7 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 	}
 
 	var so, se bytes.Buffer
-	logrus.Debugf("shell: %s", b.Command)
+	logrus.Debugf("shell start: %s", b.Command)
 	cmd := exec.Command("bash", "-c", b.Command)
 	cmd.Stdout = &so
 	cmd.Stderr = &se
@@ -91,6 +91,11 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 	b.retCode = retCode
 	b.stdout = stdout
 	b.stderr = stderr
+	logrus.WithFields(logrus.Fields{
+		"return code": fmt.Sprintf("%v", retCode),
+		"stdout": stdout,
+		"stderr": stderr,
+	}).Debugf("shell done: %s", b.Command)
 
 	return
 }

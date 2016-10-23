@@ -7,6 +7,7 @@ import (
 	"time"
 	"encoding/json"
 	log "github.com/Sirupsen/logrus"
+	"github.com/pkg/errors"
 )
 
 type commandHandlerWrap struct {
@@ -46,7 +47,6 @@ type HttpInterceptor func(http.HandlerFunc) http.HandlerFunc
 
 var (
 	commandHandlers map[string]*commandHandlerWrap = make(map[string]*commandHandlerWrap)
-	interceptors map[string][]HttpInterceptor = make(map[string][]HttpInterceptor, 0)
 	commandOptions Options
 )
 
@@ -57,16 +57,6 @@ const (
 
 func SetOptions(o Options) {
 	commandOptions = o
-}
-
-func RegisterHttpInterceptor(path string, ic HttpInterceptor)  {
-	ics, ok := interceptors[path]
-	if !ok {
-		ics = make([]HttpInterceptor, 0)
-	}
-
-	ics = append(ics, ic)
-	interceptors[path] = ics
 }
 
 func RegisterSyncCommandHandler(path string, chandler CommandHandler)  {
@@ -90,47 +80,25 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 		async: async,
 	}
 
-	inner := func(w http.ResponseWriter, req *http.Request) {
-		ctx := &CommandContext{
-			responseWriter: w,
-			request: req,
-		}
-
-		if !async {
-			rsp := chandler(ctx)
-			body := ""
-
-			if rsp != nil {
-				b, err := json.Marshal(&rsp)
-				if err != nil {
-					panic(err)
-				}
-				body = string(b)
-			}
-
+	syncReply := func(rsp interface{}, w http.ResponseWriter, req *http.Request) {
+		if body, err := json.Marshal(rsp); err == nil {
 			w.WriteHeader(http.StatusOK)
-			utils.LogError(fmt.Fprint(w, body))
+			utils.LogError(fmt.Fprint(w, string(body)))
 		} else {
-			callbackURL := req.Header.Get(CALLBACK_URL)
-			taskUuid := req.Header.Get(TASK_UUID)
-			rsp := chandler(ctx)
-
-			if rsp == nil {
-				rsp = CommandResponseHeader{ Success: true }
-			}
-
-			utils.Retry(func() error {
-				return utils.HttpPostForObject(callbackURL, map[string]string{
-					TASK_UUID: taskUuid,
-				}, rsp, nil)
-			}, 15, 1)
+			utils.LogError(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			utils.LogError(fmt.Fprint(w, err))
 		}
 	}
 
-	for _, ics := range interceptors {
-		for _, ic := range ics {
-			inner = ic(inner)
-		}
+	asyncReply := func(rsp interface{}, w http.ResponseWriter, req *http.Request) {
+		callbackURL := req.Header.Get(CALLBACK_URL)
+		taskUuid := req.Header.Get(TASK_UUID)
+		err := utils.Retry(func() error {
+			return utils.HttpPostForObject(callbackURL, map[string]string{
+				TASK_UUID: taskUuid,
+			}, rsp, nil)
+		}, 60, 1); utils.LogError(err)
 	}
 
 	w.handler = func(w http.ResponseWriter, req *http.Request) {
@@ -141,22 +109,45 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 					Error: fmt.Sprintf("%v", err),
 				}
 
-				log.Warnf("command of the path[%s] fails, %v", path, err)
-
-				body, err := json.Marshal(reply)
-				if err != nil {
-					utils.LogError(err)
-					w.WriteHeader(http.StatusInternalServerError)
-					utils.LogError(fmt.Fprintf(w, fmt.Sprintf("%s", err)))
-					return
+				if e, ok := err.(error); ok {
+					log.Warnf("+v\n", errors.Wrap(e, fmt.Sprintf("command[path:%s] failed", path)))
+				} else {
+					log.Warnf("+v\n", errors.Wrap(errors.New(err.(string)), fmt.Sprintf("command[path:%s] failed", path)))
 				}
 
-				w.WriteHeader(http.StatusOK)
-				utils.LogError(fmt.Fprint(w, string(body)))
+
+				if !async {
+					syncReply(reply, w, req)
+				} else {
+					asyncReply(reply, w, req)
+				}
 			}
 		}()
 
-		inner(w, req)
+		ctx := &CommandContext{
+			responseWriter: w,
+			request: req,
+		}
+
+		if !async {
+			rsp := chandler(ctx)
+			if rsp == nil {
+				rsp = CommandResponseHeader{ Success: true }
+			}
+			syncReply(rsp, w, req)
+		} else {
+			// reply first, and the response body is ignored
+			// this is an ack that we have received the request
+			syncReply("", w, req)
+
+			// do the real work and then send the response
+			rsp := chandler(ctx)
+			if rsp == nil {
+				rsp = CommandResponseHeader{ Success: true }
+			}
+
+			asyncReply(rsp, w, req)
+		}
 	}
 
 	log.Debugf("a command path[%s] is registered", path)

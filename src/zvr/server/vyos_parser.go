@@ -165,7 +165,7 @@ func (parser *VyosParser) getConfig(keys ...string) (*VyosConfig, bool) {
 	return c.getConfig(keys...)
 }
 
-func (parser *VyosParser) Parse(text string) {
+func (parser *VyosParser) Parse(text string) *VyosConfigTree {
 	parser.parsed = true
 
 	words := make([]string, 0)
@@ -182,6 +182,10 @@ func (parser *VyosParser) Parse(text string) {
 
 	offset := 0
 	parser.data = make(map[string]interface{})
+	tree := &VyosConfigTree{ Root: &VyosConfigNode{} }
+	tstack := &utils.Stack{}
+
+	currentNode := tree.Root
 	current := parser.data
 	stack := &utils.Stack{}
 	for i := 0; i < len(words); i += offset {
@@ -191,12 +195,23 @@ func (parser *VyosParser) Parse(text string) {
 			stack.Push(current)
 			current[keys[0]] = make(map[string]interface{})
 			current = current[keys[0]].(map[string]interface{})
+
+			tstack.Push(currentNode)
+			currentNode = currentNode.addNode(keys[0])
 		} else if role == KEY_VALUE {
 			current[keys[0]] = value
+			currentNode.addNode(keys[0]).addNode(value)
 		} else if role == ROOT_ATTRIBUTE {
 			stack.Push(current)
+			tstack.Push(currentNode)
 
 			for _, key := range keys {
+				if n := currentNode.getNode(key); n == nil {
+					currentNode = currentNode.addNode(key)
+				} else {
+					currentNode = n
+				}
+
 				if c, ok := current[key]; !ok {
 					current[key] = make(map[string]interface{})
 					current = current[key].(map[string]interface{})
@@ -206,11 +221,15 @@ func (parser *VyosParser) Parse(text string) {
 			}
 		} else if role == CLOSE {
 			current = stack.Pop().(map[string]interface{})
+			currentNode = tstack.Pop().(*VyosConfigNode)
 		}
 	}
 
 	//txt, _ := json.Marshal(parser.data)
 	//fmt.Println(string(txt))
+
+	//fmt.Println(tree.String())
+	return tree
 }
 
 var ConfigurationSourceFunc = func() string {
@@ -237,5 +256,212 @@ func NewParserFromConfiguration(text string) *VyosParser {
 	p := &VyosParser{}
 	p.Parse(text)
 	return p
+}
+
+type VyosConfigNode struct {
+	name          string
+	children      []*VyosConfigNode
+	childrenIndex map[string]*VyosConfigNode
+	parent        *VyosConfigNode
+}
+
+
+func (n *VyosConfigNode) String() string {
+	stack := &utils.Stack{}
+	p := n
+	for {
+		if p == nil {
+			return func() string {
+				sl := stack.Slice()
+				ss := make([]string, len(sl))
+				for i, s := range sl {
+					ss[i] = s.(string)
+				}
+				return strings.Join(ss, " ")
+			}()
+		}
+
+		stack.Push(p.name)
+		p = p.parent
+	}
+}
+
+func (n *VyosConfigNode) Value() string {
+	if len(n.children) != 1 {
+		panic(errors.New(fmt.Sprintf("the node[%s] is not a leaf node, it has %v child node", n.String(), len(n.children))))
+	}
+
+	c := n.children[0]
+	return c.name
+}
+
+func (n *VyosConfigNode) deleteSelf() *VyosConfigNode {
+	return n.parent.deleteNode(n.name)
+}
+
+func (n *VyosConfigNode) deleteNode(name string) *VyosConfigNode {
+	delete(n.childrenIndex, name)
+	nsl := make([]*VyosConfigNode, 0)
+	for _, c := range n.children {
+		if c.name != name {
+			nsl = append(nsl, c)
+		}
+	}
+	n.children = nsl
+	return n
+}
+
+func (n *VyosConfigNode) getNode(name string) *VyosConfigNode {
+	return n.childrenIndex[name]
+}
+
+func (n *VyosConfigNode) addNode(name string) *VyosConfigNode {
+	if c, ok := n.childrenIndex[name]; ok {
+		return c
+	}
+
+	newNode := &VyosConfigNode{
+		name: name,
+	}
+
+	if n.children == nil {
+		n.children = make([]*VyosConfigNode, 0)
+	}
+	n.children = append(n.children, newNode)
+
+	if n.childrenIndex == nil {
+		n.childrenIndex = make(map[string]*VyosConfigNode)
+	}
+	n.childrenIndex[name] = newNode
+	newNode.parent = n
+	return newNode
+}
+
+
+type VyosConfigTree struct {
+	Root *VyosConfigNode
+	changeCommands []string
+}
+
+func (t *VyosConfigTree) init() {
+	if t.changeCommands == nil {
+		t.changeCommands = make([]string, 0)
+	}
+	if t.Root == nil {
+		t.Root = &VyosConfigNode{
+			children: make([]*VyosConfigNode, 0),
+			childrenIndex: make(map[string]*VyosConfigNode),
+		}
+	}
+}
+
+func (t *VyosConfigTree) has(config...string) bool {
+	if t.Root == nil || t.Root.children == nil {
+		return false
+	}
+
+	current := t.Root
+	for _, c := range config {
+		fmt.Printf("yyy: %s\n", c)
+		current = current.childrenIndex[c]
+		if current == nil {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (t *VyosConfigTree) Has(config string) bool {
+	return t.has(strings.Split(config, " ")...)
+}
+
+func (t *VyosConfigTree) Set(config string) bool {
+	t.init()
+	cs := strings.Split(config, " ")
+	if t.has(cs...) {
+		return true
+	}
+
+	current := t.Root
+	for _, c := range cs {
+		current = current.addNode(c)
+	}
+	t.changeCommands = append(t.changeCommands, fmt.Sprintf("$SET %s", config))
+	return true
+}
+
+func (t *VyosConfigTree) Get(config string) (*VyosConfigNode, bool) {
+	t.init()
+	cs := strings.Split(config, " ")
+	if !t.has(cs...) {
+		return nil, false
+	}
+
+	current := t.Root
+	for _, c := range cs {
+		current = current.getNode(c)
+	}
+
+	return current, true
+}
+
+func (t *VyosConfigTree) Delete(config string) bool {
+	current, ok := t.Get(config)
+	if !ok {
+		return false
+	}
+
+	fmt.Println("xxxxxxxxxxxxxxxxxxxxxxxxx")
+	current.deleteSelf()
+	t.changeCommands = append(t.changeCommands, fmt.Sprintf("$DELETE %s", config))
+	return true
+}
+
+func (t *VyosConfigTree) CommandsAsString() string {
+	return strings.Join(t.changeCommands, "\n")
+}
+
+func (t *VyosConfigTree) Commands() []string {
+	return t.changeCommands
+}
+
+func (t *VyosConfigTree) String() string {
+	if t.Root == nil {
+		return ""
+	}
+
+	strs := make([]string, 0)
+	for _, n := range t.Root.children {
+		path := utils.Stack{}
+
+		var pathBuilder func(node *VyosConfigNode)
+		pathBuilder = func(node *VyosConfigNode) {
+			if node.children == nil {
+				path.Push(node.name)
+				strs = append(strs, func() string {
+					sl := path.ReverseSlice()
+					ss := make([]string, len(sl))
+					for i, s := range sl {
+						ss[i] = s.(string)
+					}
+					return strings.Join(ss, " ")
+				}())
+
+				path.Pop()
+				return
+			}
+
+			path.Push(node.name)
+			for _, cn := range node.children {
+				pathBuilder(cn)
+			}
+			path.Pop()
+		}
+
+		pathBuilder(n)
+	}
+
+	return strings.Join(strs, "\n")
 }
 

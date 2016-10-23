@@ -42,7 +42,7 @@ func FindNicNameByMac(mac string) (string, bool) {
 }
 
 func RunVyosScriptAsUserVyos(command string) {
-	template := `vyatta_sbindir=/opt/vyatta/sbin
+	template := `export vyatta_sbindir=/opt/vyatta/sbin
 SET=${vyatta_sbindir}/my_set
 DELETE=${vyatta_sbindir}/my_delete
 COPY=${vyatta_sbindir}/my_copy
@@ -90,7 +90,7 @@ trap atexit EXIT SIGHUP SIGINT SIGTERM
 }
 
 func RunVyosScript(command string, args map[string]string) {
-	template := `vyatta_sbindir=/opt/vyatta/sbin
+	template := `export vyatta_sbindir=/opt/vyatta/sbin
 SET=${vyatta_sbindir}/my_set
 DELETE=${vyatta_sbindir}/my_delete
 COPY=${vyatta_sbindir}/my_copy
