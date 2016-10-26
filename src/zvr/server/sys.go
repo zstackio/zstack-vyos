@@ -22,13 +22,13 @@ func FindNicNameByMacFromConfiguration(mac, configuration string) (string, bool)
 		return "", false
 	}
 
-	for _, eth := range config.Keys() {
-		c, _ := config.GetConfig(eth)
-		hw, ok := c.GetValue("hw-id")
-		if !ok {
+	for _, eth := range config.ChildNodeKeys() {
+		c := config.getNode(fmt.Sprintf("%s hw-id", eth))
+		if c == nil {
 			continue
 		}
 
+		hw := c.Value()
 		if strings.ToLower(mac) == hw {
 			return eth, true
 		}

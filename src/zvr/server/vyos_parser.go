@@ -6,12 +6,11 @@ import (
 	"github.com/pkg/errors"
 	"fmt"
 	"zvr/utils"
-	//"encoding/json"
 )
 
 type VyosParser struct {
-	data map[string]interface{}
 	parsed bool
+	tree *VyosConfigTree
 }
 
 type role int
@@ -53,116 +52,17 @@ func matchToken(words []string) (int, role, []string, string) {
 	}
 }
 
-type VyosConfig struct {
-	data map[string]interface{}
-}
-
-func (c *VyosConfig) Size() int {
-	return len(c.data)
-}
-
-func (c *VyosConfig) Keys() []string {
-	keys := make([]string, 0)
-	for k := range c.data {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
-func (c *VyosConfig) GetValue(key string) (string, bool) {
-	return c.getValue(strings.Split(key, " ")...)
-}
-
-func (c *VyosConfig) getValue(keys ...string) (string, bool) {
-	if len(keys) == 1 {
-		key := keys[0]
-		value := c.data[key]
-		if value == nil {
-			return "", false
-		}
-
-		if v, ok := value.(string); ok {
-			return v, true
-		} else {
-			return "", false
-		}
-	}
-
-	var current interface{} = c.data
-	for _, key := range keys {
-		m, ok := current.(map[string]interface{})
-		if !ok {
-			return "", false
-		}
-
-		current = m[key]
-		if current == nil {
-			return "", false
-		}
-	}
-
-	if v, ok := current.(string); ok {
-		return v, true
-	} else {
-		return "", false
-	}
-}
-
-func (c *VyosConfig) GetConfig(key string) (*VyosConfig, bool) {
-	return c.getConfig(strings.Split(key, " ")...)
-}
-
-func (c *VyosConfig) getConfig(keys ...string) (*VyosConfig, bool) {
-	var current interface{} = c.data
-	for _, key := range keys {
-		m, ok := current.(map[string]interface{})
-		if !ok {
-			return nil, false
-		}
-
-		current = m[key]
-		if current == nil {
-			return nil, false
-		}
-	}
-
-	if m, ok := current.(map[string]interface{}); ok {
-		return &VyosConfig{
-			data: m,
-		}, true
-	} else {
-		return nil, false
-	}
-}
 
 func (parser *VyosParser) GetValue(key string) (string, bool) {
-	return parser.getValue(strings.Split(key, " ")...)
-}
-
-func (parser *VyosParser) getValue(keys ...string) (string, bool) {
-	if (len(keys) == 1) {
-		utils.Assert(parser.parsed, "you must call Parse() before GetValue()")
-		c := &VyosConfig{ data: parser.data }
-		return c.getValue(keys...)
-	}
-
-	mainKeys := keys[:len(keys)-1]
-	if c, ok := parser.getConfig(mainKeys...); ok {
-		return c.getValue([]string{keys[len(keys)-1]}...)
-	} else {
+	if c, ok := parser.tree.Get(key); !ok {
 		return "", false
+	} else {
+		return c.Value(), true
 	}
 }
 
-func (parser *VyosParser) GetConfig(key string) (*VyosConfig, bool) {
-	return parser.getConfig(strings.Split(key, " ")...)
-}
-
-func (parser *VyosParser) getConfig(keys ...string) (*VyosConfig, bool) {
-	utils.Assert(parser.parsed, "you must call Parse() before GetConfig()")
-
-	c := VyosConfig{ data: parser.data}
-	return c.getConfig(keys...)
+func (parser *VyosParser) GetConfig(key string) (*VyosConfigNode, bool) {
+	return parser.tree.Get(key)
 }
 
 func (parser *VyosParser) Parse(text string) *VyosConfigTree {
@@ -181,28 +81,19 @@ func (parser *VyosParser) Parse(text string) *VyosConfigTree {
 	}
 
 	offset := 0
-	parser.data = make(map[string]interface{})
 	tree := &VyosConfigTree{ Root: &VyosConfigNode{} }
 	tstack := &utils.Stack{}
 
 	currentNode := tree.Root
-	current := parser.data
-	stack := &utils.Stack{}
 	for i := 0; i < len(words); i += offset {
 		o, role, keys, value := matchToken(words[i:])
 		offset = o
 		if role == ROOT {
-			stack.Push(current)
-			current[keys[0]] = make(map[string]interface{})
-			current = current[keys[0]].(map[string]interface{})
-
 			tstack.Push(currentNode)
 			currentNode = currentNode.addNode(keys[0])
 		} else if role == KEY_VALUE {
-			current[keys[0]] = value
 			currentNode.addNode(keys[0]).addNode(value)
 		} else if role == ROOT_ATTRIBUTE {
-			stack.Push(current)
 			tstack.Push(currentNode)
 
 			for _, key := range keys {
@@ -211,16 +102,8 @@ func (parser *VyosParser) Parse(text string) *VyosConfigTree {
 				} else {
 					currentNode = n
 				}
-
-				if c, ok := current[key]; !ok {
-					current[key] = make(map[string]interface{})
-					current = current[key].(map[string]interface{})
-				} else {
-					current = c.(map[string]interface{})
-				}
 			}
 		} else if role == CLOSE {
-			current = stack.Pop().(map[string]interface{})
 			currentNode = tstack.Pop().(*VyosConfigNode)
 		}
 	}
@@ -229,6 +112,7 @@ func (parser *VyosParser) Parse(text string) *VyosConfigTree {
 	//fmt.Println(string(txt))
 
 	//fmt.Println(tree.String())
+	parser.tree = tree
 	return tree
 }
 
@@ -265,6 +149,14 @@ type VyosConfigNode struct {
 	parent        *VyosConfigNode
 }
 
+
+func (n *VyosConfigNode) ChildNodeKeys() []string {
+	keys := make([]string, 0)
+	for k := range n.childrenIndex {
+		keys = append(keys, k)
+	}
+	return keys
+}
 
 func (n *VyosConfigNode) String() string {
 	stack := &utils.Stack{}

@@ -106,10 +106,10 @@ ABC E
 	utils.Assert("172.20.14.209/16" == addr, "not equal")
 	fmt.Println(addr)
 
-	c, ok := p.GetConfig("interfaces ethernet eth0")
+	c, ok := p.GetConfig("interfaces ethernet eth0 address")
 	utils.Assert(ok, "fail")
 
-	addr, ok = c.GetValue("address")
+	addr = c.Value()
 	utils.Assert(ok, "fail")
 	utils.Assert("172.20.14.209/16" == addr, "not equal")
 	fmt.Println(addr)
