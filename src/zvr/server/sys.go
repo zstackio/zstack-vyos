@@ -17,18 +17,18 @@ var (
 func FindNicNameByMacFromConfiguration(mac, configuration string) (string, bool) {
 	parser := NewParserFromConfiguration(configuration)
 
-	config, ok := parser.GetConfig("interfaces ethernet")
-	if !ok {
+	c := parser.Tree.Get("interfaces ethernet")
+	if c == nil {
 		return "", false
 	}
 
-	for _, eth := range config.ChildNodeKeys() {
-		c := config.getNode(fmt.Sprintf("%s hw-id", eth))
-		if c == nil {
+	for _, eth := range c.ChildNodeKeys() {
+		n := c.Getf("%s hw-id", eth)
+		if n == nil {
 			continue
 		}
 
-		hw := c.Value()
+		hw := n.Value()
 		if strings.ToLower(mac) == hw {
 			return eth, true
 		}

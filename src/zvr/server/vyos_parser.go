@@ -22,6 +22,10 @@ const (
 	IGNORE
 )
 
+var (
+	UNIT_TEST = false
+)
+
 func matchToken(words []string) (int, role, []string, string) {
 	ws := make([]string, 0)
 	next := 0
@@ -54,15 +58,11 @@ func matchToken(words []string) (int, role, []string, string) {
 
 
 func (parser *VyosParser) GetValue(key string) (string, bool) {
-	if c, ok := parser.Tree.Get(key); !ok {
+	if c := parser.Tree.Get(key); c == nil {
 		return "", false
 	} else {
 		return c.Value(), true
 	}
-}
-
-func (parser *VyosParser) GetConfig(key string) (*VyosConfigNode, bool) {
-	return parser.Tree.Get(key)
 }
 
 func (parser *VyosParser) Parse(text string) *VyosConfigTree {
@@ -218,6 +218,24 @@ func (n *VyosConfigNode) deleteNode(name string) *VyosConfigNode {
 	return n
 }
 
+func (n *VyosConfigNode) Getf(f string, args...interface{}) *VyosConfigNode {
+	return n.Get(fmt.Sprintf(f, args...))
+}
+
+func (n *VyosConfigNode) Get(config string) *VyosConfigNode {
+	cs := strings.Split(config, " ")
+	current := n
+
+	for _, c := range cs {
+		current = current.getNode(c)
+		if current == nil {
+			return nil
+		}
+	}
+
+	return current
+}
+
 func (n *VyosConfigNode) getNode(name string) *VyosConfigNode {
 	return n.childrenIndex[name]
 }
@@ -251,6 +269,11 @@ type VyosConfigTree struct {
 }
 
 func (t *VyosConfigTree) Apply(asVyosUser bool) {
+	if (UNIT_TEST) {
+		fmt.Println(strings.Join(t.changeCommands, "\n"))
+		return
+	}
+
 	if asVyosUser {
 		RunVyosScriptAsUserVyos(strings.Join(t.changeCommands, "\n"))
 	} else {
@@ -300,7 +323,7 @@ func (t *VyosConfigTree) SetFirewallOnInterface(ethname, direction string, rules
 	}
 
 	currentRuleNum := 0
-	if c, ok := t.Getf("firewall name %s.%s rule", ethname, direction); ok {
+	if c := t.Getf("firewall name %s.%s rule", ethname, direction); c != nil {
 		currentRuleNum += c.Size()
 	}
 
@@ -311,8 +334,8 @@ func (t *VyosConfigTree) SetFirewallOnInterface(ethname, direction string, rules
 	return currentRuleNum
 }
 
-func (t *VyosConfigTree) Setf(f string, args...string) bool {
-	return t.Set(fmt.Sprintf(f, args))
+func (t *VyosConfigTree) Setf(f string, args...interface{}) bool {
+	return t.Set(fmt.Sprintf(f, args...))
 }
 
 func (t *VyosConfigTree) Set(config string) bool {
@@ -320,8 +343,8 @@ func (t *VyosConfigTree) Set(config string) bool {
 	cs := strings.Split(config, " ")
 	key := strings.Join(cs[:len(cs)-1], " ")
 	value := cs[len(cs)-1]
-	keyNode, ok := t.Get(key)
-	if ok {
+	keyNode := t.Get(key)
+	if keyNode != nil {
 		utils.Assert(keyNode.isKeyNode(), fmt.Sprintf("the node[%s] is not a key node, cannot call set on it", keyNode.String()))
 
 		// the key found
@@ -348,36 +371,26 @@ func (t *VyosConfigTree) Set(config string) bool {
 	}
 }
 
-func (t *VyosConfigTree) Getf(f string, args...string) (*VyosConfigNode, bool) {
-	return t.Get(fmt.Sprintf(f, args))
+func (t *VyosConfigTree) Getf(f string, args...interface{}) *VyosConfigNode {
+	return t.Get(fmt.Sprintf(f, args...))
 }
 
-func (t *VyosConfigTree) Get(config string) (*VyosConfigNode, bool) {
+func (t *VyosConfigTree) Get(config string) *VyosConfigNode  {
 	t.init()
-	cs := strings.Split(config, " ")
-	if !t.has(cs...) {
-		return nil, false
-	}
-
-	current := t.Root
-	for _, c := range cs {
-		current = current.getNode(c)
-	}
-
-	return current, true
+	return t.Root.Get(config)
 }
 
-func (t *VyosConfigTree) Deletef(f string, args...string) bool {
-	return t.Delete(fmt.Sprintf(f, args))
+func (t *VyosConfigTree) Deletef(f string, args...interface{}) bool {
+	return t.Delete(fmt.Sprintf(f, args...))
 }
 
 func (t *VyosConfigTree) Delete(config string) bool {
-	current, ok := t.Get(config)
-	if !ok {
+	n := t.Get(config)
+	if n == nil {
 		return false
 	}
 
-	current.deleteSelf()
+	n.deleteSelf()
 	t.changeCommands = append(t.changeCommands, fmt.Sprintf("$DELETE %s", config))
 	return true
 }

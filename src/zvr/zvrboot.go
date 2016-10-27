@@ -143,7 +143,7 @@ func configureVyos()  {
 			"state established enable",
 			"state related enable",
 		)
-		tree.SetFirewallOnInterface(nic,nic, "in",
+		tree.SetFirewallOnInterface(nic.Name, "in",
 			"action accept",
 			"protocol icmp",
 		)

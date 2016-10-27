@@ -5,7 +5,6 @@ import (
 	"zvr/plugin"
 	"zvr/utils"
 	"fmt"
-	"strings"
 	"flag"
 	"os"
 )
@@ -43,21 +42,15 @@ func parseCommandOptions() {
 }
 
 func configureZvrFirewall() {
-	parser := server.NewParserFromShowConfiguration()
+	tree := server.NewParserFromShowConfiguration().Tree
 
-	commands := make([]string, 0)
-	if _, ok := parser.GetConfig("firewall name zvr"); !ok {
-		commands = append(commands, fmt.Sprintf("$SET firewall name zvr rule 1 destination port %v", options.Port))
-		commands = append(commands, "$SET firewall name zvr rule 1 protocol tcp")
-		commands = append(commands, "$SET firewall name zvr rule 1 action accept")
-	}
-	if _, ok := parser.GetValue("interfaces ethernet eth0 firewall local name zvr"); !ok {
-		commands = append(commands, "$SET interfaces ethernet eth0 firewall local name zvr")
-	}
+	tree.SetFirewallOnInterface("eth0", "local",
+		fmt.Sprintf("destination port %v", options.Port),
+		"protocol tcp",
+		"action accept",
+	)
 
-	if len(commands) > 0 {
-		server.RunVyosScript(strings.Join(commands, "\n"), nil)
-	}
+	tree.Apply(false)
 }
 
 func main()  {

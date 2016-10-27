@@ -4,7 +4,6 @@ import (
 	"testing"
 	"zvr/server"
 	"fmt"
-	"strings"
 )
 
 var infos = []dhcpInfo {
@@ -47,6 +46,7 @@ var infos = []dhcpInfo {
 }
 
 func TestDHCPRebuildEntry(t *testing.T) {
+	server.UNIT_TEST = true
 	runVyosScript = func(script string, args map[string]string) {
 		fmt.Println(script)
 	}
@@ -102,10 +102,12 @@ service {
 }`
 	}
 
-	rebuildAllDhcp(infos)
+	deleteDhcp(infos)
+	setDhcp(infos)
 }
 
 func TestDHCPRemoveEntry(t *testing.T) {
+	server.UNIT_TEST = true
 	runVyosScript = func(script string, args map[string]string) {
 		fmt.Println(script)
 	}
@@ -161,13 +163,11 @@ service {
 }`
 	}
 
-	commands := makeRemoveDhcpCommands(infos)
-	if len(commands) != 0 {
-		runVyosScript(strings.Join(commands, "\n"), nil)
-	}
+	deleteDhcp(infos)
 }
 
 func TestDHCPAddEntry(t *testing.T) {
+	server.UNIT_TEST = true
 	runVyosScript = func(script string, args map[string]string) {
 		fmt.Println(script)
 	}
@@ -188,6 +188,5 @@ interfaces {
 }`
 	}
 
-
-	addDhcp(infos)
+	setDhcp(infos)
 }

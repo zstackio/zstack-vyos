@@ -2,8 +2,6 @@ package plugin
 
 import (
 	"zvr/server"
-	"fmt"
-	"strings"
 )
 
 const (
@@ -24,42 +22,30 @@ type removeDnsCmd struct {
 }
 
 func setDnsHandler(ctx *server.CommandContext) interface{} {
-	vyos := server.NewParserFromShowConfiguration()
+	tree := server.NewParserFromShowConfiguration().Tree
 
 	cmd := &setDnsCmd{}
 	ctx.GetCommand(cmd)
 
-	commands := make([]string, 0)
 	for _, info := range cmd.Dns {
-		if _, ok := vyos.GetValue(fmt.Sprintf("service dns forwarding name-server %s", info.DnsAddress)); !ok {
-			commands = append(commands, fmt.Sprintf("$SET service dns forwarding name-server %s", info.DnsAddress))
-		}
+		tree.Setf("service dns forwarding name-server %s", info.DnsAddress)
 	}
 
-	if len(commands) != 0 {
-		runVyosScript(strings.Join(commands, "\n"), nil)
-	}
-
+	tree.Apply(false)
 	return nil
 }
 
 func removeDnsHandler(ctx *server.CommandContext) interface{} {
-	vyos := server.NewParserFromShowConfiguration()
+	tree := server.NewParserFromShowConfiguration().Tree
 
 	cmd := &removeDnsCmd{}
 	ctx.GetCommand(cmd)
 
-	commands := make([]string, 0)
 	for _, info := range cmd.Dns {
-		if _, ok := vyos.GetValue(fmt.Sprintf("service dns forwarding name-server %s", info.DnsAddress)); ok {
-			commands = append(commands, fmt.Sprintf("$DELETE service dns forwarding name-server %s", info.DnsAddress))
-		}
+		tree.Deletef("service dns forwarding name-server %s", info.DnsAddress)
 	}
 
-	if len(commands) != 0 {
-		runVyosScript(strings.Join(commands, "\n"), nil)
-	}
-
+	tree.Apply(false)
 	return nil
 }
 

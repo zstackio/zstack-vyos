@@ -39,16 +39,13 @@ func addDhcpHandler(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 
 	if cmd.rebuild {
-		rebuildAllDhcp(cmd.DhcpEntries)
+		deleteDhcp(cmd.DhcpEntries)
+		setDhcp(cmd.DhcpEntries)
 	} else {
-		addDhcp(cmd.DhcpEntries)
+		setDhcp(cmd.DhcpEntries)
 	}
 
 	return nil
-}
-
-func addDhcp(infos []dhcpInfo) {
-	runVyosScript(strings.Join(makeDhcpCommands(infos), "\n"), nil)
 }
 
 func makeLanName(nicname string) string {
@@ -59,7 +56,7 @@ func makeServerName(mac string) string {
 	return strings.Replace(mac, ":", "_", -1)
 }
 
-func makeDhcpCommands(infos []dhcpInfo) []string {
+func setDhcp(infos []dhcpInfo) {
 	parser := server.NewParserFromShowConfiguration()
 
 	macs := make(map[string]dhcpInfo)
@@ -68,67 +65,51 @@ func makeDhcpCommands(infos []dhcpInfo) []string {
 	}
 
 	subnetNames := make(map[string]string)
-	commands := make([]string, 0)
 
+	tree := parser.Tree
 	for vrMac, info := range macs {
 		netName, subnet := infoToNetNameAndSubnet(info)
 		subnetNames[vrMac] = netName
 
-		_, ok := parser.GetValue(fmt.Sprintf("service dhcp-server shared-network-name %s authoritative", netName))
-		if !ok {
-			commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s authoritative enable", netName))
-		}
+		tree.Setf("service dhcp-server shared-network-name %s authoritative enable", netName)
 
 		// DHCPD requires at least one lease rule in the configuration
 		// We use the gateway as the default lease
 		serverName := makeServerName(info.VrNicMac)
-		_, ok = parser.GetValue(fmt.Sprintf("service dhcp-server shared-network-name %s subnet %s static-mapping %s ip-address",
-			netName, subnet, serverName))
-		if !ok {
-			commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s ip-address %s",
-				netName, subnet, serverName, info.Gateway))
-		}
-
-		_, ok = parser.GetValue(fmt.Sprintf("service dhcp-server shared-network-name %s subnet %s static-mapping %s mac-address",
-			netName, subnet, serverName))
-		if !ok {
-			commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s mac-address %s",
-				netName, subnet, serverName, info.VrNicMac))
-		}
+		tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s ip-address %s", netName, subnet, serverName, info.Gateway)
+		tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s mac-address %s", netName, subnet, serverName, info.VrNicMac)
 	}
 
 	for _, info := range infos {
 		netName := subnetNames[info.VrNicMac]
 		subnet, err := utils.GetNetworkNumber(info.Ip, info.Netmask); utils.PanicOnError(err)
 		serverName := makeServerName(info.Mac)
-		commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s ip-address %s",
-			netName, subnet, serverName, info.Ip))
-		commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s mac-address %s",
-			netName, subnet, serverName, strings.ToLower(info.Mac)))
-		commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s static-mapping-parameters \"%s\"",
-			netName, subnet, serverName, fmt.Sprintf("option option subnet-mask %s;", info.Netmask)))
+		tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s ip-address %s", netName, subnet, serverName, info.Ip)
+		tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s mac-address %s", netName, subnet, serverName, strings.ToLower(info.Mac))
+		tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s static-mapping-parameters \"%s\"",
+			netName, subnet, serverName, fmt.Sprintf("option option subnet-mask %s;", info.Netmask))
 
 		if info.IsDefaultL3Network {
 			if info.Hostname != "" {
-				commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s static-mapping-parameters \"%s\"",
-					netName, subnet, serverName, fmt.Sprintf("option host-name &quot;%s&quot;;", info.Hostname)))
+				tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s static-mapping-parameters \"%s\"",
+					netName, subnet, serverName, fmt.Sprintf("option host-name &quot;%s&quot;;", info.Hostname))
 			}
 			if info.Dns != nil {
-				commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s static-mapping-parameters \"%s\"",
-					netName, subnet, serverName, fmt.Sprintf("option domain-name-servers %s;", strings.Join(info.Dns, ","))))
+				tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s static-mapping-parameters \"%s\"",
+					netName, subnet, serverName, fmt.Sprintf("option domain-name-servers %s;", strings.Join(info.Dns, ",")))
 			}
 			if info.Gateway != "" {
-				commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s static-mapping-parameters \"%s\"",
-					netName, subnet, serverName, fmt.Sprintf("option routers %s;", info.Gateway)))
+				tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s static-mapping-parameters \"%s\"",
+					netName, subnet, serverName, fmt.Sprintf("option routers %s;", info.Gateway))
 			}
 			if info.DnsDomain != "" {
-				commands = append(commands, fmt.Sprintf("$SET service dhcp-server shared-network-name %s subnet %s static-mapping %s static-mapping-parameters \"%s\"",
-					netName, subnet, serverName, fmt.Sprintf("option domain-name &quot;%s&quot;;", info.DnsDomain)))
+				tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s static-mapping-parameters \"%s\"",
+					netName, subnet, serverName, fmt.Sprintf("option domain-name &quot;%s&quot;;", info.DnsDomain))
 			}
 		}
 	}
 
-	return commands
+	tree.Apply(false)
 }
 
 func infoToNetNameAndSubnet(info dhcpInfo) (string, string) {
@@ -138,36 +119,24 @@ func infoToNetNameAndSubnet(info dhcpInfo) (string, string) {
 	return makeLanName(nicname), subnet
 }
 
-func rebuildAllDhcp(infos []dhcpInfo) {
-	commands := append(makeRemoveDhcpCommands(infos), makeDhcpCommands(infos)...)
-	runVyosScript(strings.Join(commands, "\n"), nil)
-}
-
-func makeRemoveDhcpCommands(infos []dhcpInfo) []string {
+func deleteDhcp(infos []dhcpInfo) {
 	parser := server.NewParserFromShowConfiguration()
-	commands := make([]string, 0)
+	tree := parser.Tree
 
 	for _, info := range infos {
 		netName, subnet := infoToNetNameAndSubnet(info)
 		serverName := makeServerName(info.Mac)
-		if _, ok := parser.GetConfig(fmt.Sprintf("service dhcp-server shared-network-name %s subnet %s static-mapping %s",
-			netName, subnet, serverName)); ok {
-			commands = append(commands, fmt.Sprintf("$DELETE service dhcp-server shared-network-name %s subnet %s static-mapping %s",
-				netName, subnet, serverName))
-		}
+		tree.Deletef("service dhcp-server shared-network-name %s subnet %s static-mapping %s", netName, subnet, serverName)
 	}
 
-	return commands
+	tree.Apply(false)
 }
 
 func removeDhcpHandler(ctx *server.CommandContext) interface{} {
 	cmd := &removeDhcpCmd{}
 	ctx.GetCommand(cmd)
 
-	commands := makeRemoveDhcpCommands(cmd.DhcpEntries)
-	if len(commands) != 0 {
-		runVyosScript(strings.Join(commands, "\n"), nil)
-	}
+	deleteDhcp(cmd.DhcpEntries)
 
 	return nil
 }
