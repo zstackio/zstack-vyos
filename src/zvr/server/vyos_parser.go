@@ -10,7 +10,7 @@ import (
 
 type VyosParser struct {
 	parsed bool
-	tree *VyosConfigTree
+	Tree   *VyosConfigTree
 }
 
 type role int
@@ -54,7 +54,7 @@ func matchToken(words []string) (int, role, []string, string) {
 
 
 func (parser *VyosParser) GetValue(key string) (string, bool) {
-	if c, ok := parser.tree.Get(key); !ok {
+	if c, ok := parser.Tree.Get(key); !ok {
 		return "", false
 	} else {
 		return c.Value(), true
@@ -62,7 +62,7 @@ func (parser *VyosParser) GetValue(key string) (string, bool) {
 }
 
 func (parser *VyosParser) GetConfig(key string) (*VyosConfigNode, bool) {
-	return parser.tree.Get(key)
+	return parser.Tree.Get(key)
 }
 
 func (parser *VyosParser) Parse(text string) *VyosConfigTree {
@@ -112,7 +112,7 @@ func (parser *VyosParser) Parse(text string) *VyosConfigTree {
 	//fmt.Println(string(txt))
 
 	//fmt.Println(tree.String())
-	parser.tree = tree
+	parser.Tree = tree
 	return tree
 }
 
@@ -198,6 +198,10 @@ func (n *VyosConfigNode) Value() string {
 	return c.name
 }
 
+func (n *VyosConfigNode) Size() int {
+	return len(n.children)
+}
+
 func (n *VyosConfigNode) deleteSelf() *VyosConfigNode {
 	return n.parent.deleteNode(n.name)
 }
@@ -246,6 +250,14 @@ type VyosConfigTree struct {
 	changeCommands []string
 }
 
+func (t *VyosConfigTree) Apply(asVyosUser bool) {
+	if asVyosUser {
+		RunVyosScriptAsUserVyos(strings.Join(t.changeCommands, "\n"))
+	} else {
+		RunVyosScript(strings.Join(t.changeCommands, "\n"), nil)
+	}
+}
+
 func (t *VyosConfigTree) init() {
 	if t.changeCommands == nil {
 		t.changeCommands = make([]string, 0)
@@ -276,6 +288,31 @@ func (t *VyosConfigTree) has(config...string) bool {
 
 func (t *VyosConfigTree) Has(config string) bool {
 	return t.has(strings.Split(config, " ")...)
+}
+
+func (t *VyosConfigTree) AttachFirewallToInterface(ethname, direction string) {
+	t.Setf("interfaces ethernet %v firewall local name %v.%v", ethname, ethname, direction)
+}
+
+func (t *VyosConfigTree) SetFirewallOnInterface(ethname, direction string, rules...string) int {
+	if direction != "in" && direction != "out" && direction != "local" {
+		panic(fmt.Sprintf("the direction can only be [in, out, local], but %s get", direction))
+	}
+
+	currentRuleNum := 0
+	if c, ok := t.Getf("firewall name %s.%s rule", ethname, direction); ok {
+		currentRuleNum += c.Size()
+	}
+
+	for _, rule := range rules {
+		t.Setf("rule %v %s", currentRuleNum, rule)
+	}
+
+	return currentRuleNum
+}
+
+func (t *VyosConfigTree) Setf(f string, args...string) bool {
+	return t.Set(fmt.Sprintf(f, args))
 }
 
 func (t *VyosConfigTree) Set(config string) bool {
@@ -311,6 +348,10 @@ func (t *VyosConfigTree) Set(config string) bool {
 	}
 }
 
+func (t *VyosConfigTree) Getf(f string, args...string) (*VyosConfigNode, bool) {
+	return t.Get(fmt.Sprintf(f, args))
+}
+
 func (t *VyosConfigTree) Get(config string) (*VyosConfigNode, bool) {
 	t.init()
 	cs := strings.Split(config, " ")
@@ -324,6 +365,10 @@ func (t *VyosConfigTree) Get(config string) (*VyosConfigNode, bool) {
 	}
 
 	return current, true
+}
+
+func (t *VyosConfigTree) Deletef(f string, args...string) bool {
+	return t.Delete(fmt.Sprintf(f, args))
 }
 
 func (t *VyosConfigTree) Delete(config string) bool {

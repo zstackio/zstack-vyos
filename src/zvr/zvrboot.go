@@ -66,7 +66,7 @@ func parseBootInfo() {
 
 func configureVyos()  {
 	vyos := server.NewParserFromShowConfiguration()
-	commands := make([]string, 0)
+	tree := vyos.Tree
 
 	sshkey := bootstrapInfo["publicKey"].(string)
 	utils.Assert(sshkey != "", "cannot find 'publicKey' in bootstrap info")
@@ -75,10 +75,8 @@ func configureVyos()  {
 	key := sshkeyparts[1]
 	id := sshkeyparts[2]
 
-	commands = append(commands, fmt.Sprintf("$SET system login user vyos authentication public-keys %s key %s",
-		id, key))
-	commands = append(commands, fmt.Sprintf("$SET system login user vyos authentication public-keys %s type %s",
-		id, sshtype))
+	tree.Setf("system login user vyos authentication public-keys %s key %s", id, key)
+	tree.Setf("system login user vyos authentication public-keys %s type %s", id, sshtype)
 
 	nicsByMac := make(map[string]utils.Nic)
 	nicsByNames, err := utils.GetAllNics(); utils.PanicOnError(err)
@@ -88,20 +86,15 @@ func configureVyos()  {
 
 	setNic := func(nicname, ip, netmask string, defaultRoute bool) {
 		cidr, err := utils.NetmaskToCIDR(netmask); utils.PanicOnError(err)
-		commands = append(commands, fmt.Sprintf("$SET interfaces ethernet %s address %s", nicname, fmt.Sprintf("%v/%v", ip, cidr)))
-		commands = append(commands, fmt.Sprintf("$SET interfaces ethernet %s duplex auto", nicname))
-		commands = append(commands, fmt.Sprintf("$SET interfaces ethernet %s smp_affinity auto", nicname))
-		commands = append(commands, fmt.Sprintf("$SET interfaces ethernet %s speed auto", nicname))
+		tree.Setf("interfaces ethernet %s address %s", nicname, fmt.Sprintf("%v/%v", ip, cidr))
+		tree.Setf("interfaces ethernet %s duplex auto", nicname)
+		tree.Setf("interfaces ethernet %s smp_affinity auto", nicname)
+		tree.Setf("interfaces ethernet %s speed auto", nicname)
 	}
 
 	mgmtNic := bootstrapInfo["managementNic"].(map[string]interface{})
 	if mgmtNic == nil {
 		panic(errors.New("no field 'managementNic' in bootstrap info"))
-	}
-
-	// delete any existing configuration
-	if _, ok := vyos.GetConfig("interfaces ethernet eth0"); ok {
-		commands = append(commands, "$DELETE interfaces ethernet eth0")
 	}
 
 	mgmtMac, ok := mgmtNic["mac"]; utils.PanicIfError(ok, errors.New("cannot find 'mac' field for the management nic"))
@@ -121,63 +114,56 @@ func configureVyos()  {
 			ip, ok := onic["ip"]; utils.PanicIfError(ok, fmt.Errorf("cannot find 'ip' field for the nic[mac:%s]", mac))
 			n, ok := nicsByMac[mac.(string)]; utils.PanicIfError(ok, fmt.Errorf("the nic with mac[%s] is not found in the system", mac))
 
-			// delete any existing configuration
-			if _, ok := vyos.GetConfig(fmt.Sprintf("interfaces ethernet %s", n.Name)); ok {
-				commands = append(commands, fmt.Sprintf("$DELETE interfaces ethernet %s", n.Name))
-			}
-
 			_, ok = onic["isDefaultRoute"]
 			setNic(n.Name, ip.(string), netmask.(string), ok)
 		}
 	}
 
-	if _, ok := vyos.GetConfig("service ssh"); ok {
-		commands = append(commands, "$DELETE service ssh")
-	}
 	sshport := bootstrapInfo["sshPort"].(float64)
 	utils.Assert(sshport != 0, "sshport not found in bootstrap info")
-	commands = append(commands, fmt.Sprintf("$SET service ssh port %v", int(sshport)))
+	tree.Setf("service ssh port %v", int(sshport))
 
 	// configure firewall
 	nics, err := utils.GetAllNics(); utils.PanicOnError(err)
-	commands = append(commands, "$SET firewall name default default-action reject")
+	tree.Set("firewall name default default-action reject")
 
 	for _, nic := range nics {
-		commands = append(commands, server.MakeFirewallLocalRules(nic.Name,
-			"rule 1 action accept",
-			"rule 1 state established enable",
-			"rule 1 state related enable",
-			"rule 2 action accept",
-			"rule 2 protocl icmp",
-		))
+		tree.SetFirewallOnInterface(nic.Name, "local",
+			"action accept",
+			"state established enable",
+			"state related enable",
+		)
+		tree.SetFirewallOnInterface(nic.Name, "local",
+			"action accept",
+			"protocol icmp",
+		)
 
-		commands = append(commands, server.MakeFirewallInRules(nic.Name,
-			"rule 1 action accept",
-			"rule 1 state established enable",
-			"rule 1 state related enable",
-			"rule 2 action accept",
-			"rule 2 protocol icmp",
-		))
-	}
+		tree.SetFirewallOnInterface(nic.Name, "in",
+			"action accept",
+			"state established enable",
+			"state related enable",
+		)
+		tree.SetFirewallOnInterface(nic,nic, "in",
+			"action accept",
+			"protocol icmp",
+		)
 
-	// only allow ssh traffic on eth0, disable on others
-	commands = append(commands, fmt.Sprintf("$SET firewall name sshon rule 1 destination port %v", int(sshport)))
-	commands = append(commands, "$SET firewall name sshon rule 1 protocol tcp")
-	commands = append(commands, "$SET firewall name sshon rule 1 action accept")
-	commands = append(commands, "$SET interfaces ethernet eth0 firewall local name sshon")
-
-	commands = append(commands, fmt.Sprintf("$SET firewall name sshoff rule 1 destination port %v", int(sshport)))
-	commands = append(commands, "$SET firewall name sshoff rule 1 protocol tcp")
-	commands = append(commands, "$SET firewall name sshoff rule 1 action reject")
-	for _, nic := range nics {
+		// only allow ssh traffic on eth0, disable on others
 		if nic.Name == "eth0" {
-			continue
+			tree.SetFirewallOnInterface(nic.Name, "local", fmt.Sprintf("destination port %v", int(sshport)))
+			tree.SetFirewallOnInterface(nic.Name, "local", "protocol tcp")
+			tree.SetFirewallOnInterface(nic.Name, "local", "action accept")
+		} else {
+			tree.SetFirewallOnInterface(nic.Name, "local", fmt.Sprintf("destination port %v", int(sshport)))
+			tree.SetFirewallOnInterface(nic.Name, "local", "protocol tcp")
+			tree.SetFirewallOnInterface(nic.Name, "local", "action reject")
 		}
 
-		commands = append(commands, fmt.Sprintf("$SET interfaces ethernet %v firewall local name sshoff", nic.Name))
+		tree.AttachFirewallToInterface(nic.Name, "local")
+		tree.AttachFirewallToInterface(nic.Name, "in")
 	}
 
-	server.RunVyosScriptAsUserVyos(strings.Join(commands, "\n"))
+	tree.Apply(false)
 
 	arping := func(nicname, ip, gateway string) {
 		b := utils.Bash{ Command: fmt.Sprintf("arping -A -U -c 1 -I %s -s %s %s", nicname, ip, gateway) }

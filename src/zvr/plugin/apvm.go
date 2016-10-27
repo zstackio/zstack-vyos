@@ -32,8 +32,9 @@ func apvmRefreshFirewallHandler(ctx *server.CommandContext) interface{} {
 	cmd := &refreshFirewallCmd{}
 	ctx.GetCommand(cmd)
 
-	commands := make([]string, 0)
 	nics, err := utils.GetAllNics(); utils.PanicOnError(err)
+	parser := server.NewParserFromShowConfiguration()
+	tree := parser.Tree
 
 	// configure rule for each interface
 	ruleByNicnames := make(map[string][]firewallRule)
@@ -63,40 +64,35 @@ func apvmRefreshFirewallHandler(ctx *server.CommandContext) interface{} {
 	}
 
 	for nicname, rules := range ruleByNicnames {
-		ruleSetName := fmt.Sprintf("%s-rules", nicname)
+		for _, rule := range rules {
+			rs := make([]string, 0)
 
-		commands = append(commands, fmt.Sprintf("$SET firewall name %s default-action accept", ruleSetName))
-		for i, rule := range rules {
 			if rule.SourceIp != "" {
-				commands = append(commands, fmt.Sprintf("$SET firewall name %s rule %v source address %v/32",
-					ruleSetName, i, rule.SourceIp))
+				rs = append(rs, fmt.Sprintf("source address %v/32", rule.SourceIp))
 			}
 
 			if rule.DestIp != "" {
-				commands = append(commands, fmt.Sprintf("$SET firewall name %s rule %v destination address %v/32",
-					ruleSetName, i, rule.DestIp))
+				rs = append(rs, fmt.Sprintf("destination address %v/32", rule.DestIp))
 			}
 
-			commands = append(commands, fmt.Sprintf("$SET firewall name %s rule %v destination port %v-%v",
-				ruleSetName, i, rule.StartPort, rule.EndPort))
-			commands = append(commands, fmt.Sprintf("$SET firewall name %s rule %v state new enable",
-				ruleSetName, i))
+			rs = append(rs, fmt.Sprintf("destination port %v-%v", rule.StartPort, rule.EndPort))
+			rs = append(rs, "state new enable")
 
 			if rule.Protocol == "all" {
-				commands = append(commands, fmt.Sprintf("$SET firewall name %s rule %v protocol tcp_udp",
-					ruleSetName, i))
+				rs = append(rs, "protocol tcp_udp")
 			} else if rule.Protocol == "udp" {
-				commands = append(commands, fmt.Sprintf("$SET firewall name %s rule %v protocol udp",
-					ruleSetName, i))
+				rs = append(rs, "protocol udp")
 			} else if rule.Protocol == "tcp" {
-				commands = append(commands, fmt.Sprintf("$SET firewall name %s rule %v protocol tcp",
-					ruleSetName, i))
+				rs = append(rs, "protocol tcp")
 			}
+
+			tree.SetFirewallOnInterface(nicname, "local", rs...)
 		}
-		commands = append(commands, fmt.Sprintf("$SET interfaces ethernet %v firewall local name %v", nicname, ruleSetName))
+
+		tree.AttachFirewallToInterface(nicname, "local")
 	}
 
-	server.RunVyosScriptAsUserVyos(strings.Join(commands, "\n"))
+	tree.Apply(false)
 
 	return nil
 }
