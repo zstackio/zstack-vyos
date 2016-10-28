@@ -6,6 +6,35 @@ import (
 	"zvr/utils"
 )
 
+func TestSetFirewall(t *testing.T) {
+	UNIT_TEST = true
+
+	ConfigurationSourceFunc = func() string {
+		return ""
+	}
+
+	tree := NewParserFromShowConfiguration().Tree
+
+	tree.SetFirewallOnInterface("eth0", "local",
+		fmt.Sprintf("destination port %v", 7758),
+		"protocol tcp",
+		"action accept",
+	)
+	tree.SetFirewallOnInterface("eth0", "local",
+		fmt.Sprintf("destination port %v", 7758),
+		"protocol udp",
+		"action accept",
+	)
+	tree.SetFirewallOnInterface("eth0", "local",
+		fmt.Sprintf("destination port %v", 7759),
+		"protocol udp",
+		"action accept",
+	)
+	tree.AttachFirewallToInterface("eth0", "local")
+
+	tree.Apply(false)
+}
+
 func TestVyosParser1(t *testing.T) {
 	text := `
 interfaces {

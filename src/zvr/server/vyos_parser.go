@@ -328,7 +328,7 @@ func (t *VyosConfigTree) SetFirewallOnInterface(ethname, direction string, rules
 	}
 
 	for _, rule := range rules {
-		t.Setf("rule %v %s", currentRuleNum, rule)
+		t.Setf("firewall name %v.%v rule %v %s", ethname, direction, currentRuleNum, rule)
 	}
 
 	return currentRuleNum
