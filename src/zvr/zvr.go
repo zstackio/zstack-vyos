@@ -15,6 +15,7 @@ func loadPlugins()  {
 	plugin.MiscEntryPoint()
 	plugin.DnsEntryPoint()
 	plugin.SnatEntryPoint()
+	plugin.DnatEntryPoint()
 }
 
 var options server.Options
