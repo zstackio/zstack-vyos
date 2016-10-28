@@ -74,7 +74,11 @@ func apvmRefreshFirewallHandler(ctx *server.CommandContext) interface{} {
 				rs = append(rs, fmt.Sprintf("destination address %v/32", rule.DestIp))
 			}
 
-			rs = append(rs, fmt.Sprintf("destination port %v-%v", rule.StartPort, rule.EndPort))
+			if rule.StartPort == rule.EndPort {
+				rs = append(rs, fmt.Sprintf("destination port %v", rule.StartPort))
+			} else {
+				rs = append(rs, fmt.Sprintf("destination port %v-%v", rule.StartPort, rule.EndPort))
+			}
 			rs = append(rs, "state new enable")
 
 			if rule.Protocol == "all" {
@@ -84,6 +88,7 @@ func apvmRefreshFirewallHandler(ctx *server.CommandContext) interface{} {
 			} else if rule.Protocol == "tcp" {
 				rs = append(rs, "protocol tcp")
 			}
+			rs = append(rs, "action accept")
 
 			tree.SetFirewallOnInterface(nicname, "local", rs...)
 		}

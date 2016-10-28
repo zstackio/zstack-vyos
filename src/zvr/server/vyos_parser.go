@@ -314,7 +314,7 @@ func (t *VyosConfigTree) Has(config string) bool {
 }
 
 func (t *VyosConfigTree) AttachFirewallToInterface(ethname, direction string) {
-	t.Setf("interfaces ethernet %v firewall local name %v.%v", ethname, ethname, direction)
+	t.Setf("interfaces ethernet %v firewall %s name %v.%v", ethname, direction, ethname, direction)
 }
 
 func (t *VyosConfigTree) SetFirewallOnInterface(ethname, direction string, rules...string) int {
@@ -322,7 +322,7 @@ func (t *VyosConfigTree) SetFirewallOnInterface(ethname, direction string, rules
 		panic(fmt.Sprintf("the direction can only be [in, out, local], but %s get", direction))
 	}
 
-	currentRuleNum := 0
+	currentRuleNum := 1
 	if c := t.Getf("firewall name %s.%s rule", ethname, direction); c != nil {
 		currentRuleNum += c.Size()
 	}

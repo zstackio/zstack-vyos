@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"github.com/pkg/errors"
 	"fmt"
 	"strings"
 	"zvr/utils"
@@ -87,7 +86,7 @@ func setDhcp(infos []dhcpInfo) {
 		tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s ip-address %s", netName, subnet, serverName, info.Ip)
 		tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s mac-address %s", netName, subnet, serverName, strings.ToLower(info.Mac))
 		tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s static-mapping-parameters \"%s\"",
-			netName, subnet, serverName, fmt.Sprintf("option option subnet-mask %s;", info.Netmask))
+			netName, subnet, serverName, fmt.Sprintf("option subnet-mask %s;", info.Netmask))
 
 		if info.IsDefaultL3Network {
 			if info.Hostname != "" {
@@ -113,7 +112,7 @@ func setDhcp(infos []dhcpInfo) {
 }
 
 func infoToNetNameAndSubnet(info dhcpInfo) (string, string) {
-	nicname, ok := server.FindNicNameByMac(info.VrNicMac); utils.PanicIfError(ok, errors.Errorf("cannot find the nic with mac[%s] on the virtual router", info.VrNicMac))
+	nicname, err := utils.GetNicNameByMac(info.VrNicMac); utils.PanicOnError(err)
 	subnet, err := utils.GetNetworkNumber(info.Ip, info.Netmask); utils.PanicOnError(err)
 
 	return makeLanName(nicname), subnet

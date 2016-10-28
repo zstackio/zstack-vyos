@@ -96,6 +96,21 @@ func GetAllNics() (map[string]Nic, error) {
 	return nics, nil
 }
 
+func GetNicNameByMac(mac string) (string, error) {
+	nics, err := GetAllNics()
+	if err != nil {
+		return "", err
+	}
+
+	for _, nic := range nics {
+		if nic.Mac == mac {
+			return nic.Name, nil
+		}
+	}
+
+	return "", fmt.Errorf("cannot find any nic with the mac[%s]", mac)
+}
+
 func GetNicNameByIp(ip string) (string, error) {
 	bash := Bash{
 		Command: fmt.Sprintf("ip addr | grep -w %s", ip),

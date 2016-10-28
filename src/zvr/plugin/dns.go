@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"zvr/server"
+	"zvr/utils"
 )
 
 const (
@@ -11,6 +12,7 @@ const (
 
 type dnsInfo struct {
 	DnsAddress string `json:"dnsAddress"`
+	NicMac string `json:"nicMac"`
 }
 
 type setDnsCmd struct {
@@ -27,11 +29,26 @@ func setDnsHandler(ctx *server.CommandContext) interface{} {
 	cmd := &setDnsCmd{}
 	ctx.GetCommand(cmd)
 
+	dnsByMac := make(map[string][]dnsInfo)
 	for _, info := range cmd.Dns {
-		tree.Setf("service dns forwarding name-server %s", info.DnsAddress)
+		dns := dnsByMac[info.NicMac]
+		if dns == nil {
+			dns = make([]dnsInfo, 0)
+		}
+		dns = append(dns, info)
+		dnsByMac[info.NicMac] = dns
+	}
+
+	for mac, dns := range dnsByMac {
+		for _, info := range dns {
+			tree.Setf("service dns forwarding name-server %s", info.DnsAddress)
+		}
+		eth, err := utils.GetNicNameByMac(mac); utils.PanicOnError(err)
+		tree.Setf("service dns forwarding listen-on %s", eth)
 	}
 
 	tree.Apply(false)
+
 	return nil
 }
 

@@ -150,20 +150,24 @@ func configureVyos()  {
 
 		// only allow ssh traffic on eth0, disable on others
 		if nic.Name == "eth0" {
-			tree.SetFirewallOnInterface(nic.Name, "local", fmt.Sprintf("destination port %v", int(sshport)))
-			tree.SetFirewallOnInterface(nic.Name, "local", "protocol tcp")
-			tree.SetFirewallOnInterface(nic.Name, "local", "action accept")
+			tree.SetFirewallOnInterface(nic.Name, "local",
+				fmt.Sprintf("destination port %v", int(sshport)),
+				"protocol tcp",
+				"action accept",
+			)
 		} else {
-			tree.SetFirewallOnInterface(nic.Name, "local", fmt.Sprintf("destination port %v", int(sshport)))
-			tree.SetFirewallOnInterface(nic.Name, "local", "protocol tcp")
-			tree.SetFirewallOnInterface(nic.Name, "local", "action reject")
+			tree.SetFirewallOnInterface(nic.Name, "local",
+				fmt.Sprintf("destination port %v", int(sshport)),
+				"protocol tcp",
+				"action reject",
+			)
 		}
 
 		tree.AttachFirewallToInterface(nic.Name, "local")
 		tree.AttachFirewallToInterface(nic.Name, "in")
 	}
 
-	tree.Apply(false)
+	tree.Apply(true)
 
 	arping := func(nicname, ip, gateway string) {
 		b := utils.Bash{ Command: fmt.Sprintf("arping -A -U -c 1 -I %s -s %s %s", nicname, ip, gateway) }
