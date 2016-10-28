@@ -150,6 +150,10 @@ type VyosConfigNode struct {
 }
 
 
+func (n *VyosConfigNode) Children() []*VyosConfigNode {
+	return n.children
+}
+
 func (n *VyosConfigNode) ChildNodeKeys() []string {
 	keys := make([]string, 0)
 	for k := range n.childrenIndex {
@@ -200,6 +204,10 @@ func (n *VyosConfigNode) Value() string {
 
 func (n *VyosConfigNode) Size() int {
 	return len(n.children)
+}
+
+func (n *VyosConfigNode) Delete() {
+	n.deleteSelf()
 }
 
 func (n *VyosConfigNode) deleteSelf() *VyosConfigNode {
@@ -274,6 +282,10 @@ func (t *VyosConfigTree) Apply(asVyosUser bool) {
 		return
 	}
 
+	if (len(t.changeCommands) == 0) {
+		return
+	}
+
 	if asVyosUser {
 		RunVyosScriptAsUserVyos(strings.Join(t.changeCommands, "\n"))
 	} else {
@@ -329,6 +341,19 @@ func (t *VyosConfigTree) SetFirewallOnInterface(ethname, direction string, rules
 
 	for _, rule := range rules {
 		t.Setf("firewall name %v.%v rule %v %s", ethname, direction, currentRuleNum, rule)
+	}
+
+	return currentRuleNum
+}
+
+func (t *VyosConfigTree) SetSnat(rules...string) int {
+	currentRuleNum := 1
+	if c := t.Get("nat source rule"); c != nil {
+		currentRuleNum += c.Size()
+	}
+
+	for _, rule := range rules {
+		t.Setf("nat source rule %v %s", currentRuleNum, rule)
 	}
 
 	return currentRuleNum
