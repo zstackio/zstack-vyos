@@ -346,6 +346,19 @@ func (t *VyosConfigTree) SetFirewallOnInterface(ethname, direction string, rules
 	return currentRuleNum
 }
 
+func (t *VyosConfigTree) SetDnat(rules...string) int {
+	currentRuleNum := 1
+	if c := t.Get("nat destination rule"); c != nil {
+		currentRuleNum += c.Size()
+	}
+
+	for _, rule := range rules {
+		t.Setf("nat destination rule %v %s", currentRuleNum, rule)
+	}
+
+	return currentRuleNum
+}
+
 func (t *VyosConfigTree) SetSnat(rules...string) int {
 	currentRuleNum := 1
 	if c := t.Get("nat source rule"); c != nil {

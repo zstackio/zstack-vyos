@@ -1,6 +1,11 @@
 package plugin
 
-import "zvr/server"
+import (
+	"zvr/server"
+	"fmt"
+	log "github.com/Sirupsen/logrus"
+	"zvr/utils"
+)
 
 const (
 	CREATE_PORT_FORWARDING_PATH = "/createportforwarding"
@@ -34,14 +39,93 @@ type syncDnatCmd struct {
 }
 
 func syncDnatHandler(ctx *server.CommandContext) interface{} {
+	cmd := &syncDnatCmd{}
+	ctx.GetCommand(cmd)
+
+	tree := server.NewParserFromShowConfiguration().Tree
+	tree.Delete("nat destination")
+	setRuleInTree(tree, cmd.Rules)
+	tree.Apply(false)
 	return nil
 }
 
+func getRule(tree *server.VyosConfigTree, description string) *server.VyosConfigNode {
+	rs := tree.Get("nat destination rule")
+	if rs == nil {
+		return nil
+	}
+
+	for _, r := range rs.Children() {
+		if des := r.Get("description"); des != nil && des.Value() == description {
+			return r
+		}
+	}
+
+	return nil
+}
+
+func makeDescription(r dnatInfo) string {
+	return fmt.Sprintf("%v %v %v %v %v %v %v", r.VipIp, r.VipPortStart, r.VipPortEnd, r.PrivateMac, r.PrivatePortStart, r.PrivatePortEnd, r.ProtocolType)
+}
+
+func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
+	for _, r := range rules {
+		des := makeDescription(r)
+		if currentRule := getRule(tree, des); currentRule != nil {
+			log.Debugf("dnat rule %s exists, skip it", des)
+			continue
+		}
+
+		var sport string
+		if r.VipPortStart == r.VipPortEnd {
+			sport = fmt.Sprintf("%v", r.VipPortStart)
+		} else {
+			sport = fmt.Sprintf("%v-%v", r.VipPortStart, r.VipPortEnd)
+		}
+		var dport string
+		if r.PrivatePortStart == r.PrivatePortEnd {
+			dport = fmt.Sprintf("%v", r.PrivatePortStart)
+		} else {
+			dport = fmt.Sprintf("%v-%v", r.PrivatePortStart, r.PrivatePortEnd)
+		}
+
+		pubNicName, err := utils.GetNicNameByIp(r.VipIp); utils.PanicOnError(err)
+
+		tree.SetDnat(
+			fmt.Sprintf("description %v", des),
+			fmt.Sprintf("destination port %v", dport),
+			fmt.Sprintf("source port %v", sport),
+			fmt.Sprintf("inbound-interface %v", pubNicName),
+			fmt.Sprintf("protocol %v", r.ProtocolType),
+			fmt.Sprintf("translation address %v", r.VipIp),
+		)
+	}
+}
+
 func setDnatHandler(ctx *server.CommandContext) interface{} {
+	cmd := &setDnatCmd{}
+	ctx.GetCommand(cmd)
+
+	tree := server.NewParserFromShowConfiguration().Tree
+	setRuleInTree(tree, cmd.Rules)
+	tree.Apply(false)
+
 	return nil
 }
 
 func removeDnatHandler(ctx *server.CommandContext) interface{} {
+	cmd := &removeDnatCmd{}
+	ctx.GetCommand(cmd)
+
+	tree := server.NewParserFromShowConfiguration().Tree
+	for _, r := range cmd.Rules {
+		des := makeDescription(r)
+		if c := getRule(tree, des); c != nil {
+			c.Delete()
+		}
+	}
+	tree.Apply(false)
+
 	return nil
 }
 
