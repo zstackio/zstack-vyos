@@ -39,12 +39,10 @@ func setSnatHandler(ctx *server.CommandContext) interface{} {
 	s := cmd.Snat
 	tree := server.NewParserFromShowConfiguration().Tree
 	outNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
-	subnetNumber, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
-	cidr, err := utils.NetmaskToCIDR(s.SnatNetmask); utils.PanicOnError(err)
-	address := fmt.Sprintf("%v/%v", subnetNumber, cidr)
+	address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
 
 	if hasRuleNumberForAddress(tree, address) {
-		panic(fmt.Errorf("there has been a source nat for the network[%s]", address))
+		return nil
 	}
 
 	tree.SetSnat(
@@ -69,9 +67,7 @@ func removeSnatHandler(ctx *server.CommandContext) interface{} {
 	}
 
 	for _, s := range cmd.natInfo {
-		subnetNumber, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
-		cidr, err := utils.NetmaskToCIDR(s.SnatNetmask); utils.PanicOnError(err)
-		address := fmt.Sprintf("%v/%v", subnetNumber, cidr)
+		address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
 
 		for _, r := range rs.Children() {
 			if addr := r.Get("source address"); addr != nil && addr.Value() == address {
@@ -107,9 +103,7 @@ func syncSnatHandler(ctx *server.CommandContext) interface{} {
 	tree := server.NewParserFromShowConfiguration().Tree
 	for _, s := range cmd.snats {
 		outNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
-		subnetNumber, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
-		cidr, err := utils.NetmaskToCIDR(s.SnatNetmask); utils.PanicOnError(err)
-		address := fmt.Sprintf("%v/%v", subnetNumber, cidr)
+		address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
 
 		if !hasRuleNumberForAddress(tree, address) {
 			tree.SetSnat(

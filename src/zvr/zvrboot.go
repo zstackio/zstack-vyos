@@ -84,7 +84,7 @@ func configureVyos()  {
 		nicsByMac[nic.Mac] = nic
 	}
 
-	setNic := func(nicname, ip, netmask string, defaultRoute bool) {
+	setNic := func(nicname, ip, netmask string) {
 		cidr, err := utils.NetmaskToCIDR(netmask); utils.PanicOnError(err)
 		tree.Setf("interfaces ethernet %s address %s", nicname, fmt.Sprintf("%v/%v", ip, cidr))
 		tree.Setf("interfaces ethernet %s duplex auto", nicname)
@@ -103,7 +103,10 @@ func configureVyos()  {
 	mn, ok := nicsByMac[mgmtMac.(string)]; utils.PanicIfError(ok, fmt.Errorf("cannot find the management nic[mac:%s]", mgmtMac))
 	utils.PanicIfError(mn.Name == "eth0", fmt.Errorf("the management nic is not eth0 but %s", mn.Name))
 	_, ok = mgmtNic["isDefaultRoute"]
-	setNic("eth0", mgmtIp.(string), mgmtNetmask.(string), ok)
+	setNic("eth0", mgmtIp.(string), mgmtNetmask.(string))
+	if ok {
+		tree.Setf("system gateway-address %v", mgmtNic["gateway"])
+	}
 
 	otherNics := bootstrapInfo["additionalNics"].([]interface{})
 	if otherNics != nil {
@@ -115,7 +118,10 @@ func configureVyos()  {
 			n, ok := nicsByMac[mac.(string)]; utils.PanicIfError(ok, fmt.Errorf("the nic with mac[%s] is not found in the system", mac))
 
 			_, ok = onic["isDefaultRoute"]
-			setNic(n.Name, ip.(string), netmask.(string), ok)
+			setNic(n.Name, ip.(string), netmask.(string))
+			if ok {
+				tree.Setf("system gateway-address %v", onic["gateway"])
+			}
 		}
 	}
 
