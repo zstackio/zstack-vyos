@@ -5,6 +5,7 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"zvr/utils"
+	"strings"
 )
 
 const (
@@ -64,13 +65,13 @@ func getRule(tree *server.VyosConfigTree, description string) *server.VyosConfig
 	return nil
 }
 
-func makeDescription(r dnatInfo) string {
-	return fmt.Sprintf("%v %v %v %v %v %v %v", r.VipIp, r.VipPortStart, r.VipPortEnd, r.PrivateMac, r.PrivatePortStart, r.PrivatePortEnd, r.ProtocolType)
+func makeDnatDescription(r dnatInfo) string {
+	return fmt.Sprintf("%v-%v-%v-%v-%v-%v-%v", r.VipIp, r.VipPortStart, r.VipPortEnd, r.PrivateMac, r.PrivatePortStart, r.PrivatePortEnd, r.ProtocolType)
 }
 
 func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 	for _, r := range rules {
-		des := makeDescription(r)
+		des := makeDnatDescription(r)
 		if currentRule := getRule(tree, des); currentRule != nil {
 			log.Debugf("dnat rule %s exists, skip it", des)
 			continue
@@ -93,12 +94,25 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 
 		tree.SetDnat(
 			fmt.Sprintf("description %v", des),
-			fmt.Sprintf("destination port %v", dport),
-			fmt.Sprintf("source port %v", sport),
+			fmt.Sprintf("destination port %v", sport),
 			fmt.Sprintf("inbound-interface %v", pubNicName),
-			fmt.Sprintf("protocol %v", r.ProtocolType),
-			fmt.Sprintf("translation address %v", r.VipIp),
+			fmt.Sprintf("protocol %v", strings.ToLower(r.ProtocolType)),
+			fmt.Sprintf("translation address %v", r.PrivateIp),
+			fmt.Sprintf("translation port %v", dport),
 		)
+
+		if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", des); fr != nil {
+			tree.SetFirewallOnInterface(pubNicName, "in",
+				"action accept",
+				fmt.Sprintf("description %v", des),
+				fmt.Sprintf("destination address %v", r.PrivateIp),
+				fmt.Sprintf("destination port %v", dport),
+				fmt.Sprintf("protocol %s", strings.ToLower(r.ProtocolType)),
+				"state new enable",
+			)
+		}
+
+		tree.AttachFirewallToInterface(pubNicName, "in")
 	}
 }
 
@@ -119,9 +133,14 @@ func removeDnatHandler(ctx *server.CommandContext) interface{} {
 
 	tree := server.NewParserFromShowConfiguration().Tree
 	for _, r := range cmd.Rules {
-		des := makeDescription(r)
+		des := makeDnatDescription(r)
 		if c := getRule(tree, des); c != nil {
 			c.Delete()
+		}
+
+		pubNicName, err := utils.GetNicNameByIp(r.VipIp); utils.PanicOnError(err)
+		if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", des); fr != nil {
+			fr.Delete()
 		}
 	}
 	tree.Apply(false)

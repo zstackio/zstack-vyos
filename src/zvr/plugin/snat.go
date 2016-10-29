@@ -109,7 +109,7 @@ func syncSnatHandler(ctx *server.CommandContext) interface{} {
 			tree.SetSnat(
 				fmt.Sprintf("outbound-interface %s", outNic),
 				fmt.Sprintf("source address %s", address),
-				"translation address masquerade",
+				fmt.Sprintf("translation address %s", s.PublicIp),
 			)
 		}
 	}

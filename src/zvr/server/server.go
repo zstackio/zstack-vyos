@@ -8,6 +8,10 @@ import (
 	"encoding/json"
 	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
+	"net/http/httputil"
+	"bytes"
+	"io/ioutil"
+	"bufio"
 )
 
 type commandHandlerWrap struct {
@@ -81,14 +85,20 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 	}
 
 	syncReply := func(rsp interface{}, w http.ResponseWriter, req *http.Request) {
-		if body, err := json.Marshal(rsp); err == nil {
-			w.WriteHeader(http.StatusOK)
-			utils.LogError(fmt.Fprint(w, string(body)))
+		var statusCode int
+		var body string
+		if b, err := json.Marshal(rsp); err == nil {
+			statusCode = http.StatusOK
+			body = string(b)
 		} else {
 			utils.LogError(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			utils.LogError(fmt.Fprint(w, err))
+			statusCode = http.StatusInternalServerError
+			body = err.Error()
 		}
+
+		log.Debugf("[SEND] to %v, status code: %v, body: %v", req.URL, statusCode, body)
+		w.WriteHeader(statusCode)
+		utils.LogError(fmt.Fprint(w, body))
 	}
 
 	asyncReply := func(rsp interface{}, w http.ResponseWriter, req *http.Request) {
@@ -99,6 +109,33 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 				TASK_UUID: taskUuid,
 			}, rsp, nil)
 		}, 60, 1); utils.LogError(err)
+	}
+
+	handler := func(w http.ResponseWriter, req *http.Request) {
+		ctx := &CommandContext{
+			responseWriter: w,
+			request: req,
+		}
+
+		if !async {
+			rsp := chandler(ctx)
+			if rsp == nil {
+				rsp = CommandResponseHeader{ Success: true }
+			}
+			syncReply(rsp, w, req)
+		} else {
+			// reply first, and the response body is ignored
+			// this is an ack that we have received the request
+			syncReply("", w, req)
+
+			// do the real work and then send the response
+			rsp := chandler(ctx)
+			if rsp == nil {
+				rsp = CommandResponseHeader{ Success: true }
+			}
+
+			asyncReply(rsp, w, req)
+		}
 	}
 
 	w.handler = func(w http.ResponseWriter, req *http.Request) {
@@ -124,30 +161,22 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 			}
 		}()
 
-		ctx := &CommandContext{
-			responseWriter: w,
-			request: req,
-		}
-
-		if !async {
-			rsp := chandler(ctx)
-			if rsp == nil {
-				rsp = CommandResponseHeader{ Success: true }
-			}
-			syncReply(rsp, w, req)
+		if reqDump, err := httputil.DumpRequest(req, true); err != nil {
+			log.Warnf("unable to dump the http request[url:%v]", req.URL)
 		} else {
-			// reply first, and the response body is ignored
-			// this is an ack that we have received the request
-			syncReply("", w, req)
-
-			// do the real work and then send the response
-			rsp := chandler(ctx)
-			if rsp == nil {
-				rsp = CommandResponseHeader{ Success: true }
+			nreq, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(reqDump))); utils.LogError(err)
+			if nreq != nil {
+				body, err := ioutil.ReadAll(nreq.Body); utils.LogError(err)
+				defer nreq.Body.Close()
+				log.WithFields(log.Fields{
+					CALLBACK_URL: nreq.Header.Get(CALLBACK_URL),
+					TASK_UUID: nreq.Header.Get(TASK_UUID),
+					"Host": nreq.Header.Get("Host"),
+				}).Debugf("[RECV] %v, body: %s", nreq.URL, string(body))
 			}
-
-			asyncReply(rsp, w, req)
 		}
+
+		handler(w, req)
 	}
 
 	log.Debugf("a command path[%s] is registered", path)

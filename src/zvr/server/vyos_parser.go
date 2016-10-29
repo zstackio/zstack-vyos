@@ -329,6 +329,18 @@ func (t *VyosConfigTree) AttachFirewallToInterface(ethname, direction string) {
 	t.Setf("interfaces ethernet %v firewall %s name %v.%v", ethname, direction, ethname, direction)
 }
 
+
+func (t *VyosConfigTree) FindFirewallRuleByDescription(ethname, direction, des string) *VyosConfigNode {
+	rs := t.Getf("firewall name %v.%v rule", ethname, direction)
+	for _, r := range rs.children {
+		if d := r.Get("description"); d != nil && d.Value() == des {
+			return r
+		}
+	}
+
+	return nil
+}
+
 func (t *VyosConfigTree) SetFirewallOnInterface(ethname, direction string, rules...string) int {
 	if direction != "in" && direction != "out" && direction != "local" {
 		panic(fmt.Sprintf("the direction can only be [in, out, local], but %s get", direction))
@@ -372,10 +384,26 @@ func (t *VyosConfigTree) SetSnat(rules...string) int {
 	return currentRuleNum
 }
 
+// set the config without checking any existing config with the same path
+// usually used for set multi-value keys
+func (t *VyosConfigTree) SetWithoutCheckExisting(config string) {
+	t.changeCommands = append(t.changeCommands, fmt.Sprintf("$SET %s", config))
+}
+
+// set the config without checking any existing config with the same path
+// usually used for set multi-value keys
+func (t *VyosConfigTree) SetfWithoutCheckExisting(f string, args...interface{}) {
+	t.SetWithoutCheckExisting(fmt.Sprintf(f, args...))
+}
+
+// if existing value is different from the config
+// delete the old one and set the new one
 func (t *VyosConfigTree) Setf(f string, args...interface{}) bool {
 	return t.Set(fmt.Sprintf(f, args...))
 }
 
+// if existing value is different from the config
+// delete the old one and set the new one
 func (t *VyosConfigTree) Set(config string) bool {
 	t.init()
 	cs := strings.Split(config, " ")

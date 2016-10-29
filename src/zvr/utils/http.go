@@ -62,7 +62,7 @@ func HttpPost(url string, headers map[string]string, obj interface{}) ([]byte, e
 	}
 
 	c := &http.Client{}
-	logrus.Debugf("post to %s, body: %s", url, string(b))
+	logrus.Debugf("[HTTP POST] %s, body: %s", url, string(b))
 	rsp, err := c.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("unable to do HTTP post to %v", url))

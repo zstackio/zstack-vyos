@@ -14,6 +14,7 @@ type Bash struct {
 	Command string
 	PipeFail bool
 	Arguments map[string]string
+	NoLog bool
 
 	retCode int
 	stdout string
@@ -66,8 +67,11 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 		return -1, "", "", err
 	}
 
+	if !b.NoLog {
+		logrus.Debugf("shell start: %s", b.Command)
+	}
+
 	var so, se bytes.Buffer
-	logrus.Debugf("shell start: %s", b.Command)
 	cmd := exec.Command("bash", "-c", b.Command)
 	cmd.Stdout = &so
 	cmd.Stderr = &se
@@ -91,11 +95,14 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 	b.retCode = retCode
 	b.stdout = stdout
 	b.stderr = stderr
-	logrus.WithFields(logrus.Fields{
-		"return code": fmt.Sprintf("%v", retCode),
-		"stdout": stdout,
-		"stderr": stderr,
-	}).Debugf("shell done: %s", b.Command)
+
+	if !b.NoLog {
+		logrus.WithFields(logrus.Fields{
+			"return code": fmt.Sprintf("%v", retCode),
+			"stdout": stdout,
+			"stderr": stderr,
+		}).Debugf("shell done: %s", b.Command)
+	}
 
 	return
 }

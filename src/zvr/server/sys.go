@@ -81,7 +81,7 @@ trap atexit EXIT SIGHUP SIGINT SIGTERM
 	err = ioutil.WriteFile(tmpfile.Name(), []byte(command), 0777); utils.PanicOnError(err)
 	tmpfile.Sync()
 	tmpfile.Close()
-	logrus.Debugln(command)
+	logrus.Debugf("[Configure VYOS]: %s\n", command)
 	bash := utils.Bash{
 		Command: fmt.Sprintf(`chown vyos:users %s; chmod +x %s; su - vyos -c %v`, tmpfile.Name(), tmpfile.Name(), tmpfile.Name()),
 	}
@@ -125,7 +125,9 @@ trap atexit EXIT SIGHUP SIGINT SIGTERM
 	bash := &utils.Bash{
 		Command: fmt.Sprintf(template, command),
 		Arguments: args,
+		NoLog: true,
 	}
+	logrus.Debugf("[Configure VYOS]: %s\n", command)
 	bash.Run()
 	bash.PanicIfError()
 }
