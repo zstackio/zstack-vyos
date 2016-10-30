@@ -68,6 +68,9 @@ chown vyos:users $SBIN_DIR/zvr
 $SBIN_DIR/zvrboot >/home/vyos/zvr/zvrboot.log 2>&1 < /dev/null &
 exit 0
 END
+download /boot/grub/grub.cfg /tmp/grub.cfg
+! sed -e 's/^set[[:space:]]\+timeout[[:space:]]*=[[:space:]]*[[:digit:]]\+/set timeout=0/g' -e '/^echo.*Grub menu/,/^fi$/d' /tmp/grub.cfg > /tmp/grub.cfg.new
+upload /tmp/grub.cfg.new /boot/grub/grub.cfg
 _EOF_
 
 rm -rf $tmpdir
