@@ -88,7 +88,7 @@ func GetAllNics() (map[string]Nic, error) {
 			return nil, errors.Wrap(err, fmt.Sprintf("unable to read the mac file[%s]", macfile))
 		}
 		nics[f.Name()] = Nic{
-			Name: f.Name(),
+			Name: strings.TrimSpace(f.Name()),
 			Mac: strings.TrimSpace(string(mac)),
 		}
 	}

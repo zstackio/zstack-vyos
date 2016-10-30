@@ -147,9 +147,9 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 				}
 
 				if e, ok := err.(error); ok {
-					log.Warnf("+v\n", errors.Wrap(e, fmt.Sprintf("command[path:%s] failed", path)))
+					log.Warnf("%+v\n", errors.Wrap(e, fmt.Sprintf("command[path:%s] failed", path)))
 				} else {
-					log.Warnf("+v\n", errors.Wrap(errors.New(err.(string)), fmt.Sprintf("command[path:%s] failed", path)))
+					log.Warnf("%+v\n", errors.Wrap(errors.New(err.(string)), fmt.Sprintf("command[path:%s] failed", path)))
 				}
 
 

@@ -53,7 +53,7 @@ func removeVip(ctx *server.CommandContext) interface{} {
 	for _, vip := range cmd.Vips {
 		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac); utils.PanicOnError(err)
 		cidr, err := utils.NetmaskToCIDR(vip.Netmask); utils.PanicOnError(err)
-		addr := fmt.Sprintf("%v/%v", nicname, cidr)
+		addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
 
 		tree.Deletef("interfaces ethernet %s address %v", nicname, addr)
 	}
