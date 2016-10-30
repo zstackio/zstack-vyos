@@ -103,14 +103,26 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 		)
 
 		if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", des); fr == nil {
-			tree.SetFirewallOnInterface(pubNicName, "in",
-				"action accept",
-				fmt.Sprintf("description %v", des),
-				fmt.Sprintf("destination address %v", r.PrivateIp),
-				fmt.Sprintf("destination port %v", dport),
-				fmt.Sprintf("protocol %s", strings.ToLower(r.ProtocolType)),
-				"state new enable",
-			)
+			if r.AllowedCidr != "" && r.AllowedCidr != "0.0.0.0/0" {
+				tree.SetFirewallOnInterface(pubNicName, "in",
+					"action accept",
+					fmt.Sprintf("source address %v", r.AllowedCidr),
+					fmt.Sprintf("description %v", des),
+					fmt.Sprintf("destination address %v", r.PrivateIp),
+					fmt.Sprintf("destination port %v", dport),
+					fmt.Sprintf("protocol %s", strings.ToLower(r.ProtocolType)),
+					"state new enable",
+				)
+			} else {
+				tree.SetFirewallOnInterface(pubNicName, "in",
+					"action accept",
+					fmt.Sprintf("description %v", des),
+					fmt.Sprintf("destination address %v", r.PrivateIp),
+					fmt.Sprintf("destination port %v", dport),
+					fmt.Sprintf("protocol %s", strings.ToLower(r.ProtocolType)),
+					"state new enable",
+				)
+			}
 		}
 
 		tree.AttachFirewallToInterface(pubNicName, "in")
