@@ -10,7 +10,7 @@ PKG_ZVR_DIR=$(TARGET_DIR)/pkg-zvr
 PKG_ZVRBOOT_DIR=$(TARGET_DIR)/pkg-zvrboot
 PKG_TAR_DIR=$(TARGET_DIR)/pkg-tar
 
-DEPS=github.com/Sirupsen/logrus github.com/pkg/errors
+DEPS=github.com/Sirupsen/logrus github.com/pkg/errors github.com/fatih/structs
 
 zvr: deps
 	mkdir -p $(TARGET_DIR)

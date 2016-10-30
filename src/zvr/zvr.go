@@ -18,6 +18,7 @@ func loadPlugins()  {
 	plugin.DnatEntryPoint()
 	plugin.VipEntryPoint()
 	plugin.EipEntryPoint()
+	plugin.LbEntryPoint()
 }
 
 var options server.Options
