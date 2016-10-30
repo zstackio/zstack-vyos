@@ -12,8 +12,10 @@ import (
 type logFormatter struct {
 }
 
+const timeFormat  = "2006-01-02 15:04:05" //"Jan 2, 2006 at 3:04pm (MST)"
+
 func (f *logFormatter) Format(entry *log.Entry) ([]byte, error) {
-	timestampFormat := log.DefaultTimestampFormat
+	//timestampFormat := log.DefaultTimestampFormat
 
 	var msg string
 	if len(entry.Data) > 0 {
@@ -32,10 +34,10 @@ func (f *logFormatter) Format(entry *log.Entry) ([]byte, error) {
 			return nil, fmt.Errorf("Failed to marshal fields to JSON, %v", err)
 		}
 
-		msg = fmt.Sprintf("%v %v %v %v", entry.Time.Format(timestampFormat),
+		msg = fmt.Sprintf("%v %v %v %v", entry.Time.Format(timeFormat),
 			strings.ToUpper(entry.Level.String()), entry.Message, string(jsondata))
 	} else {
-		msg = fmt.Sprintf("%v %v %v", entry.Time.Format(timestampFormat),
+		msg = fmt.Sprintf("%v %v %v", entry.Time.Format(timeFormat),
 			strings.ToUpper(entry.Level.String()), entry.Message)
 	}
 

@@ -6,6 +6,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+func Assertf(expression bool, f string, args...interface{})  {
+	Assert(expression, fmt.Sprintf(f, args...))
+}
+
 func Assert(expression bool, msg string)  {
 	if !expression {
 		panic(errors.New(msg))

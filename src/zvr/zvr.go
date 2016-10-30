@@ -48,6 +48,7 @@ func configureZvrFirewall() {
 	tree := server.NewParserFromShowConfiguration().Tree
 
 	tree.SetFirewallOnInterface("eth0", "local",
+		fmt.Sprintf("destination address %v", options.Ip),
 		fmt.Sprintf("destination port %v", options.Port),
 		"protocol tcp",
 		"action accept",

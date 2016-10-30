@@ -87,18 +87,18 @@ func configureVyos()  {
 		gateway string
 	}
 
-	allNicsByMac := make(map[string]Nic)
+	allNicsByMac := make(map[string]*Nic)
 
 	nicsByNames, err := utils.GetAllNics(); utils.PanicOnError(err)
 	for _, nic := range nicsByNames {
-		n := Nic{
+		n := &Nic{
 			mac: nic.Mac,
 			name: nic.Name,
 		}
 		allNicsByMac[n.mac] = n
 	}
 
-	setNic := func(nic Nic) {
+	setNic := func(nic *Nic) {
 		cidr, err := utils.NetmaskToCIDR(nic.netmask); utils.PanicOnError(err)
 		tree.Setf("interfaces ethernet %s address %s", nic.name, fmt.Sprintf("%v/%v", nic.ip, cidr))
 		tree.Setf("interfaces ethernet %s duplex auto", nic.name)
@@ -114,7 +114,7 @@ func configureVyos()  {
 		panic(errors.New("no field 'managementNic' in bootstrap info"))
 	}
 
-	eth0 := func() Nic {
+	eth0 := func() *Nic {
 		for _, nic := range allNicsByMac {
 			if nic.name == "eth0" {
 				return nic
@@ -128,16 +128,15 @@ func configureVyos()  {
 		eth0.mac, mgmtMac))
 	eth0.netmask, ok = mgmtNic["netmask"].(string); utils.PanicIfError(ok, errors.New("cannot find 'netmask' field for the management nic"))
 	eth0.ip, ok = mgmtNic["ip"].(string); utils.PanicIfError(ok, errors.New("cannot find 'ip' field for the management nic"))
-	_, eth0.isDefaultRoute = mgmtNic["isDefaultRoute"].(bool)
+	eth0.isDefaultRoute = mgmtNic["isDefaultRoute"].(bool)
 	eth0.gateway = mgmtNic["gateway"].(string)
-	setNic(eth0)
 
 	otherNics := bootstrapInfo["additionalNics"].([]interface{})
 	if otherNics != nil {
 		for _, o := range otherNics {
 			onic := o.(map[string]interface{})
 			mac, ok := onic["mac"]; utils.PanicIfError(ok, errors.New("cannot find 'mac' field for the nic"))
-			n := func() Nic {
+			n := func() *Nic {
 				for _, nic := range allNicsByMac {
 					if nic.mac == mac.(string) {
 						return nic
@@ -148,9 +147,18 @@ func configureVyos()  {
 
 			n.netmask, ok = onic["netmask"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'netmask' field for the nic[mac:%s]", mac))
 			n.ip, ok = onic["ip"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'ip' field for the nic[mac:%s]", mac))
-			_, n.isDefaultRoute = onic["isDefaultRoute"].(bool)
-			setNic(n)
+			n.gateway = onic["gateway"].(string)
+			n.isDefaultRoute = onic["isDefaultRoute"].(bool)
 		}
+	}
+
+	// check integrity of nics
+	for _, nic := range allNicsByMac {
+		utils.Assertf(nic.name != "", "name cannot be empty[mac:%s]", nic.mac)
+		utils.Assertf(nic.ip != "", "ip cannot be empty[nicname: %s]", nic.name)
+		utils.Assertf(nic.gateway != "", "gateway cannot be empty[nicname:%s]", nic.name)
+		utils.Assertf(nic.netmask != "", "netmask cannot be empty[nicname:%s]", nic.name)
+		utils.Assertf(nic.mac != "", "mac cannot be empty[nicname:%s]", nic.name)
 	}
 
 	sshport := bootstrapInfo["sshPort"].(float64)
@@ -161,14 +169,18 @@ func configureVyos()  {
 	tree.Set("firewall name default default-action reject")
 
 	for _, nic := range allNicsByMac {
+		setNic(nic)
+
 		tree.SetFirewallOnInterface(nic.name, "local",
 			"action accept",
 			"state established enable",
 			"state related enable",
+			fmt.Sprintf("destination address %v", nic.ip),
 		)
 		tree.SetFirewallOnInterface(nic.name, "local",
 			"action accept",
 			"protocol icmp",
+			fmt.Sprintf("destination address %v", nic.ip),
 		)
 
 		tree.SetFirewallOnInterface(nic.name, "in",

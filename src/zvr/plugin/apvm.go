@@ -1,11 +1,11 @@
 package plugin
 
 import (
-	"zvr/utils"
 	"zvr/server"
-	"fmt"
-	"github.com/pkg/errors"
 )
+
+// This plugin is largely to keep the mgmt server appliance vm
+// logic unchanged
 
 const (
 	APVM_REFRESH_FIREWALL_PATH = "/appliancevm/refreshfirewall"
@@ -28,6 +28,7 @@ type refreshFirewallCmd struct {
 }
 
 func apvmRefreshFirewallHandler(ctx *server.CommandContext) interface{} {
+	/*
 	cmd := &refreshFirewallCmd{}
 	ctx.GetCommand(cmd)
 
@@ -97,7 +98,12 @@ func apvmRefreshFirewallHandler(ctx *server.CommandContext) interface{} {
 	}
 
 	tree.Apply(false)
+	*/
 
+	// firewall is totally handled by ourselves, we
+	// don't need mgmt server to instruct us; however,
+	// to keep the mgmt server side code consistent,
+	// we return success for every call
 	return nil
 }
 

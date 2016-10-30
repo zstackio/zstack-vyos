@@ -82,6 +82,7 @@ func (parser *VyosParser) Parse(text string) *VyosConfigTree {
 
 	offset := 0
 	tree := &VyosConfigTree{ Root: &VyosConfigNode{} }
+	tree.Root.tree = tree
 	tstack := &utils.Stack{}
 
 	currentNode := tree.Root
@@ -147,6 +148,7 @@ type VyosConfigNode struct {
 	children      []*VyosConfigNode
 	childrenIndex map[string]*VyosConfigNode
 	parent        *VyosConfigNode
+	tree *VyosConfigTree
 }
 
 
@@ -173,7 +175,7 @@ func (n *VyosConfigNode) String() string {
 				for i, s := range sl {
 					ss[i] = s.(string)
 				}
-				return strings.Join(ss, " ")
+				return strings.TrimSpace(strings.Join(ss, " "))
 			}()
 		}
 
@@ -207,7 +209,7 @@ func (n *VyosConfigNode) Size() int {
 }
 
 func (n *VyosConfigNode) Delete() {
-	n.deleteSelf()
+	n.tree.Delete(n.String())
 }
 
 func (n *VyosConfigNode) deleteSelf() *VyosConfigNode {
@@ -253,8 +255,10 @@ func (n *VyosConfigNode) addNode(name string) *VyosConfigNode {
 		return c
 	}
 
+	utils.Assertf(n.tree != nil, "node[%s] has tree == nil", n.String())
 	newNode := &VyosConfigNode{
 		name: name,
+		tree: n.tree,
 	}
 
 	if n.children == nil {
@@ -301,6 +305,7 @@ func (t *VyosConfigTree) init() {
 		t.Root = &VyosConfigNode{
 			children: make([]*VyosConfigNode, 0),
 			childrenIndex: make(map[string]*VyosConfigNode),
+			tree: t,
 		}
 	}
 }

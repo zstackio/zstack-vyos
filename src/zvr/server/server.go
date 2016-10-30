@@ -96,7 +96,7 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 			body = err.Error()
 		}
 
-		log.Debugf("[SEND] to %v, status code: %v, body: %v", req.URL, statusCode, body)
+		log.Debugf("[RESPONSE] to %v, status code: %v, body: %v", req.URL, statusCode, body)
 		w.WriteHeader(statusCode)
 		utils.LogError(fmt.Fprint(w, body))
 	}

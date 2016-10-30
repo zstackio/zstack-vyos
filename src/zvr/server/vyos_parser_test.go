@@ -147,6 +147,8 @@ ABC E
 	tree.Delete("system login user vyos authentication plaintext-password")
 	tree.Set("system login user vyos authentication plaintext-password xxx")
 	tree.Set("protocols static route 0.0.0.0/0 next-hop 172.20.0.1 distance 2")
+	n := tree.Get("system package")
+	n.Delete()
 	fmt.Println(tree.CommandsAsString())
 	fmt.Println(tree.String())
 }

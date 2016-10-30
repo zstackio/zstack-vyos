@@ -48,7 +48,7 @@ func setSnatHandler(ctx *server.CommandContext) interface{} {
 	tree.SetSnat(
 		fmt.Sprintf("outbound-interface %s", outNic),
 		fmt.Sprintf("source address %v", address),
-		"translation address masquerade",
+		fmt.Sprintf("translation address %s", s.PublicIp),
 	)
 
 	tree.Apply(false)
