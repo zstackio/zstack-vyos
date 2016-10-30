@@ -55,6 +55,10 @@ func makeServerName(mac string) string {
 	return strings.Replace(mac, ":", "_", -1)
 }
 
+func makeDhcpFirewallRuleDescription(netname string) string {
+	return fmt.Sprintf("DHCP-for-%s", netname)
+}
+
 func setDhcp(infos []dhcpInfo) {
 	parser := server.NewParserFromShowConfiguration()
 
@@ -67,7 +71,7 @@ func setDhcp(infos []dhcpInfo) {
 
 	tree := parser.Tree
 	for vrMac, info := range macs {
-		netName, subnet := infoToNetNameAndSubnet(info)
+		netName, subnet, nicname := infoToNetNameAndSubnet(info)
 		subnetNames[vrMac] = netName
 
 		tree.Setf("service dhcp-server shared-network-name %s authoritative enable", netName)
@@ -77,6 +81,18 @@ func setDhcp(infos []dhcpInfo) {
 		serverName := makeServerName(info.VrNicMac)
 		tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s ip-address %s", netName, subnet, serverName, info.Gateway)
 		tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s mac-address %s", netName, subnet, serverName, info.VrNicMac)
+
+		des := makeDhcpFirewallRuleDescription(netName)
+		if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
+			tree.SetFirewallOnInterface(nicname, "local",
+				fmt.Sprintf("description %v", des),
+				"destination port 67-68",
+				"protocol tcp_udp",
+				"action accept",
+			)
+
+			tree.AttachFirewallToInterface(nicname, "local")
+		}
 	}
 
 	for _, info := range infos {
@@ -111,11 +127,11 @@ func setDhcp(infos []dhcpInfo) {
 	tree.Apply(false)
 }
 
-func infoToNetNameAndSubnet(info dhcpInfo) (string, string) {
+func infoToNetNameAndSubnet(info dhcpInfo) (string, string, string) {
 	nicname, err := utils.GetNicNameByMac(info.VrNicMac); utils.PanicOnError(err)
 	subnet, err := utils.GetNetworkNumber(info.Ip, info.Netmask); utils.PanicOnError(err)
 
-	return makeLanName(nicname), subnet
+	return makeLanName(nicname), subnet, nicname
 }
 
 func deleteDhcp(infos []dhcpInfo) {
@@ -123,7 +139,7 @@ func deleteDhcp(infos []dhcpInfo) {
 	tree := parser.Tree
 
 	for _, info := range infos {
-		netName, subnet := infoToNetNameAndSubnet(info)
+		netName, subnet, _ := infoToNetNameAndSubnet(info)
 		serverName := makeServerName(info.Mac)
 		tree.Deletef("service dhcp-server shared-network-name %s subnet %s static-mapping %s", netName, subnet, serverName)
 	}

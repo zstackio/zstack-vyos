@@ -346,6 +346,11 @@ func (t *VyosConfigTree) FindFirewallRuleByDescription(ethname, direction, des s
 	return nil
 }
 
+func (t *VyosConfigTree) SetFirewallDefaultAction(ethname, direction, action string) {
+	utils.Assertf(action == "drop" || action == "reject" || action == "accept", "action must be drop or reject or accept, but %s got", action)
+	t.Setf("firewall name %s.%s default-action %v", ethname, direction, action)
+}
+
 func (t *VyosConfigTree) SetFirewallOnInterface(ethname, direction string, rules...string) int {
 	if direction != "in" && direction != "out" && direction != "local" {
 		panic(fmt.Sprintf("the direction can only be [in, out, local], but %s get", direction))

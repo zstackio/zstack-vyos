@@ -166,8 +166,6 @@ func configureVyos()  {
 	tree.Setf("service ssh port %v", int(sshport))
 
 	// configure firewall
-	tree.Set("firewall name default default-action reject")
-
 	for _, nic := range allNicsByMac {
 		setNic(nic)
 
@@ -209,6 +207,9 @@ func configureVyos()  {
 				"action reject",
 			)
 		}
+
+		tree.SetFirewallDefaultAction(nic.name, "local", "reject")
+		tree.SetFirewallDefaultAction(nic.name, "in", "reject")
 
 		tree.AttachFirewallToInterface(nic.name, "local")
 		tree.AttachFirewallToInterface(nic.name, "in")
