@@ -48,6 +48,7 @@ tar xzf $2 -C $tmpdir
 ZVR=$tmpdir/zvr
 ZVRBOOT=$tmpdir/zvrboot
 ZVRSCRIPT=$tmpdir/zstack-virtualrouteragent
+HAPROXY=$tmpdir/haproxy
 SBIN_DIR=/opt/vyatta/sbin
 
 guestfish <<_EOF_
@@ -57,14 +58,17 @@ mount /dev/sda1 /
 upload $ZVR $SBIN_DIR/zvr
 upload $ZVRBOOT $SBIN_DIR/zvrboot
 upload $ZVRSCRIPT /etc/init.d/zstack-virtualrouteragent
+upload $HAPROXY $SBIN_DIR/haproxy
 upload -<<END /opt/vyatta/etc/config/scripts/vyatta-postconfig-bootup.script
 #!/bin/bash
 chmod +x $SBIN_DIR/zvrboot
 chmod +x $SBIN_DIR/zvr
 chmod +x /etc/init.d/zstack-virtualrouteragent
+chmod +x $SBIN_DIR/haproxy
 mkdir -p /home/vyos/zvr
 chown vyos:users /home/vyos/zvr
 chown vyos:users $SBIN_DIR/zvr
+chown vyos:users $SBIN_DIR/haproxy
 $SBIN_DIR/zvrboot >/home/vyos/zvr/zvrboot.log 2>&1 < /dev/null &
 exit 0
 END
