@@ -120,6 +120,7 @@ func (parser *VyosParser) Parse(text string) *VyosConfigTree {
 var ConfigurationSourceFunc = func() string {
 	bash := utils.Bash{
 		Command: "/bin/cli-shell-api showCfg",
+		NoLog: true,
 	}
 
 	_, o, _, _ := bash.RunWithReturn()

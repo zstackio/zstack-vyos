@@ -164,6 +164,7 @@ func configureVyos()  {
 	sshport := bootstrapInfo["sshPort"].(float64)
 	utils.Assert(sshport != 0, "sshport not found in bootstrap info")
 	tree.Setf("service ssh port %v", int(sshport))
+	tree.Setf("service ssh listen-address %v", eth0.ip)
 
 	// configure firewall
 	for _, nic := range allNicsByMac {

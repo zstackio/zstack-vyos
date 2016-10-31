@@ -15,6 +15,7 @@ func FindPIDByPS(cmdline...string) (int, error) {
 		cmds = append(cmds, fmt.Sprintf("grep '%s'", c))
 	}
 	cmds = append(cmds, "grep -v grep")
+	cmds = append(cmds, "awk '{print $2}'")
 
 	b := Bash{
 		Command: strings.Join(cmds, " | "),

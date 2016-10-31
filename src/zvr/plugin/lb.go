@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"time"
 	"os"
+	//log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -56,8 +57,8 @@ func setLb(lb lbInfo) {
 	conf := `global
 maxconn {{.MaxConnection}}
 log 127.0.0.1 local1
-user haproxy
-group haproxy
+user vyos
+group users
 daemon
 
 listen {{.ListenerUuid}}
@@ -68,19 +69,19 @@ timeout connect 60s
 balance {{.BalancerAlgorithm}}
 bind {{.Vip}}:{{.LoadBalancerPort}}
 {{ range $index, $ip := .NicIps }}
-server nic-{{ip}} {{ip}}:{{.LoadBalancerPort}} check port {{.CheckPort}} inter {{.HealthCheckInterval}}s rise {{.HealthyThreshold}} fall {{.UnhealthyThreshold}}
-{{ endfor }}`
+server nic-{{$ip}} {{$ip}}:{{$.LoadBalancerPort}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
+{{ end }}`
 
 	tmpl, err := template.New("conf").Parse(conf); utils.PanicOnError(err)
 	var buf bytes.Buffer
 	m := structs.Map(lb)
 	for _, param := range lb.Parameters {
-		kv := strings.Split(param, "::")
+		kv := strings.SplitN(param, "::", 2)
 		k := kv[0]
 		v := kv[1]
 
 		if k == "healthCheckTarget" {
-			mp := strings.Split(v, "::")
+			mp := strings.Split(v, ":")
 			cport := mp[1]
 			if cport == "default" {
 				m["CheckPort"] = lb.InstancePort
@@ -105,8 +106,8 @@ server nic-{{ip}} {{ip}}:{{.LoadBalancerPort}} check port {{.CheckPort}} inter {
 	nicname, err := utils.GetNicNameByIp(lb.Vip); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
 	dropRuleDes := fmt.Sprintf("lb-%v-%s-drop", lb.LbUuid, lb.ListenerUuid)
-	if r := tree.FindFirewallRuleByDescription(nicname, "in", dropRuleDes); r == nil {
-		tree.SetFirewallOnInterface(nicname, "in",
+	if r := tree.FindFirewallRuleByDescription(nicname, "local", dropRuleDes); r == nil {
+		tree.SetFirewallOnInterface(nicname, "local",
 			fmt.Sprintf("description %v", dropRuleDes),
 			fmt.Sprintf("destination address %v", lb.Vip),
 			fmt.Sprintf("destination port %v", lb.LoadBalancerPort),
@@ -117,8 +118,8 @@ server nic-{{ip}} {{ip}}:{{.LoadBalancerPort}} check port {{.CheckPort}} inter {
 	}
 
 	des := makeLbFirewallRuleDescription(lb)
-	if r := tree.FindFirewallRuleByDescription(nicname, "in", des); r == nil {
-		tree.SetFirewallOnInterface(nicname, "in",
+	if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
+		tree.SetFirewallOnInterface(nicname, "local",
 			fmt.Sprintf("description %v", des),
 			fmt.Sprintf("destination address %v", lb.Vip),
 			fmt.Sprintf("destination port %v", lb.LoadBalancerPort),
@@ -127,13 +128,13 @@ server nic-{{ip}} {{ip}}:{{.LoadBalancerPort}} check port {{.CheckPort}} inter {
 		)
 	}
 
-	tree.AttachFirewallToInterface(nicname, "in")
+	tree.AttachFirewallToInterface(nicname, "local")
 	tree.Apply(false)
 
 	defer func() {
 		// delete the DROP SYNC rule on exit
 		tree := server.NewParserFromShowConfiguration().Tree
-		if r := tree.FindFirewallRuleByDescription(nicname, "in", dropRuleDes); r != nil {
+		if r := tree.FindFirewallRuleByDescription(nicname, "local", dropRuleDes); r != nil {
 			r.Delete()
 		}
 		tree.Apply(false)
@@ -142,13 +143,13 @@ server nic-{{ip}} {{ip}}:{{.LoadBalancerPort}} check port {{.CheckPort}} inter {
 	time.Sleep(time.Duration(1) * time.Second)
 
 	bash := utils.Bash{
-		Command: fmt.Sprintf("'haproxy -D -f %s -p %s -sf $(cat %s)", confPath, pidPath, pidPath),
+		Command: fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -f %s -p %s -sf $(cat %s)", confPath, pidPath, pidPath),
 	}
 
 	if ret, _, _, err := bash.RunWithReturn(); ret != 0 || err != nil {
 		// fail, cleanup the firewall rule
 		tree = server.NewParserFromShowConfiguration().Tree
-		if r := tree.FindFirewallRuleByDescription(nicname, "in", des); r != nil {
+		if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r != nil {
 			r.Delete()
 		}
 		tree.Apply(false)
@@ -188,7 +189,7 @@ func delLb(lb lbInfo) {
 	nicname, err := utils.GetNicNameByIp(lb.Vip); utils.PanicOnError(err)
 	des := makeLbFirewallRuleDescription(lb)
 	tree := server.NewParserFromShowConfiguration().Tree
-	if r := tree.FindFirewallRuleByDescription(nicname, "in", des); r != nil {
+	if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r != nil {
 		r.Delete()
 	}
 	tree.Apply(false)

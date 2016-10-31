@@ -75,6 +75,10 @@ END
 download /boot/grub/grub.cfg /tmp/grub.cfg
 ! sed -e 's/^set[[:space:]]\+timeout[[:space:]]*=[[:space:]]*[[:digit:]]\+/set timeout=0/g' -e '/^echo.*Grub menu/,/^fi$/d' /tmp/grub.cfg > /tmp/grub.cfg.new
 upload /tmp/grub.cfg.new /boot/grub/grub.cfg
+download /etc/security/limits.conf /tmp/limits.conf
+! grep -w "vyos" /tmp/limits.conf  | grep soft || echo "vyos soft nofile 1000000" >> /tmp/limits.conf
+! grep -w "vyos" /tmp/limits.conf  | grep hard || echo "vyos hard nofile 1000000" >> /tmp/limits.conf
+upload /tmp/limits.conf /etc/security/limits.conf
 _EOF_
 
 rm -rf $tmpdir
