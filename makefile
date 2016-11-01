@@ -34,6 +34,7 @@ package: clean zvr zvrboot
 	cp -f scripts/haproxy $(PKG_ZVR_DIR)
 	cp -f $(TARGET_DIR)/zvrboot $(PKG_ZVRBOOT_DIR)
 	$(GO) run package.go -conf package-config.json
+	cp -f ansible/zvr.py $(TARGET_DIR)
 
 tar: zvr zvrboot
 	rm -rf $(PKG_TAR_DIR)
