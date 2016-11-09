@@ -19,6 +19,7 @@ func loadPlugins()  {
 	plugin.VipEntryPoint()
 	plugin.EipEntryPoint()
 	plugin.LbEntryPoint()
+	plugin.IPsecEntryPoint()
 }
 
 var options server.Options
