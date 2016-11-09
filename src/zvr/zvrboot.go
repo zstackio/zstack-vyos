@@ -185,6 +185,7 @@ func configureVyos()  {
 		tree.SetFirewallOnInterface(nic.name, "in",
 			"action accept",
 			"state established enable",
+			"state new enable",
 			"state related enable",
 		)
 		tree.SetFirewallOnInterface(nic.name, "in",
