@@ -45,7 +45,9 @@ func setSnatHandler(ctx *server.CommandContext) interface{} {
 		return nil
 	}
 
-	tree.SetSnat(
+	// make source nat rule as the latest rule
+	// in case there are EIP rules
+	tree.SetSnatWithRuleNumber(9999,
 		fmt.Sprintf("outbound-interface %s", outNic),
 		fmt.Sprintf("source address %v", address),
 		fmt.Sprintf("translation address %s", s.PublicIp),

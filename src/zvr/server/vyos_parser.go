@@ -421,6 +421,12 @@ func (t *VyosConfigTree) FindSnatRuleDescription(des string) *VyosConfigNode {
 	return nil
 }
 
+func (t *VyosConfigTree) SetSnatWithRuleNumber(ruleNum int, rules...string) {
+	for _, rule := range rules {
+		t.Setf("nat source rule %v %s", ruleNum, rule)
+	}
+}
+
 func (t *VyosConfigTree) SetSnat(rules...string) int {
 	currentRuleNum := 1
 	if c := t.Get("nat source rule"); c != nil {
