@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"fmt"
 	"zvr/utils"
+	log "github.com/Sirupsen/logrus"
 )
 
 type VyosParser struct {
@@ -292,6 +293,7 @@ func (t *VyosConfigTree) Apply(asVyosUser bool) {
 	}
 
 	if (len(t.changeCommands) == 0) {
+		log.Debug("[Vyos Configuration] no changes to apply")
 		return
 	}
 
