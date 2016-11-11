@@ -84,6 +84,7 @@ system {
         device ttyS0 {
             speed 9600
         }
+        test
     }
     host-name vyos
     login {
@@ -142,6 +143,8 @@ ABC E
 	tree.Set("interfaces ethernet eth1 address 172.20.14.209/16")
 	tree.Set("interfaces ethernet eth1 address 172.20.14.209/16")
 	tree.Set("interfaces ethernet eth1 address 172.20.14.210/16")
+	tree.Set("interfaces ethernet eth1 exclude")
+	tree.Set("interfaces ethernet eth1 include")
 	tree.Delete("interfaces ethernet eth0 address")
 	tree.Delete("interfaces ethernet eth0 address")
 	tree.Delete("system login user vyos authentication plaintext-password")

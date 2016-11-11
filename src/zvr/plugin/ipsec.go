@@ -9,6 +9,7 @@ import (
 const(
 	CREATE_IPSEC_CONNECTION = "/vyos/createipsecconnection"
 	DELETE_IPSEC_CONNECTION = "/vyos/deleteipsecconnection"
+	SYNC_IPSEC_CONNECTION = "/vyos/syncipsecconnection"
 )
 
 type ipsecInfo struct {
@@ -35,6 +36,10 @@ type createIPsecCmd struct {
 }
 
 type deleteIPsecCmd struct {
+	Infos []ipsecInfo `json:"infos"`
+}
+
+type syncIPsecCmd struct {
 	Infos []ipsecInfo `json:"infos"`
 }
 
@@ -144,6 +149,23 @@ func createIPsecConnection(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
+func syncIPsecConnection(ctx *server.CommandContext) interface{} {
+	cmd := &syncIPsecCmd{}
+	ctx.GetCommand(cmd)
+
+	vyos := server.NewParserFromShowConfiguration()
+	tree := vyos.Tree
+
+	tree.Delete("vpn ipsec")
+
+	for _, info := range cmd.Infos {
+		createIPsec(tree, info)
+	}
+	tree.Apply(false)
+
+	return nil
+}
+
 func deleteIPsecConnection(ctx *server.CommandContext) interface{} {
 	cmd := &deleteIPsecCmd{}
 	ctx.GetCommand(cmd)
@@ -177,7 +199,7 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 		}
 	}
 
-	ipsec := tree.Get("vpn ipsec site-to-site")
+	ipsec := tree.Get("vpn ipsec site-to-site peer")
 	if ipsec == nil || ipsec.Size() == 0 {
 		// no any ipsec connection
 
@@ -203,4 +225,5 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 func IPsecEntryPoint() {
 	server.RegisterAsyncCommandHandler(CREATE_IPSEC_CONNECTION, server.VyosLock(createIPsecConnection))
 	server.RegisterAsyncCommandHandler(DELETE_IPSEC_CONNECTION, server.VyosLock(deleteIPsecConnection))
+	server.RegisterAsyncCommandHandler(SYNC_IPSEC_CONNECTION, server.VyosLock(syncIPsecConnection))
 }

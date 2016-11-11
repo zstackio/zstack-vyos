@@ -21,6 +21,7 @@ const (
 	KEY_VALUE
 	CLOSE
 	IGNORE
+	VALUE
 )
 
 var (
@@ -50,6 +51,8 @@ func matchToken(words []string) (int, role, []string, string) {
 		return next, KEY_VALUE, []string{ws[0]}, strings.Join(ws[1:], " ")
 	} else if length == 1 && ws[0] == "}" {
 		return next, CLOSE, nil, ""
+	} else if length == 1 && ws[0] != "{" && ws[0] != "}" {
+		return next, VALUE, nil, ws[0]
 	} else if length == 0 {
 		return next+1, IGNORE, nil, ""
 	} else {
@@ -95,6 +98,8 @@ func (parser *VyosParser) Parse(text string) *VyosConfigTree {
 			currentNode = currentNode.addNode(keys[0])
 		} else if role == KEY_VALUE {
 			currentNode.addNode(keys[0]).addNode(value)
+		} else if role == VALUE {
+			currentNode.addNode(value)
 		} else if role == ROOT_ATTRIBUTE {
 			tstack.Push(currentNode)
 
@@ -199,11 +204,25 @@ func (n *VyosConfigNode) isKeyNode() bool {
 	return c.isValueNode()
 }
 
-func (n *VyosConfigNode) Value() string {
-	utils.Assert(n.isKeyNode(), fmt.Sprintf("the node[%s] is not a key node", n.String()))
+func (n *VyosConfigNode) Values() []string {
+	values := make([]string, 0)
+	for _, c := range n.children {
+		if c.isValueNode() {
+			values = append(values, c.name)
+		}
+	}
+	return values
+}
 
-	c := n.children[0]
-	return c.name
+func (n *VyosConfigNode) ValueSize() int {
+	return len(n.Values())
+}
+
+func (n *VyosConfigNode) Value() string {
+	values := n.Values()
+	utils.Assert(len(values) != 0, fmt.Sprintf("the node[%s] doesn't have any value", n.String()))
+	utils.Assert(len(values) == 1, fmt.Sprintf("the node[%s] has more than one value%s", n.String(), values))
+	return values[0]
 }
 
 func (n *VyosConfigNode) Size() int {
@@ -476,9 +495,7 @@ func (t *VyosConfigTree) Set(config string) bool {
 	key := strings.Join(cs[:len(cs)-1], " ")
 	value := cs[len(cs)-1]
 	keyNode := t.Get(key)
-	if keyNode != nil {
-		utils.Assert(keyNode.isKeyNode(), fmt.Sprintf("the node[%s] is not a key node, cannot call set on it", keyNode.String()))
-
+	if keyNode != nil && keyNode.ValueSize() > 0 {
 		// the key found
 		cvalue := keyNode.Value()
 		if (value != cvalue) {
