@@ -69,7 +69,7 @@ timeout connect 60s
 balance {{.BalancerAlgorithm}}
 bind {{.Vip}}:{{.LoadBalancerPort}}
 {{ range $index, $ip := .NicIps }}
-server nic-{{$ip}} {{$ip}}:{{$.LoadBalancerPort}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
+server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
 {{ end }}`
 
 	tmpl, err := template.New("conf").Parse(conf); utils.PanicOnError(err)
