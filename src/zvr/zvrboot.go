@@ -104,6 +104,14 @@ func configureVyos()  {
 		}
 	}
 
+	type deviceName struct {
+		expected string
+		actual string
+		swap string
+	}
+
+	devNames := make([]*deviceName, 0)
+
 	// check integrity of nics
 	for _, nic := range nics {
 		utils.Assertf(nic.name != "", "name cannot be empty[mac:%s]", nic.mac)
@@ -111,6 +119,47 @@ func configureVyos()  {
 		utils.Assertf(nic.gateway != "", "gateway cannot be empty[nicname:%s]", nic.name)
 		utils.Assertf(nic.netmask != "", "netmask cannot be empty[nicname:%s]", nic.name)
 		utils.Assertf(nic.mac != "", "mac cannot be empty[nicname:%s]", nic.name)
+
+		nicname, err := utils.GetNicNameByMac(nic.mac); utils.PanicOnError(err)
+		if nicname != nic.name {
+			devNames = append(devNames, &deviceName{
+				expected: nic.name,
+				actual: nicname,
+			})
+		}
+	}
+
+	if len(devNames) != 0 {
+		// shutdown links and change to temporary names
+		cmds := make([]string, 0)
+		for i, devname := range devNames {
+			devnum := 1000 + i
+
+			devname.swap = fmt.Sprintf("eth%v", devnum)
+			cmds = append(cmds, fmt.Sprintf("ip link set dev %v down", devname.actual))
+			cmds = append(cmds, fmt.Sprintf("ip link set dev %v name %v", devname.actual, devname.swap))
+		}
+
+		b := utils.Bash{
+			Command: strings.Join(cmds, "\n"),
+		}
+
+		b.Run()
+		b.PanicIfError()
+
+		// change temporary names to real names and bring up links
+		cmds = make([]string, 0)
+		for _, devname := range devNames {
+			cmds = append(cmds, fmt.Sprintf("ip link set dev %v name %v", devname.swap, devname.expected))
+			cmds = append(cmds, fmt.Sprintf("ip link set dev %v up", devname.expected))
+		}
+
+		b = utils.Bash{
+			Command: strings.Join(cmds, "\n"),
+		}
+
+		b.Run()
+		b.PanicIfError()
 	}
 
 	vyos := server.NewParserFromShowConfiguration()
@@ -128,7 +177,7 @@ func configureVyos()  {
 
 	setNic := func(nic *nic) {
 		cidr, err := utils.NetmaskToCIDR(nic.netmask); utils.PanicOnError(err)
-		tree.Setf("interfaces ethernet %s hw-id %s", nic.name, nic.mac)
+		//tree.Setf("interfaces ethernet %s hw-id %s", nic.name, nic.mac)
 		tree.Setf("interfaces ethernet %s address %s", nic.name, fmt.Sprintf("%v/%v", nic.ip, cidr))
 		tree.Setf("interfaces ethernet %s duplex auto", nic.name)
 		tree.Setf("interfaces ethernet %s smp_affinity auto", nic.name)
