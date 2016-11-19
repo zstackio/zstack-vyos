@@ -108,6 +108,8 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 					"action accept",
 					fmt.Sprintf("source address %v", r.AllowedCidr),
 					fmt.Sprintf("description %v", des),
+					// NOTE: the destination is private IP
+					// because the destination address is changed by the dnat rule
 					fmt.Sprintf("destination address %v", r.PrivateIp),
 					fmt.Sprintf("destination port %v", dport),
 					fmt.Sprintf("protocol %s", strings.ToLower(r.ProtocolType)),

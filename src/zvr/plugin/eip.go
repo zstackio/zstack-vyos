@@ -32,6 +32,8 @@ type syncEipCmd struct {
 	Eips []eipInfo `json:"eips"`
 }
 
+var EIP_SNAT_START_RULE_NUM = 5000
+
 func makeEipDescription(info eipInfo) string {
 	return fmt.Sprintf("EIP-%v-%v-%v", info.VipIp, info.GuestIp, info.PrivateMac)
 }
@@ -41,7 +43,7 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	nicname, err := utils.GetNicNameByIp(eip.VipIp); utils.PanicOnError(err)
 
 	if r := tree.FindSnatRuleDescription(des); r == nil {
-		tree.SetSnat(
+		tree.SetSnatWithStartRuleNumber(EIP_SNAT_START_RULE_NUM,
 			fmt.Sprintf("description %v", des),
 			fmt.Sprintf("outbound-interface %v", nicname),
 			fmt.Sprintf("source address %v", eip.GuestIp),
@@ -62,12 +64,27 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 		tree.SetFirewallOnInterface(nicname, "in",
 			fmt.Sprintf("description %v", des),
 			fmt.Sprintf("destination address %v", eip.GuestIp),
-			"protocol tcp_udp",
 			"state new enable",
+			"established enable",
+			"related enable",
 			"action accept",
 		)
 
 		tree.AttachFirewallToInterface(nicname, "in")
+	}
+
+	prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
+	if r := tree.FindFirewallRuleByDescription(prinicname, "in", des); r == nil {
+		tree.SetFirewallOnInterface(prinicname, "in",
+			fmt.Sprintf("description %v", des),
+			fmt.Sprintf("destination address %v", eip.GuestIp),
+			"state new enable",
+			"established enable",
+			"related enable",
+			"action accept",
+		)
+
+		tree.AttachFirewallToInterface(prinicname, "in")
 	}
 }
 

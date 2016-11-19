@@ -448,8 +448,8 @@ func (t *VyosConfigTree) SetSnatWithRuleNumber(ruleNum int, rules...string) {
 	}
 }
 
-func (t *VyosConfigTree) SetSnat(rules...string) int {
-	currentRuleNum := 1
+func (t *VyosConfigTree) SetSnatWithStartRuleNumber(startNum int, rules...string) int {
+	currentRuleNum := startNum
 	if c := t.Get("nat source rule"); c != nil {
 		currentRuleNum += c.Size()
 	}
@@ -459,6 +459,10 @@ func (t *VyosConfigTree) SetSnat(rules...string) int {
 	}
 
 	return currentRuleNum
+}
+
+func (t *VyosConfigTree) SetSnat(rules...string) int {
+	return t.SetSnatWithStartRuleNumber(1, rules...)
 }
 
 // set the config without checking any existing config with the same path
