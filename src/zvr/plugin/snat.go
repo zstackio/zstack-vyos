@@ -25,12 +25,14 @@ type setSnatCmd struct {
 }
 
 type removeSnatCmd struct {
-	natInfo []snatInfo `json:"natInfo"`
+	NatInfo []snatInfo `json:"natInfo"`
 }
 
 type syncSnatCmd struct {
-	snats []snatInfo `json:"snats"`
+	Snats []snatInfo `json:"snats"`
 }
+
+var SNAT_RULE_NUMBER = 9999
 
 func setSnatHandler(ctx *server.CommandContext) interface{} {
 	cmd := &setSnatCmd{}
@@ -47,7 +49,7 @@ func setSnatHandler(ctx *server.CommandContext) interface{} {
 
 	// make source nat rule as the latest rule
 	// in case there are EIP rules
-	tree.SetSnatWithRuleNumber(9999,
+	tree.SetSnatWithRuleNumber(SNAT_RULE_NUMBER,
 		fmt.Sprintf("outbound-interface %s", outNic),
 		fmt.Sprintf("source address %v", address),
 		fmt.Sprintf("translation address %s", s.PublicIp),
@@ -68,7 +70,7 @@ func removeSnatHandler(ctx *server.CommandContext) interface{} {
 		return nil
 	}
 
-	for _, s := range cmd.natInfo {
+	for _, s := range cmd.NatInfo {
 		address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
 
 		for _, r := range rs.Children() {
@@ -103,17 +105,20 @@ func syncSnatHandler(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 
 	tree := server.NewParserFromShowConfiguration().Tree
-	for _, s := range cmd.snats {
+	utils.Assert(len(cmd.Snats) < 2, "multiple source nat are not supported yet")
+
+	for _, s := range cmd.Snats {
 		outNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
 		address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
-
-		if !hasRuleNumberForAddress(tree, address) {
-			tree.SetSnat(
-				fmt.Sprintf("outbound-interface %s", outNic),
-				fmt.Sprintf("source address %s", address),
-				fmt.Sprintf("translation address %s", s.PublicIp),
-			)
+		if rs := tree.Getf("nat source rule %v", SNAT_RULE_NUMBER); rs != nil {
+			rs.Delete()
 		}
+
+		tree.SetSnatWithRuleNumber(SNAT_RULE_NUMBER,
+			fmt.Sprintf("outbound-interface %s", outNic),
+			fmt.Sprintf("source address %s", address),
+			fmt.Sprintf("translation address %s", s.PublicIp),
+		)
 	}
 
 	tree.Apply(false)
