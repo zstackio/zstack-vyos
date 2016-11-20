@@ -10,10 +10,13 @@ import (
 	"github.com/Sirupsen/logrus"
 )
 
+var (
+	HEADER_TRIGGER_URL = "TriggerURL"
+)
+
 func HttpPostWithoutHeaders(url string, obj interface{}) ([]byte, error) {
 	return HttpPost(url, nil, obj)
 }
-
 
 func HttpPostForObject(url string, headers map[string]string, obj interface{}, retObj interface{}) error {
 	b, err := HttpPost(url, headers, obj)
@@ -71,7 +74,14 @@ func HttpPost(url string, headers map[string]string, obj interface{}) ([]byte, e
 	}
 
 	c := &http.Client{}
-	logrus.Debugf("[HTTP POST] %s, body: %s", url, string(b))
+
+	triggerUrl := req.Header.Get(HEADER_TRIGGER_URL)
+	if triggerUrl != "" {
+		logrus.Debugf("[HTTP POST][ASYNC REPLY TO %s] %s, body: %s", triggerUrl, url, string(b))
+	} else {
+		logrus.Debugf("[HTTP POST] %s, body: %s", url, string(b))
+	}
+
 	rsp, err := c.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("unable to do HTTP post to %v", url))

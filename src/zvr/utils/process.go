@@ -26,11 +26,11 @@ func FindPIDByPS(cmdline...string) (int, error) {
 		return -2, err
 	}
 
-	if ret != 0 {
+	o = strings.TrimSpace(o)
+	if ret != 0 || o == "" {
 		return -1, fmt.Errorf("cannot find any process having command line%v", cmdline)
 	}
 
-	o = strings.TrimSpace(o)
 	return strconv.Atoi(o)
 }
 

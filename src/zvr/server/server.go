@@ -104,10 +104,10 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 	asyncReply := func(rsp interface{}, w http.ResponseWriter, req *http.Request) {
 		callbackURL := req.Header.Get(CALLBACK_URL)
 		taskUuid := req.Header.Get(TASK_UUID)
-		log.Debugf("[ASYNC REPLY] to %v", req.URL.String())
 		err := utils.Retry(func() error {
 			if e := utils.HttpPostForObject(callbackURL, map[string]string{
 				TASK_UUID: taskUuid,
+				utils.HEADER_TRIGGER_URL: req.URL.String(),
 			}, rsp, nil); e != nil {
 				if he, ok := e.(utils.HttpPostError); ok {
 					if he.StatusCode() == 404 {

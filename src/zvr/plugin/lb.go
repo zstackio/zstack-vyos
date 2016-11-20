@@ -178,10 +178,6 @@ func delLb(lb lbInfo) {
 	confPath := makeLbConfFilePath(lb)
 
 	pid, err := utils.FindPIDByPS(pidPath, confPath)
-	if pid != -1 && err != nil {
-		utils.PanicOnError(err)
-	}
-
 	if pid > 0 {
 		err := utils.KillProcess(pid); utils.PanicOnError(err)
 	}
@@ -193,16 +189,21 @@ func delLb(lb lbInfo) {
 		r.Delete()
 	}
 	tree.Apply(false)
-	err = os.Remove(pidPath); utils.LogError(err)
-	err = os.Remove(confPath); utils.LogError(err)
+
+	if e, _ := utils.PathExists(pidPath); e {
+		err = os.Remove(pidPath); utils.LogError(err)
+	}
+	if e, _ := utils.PathExists(confPath); e {
+		err = os.Remove(confPath); utils.LogError(err)
+	}
 }
 
 func deleteLb(ctx *server.CommandContext) interface{} {
 	cmd := &deleteLbCmd{}
 	ctx.GetCommand(cmd)
 
-	for _, lb := range cmd.Lbs {
-		delLb(lb)
+	if len(cmd.Lbs) > 0 {
+		delLb(cmd.Lbs[0])
 	}
 
 	return nil
