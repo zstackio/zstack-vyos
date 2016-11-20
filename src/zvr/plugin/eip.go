@@ -65,8 +65,8 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 			fmt.Sprintf("description %v", des),
 			fmt.Sprintf("destination address %v", eip.GuestIp),
 			"state new enable",
-			"established enable",
-			"related enable",
+			"state established enable",
+			"state related enable",
 			"action accept",
 		)
 
@@ -77,10 +77,10 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	if r := tree.FindFirewallRuleByDescription(prinicname, "in", des); r == nil {
 		tree.SetFirewallOnInterface(prinicname, "in",
 			fmt.Sprintf("description %v", des),
-			fmt.Sprintf("destination address %v", eip.GuestIp),
+			fmt.Sprintf("source address %v", eip.GuestIp),
 			"state new enable",
-			"established enable",
-			"related enable",
+			"state established enable",
+			"state related enable",
 			"action accept",
 		)
 
@@ -101,6 +101,11 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 	}
 
 	if r := tree.FindFirewallRuleByDescription(nicname, "in", des); r != nil {
+		r.Delete()
+	}
+
+	prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
+	if r := tree.FindFirewallRuleByDescription(prinicname, "in", des); r != nil {
 		r.Delete()
 	}
 }
@@ -136,24 +141,29 @@ func syncEip(ctx *server.CommandContext) interface{} {
 	tree := server.NewParserFromShowConfiguration().Tree
 
 	// delete all EIP related rules
-	rs := tree.Getf("nat destination rule")
-	for _, r := range rs.Children() {
-		if d := r.Get("description"); d != nil && strings.HasPrefix(d.Value(), "EIP") {
-			r.Delete()
+	if rs := tree.Get("nat destination rule"); rs != nil {
+		for _, r := range rs.Children() {
+			if d := r.Get("description"); d != nil && strings.HasPrefix(d.Value(), "EIP") {
+				r.Delete()
+			}
 		}
 	}
-	rs = tree.Getf("nat source rule")
-	for _, r := range rs.Children() {
-		if d := r.Get("description"); d != nil && strings.HasPrefix(d.Value(), "EIP") {
-			r.Delete()
+
+	if rs := tree.Getf("nat source rule"); rs != nil {
+		for _, r := range rs.Children() {
+			if d := r.Get("description"); d != nil && strings.HasPrefix(d.Value(), "EIP") {
+				r.Delete()
+			}
 		}
 	}
-	rs = tree.Getf("firewall name")
-	for _, r := range rs.Children() {
-		if rss := r.Get("rule"); rss != nil {
-			for _, rr := range rss.Children() {
-				if d := rr.Get("description"); d != nil && strings.HasPrefix(d.Value(), "EIP") {
-					rr.Delete()
+
+	if rs := tree.Getf("firewall name"); rs != nil {
+		for _, r := range rs.Children() {
+			if rss := r.Get("rule"); rss != nil {
+				for _, rr := range rss.Children() {
+					if d := rr.Get("description"); d != nil && strings.HasPrefix(d.Value(), "EIP") {
+						rr.Delete()
+					}
 				}
 			}
 		}

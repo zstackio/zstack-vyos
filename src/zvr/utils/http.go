@@ -37,6 +37,15 @@ func HttpPostForObjectWithoutHeaders(url string, obj interface{}, retObj interfa
 	return HttpPostForObject(url, nil, obj, retObj)
 }
 
+type HttpPostError struct {
+	error
+	statusCode int
+}
+
+func (e *HttpPostError) StatusCode() int {
+	return e.statusCode
+}
+
 func HttpPost(url string, headers map[string]string, obj interface{}) ([]byte, error) {
 	var b []byte
 	var err error
@@ -74,7 +83,10 @@ func HttpPost(url string, headers map[string]string, obj interface{}) ([]byte, e
 	LogError(err)
 
 	if rsp.StatusCode < 200 || rsp.StatusCode > 300 {
-		return nil, errors.New(fmt.Sprintf("unable to post to the URL[%s], %s, %s", url, rsp.Status, string(body)))
+		return nil, &HttpPostError{
+			errors.New(fmt.Sprintf("unable to post to the URL[%s], %s, %s", url, rsp.Status, string(body))),
+			rsp.StatusCode,
+		}
 	}
 
 	return body, nil
