@@ -242,6 +242,8 @@ func configureVyos()  {
 		tree.AttachFirewallToInterface(nic.name, "in")
 	}
 
+	tree.Set("system time-zone Asia/Shanghai")
+
 	tree.Apply(true)
 
 	arping := func(nicname, ip, gateway string) {
