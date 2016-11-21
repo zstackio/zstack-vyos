@@ -386,9 +386,16 @@ func (t *VyosConfigTree) SetFirewallOnInterface(ethname, direction string, rules
 		panic(fmt.Sprintf("the direction can only be [in, out, local], but %s get", direction))
 	}
 
-	currentRuleNum := 1
-	if c := t.Getf("firewall name %s.%s rule", ethname, direction); c != nil {
-		currentRuleNum += c.Size()
+	currentRuleNum := -1
+	for i:=1; i<=9999; i++ {
+		if c := t.Getf("firewall name %s.%s rule %v", ethname, direction, i); c == nil {
+			currentRuleNum = i
+			break
+		}
+	}
+
+	if currentRuleNum == -1 {
+		panic(fmt.Sprintf("No firewall rule number found for the interface %s.%s. You have set more than 9999 rules???", ethname, direction))
 	}
 
 	for _, rule := range rules {
@@ -399,9 +406,17 @@ func (t *VyosConfigTree) SetFirewallOnInterface(ethname, direction string, rules
 }
 
 func (t *VyosConfigTree) SetDnat(rules...string) int {
-	currentRuleNum := 1
-	if c := t.Get("nat destination rule"); c != nil {
-		currentRuleNum += c.Size()
+	currentRuleNum := -1
+
+	for i:=1; i<=9999; i ++ {
+		if c := t.Getf("nat destination rule %v", i); c == nil {
+			currentRuleNum = i
+			break
+		}
+	}
+
+	if currentRuleNum == -1 {
+		panic("No rule number avaible for dnat. You have set more than 9999 rules???")
 	}
 
 	for _, rule := range rules {
@@ -449,9 +464,17 @@ func (t *VyosConfigTree) SetSnatWithRuleNumber(ruleNum int, rules...string) {
 }
 
 func (t *VyosConfigTree) SetSnatWithStartRuleNumber(startNum int, rules...string) int {
-	currentRuleNum := startNum
-	if c := t.Get("nat source rule"); c != nil {
-		currentRuleNum += c.Size()
+	currentRuleNum := -1
+
+	for i:=startNum; i<=9999; i ++ {
+		if c := t.Getf("nat destination rule %v", i); c == nil {
+			currentRuleNum = i
+			break
+		}
+	}
+
+	if currentRuleNum == -1 {
+		panic("No rule number avaible for source nat. You have set more than 9999 rules???")
 	}
 
 	for _, rule := range rules {
