@@ -117,7 +117,22 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 		)
 	}
 
+	for _, cidr := range info.PeerCidrs {
+		des = fmt.Sprintf("IPSEC-%s-%s", info.Uuid, cidr)
+		if r := tree.FindFirewallRuleByDescription(nicname, "in", des); r == nil {
+			tree.SetFirewallOnInterface(nicname, "in",
+				"action accept",
+				"state established enable",
+				"state related enable",
+				"state new enable",
+				fmt.Sprintf("description %v", des),
+				fmt.Sprintf("source address %v", cidr),
+			)
+		}
+	}
+
 	tree.AttachFirewallToInterface(nicname, "local")
+	tree.AttachFirewallToInterface(nicname, "in")
 
 	if info.ExcludeSnat {
 		for _, remoteCidr := range info.PeerCidrs {
@@ -196,6 +211,13 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 			if r := tree.FindSnatRuleDescription(des); r != nil {
 				r.Delete()
 			}
+		}
+	}
+
+	for _, cidr := range info.PeerCidrs {
+		des := fmt.Sprintf("IPSEC-%s-%s", info.Uuid, cidr)
+		if r := tree.FindFirewallRuleByDescription(nicname, "in", des); r != nil {
+			r.Delete()
 		}
 	}
 
