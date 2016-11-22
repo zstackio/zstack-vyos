@@ -208,11 +208,24 @@ func configureVyos()  {
 			fmt.Sprintf("destination address %v", nic.ip),
 		)
 
-		tree.SetFirewallOnInterface(nic.name, "in",
-			"action accept",
-			"state established enable",
-			"state related enable",
-		)
+		if !nic.isDefaultRoute && nic.name != "eth0" {
+			// for nic connecting to the guest network
+			// make its FORWARDING chain open
+			// here in = "-A FORWARDING -i nic.name -j ACCEPT"
+			tree.SetFirewallOnInterface(nic.name, "in",
+				"action accept",
+				"state established enable",
+				"state related enable",
+				"state new enable",
+			)
+		} else {
+			tree.SetFirewallOnInterface(nic.name, "in",
+				"action accept",
+				"state established enable",
+				"state related enable",
+			)
+		}
+
 		tree.SetFirewallOnInterface(nic.name, "in",
 			"action accept",
 			"protocol icmp",
