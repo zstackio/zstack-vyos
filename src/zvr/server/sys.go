@@ -61,6 +61,7 @@ echo $session_env
 eval $session_env
 $API setupSession
 
+$DISCARD
 %s
 $COMMIT
 if [ $? -ne 0 ]; then
@@ -109,6 +110,7 @@ echo $session_env
 eval $session_env
 $API setupSession
 
+$DISCARD
 %s
 $COMMIT
 if [ $? -ne 0 ]; then
