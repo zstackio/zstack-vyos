@@ -59,6 +59,7 @@ const (
 	TASK_UUID = "taskuuid"
 )
 
+
 func SetOptions(o Options) {
 	commandOptions = o
 }
@@ -101,7 +102,7 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 		utils.LogError(fmt.Fprint(w, body))
 	}
 
-	asyncReply := func(rsp interface{}, w http.ResponseWriter, req *http.Request) {
+	asyncReply := func(rsp interface{}, req *http.Request) {
 		callbackURL := req.Header.Get(CALLBACK_URL)
 		taskUuid := req.Header.Get(TASK_UUID)
 		err := utils.Retry(func() error {
@@ -127,7 +128,11 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 	handler := func(w http.ResponseWriter, req *http.Request) {
 		ctx := &CommandContext{
 			responseWriter: w,
-			request: req,
+			request: func() *http.Request {
+				reqDump, err := httputil.DumpRequest(req, true); utils.PanicOnError(err)
+				nreq, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(reqDump))); utils.PanicOnError(err)
+				return nreq
+			}(),
 		}
 
 		if !async {
@@ -135,6 +140,7 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 			if rsp == nil {
 				rsp = CommandResponseHeader{ Success: true }
 			}
+
 			syncReply(rsp, w, req)
 		} else {
 			// reply first, and the response body is ignored
@@ -142,12 +148,16 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 			syncReply("", w, req)
 
 			// do the real work and then send the response
-			rsp := chandler(ctx)
-			if rsp == nil {
-				rsp = CommandResponseHeader{ Success: true }
-			}
+			// this must be done in a go routine, otherwise it
+			// will block the preceding syncReply method
+			go func() {
+				rsp := chandler(ctx)
+				if rsp == nil {
+					rsp = CommandResponseHeader{Success: true }
+				}
 
-			asyncReply(rsp, w, req)
+				asyncReply(rsp, req)
+			}()
 		}
 	}
 
@@ -169,7 +179,7 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 				if !async {
 					syncReply(reply, w, req)
 				} else {
-					asyncReply(reply, w, req)
+					asyncReply(reply, req)
 				}
 			}
 		}()
@@ -223,6 +233,7 @@ func dispatch(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// async command
 	callbackURL := req.Header.Get(CALLBACK_URL)
 	if callbackURL == "" {
 		err := fmt.Sprintf("no field '%s' found in the HTTP header but the plugin registers the path[%s]" +
@@ -243,9 +254,6 @@ func dispatch(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// for async command, reply first and then handle
-	w.WriteHeader(http.StatusOK)
-	utils.LogError(fmt.Fprint(w, ""))
 	wrap.handler(w, req)
 }
 
