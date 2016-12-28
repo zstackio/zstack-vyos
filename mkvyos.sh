@@ -50,11 +50,13 @@ ZVRBOOT=$tmpdir/zvrboot
 ZVRSCRIPT=$tmpdir/zstack-virtualrouteragent
 HAPROXY=$tmpdir/haproxy
 SBIN_DIR=/opt/vyatta/sbin
+VERSION=`date +%Y%m%d`
 
 guestfish <<_EOF_
 add $1
 run
 mount /dev/sda1 /
+write /etc/version $VERSION
 upload $ZVR $SBIN_DIR/zvr
 upload $ZVRBOOT $SBIN_DIR/zvrboot
 upload $ZVRSCRIPT /etc/init.d/zstack-virtualrouteragent
