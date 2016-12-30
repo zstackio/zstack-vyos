@@ -305,6 +305,10 @@ type VyosConfigTree struct {
 	changeCommands []string
 }
 
+func (t *VyosConfigTree) HasChanges() bool {
+	return len(t.changeCommands) != 0
+}
+
 func (t *VyosConfigTree) Apply(asVyosUser bool) {
 	if (UNIT_TEST) {
 		fmt.Println(strings.Join(t.changeCommands, "\n"))

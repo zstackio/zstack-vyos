@@ -124,7 +124,24 @@ func setDhcp(infos []dhcpInfo) {
 		}
 	}
 
+	if tree.HasChanges() {
+		deleteDhcpdPIDFile()
+	}
+
 	tree.Apply(false)
+}
+
+func deleteDhcpdPIDFile() {
+	// DHCPD will be restarted every time its configuration file changed,
+	// the PID file way will fail sometimes if the PID file has not been
+	// deleted completely but the new process is running, then an error
+	// of "There's already a DHCP server running." is reported in the
+	// /var/log/message and DHCPD daemon is not started
+	b := &utils.Bash{
+		Command: "sudo rm -f /var/run/dhcpd-unused.pid",
+	}
+
+	err := b.Run(); utils.PanicOnError(err)
 }
 
 func infoToNetNameAndSubnet(info dhcpInfo) (string, string, string) {
@@ -142,6 +159,10 @@ func deleteDhcp(infos []dhcpInfo) {
 		netName, subnet, _ := infoToNetNameAndSubnet(info)
 		serverName := makeServerName(info.Mac)
 		tree.Deletef("service dhcp-server shared-network-name %s subnet %s static-mapping %s", netName, subnet, serverName)
+	}
+
+	if tree.HasChanges() {
+		deleteDhcpdPIDFile()
 	}
 
 	tree.Apply(false)
