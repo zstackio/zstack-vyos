@@ -16,6 +16,7 @@ import (
 const (
 	VIRTIO_PORT_PATH = "/dev/virtio-ports/applianceVm.vport"
 	BOOTSTRAP_INFO_CACHE = "/home/vyos/zvr/bootstrap-info.json"
+	TMP_LOCATION_FOR_ESX = "/tmp/bootstrap-info.json"
 )
 
 type nic struct {
@@ -54,7 +55,35 @@ func waitVirtioPortOnline() {
 	}, time.Duration(120)*time.Second, time.Duration(500)*time.Millisecond)
 }
 
-func parseBootInfo() {
+func isOnVMwareHypervisor() bool {
+	bash := utils.Bash{
+		Command: "dmesg | grep -q 'Hypervisor.*VMware'",
+	}
+
+	if ret, _, _, err := bash.RunWithReturn(); ret == 0 && err == nil {
+		return true
+	}
+
+	return false
+}
+
+func parseEsxBootInfo() {
+	utils.LoopRunUntilSuccessOrTimeout(func() bool {
+		if _, err := os.Stat(TMP_LOCATION_FOR_ESX); os.IsNotExist(err) {
+			log.Debugf("bootstrap info not ready, waiting ...")
+			return false
+		}
+
+		err := utils.MkdirForFile(BOOTSTRAP_INFO_CACHE, 0666); utils.PanicOnError(err)
+		err = os.Rename(TMP_LOCATION_FOR_ESX, BOOTSTRAP_INFO_CACHE); utils.PanicOnError(err)
+		err = os.Chmod(BOOTSTRAP_INFO_CACHE, 0777); utils.PanicOnError(err)
+		content, _ := ioutil.ReadFile(BOOTSTRAP_INFO_CACHE)
+		log.Debugf("recieved bootstrap info:\n%s", string(content))
+		return true
+	}, time.Duration(300)*time.Second, time.Duration(1)*time.Second)
+}
+
+func parseKvmBootInfo() {
 	utils.LoopRunUntilSuccessOrTimeout(func() bool {
 		content, err := ioutil.ReadFile(VIRTIO_PORT_PATH); utils.PanicOnError(err)
 		if len(content) == 0 {
@@ -286,7 +315,11 @@ func main() {
 	utils.InitLog("/home/vyos/zvr/zvrboot.log", false)
 	waitIptablesServiceOnline()
 	waitVirtioPortOnline()
-	parseBootInfo()
+	if isOnVMwareHypervisor() {
+		parseEsxBootInfo()
+	} else {
+		parseKvmBootInfo()
+	}
 	configureVyos()
 	startZvr()
 	log.Debugf("successfully configured the sysmtem and bootstrap the zstack virtual router agents")
