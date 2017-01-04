@@ -43,9 +43,9 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	nicname, err := utils.GetNicNameByIp(eip.VipIp); utils.PanicOnError(err)
 
 	if r := tree.FindSnatRuleDescription(des); r == nil {
-		tree.SetSnatWithStartRuleNumber(EIP_SNAT_START_RULE_NUM,
+		tree.SetSnat(
 			fmt.Sprintf("description %v", des),
-			fmt.Sprintf("outbound-interface %v", nicname),
+			fmt.Sprintf("outbound-interface any"),
 			fmt.Sprintf("source address %v", eip.GuestIp),
 			fmt.Sprintf("translation address %v", eip.VipIp),
 		)
@@ -54,7 +54,7 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	if r := tree.FindDnatRuleDescription(des); r == nil {
 		tree.SetDnat(
 			fmt.Sprintf("description %v", des),
-			fmt.Sprintf("inbound-interface %v", nicname),
+			fmt.Sprintf("inbound-interface any"),
 			fmt.Sprintf("destination address %v", eip.VipIp),
 			fmt.Sprintf("translation address %v", eip.GuestIp),
 		)

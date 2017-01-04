@@ -96,7 +96,7 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 			fmt.Sprintf("description %v", des),
 			fmt.Sprintf("destination address %v", r.VipIp),
 			fmt.Sprintf("destination port %v", sport),
-			fmt.Sprintf("inbound-interface %v", pubNicName),
+			fmt.Sprintf("inbound-interface any"),
 			fmt.Sprintf("protocol %v", strings.ToLower(r.ProtocolType)),
 			fmt.Sprintf("translation address %v", r.PrivateIp),
 			fmt.Sprintf("translation port %v", dport),
