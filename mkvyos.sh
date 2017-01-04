@@ -8,6 +8,12 @@ if [ $? -ne 0 ]; then
    exit 1
 fi
 
+which qemu-img > /dev/null
+if [ $? -ne 0 ]; then
+   echo "qemu-img is not installed"
+   exit 1
+fi
+
 usage() {
    echo "
 USAGE:
@@ -36,12 +42,23 @@ if [ ! -f $2 ]; then
    exit 1
 fi
 
+imgfile=$1
+isVmdk=0
+if echo $1 | grep -q -i '\.vmdk$'; then
+    isVmdk=1
+    imgfile=${1%%.vmdk}.qcow2
+    qemu-img convert -f vmdk -O qcow2 "$1" "$imgfile"
+fi
+
 set -e
+
 tmpdir=$(mktemp -d)
 
-function atexit() {
-   rm -rf $tmpdir
+atexit() {
+    /bin/rm -fr $tmpdir
+    [ $isVmdk -eq 1 ] && /bin/rm -f $imgfile
 }
+
 trap atexit EXIT SIGHUP SIGINT SIGTERM
 
 tar xzf $2 -C $tmpdir
@@ -53,7 +70,7 @@ SBIN_DIR=/opt/vyatta/sbin
 VERSION=`date +%Y%m%d`
 
 guestfish <<_EOF_
-add $1
+add $imgfile
 run
 mount /dev/sda1 /
 write /etc/version $VERSION
@@ -83,5 +100,11 @@ download /etc/security/limits.conf /tmp/limits.conf
 upload /tmp/limits.conf /etc/security/limits.conf
 _EOF_
 
-rm -rf $tmpdir
+/bin/rm -rf $tmpdir
+
+if [ $isVmdk -eq 1 ]; then
+    /bin/rm -f "$1"
+    qemu-img convert -f qcow2 -O vmdk "$imgfile" "$1"
+fi
+
 echo "successfully installed $2 to vyos image $1"
