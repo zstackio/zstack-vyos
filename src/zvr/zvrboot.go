@@ -103,7 +103,22 @@ func parseKvmBootInfo() {
 	}, time.Duration(300)*time.Second, time.Duration(1)*time.Second)
 }
 
+func resetVyos()  {
+	// clear all configuration in case someone runs 'save' command manually before,
+	// to keep the vyos must be stateless
+
+	// delete all interfaces
+	tree := server.NewParserFromShowConfiguration().Tree
+	tree.Delete("interfaces ethernet")
+	tree.Apply(true)
+
+	// reload default configuration
+	server.RunVyosScriptAsUserVyos("load /opt/vyatta/etc/config.boot.default\nsave")
+}
+
 func configureVyos()  {
+	resetVyos()
+
 	mgmtNic := bootstrapInfo["managementNic"].(map[string]interface{})
 	if mgmtNic == nil {
 		panic(errors.New("no field 'managementNic' in bootstrap info"))
