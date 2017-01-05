@@ -56,7 +56,7 @@ tmpdir=$(mktemp -d)
 
 atexit() {
     /bin/rm -fr $tmpdir
-    [ $isVmdk -eq 1 ] && /bin/rm -f $imgfile
+    [ $isVmdk -eq 1 ] && /bin/rm -f $imgfile || true
 }
 
 trap atexit EXIT SIGHUP SIGINT SIGTERM
