@@ -74,10 +74,14 @@ func parseEsxBootInfo() {
 			return false
 		}
 
-		err := utils.MkdirForFile(BOOTSTRAP_INFO_CACHE, 0666); utils.PanicOnError(err)
+		content, err := ioutil.ReadFile(TMP_LOCATION_FOR_ESX); utils.PanicOnError(err)
+		if err = json.Unmarshal(content, &bootstrapInfo); err != nil {
+			panic(errors.Wrap(err, fmt.Sprintf("unable to JSON parse:\n %s", string(content))))
+		}
+
+		err = utils.MkdirForFile(BOOTSTRAP_INFO_CACHE, 0666); utils.PanicOnError(err)
 		err = os.Rename(TMP_LOCATION_FOR_ESX, BOOTSTRAP_INFO_CACHE); utils.PanicOnError(err)
 		err = os.Chmod(BOOTSTRAP_INFO_CACHE, 0777); utils.PanicOnError(err)
-		content, _ := ioutil.ReadFile(BOOTSTRAP_INFO_CACHE)
 		log.Debugf("recieved bootstrap info:\n%s", string(content))
 		return true
 	}, time.Duration(300)*time.Second, time.Duration(1)*time.Second)
@@ -302,7 +306,9 @@ func configureVyos()  {
 	tree.Set("system time-zone Asia/Shanghai")
 
 	password := bootstrapInfo["vyosPassword"]; utils.Assert(password != "", "vyosPassword cannot be empty")
-	tree.Setf("system login user vyos authentication plaintext-password %v", password)
+	if !isOnVMwareHypervisor() {
+		tree.Setf("system login user vyos authentication plaintext-password %v", password)
+	}
 
 	tree.Apply(true)
 
@@ -329,10 +335,10 @@ func startZvr()  {
 func main() {
 	utils.InitLog("/home/vyos/zvr/zvrboot.log", false)
 	waitIptablesServiceOnline()
-	waitVirtioPortOnline()
 	if isOnVMwareHypervisor() {
 		parseEsxBootInfo()
 	} else {
+		waitVirtioPortOnline()
 		parseKvmBootInfo()
 	}
 	configureVyos()
