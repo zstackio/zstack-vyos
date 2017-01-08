@@ -306,7 +306,9 @@ func configureVyos()  {
 	tree.Set("system time-zone Asia/Shanghai")
 
 	password := bootstrapInfo["vyosPassword"]; utils.Assert(password != "", "vyosPassword cannot be empty")
-	tree.Setf("system login user vyos authentication plaintext-password %v", password)
+	if !isOnVMwareHypervisor() {
+		tree.Setf("system login user vyos authentication plaintext-password %v", password)
+	}
 
 	tree.Apply(true)
 
