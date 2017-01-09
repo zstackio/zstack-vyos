@@ -8,10 +8,8 @@ import (
 	"encoding/json"
 	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
-	"net/http/httputil"
 	"bytes"
 	"io/ioutil"
-	"bufio"
 )
 
 type commandHandlerWrap struct {
@@ -85,6 +83,8 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 		async: async,
 	}
 
+	// Be noted that, both function 'syncReply' and 'asyncReply' only use
+	// the request Header/URL, thus will *not* drain the Body.
 	syncReply := func(rsp interface{}, w http.ResponseWriter, req *http.Request) {
 		var statusCode int
 		var body string
@@ -128,11 +128,7 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 	handler := func(w http.ResponseWriter, req *http.Request) {
 		ctx := &CommandContext{
 			responseWriter: w,
-			request: func() *http.Request {
-				reqDump, err := httputil.DumpRequest(req, true); utils.PanicOnError(err)
-				nreq, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(reqDump))); utils.PanicOnError(err)
-				return nreq
-			}(),
+			request: req,
 		}
 
 		if !async {
@@ -142,63 +138,72 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 			}
 
 			syncReply(rsp, w, req)
-		} else {
-			// reply first, and the response body is ignored
-			// this is an ack that we have received the request
-			syncReply("", w, req)
-
-			// do the real work and then send the response
-			// this must be done in a go routine, otherwise it
-			// will block the preceding syncReply method
-			go func() {
-				rsp := chandler(ctx)
-				if rsp == nil {
-					rsp = CommandResponseHeader{Success: true }
-				}
-
-				asyncReply(rsp, req)
-			}()
+			return
 		}
+
+		// reply first, and the response body is ignored
+		// this is an ack that we have received the request
+		syncReply("", w, req)
+
+		// do the real work and then send the response
+		// this must be done in a go routine, otherwise it
+		// will block the preceding syncReply method
+		go func() {
+			defer func() {
+				if err := recover(); err != nil {
+					reply := CommandResponseHeader{
+						Success: false,
+						Error: fmt.Sprintf("%v", err),
+					}
+
+					if e, ok := err.(error); ok {
+						log.Warnf("%+v\n", errors.Wrap(e, fmt.Sprintf("command[path:%s] failed", path)))
+					} else {
+						log.Warnf("%+v\n", errors.Wrap(errors.New(err.(string)), fmt.Sprintf("command[path:%s] failed", path)))
+					}
+
+
+					asyncReply(reply, req)
+				}
+			}()
+
+			rsp := chandler(ctx)
+			if rsp == nil {
+				rsp = CommandResponseHeader{Success: true }
+			}
+
+			asyncReply(rsp, req)
+		}()
 	}
 
 	w.handler = func(w http.ResponseWriter, req *http.Request) {
-		defer func() {
-			if err := recover(); err != nil {
-				reply := CommandResponseHeader{
-					Success: false,
-					Error: fmt.Sprintf("%v", err),
-				}
+		// drain the body
+		body, err := ioutil.ReadAll(req.Body)
+		if err != nil {
+			log.Warnf("unable to dump the http request[url:%v], %v", req.URL, err)
 
-				if e, ok := err.(error); ok {
-					log.Warnf("%+v\n", errors.Wrap(e, fmt.Sprintf("command[path:%s] failed", path)))
-				} else {
-					log.Warnf("%+v\n", errors.Wrap(errors.New(err.(string)), fmt.Sprintf("command[path:%s] failed", path)))
-				}
-
-
-				if !async {
-					syncReply(reply, w, req)
-				} else {
-					asyncReply(reply, req)
-				}
+			reply := CommandResponseHeader{
+				Success: false,
+				Error: fmt.Sprintf("%v", err),
 			}
-		}()
 
-		if reqDump, err := httputil.DumpRequest(req, true); err != nil {
-			log.Warnf("unable to dump the http request[url:%v]", req.URL)
-		} else {
-			nreq, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(reqDump))); utils.LogError(err)
-			if nreq != nil {
-				body, err := ioutil.ReadAll(nreq.Body); utils.LogError(err)
-				defer nreq.Body.Close()
-				log.WithFields(log.Fields{
-					CALLBACK_URL: nreq.Header.Get(CALLBACK_URL),
-					TASK_UUID: nreq.Header.Get(TASK_UUID),
-					"Host": nreq.Header.Get("Host"),
-				}).Debugf("[RECV] %v, body: %s", nreq.URL, string(body))
+			if async  {
+				asyncReply(reply, req)
+			} else {
+				syncReply(reply, w, req)
 			}
+
+			return
 		}
 
+		log.WithFields(log.Fields{
+			CALLBACK_URL: req.Header.Get(CALLBACK_URL),
+			TASK_UUID: req.Header.Get(TASK_UUID),
+			"Host": req.Header.Get("Host"),
+		}).Debugf("[RECV] %v, body: %s", req.URL, string(body))
+
+		// re-fill the body
+		req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 		handler(w, req)
 	}
 
