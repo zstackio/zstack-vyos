@@ -78,7 +78,7 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 
 	if len(b.Command) > 1024* 4 {
 		content := []byte(b.Command)
-		tmpfile, err := ioutil.TempFile("", "zvrcommand"); PanicOnError(err)
+		tmpfile, err := ioutil.TempFile("/home/vyos", "zvrcommand"); PanicOnError(err)
 		tmpfile.Write(content); PanicOnError(err)
 		//path := "/home/vyos/zvrcommand"
 		cmd = exec.Command("bash", "-c", tmpfile.Name())
