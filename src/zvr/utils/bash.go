@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/Sirupsen/logrus"
+	"io/ioutil"
+	"os"
 )
 
 type Bash struct {
@@ -72,7 +74,24 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 	}
 
 	var so, se bytes.Buffer
-	cmd := exec.Command("bash", "-c", b.Command)
+	var cmd *exec.Cmd
+
+	if len(b.Command) > 1024* 4 {
+		content := []byte(b.Command)
+		tmpfile, err := ioutil.TempFile("", "zvrcommand"); PanicOnError(err)
+		tmpfile.Write(content); PanicOnError(err)
+		//path := "/home/vyos/zvrcommand"
+		cmd = exec.Command("bash", "-c", tmpfile.Name())
+		//ioutil.WriteFile(path, content, 0777)
+		//cmd = exec.Command("bash", "-c", path)
+		defer func() {
+			tmpfile.Close()
+			os.Remove(tmpfile.Name())
+		}()
+	} else {
+		cmd = exec.Command("bash", "-c", b.Command)
+	}
+
 	cmd.Stdout = &so
 	cmd.Stderr = &se
 
