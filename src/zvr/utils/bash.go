@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/Sirupsen/logrus"
 	"io/ioutil"
+	//"os"
 	"os"
 )
 
@@ -79,9 +80,11 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 	if len(b.Command) > 1024* 4 {
 		content := []byte(b.Command)
 		tmpfile, err := ioutil.TempFile("/home/vyos", "zvrcommand"); PanicOnError(err)
-		ioutil.WriteFile(tmpfile.Name(), content, 0777)
-		tmpfile.Close()
+		err = tmpfile.Chmod(0777); PanicOnError(err)
+		_, err = tmpfile.Write(content); PanicOnError(err)
+		err = tmpfile.Close(); PanicOnError(err)
 		cmd = exec.Command("bash", "-c", tmpfile.Name())
+		//ioutil.WriteFile(tmpfile.Name(), content, 0777)
 		//path := "/home/vyos/zvrcommand"
 		//ioutil.WriteFile(path, content, 0777)
 		//cmd = exec.Command("bash", "-c", path)
