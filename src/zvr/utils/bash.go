@@ -82,7 +82,7 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 			waitStatus = exitError.Sys().(syscall.WaitStatus)
 			retCode = waitStatus.ExitStatus()
 		} else {
-			panic(errors.New("unable to get return code"))
+			panic(errors.Errorf("unable to get return code, %s", err))
 		}
 	} else {
 		waitStatus = cmd.ProcessState.Sys().(syscall.WaitStatus)
