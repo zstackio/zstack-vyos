@@ -17,6 +17,7 @@ var infos = []dhcpInfo {
 		IsDefaultL3Network: true,
 		Hostname: "172-120-14-16",
 		Mac: "fa:da:21:1f:1a:11",
+		Mtu: 1500,
 	},
 
 	dhcpInfo{
@@ -29,6 +30,7 @@ var infos = []dhcpInfo {
 		IsDefaultL3Network: true,
 		Hostname: "172-120-14-17",
 		Mac: "fa:da:21:1f:1b:11",
+		Mtu: 1500,
 	},
 
 	// not existing one, for TestDHCPRemoveEntry
@@ -42,6 +44,7 @@ var infos = []dhcpInfo {
 		IsDefaultL3Network: true,
 		Hostname: "172-120-14-17",
 		Mac: "fa:63:21:1f:1b:11",
+		Mtu: 1500,
 	},
 }
 
@@ -83,6 +86,7 @@ service {
                     static-mapping-parameters "option domain-name-servers 8.8.8.8,114.114.114.114;"
                     static-mapping-parameters "option routers 172.20.14.114;"
                     static-mapping-parameters "option domain-name &quot;zstack.org&quot;;"
+                    static-mapping-parameters "option interface-mtu 1500;"
                 }
                 static-mapping fa_da_21_1f_1b_11 {
                     ip-address 172.20.14.17
@@ -92,6 +96,7 @@ service {
                     static-mapping-parameters "option domain-name-servers 8.8.8.8,114.114.114.114;"
                     static-mapping-parameters "option routers 172.20.14.114;"
                     static-mapping-parameters "option domain-name &quot;zstack.org&quot;;"
+                    static-mapping-parameters "option interface-mtu 1500;"
                 }
             }
         }
@@ -144,6 +149,7 @@ service {
                     static-mapping-parameters "option domain-name-servers 8.8.8.8,114.114.114.114;"
                     static-mapping-parameters "option routers 172.20.14.114;"
                     static-mapping-parameters "option domain-name &quot;zstack.org&quot;;"
+                    static-mapping-parameters "option interface-mtu 1500;"
                 }
                 static-mapping fa_da_21_1f_1b_11 {
                     ip-address 172.20.14.17
@@ -153,6 +159,7 @@ service {
                     static-mapping-parameters "option domain-name-servers 8.8.8.8,114.114.114.114;"
                     static-mapping-parameters "option routers 172.20.14.114;"
                     static-mapping-parameters "option domain-name &quot;zstack.org&quot;;"
+                    static-mapping-parameters "option interface-mtu 1500;"
                 }
             }
         }

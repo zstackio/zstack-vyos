@@ -22,6 +22,7 @@ type dhcpInfo struct {
 	VrNicMac string `json:"vrNicMac"`
 	DnsDomain string `json:"dnsDomain"`
 	IsDefaultL3Network bool `json:"isDefaultL3Network"`
+	Mtu int `json:"mtu"`
 }
 
 type addDhcpCmd struct {
@@ -120,6 +121,10 @@ func setDhcp(infos []dhcpInfo) {
 			if info.DnsDomain != "" {
 				tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s static-mapping-parameters \"%s\"",
 					netName, subnet, serverName, fmt.Sprintf("option domain-name &quot;%s&quot;;", info.DnsDomain))
+			}
+			if info.Mtu != 0 {
+				tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s static-mapping-parameters \"%s\"",
+					netName, subnet, serverName, fmt.Sprintf("option interface-mtu %d;", info.Mtu))
 			}
 		}
 	}
