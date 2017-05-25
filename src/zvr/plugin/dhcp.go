@@ -126,6 +126,9 @@ func setDhcp(infos []dhcpInfo) {
 				tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s static-mapping-parameters \"%s\"",
 					netName, subnet, serverName, fmt.Sprintf("option interface-mtu %d;", info.Mtu))
 			}
+			if info.Hostname != "" {
+				tree.Setf("system static-host-mapping host-name %s inet %s", info.Hostname, info.Ip)
+			}
 		}
 	}
 
