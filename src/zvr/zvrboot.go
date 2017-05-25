@@ -130,12 +130,17 @@ func configureVyos()  {
 
 	eth0 := &nic{ name: "eth0" }
 	var ok bool
+	var publicNetCidr string
+	var err error
 	eth0.mac, ok = mgmtNic["mac"].(string); utils.PanicIfError(ok, errors.New("cannot find 'mac' field for the management nic"))
 	eth0.netmask, ok = mgmtNic["netmask"].(string); utils.PanicIfError(ok, errors.New("cannot find 'netmask' field for the management nic"))
 	eth0.ip, ok = mgmtNic["ip"].(string); utils.PanicIfError(ok, errors.New("cannot find 'ip' field for the management nic"))
 	eth0.isDefaultRoute = mgmtNic["isDefaultRoute"].(bool)
 	eth0.gateway = mgmtNic["gateway"].(string)
 	nics[eth0.name] = eth0
+	if eth0.isDefaultRoute {
+		publicNetCidr, err = utils.GetNetworkNumber(eth0.ip, eth0.netmask); utils.PanicOnError(err)
+	}
 
 	otherNics := bootstrapInfo["additionalNics"].([]interface{})
 	if otherNics != nil {
@@ -149,6 +154,11 @@ func configureVyos()  {
 			n.gateway = onic["gateway"].(string)
 			n.isDefaultRoute = onic["isDefaultRoute"].(bool)
 			nics[n.name] = n
+			if n.isDefaultRoute && publicNetCidr != "" {
+				panic(errors.New("do not support multiple default route network"))
+			} else if n.isDefaultRoute {
+				publicNetCidr, err = utils.GetNetworkNumber(n.ip, n.netmask); utils.PanicOnError(err)
+			}
 		}
 	}
 
@@ -265,6 +275,20 @@ func configureVyos()  {
 				"state established enable",
 				"state related enable",
 				"state new enable",
+			)
+			// (weiw): make it can access eips under this router
+			// see more at issue #1638
+			tree.SetFirewallOnInterface(nic.name, "local",
+				"action accept",
+				"protocol icmp",
+				"description 'EIP internal accessable'",
+				fmt.Sprintf("destination address %v", publicNetCidr),
+			)
+			tree.SetFirewallOnInterface(nic.name, "local",
+				"action accept",
+				"protocol tcp_udp",
+				"description 'EIP internal accessable'",
+				fmt.Sprintf("destination address %v", publicNetCidr),
 			)
 		} else {
 			tree.SetFirewallOnInterface(nic.name, "in",
