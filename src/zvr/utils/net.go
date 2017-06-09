@@ -8,6 +8,12 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"encoding/json"
+	log "github.com/Sirupsen/logrus"
+)
+
+const (
+	ZSTACK_ROUTE_PROTO = "zstack"
+	ZSTACK_ROUTE_PROTO_IDENTIFFER = "192"
 )
 
 func NetmaskToCIDR(netmask string) (int, error) {
@@ -126,4 +132,56 @@ func GetNicNameByIp(ip string) (string, error) {
 	o = strings.TrimSpace(o)
 	os := strings.Split(o, " ")
 	return os[len(os)-1], nil
+}
+
+func GetIpFromUrl(url string) (string, error) {
+	ip := strings.Split(strings.Split(url, "/")[2], ":")[0]
+	return ip, nil
+}
+
+func SetZStackRoute(ip string, nic string) error {
+	SetZStackRouteProtoIdentifier()
+	bash := Bash{
+		Command: fmt.Sprintf("ip route add %s/32 dev %s proto %s", ip, nic, ZSTACK_ROUTE_PROTO),
+	}
+	ret, _, _, err := bash.RunWithReturn()
+	if err != nil {
+		return err
+	}
+	if ret != 0 {
+		return errors.New(fmt.Sprintf("add route to %s/32 use dev %s failed", ip, nic))
+	}
+
+	return nil
+}
+
+func RemoveZStackRoute(ip string, nic string) error {
+	SetZStackRouteProtoIdentifier()
+	bash := Bash{
+		Command: fmt.Sprintf("ip route del %s/32 dev %s proto %s", ip, nic, ZSTACK_ROUTE_PROTO),
+	}
+	ret, _, _, err := bash.RunWithReturn()
+	if err != nil {
+		return err
+	}
+	if ret != 0 {
+		return errors.New(fmt.Sprintf("del route to %s/32 use dev %s failed", ip, nic))
+	}
+
+	return nil
+}
+
+func SetZStackRouteProtoIdentifier() {
+	bash := Bash {
+		Command: "grep zstack /etc/iproute2/rt_protos",
+	}
+	check, _, _ , _ := bash.RunWithReturn()
+
+	if check != 0 {
+		log.Debugf("no route proto zstack in /etc/iproute2/rt_protos")
+		bash = Bash {
+			Command: fmt.Sprintf("echo -e '\n\n# Used by zstack\n%s     zstack' >> /etc/iproute2/rt_protos", ZSTACK_ROUTE_PROTO_IDENTIFFER),
+		}
+		bash.Run()
+	}
 }

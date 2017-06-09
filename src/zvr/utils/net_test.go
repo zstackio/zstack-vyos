@@ -45,3 +45,12 @@ func TestGetAllNics(t *testing.T) {
 	Assert(err == nil, "error")
 	fmt.Println(nics)
 }
+
+func TestGetIpFromUrl(t *testing.T) {
+	ip, err := GetIpFromUrl("http://172.20.14.15:8080/zstack/asyncrest/callback")
+	Assert(err == nil, "error")
+	Assert("172.20.14.15" == ip, ip)
+
+	ip, _ = GetIpFromUrl("http://172.20.14.15/zstack/asyncrest/callback")
+	Assert("172.20.14.15" == ip, ip)
+}

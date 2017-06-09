@@ -50,6 +50,8 @@ type HttpInterceptor func(http.HandlerFunc) http.HandlerFunc
 var (
 	commandHandlers map[string]*commandHandlerWrap = make(map[string]*commandHandlerWrap)
 	commandOptions Options
+	CALLBACK_IP = ""
+	CURRENT_CALLBACK_IP = ""
 )
 
 const (
@@ -104,6 +106,7 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 
 	asyncReply := func(rsp interface{}, req *http.Request) {
 		callbackURL := req.Header.Get(CALLBACK_URL)
+		CALLBACK_IP, _ = utils.GetIpFromUrl(callbackURL)
 		taskUuid := req.Header.Get(TASK_UUID)
 		err := utils.Retry(func() error {
 			if e := utils.HttpPostForObject(callbackURL, map[string]string{
