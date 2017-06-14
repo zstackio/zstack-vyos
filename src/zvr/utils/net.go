@@ -148,7 +148,8 @@ func SetZStackRoute(ip string, nic string) error {
 	if err != nil {
 		return err
 	}
-	if ret != 0 {
+	// NOTE(WeiW): It will return 2 if exists
+	if ret != 0 && ret != 2{
 		return errors.New(fmt.Sprintf("add route to %s/32 use dev %s failed", ip, nic))
 	}
 

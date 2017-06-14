@@ -3,6 +3,8 @@ package plugin
 import (
 	"zvr/server"
 	"zvr/utils"
+	log "github.com/Sirupsen/logrus"
+	"fmt"
 )
 
 const (
@@ -51,6 +53,11 @@ func GetInitConfig() *InitConfig {
 
 func addRouteIfCallbackIpChanged() {
 	if server.CURRENT_CALLBACK_IP != server.CALLBACK_IP {
+		if server.CURRENT_CALLBACK_IP == "" {
+			log.Debug(fmt.Sprintf("agent first start, add static route to callback ip host"))
+		} else {
+			log.Debug(fmt.Sprintf("detect call back ip host changed, add static route"))
+		}
 		// NOTE(WeiW): Since our mgmt nic is always eth0
 		if server.CURRENT_CALLBACK_IP != "" {
 			err := utils.RemoveZStackRoute(server.CURRENT_CALLBACK_IP, "eth0");
