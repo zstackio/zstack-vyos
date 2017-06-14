@@ -1,6 +1,9 @@
 package plugin
 
-import "zvr/server"
+import (
+	"zvr/server"
+	"zvr/utils"
+)
 
 const (
 	INIT_PATH = "/init"
@@ -23,10 +26,12 @@ var (
 
 func initHandler(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(initConfig)
+	addRouteIfCallbackIpChanged()
 	return nil
 }
 
 func pingHandler(ctx *server.CommandContext) interface{} {
+	addRouteIfCallbackIpChanged()
 	return pingRsp{ Uuid: initConfig.Uuid }
 }
 
@@ -42,5 +47,17 @@ func MiscEntryPoint() {
 
 func GetInitConfig() *InitConfig {
 	return initConfig
+}
+
+func addRouteIfCallbackIpChanged() {
+	if server.CURRENT_CALLBACK_IP != server.CALLBACK_IP {
+		// NOTE(WeiW): Since our mgmt nic is always eth0
+		if server.CURRENT_CALLBACK_IP != "" {
+			err := utils.RemoveZStackRoute(server.CURRENT_CALLBACK_IP, "eth0");
+			utils.PanicOnError(err)
+		}
+		err := utils.SetZStackRoute(server.CALLBACK_IP, "eth0"); utils.PanicOnError(err)
+		server.CURRENT_CALLBACK_IP = server.CALLBACK_IP
+	}
 }
 
