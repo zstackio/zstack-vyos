@@ -181,7 +181,7 @@ func SetZStackRouteProtoIdentifier() {
 	if check != 0 {
 		log.Debugf("no route proto zstack in /etc/iproute2/rt_protos")
 		bash = Bash {
-			Command: fmt.Sprintf("echo -e '\n\n# Used by zstack\n%s     zstack' >> /etc/iproute2/rt_protos", ZSTACK_ROUTE_PROTO_IDENTIFFER),
+			Command: fmt.Sprintf("sudo bash -c \"echo -e '\n\n# Used by zstack\n%s     zstack' >> /etc/iproute2/rt_protos\"", ZSTACK_ROUTE_PROTO_IDENTIFFER),
 		}
 		bash.Run()
 	}

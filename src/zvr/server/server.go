@@ -106,7 +106,6 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 
 	asyncReply := func(rsp interface{}, req *http.Request) {
 		callbackURL := req.Header.Get(CALLBACK_URL)
-		CALLBACK_IP, _ = utils.GetIpFromUrl(callbackURL)
 		taskUuid := req.Header.Get(TASK_UUID)
 		err := utils.Retry(func() error {
 			if e := utils.HttpPostForObject(callbackURL, map[string]string{
@@ -243,6 +242,7 @@ func dispatch(w http.ResponseWriter, req *http.Request) {
 
 	// async command
 	callbackURL := req.Header.Get(CALLBACK_URL)
+	CALLBACK_IP, _ = utils.GetIpFromUrl(callbackURL)
 	if callbackURL == "" {
 		err := fmt.Sprintf("no field '%s' found in the HTTP header but the plugin registers the path[%s]" +
 				" as an async command", CALLBACK_URL, path)
