@@ -21,6 +21,7 @@ func loadPlugins()  {
 	plugin.LbEntryPoint()
 	plugin.IPsecEntryPoint()
 	plugin.ConfigureNicEntryPoint()
+	plugin.RouteEntryPoint()
 }
 
 var options server.Options
