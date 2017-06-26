@@ -41,11 +41,12 @@ func makeEipDescription(info eipInfo) string {
 func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	des := makeEipDescription(eip)
 	nicname, err := utils.GetNicNameByIp(eip.VipIp); utils.PanicOnError(err)
+	prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
 
 	if r := tree.FindSnatRuleDescription(des); r == nil {
 		tree.SetSnat(
 			fmt.Sprintf("description %v", des),
-			fmt.Sprintf("outbound-interface any"),
+			fmt.Sprintf("outbound-interface %v", prinicname),
 			fmt.Sprintf("source address %v", eip.GuestIp),
 			fmt.Sprintf("translation address %v", eip.VipIp),
 		)
@@ -73,7 +74,6 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 		tree.AttachFirewallToInterface(nicname, "in")
 	}
 
-	prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
 	if r := tree.FindFirewallRuleByDescription(prinicname, "in", des); r == nil {
 		tree.SetFirewallOnInterface(prinicname, "in",
 			fmt.Sprintf("description %v", des),
