@@ -87,6 +87,9 @@ do_stop() {
         kill -SIGINT $pid
         sleep 1
         kill -SIGTERM $pid 2> /dev/null
+        while [ `kill -0 $pid` ]; do
+            sleep 1
+        done
     fi
 }
 
