@@ -41,8 +41,11 @@ func makeEipDescription(info eipInfo) string {
 
 func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	des := makeEipDescription(eip)
+	nicname, err := utils.GetNicNameByIp(eip.VipIp)
+	if err != nil && eip.PublicMac != "" {
+		nicname, err = utils.GetNicNameByMac(eip.PublicMac); utils.PanicOnError(err)
+	}
 	prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
-	nicname, err := utils.GetNicNameByMac(eip.PublicMac); utils.PanicOnError(err)
 
 	if r := tree.FindSnatRuleDescription(des); r == nil {
 		tree.SetSnat(
