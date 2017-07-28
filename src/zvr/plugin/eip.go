@@ -16,7 +16,6 @@ const (
 type eipInfo struct {
 	VipIp string `json:"vipIp"`
 	PrivateMac string `json:"privateMac"`
-	PublicMac string `json:"publicMac"`
 	GuestIp string `json:"guestIp"`
 	SnatInboundTraffic bool `json:"snatInboundTraffic"`
 }
@@ -91,7 +90,7 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 
 func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 	des := makeEipDescription(eip)
-	nicname, err := utils.GetNicNameByMac(eip.PublicMac); utils.PanicOnError(err)
+	nicname, err := utils.GetNicNameByIp(eip.VipIp); utils.PanicOnError(err)
 
 	if r := tree.FindSnatRuleDescription(des); r != nil {
 		r.Delete()
