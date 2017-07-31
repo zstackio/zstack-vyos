@@ -59,6 +59,7 @@ func configureNic(ctx *server.CommandContext) interface{} {
 			"action accept",
 			"state established enable",
 			"state related enable",
+			"state new enable",
 		)
 		tree.SetFirewallOnInterface(nicname, "in",
 			"action accept",
@@ -69,7 +70,7 @@ func configureNic(ctx *server.CommandContext) interface{} {
 			fmt.Sprintf("destination port %v", int(getSshPortFromBootInfo())),
 			fmt.Sprintf("destination address %v", nic.Ip),
 			"protocol tcp",
-			"action reject",
+			"action accept",
 		)
 
 		tree.SetFirewallDefaultAction(nicname, "local", "reject")
