@@ -167,6 +167,9 @@ func deleteDhcp(infos []dhcpInfo) {
 		netName, subnet, _ := infoToNetNameAndSubnet(info)
 		serverName := makeServerName(info.Mac)
 		tree.Deletef("service dhcp-server shared-network-name %s subnet %s static-mapping %s", netName, subnet, serverName)
+		if info.Hostname != "" {
+			tree.Deletef("system static-host-mapping host-name %s inet %s", info.Hostname, info.Ip)
+		}
 	}
 
 	if tree.HasChanges() {

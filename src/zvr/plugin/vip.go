@@ -5,6 +5,7 @@ import (
 	"zvr/utils"
 	"fmt"
 	"strings"
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -31,6 +32,7 @@ type vipQosSettings struct {
 	IsFirstSetOutboundBandwidth bool `json:"isFirstSetOutboundBandwidth"`
 	InboundBandwidth            int64 `json:"inboundBandwidth"`
 	OutBoundBandwidth           int64 `json:"outboundBandwidth"`
+	NicMac						string `json:"nicMac"`
 }
 
 type setVipCmd struct {
@@ -124,7 +126,11 @@ func deleteVipQos(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 
 	for _, setting := range cmd.Settings {
-		publicInterface, err := utils.GetNicNameByIp(setting.Ip); utils.PanicOnError(err)
+		publicInterface, error := utils.GetNicNameByIp(setting.Ip)
+		if (error != nil && setting.NicMac != "") {
+			log.Debugf("no nic for ip %s found, try to use mac %s", setting.Ip, setting.NicMac)
+			publicInterface, error = utils.GetNicNameByMac(setting.NicMac); utils.PanicOnError(error)
+		}
 		if(setting.OutBoundBandwidth == 0){
 			delFilter(publicInterface, setting.QosClassId)
 			delClass(publicInterface, setting.QosClassId)
