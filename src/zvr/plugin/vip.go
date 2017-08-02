@@ -150,7 +150,11 @@ func syncVipQos(ctx *server.CommandContext) interface{} {
 
 	for _, setting := range cmd.Settings {
 		addr := fmt.Sprintf("%v/32", setting.Ip)
-		publicInterface, err := utils.GetNicNameByIp(setting.Ip); utils.PanicOnError(err)
+		publicInterface, err := utils.GetNicNameByIp(setting.Ip);
+		if (err != nil && setting.NicMac != "") {
+			log.Debugf("no nic for ip %s found, try to use mac %s", setting.Ip, setting.NicMac)
+			publicInterface, err = utils.GetNicNameByMac(setting.NicMac); utils.PanicOnError(err)
+		}
 		initPublicInterfaceQosConfigurationIfNotInit(publicInterface)
 		initIfbConfigurationIfNotInit(publicInterface)
 		if(setting.OutBoundBandwidth != -1 && setting.OutBoundBandwidth != 0){
@@ -161,7 +165,14 @@ func syncVipQos(ctx *server.CommandContext) interface{} {
 			addClass(VR_IFB, setting.InboundBandwidth, setting.QosClassId)
 			addInFilter(VR_IFB, addr, setting.QosClassId)
 		}
-
+		if(setting.OutBoundBandwidth == 0){
+			delFilter(publicInterface, setting.QosClassId)
+			delClass(publicInterface, setting.QosClassId)
+		}
+		if(setting.InboundBandwidth == 0){
+			delFilter(VR_IFB, setting.QosClassId)
+			delClass(VR_IFB, setting.QosClassId)
+		}
 	}
 
 	return nil
