@@ -471,7 +471,7 @@ func (t *VyosConfigTree) SetSnatWithStartRuleNumber(startNum int, rules...string
 	currentRuleNum := -1
 
 	for i:=startNum; i<=9999; i ++ {
-		if c := t.Getf("nat destination rule %v", i); c == nil {
+		if c := t.Getf("nat source rule %v", i); c == nil {
 			currentRuleNum = i
 			break
 		}
