@@ -409,6 +409,16 @@ func (t *VyosConfigTree) SetFirewallOnInterface(ethname, direction string, rules
 	return currentRuleNum
 }
 
+func (t *VyosConfigTree) SetFirewallWithRuleNumber(ethname, direction string, number int, rules...string) {
+	if direction != "in" && direction != "out" && direction != "local" {
+		panic(fmt.Sprintf("the direction can only be [in, out, local], but %s get", direction))
+	}
+
+	for _, rule := range rules {
+		t.Setf("firewall name %v.%v rule %v %s", ethname, direction, number, rule)
+	}
+}
+
 func (t *VyosConfigTree) SetDnat(rules...string) int {
 	currentRuleNum := -1
 

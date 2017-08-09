@@ -105,8 +105,8 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 		if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", des); fr == nil {
 			if r.AllowedCidr != "" && r.AllowedCidr != "0.0.0.0/0" {
 				tree.SetFirewallOnInterface(pubNicName, "in",
-					"action accept",
-					fmt.Sprintf("source address %v", r.AllowedCidr),
+					"action reject",
+					fmt.Sprintf("source address !%v", r.AllowedCidr),
 					fmt.Sprintf("description %v", des),
 					// NOTE: the destination is private IP
 					// because the destination address is changed by the dnat rule
