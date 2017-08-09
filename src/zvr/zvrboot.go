@@ -17,6 +17,8 @@ const (
 	VIRTIO_PORT_PATH = "/dev/virtio-ports/applianceVm.vport"
 	BOOTSTRAP_INFO_CACHE = "/home/vyos/zvr/bootstrap-info.json"
 	TMP_LOCATION_FOR_ESX = "/tmp/bootstrap-info.json"
+	// use this rule number to set a rule which confirm route entry work issue ZSTAC-6170
+	ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER = 9999
 )
 
 type nic struct {
@@ -260,9 +262,12 @@ func configureVyos()  {
 			"action accept",
 			"state established enable",
 			"state related enable",
-			"state new enable",
 		)
 
+		tree.SetFirewallWithRuleNumber(nic.name, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
+			"action accept",
+			"state new enable",
+		)
 
 		tree.SetFirewallOnInterface(nic.name, "in",
 			"action accept",
