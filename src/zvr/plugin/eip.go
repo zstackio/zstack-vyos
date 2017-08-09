@@ -39,18 +39,34 @@ func makeEipDescription(info eipInfo) string {
 	return fmt.Sprintf("EIP-%v-%v-%v", info.VipIp, info.GuestIp, info.PrivateMac)
 }
 
+func makeEipDescriptionForPrivateMac(info eipInfo) string {
+	return fmt.Sprintf("EIP-%v-%v-%v-private", info.VipIp, info.GuestIp, info.PrivateMac)
+}
+
 func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	des := makeEipDescription(eip)
+	priDes := makeEipDescriptionForPrivateMac(eip)
 	nicname, err := utils.GetNicNameByIp(eip.VipIp)
 	if err != nil && eip.PublicMac != "" {
-		nicname, err = utils.GetNicNameByMac(eip.PublicMac); utils.PanicOnError(err)
+		nicname, err = utils.GetNicNameByMac(eip.PublicMac)
 	}
+	utils.PanicOnError(err)
+
 	prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
 
 	if r := tree.FindSnatRuleDescription(des); r == nil {
 		tree.SetSnat(
 			fmt.Sprintf("description %v", des),
 			fmt.Sprintf("outbound-interface %v", nicname),
+			fmt.Sprintf("source address %v", eip.GuestIp),
+			fmt.Sprintf("translation address %v", eip.VipIp),
+		)
+	}
+
+	if r := tree.FindSnatRuleDescription(priDes); r == nil {
+		tree.SetSnat(
+			fmt.Sprintf("description %v", priDes),
+			fmt.Sprintf("outbound-interface %v", prinicname),
 			fmt.Sprintf("source address %v", eip.GuestIp),
 			fmt.Sprintf("translation address %v", eip.VipIp),
 		)
@@ -94,9 +110,19 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 
 func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 	des := makeEipDescription(eip)
-	nicname, err := utils.GetNicNameByIp(eip.VipIp); utils.PanicOnError(err)
+	priDes := makeEipDescriptionForPrivateMac(eip)
+	nicname, err := utils.GetNicNameByIp(eip.VipIp)
+	if err != nil && eip.PublicMac != "" {
+		nicname, err = utils.GetNicNameByMac(eip.PublicMac)
+	}
+	utils.PanicOnError(err)
+
 
 	if r := tree.FindSnatRuleDescription(des); r != nil {
+		r.Delete()
+	}
+
+	if r := tree.FindSnatRuleDescription(priDes); r != nil {
 		r.Delete()
 	}
 
