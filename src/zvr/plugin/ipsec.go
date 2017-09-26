@@ -10,10 +10,12 @@ const(
 	CREATE_IPSEC_CONNECTION = "/vyos/createipsecconnection"
 	DELETE_IPSEC_CONNECTION = "/vyos/deleteipsecconnection"
 	SYNC_IPSEC_CONNECTION = "/vyos/syncipsecconnection"
+	UPDATE_IPSEC_CONNECTION = "/vyos/updateipsecconnection"
 )
 
 type ipsecInfo struct {
 	Uuid string `json:"uuid"`
+	State string `json:"state"`
 	LocalCidrs []string `json:"localCidrs"`
 	PeerAddress string `json:"peerAddress"`
 	AuthMode string `json:"authMode"`
@@ -29,6 +31,7 @@ type ipsecInfo struct {
 	TransformProtocol string `json:"transformProtocol"`
 	PeerCidrs []string `json:"peerCidrs"`
 	ExcludeSnat bool `json:"excludeSnat"`
+	ModifiedItems []string `json:"modifiedItems"`
 }
 
 type createIPsecCmd struct {
@@ -40,6 +43,14 @@ type deleteIPsecCmd struct {
 }
 
 type syncIPsecCmd struct {
+	Infos []ipsecInfo `json:"infos"`
+}
+
+type updateIPsecReq struct {
+	Infos []ipsecInfo `json:"infos"`
+}
+
+type updateIPsecReply struct {
 	Infos []ipsecInfo `json:"infos"`
 }
 
@@ -244,8 +255,40 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 	}
 }
 
+func updateIPsecConnectionState(tree *server.VyosConfigTree, info ipsecInfo) {
+	if info.State == "Disabled" {
+		for i, _ := range info.PeerCidrs {
+			tree.Setf("vpn ipsec site-to-site peer %v tunnel %v disable", info.PeerAddress, i + 1);
+		}
+	} else if (info.State == "Enabled"){
+		for i, _ := range info.PeerCidrs {
+			tree.Deletef("vpn ipsec site-to-site peer %v tunnel %v disable", info.PeerAddress, i + 1)
+		}
+	}
+	tree.Apply(false)
+}
+
+func updateIPsecConnection(ctx *server.CommandContext) interface{} {
+	cmd := &updateIPsecReq{}
+	ctx.GetCommand(cmd)
+
+	vyos := server.NewParserFromShowConfiguration()
+	tree := vyos.Tree
+
+	for _, info := range cmd.Infos {
+		for _, item := range info.ModifiedItems{
+			if item == "State" {
+				updateIPsecConnectionState(tree, cmd.Infos[0])
+		    }
+		}
+	}
+
+	return nil
+}
+
 func IPsecEntryPoint() {
 	server.RegisterAsyncCommandHandler(CREATE_IPSEC_CONNECTION, server.VyosLock(createIPsecConnection))
 	server.RegisterAsyncCommandHandler(DELETE_IPSEC_CONNECTION, server.VyosLock(deleteIPsecConnection))
 	server.RegisterAsyncCommandHandler(SYNC_IPSEC_CONNECTION, server.VyosLock(syncIPsecConnection))
+	server.RegisterAsyncCommandHandler(UPDATE_IPSEC_CONNECTION, server.VyosLock(updateIPsecConnection))
 }
