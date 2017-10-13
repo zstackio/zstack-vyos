@@ -41,6 +41,8 @@ func setSnatHandler(ctx *server.CommandContext) interface{} {
 	s := cmd.Snat
 	tree := server.NewParserFromShowConfiguration().Tree
 	outNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
+	inNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
+	nicNumber, err := utils.GetNicNumber(inNic); utils.PanicOnError(err)
 	address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
 
 	if hasRuleNumberForAddress(tree, address) {
@@ -49,7 +51,7 @@ func setSnatHandler(ctx *server.CommandContext) interface{} {
 
 	// make source nat rule as the latest rule
 	// in case there are EIP rules
-	tree.SetSnatWithRuleNumber(SNAT_RULE_NUMBER,
+	tree.SetSnatWithRuleNumber(SNAT_RULE_NUMBER - nicNumber,
 		fmt.Sprintf("outbound-interface %s", outNic),
 		fmt.Sprintf("source address %v", address),
 		fmt.Sprintf("translation address %s", s.PublicIp),
@@ -105,16 +107,17 @@ func syncSnatHandler(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 
 	tree := server.NewParserFromShowConfiguration().Tree
-	utils.Assert(len(cmd.Snats) < 2, "multiple source nat are not supported yet")
 
 	for _, s := range cmd.Snats {
 		outNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
+		inNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
+		nicNumber, err := utils.GetNicNumber(inNic); utils.PanicOnError(err)
 		address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
-		if rs := tree.Getf("nat source rule %v", SNAT_RULE_NUMBER); rs != nil {
+		if rs := tree.Getf("nat source rule %v", SNAT_RULE_NUMBER - nicNumber); rs != nil {
 			rs.Delete()
 		}
 
-		tree.SetSnatWithRuleNumber(SNAT_RULE_NUMBER,
+		tree.SetSnatWithRuleNumber(SNAT_RULE_NUMBER - nicNumber,
 			fmt.Sprintf("outbound-interface %s", outNic),
 			fmt.Sprintf("source address %s", address),
 			fmt.Sprintf("translation address %s", s.PublicIp),

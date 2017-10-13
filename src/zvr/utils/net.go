@@ -186,3 +186,12 @@ func SetZStackRouteProtoIdentifier() {
 		bash.Run()
 	}
 }
+
+func GetNicNumber(nic string) (int, error) {
+	num, err := strconv.ParseInt(strings.Split(nic, "eth")[1], 10, 64)
+	if err != nil {
+		return -1, err
+	}
+	return int(num), nil
+}
+
