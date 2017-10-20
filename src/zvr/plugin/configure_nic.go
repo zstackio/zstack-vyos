@@ -34,8 +34,17 @@ func configureNic(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 
 	tree := server.NewParserFromShowConfiguration().Tree
+	var nicname string
 	for _, nic := range cmd.Nics {
-		nicname, err := utils.GetNicNameByMac(nic.Mac); utils.PanicOnError(err)
+		err := utils.Retry(func() error {
+			var e error
+			nicname, e = utils.GetNicNameByMac(nic.Mac)
+			if e != nil {
+				return e
+			} else {
+				return nil
+			}
+		}, 5, 1); utils.PanicOnError(err)
 		cidr, err := utils.NetmaskToCIDR(nic.Netmask); utils.PanicOnError(err)
 		addr := fmt.Sprintf("%v/%v", nic.Ip, cidr)
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s address %v", nicname, addr)
@@ -105,7 +114,16 @@ func removeNic(ctx *server.CommandContext) interface{} {
 
 	tree := server.NewParserFromShowConfiguration().Tree
 	for _, nic := range cmd.Nics {
-		nicname, err := utils.GetNicNameByMac(nic.Mac); utils.PanicOnError(err)
+		var nicname string
+		err := utils.Retry(func() error {
+			var e error
+			nicname, e = utils.GetNicNameByMac(nic.Mac)
+			if e != nil {
+				return e
+			} else {
+				return nil
+			}
+		}, 5, 1); utils.PanicOnError(err)
 		tree.Deletef("interfaces ethernet %s", nicname)
 		tree.Deletef("firewall name %s.in", nicname)
 		tree.Deletef("firewall name %s.local", nicname)

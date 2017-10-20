@@ -48,7 +48,16 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	priDes := makeEipDescriptionForPrivateMac(eip)
 	nicname, err := utils.GetNicNameByIp(eip.VipIp)
 	if err != nil && eip.PublicMac != "" {
-		nicname, err = utils.GetNicNameByMac(eip.PublicMac)
+		var nicname string
+		err = utils.Retry(func() error {
+			var e error
+			nicname, e = utils.GetNicNameByMac(eip.PublicMac)
+			if e != nil {
+				return e
+			} else {
+				return nil
+			}
+		}, 5, 1)
 	}
 	utils.PanicOnError(err)
 
@@ -113,7 +122,16 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 	priDes := makeEipDescriptionForPrivateMac(eip)
 	nicname, err := utils.GetNicNameByIp(eip.VipIp)
 	if err != nil && eip.PublicMac != "" {
-		nicname, err = utils.GetNicNameByMac(eip.PublicMac)
+		var nicname string
+		err = utils.Retry(func() error {
+			var e error
+			nicname, e = utils.GetNicNameByMac(eip.PublicMac)
+			if e != nil {
+				return e
+			} else {
+				return nil
+			}
+		}, 5, 1)
 	}
 	utils.PanicOnError(err)
 
