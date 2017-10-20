@@ -65,6 +65,22 @@ do_start() {
     su - vyos -c "nohup $SERVER -ip $ETH0_IP -logfile $LOGFILE >$BOOTLOG 2>&1 < /dev/null &"
 
     sleep 1
+
+    retry=1
+    maxRetries=10
+    until [ ${retry} -ge ${maxRetries} ]
+    c=$check_status
+    do
+        if [ "$c"=="1" ]
+        then
+            echo "failed, retrying the $retry time"
+            su - vyos -c "nohup $SERVER -ip $ETH0_IP -logfile $LOGFILE >$BOOTLOG 2>&1 < /dev/null &"
+            sleep $(( retry++ ))
+        else
+            retry=maxRetries+1
+        fi
+    done
+
     check_status > /dev/null || err_exit "unable to start zstack virtual router agent"
 
     exit 0
