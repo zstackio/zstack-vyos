@@ -41,7 +41,7 @@ func setSnatHandler(ctx *server.CommandContext) interface{} {
 	s := cmd.Snat
 	tree := server.NewParserFromShowConfiguration().Tree
 	outNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
-	inNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
+	inNic, err := utils.GetNicNameByMac(s.PrivateNicMac); utils.PanicOnError(err)
 	nicNumber, err := utils.GetNicNumber(inNic); utils.PanicOnError(err)
 	address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
 
@@ -110,7 +110,7 @@ func syncSnatHandler(ctx *server.CommandContext) interface{} {
 
 	for _, s := range cmd.Snats {
 		outNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
-		inNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
+		inNic, err := utils.GetNicNameByMac(s.PrivateNicMac); utils.PanicOnError(err)
 		nicNumber, err := utils.GetNicNumber(inNic); utils.PanicOnError(err)
 		address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
 		if rs := tree.Getf("nat source rule %v", SNAT_RULE_NUMBER - nicNumber); rs != nil {
