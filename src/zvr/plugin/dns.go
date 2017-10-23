@@ -50,7 +50,7 @@ func setDnsHandler(ctx *server.CommandContext) interface{} {
 			tree.Setf("service dns forwarding name-server %s", info.DnsAddress)
 		}
 		eth, err := utils.GetNicNameByMac(mac); utils.PanicOnError(err)
-		tree.Setf("service dns forwarding listen-on %s", eth)
+		tree.SetfWithoutCheckExisting("service dns forwarding listen-on %s", eth)
 
 
 		des := makeDnsFirewallRuleDescription(eth)
