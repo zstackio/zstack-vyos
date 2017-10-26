@@ -21,6 +21,9 @@ type nicInfo struct {
 	Netmask string `json:"netmask"`
 	Gateway string `json:"gateway"`
 	Mac string `json:"Mac"`
+	Category string `json:"category"`
+	L2Type string `json:"l2type"`
+	Vni int `json:"vni"`
 }
 
 type configureNicCmd struct {
@@ -87,6 +90,13 @@ func configureNic(ctx *server.CommandContext) interface{} {
 
 		tree.AttachFirewallToInterface(nicname, "local")
 		tree.AttachFirewallToInterface(nicname, "in")
+
+		log.Debugf("weiw: get nic.l2type: %s", nic.L2Type)
+		if nic.L2Type != "" {
+			b := utils.NewBash()
+			b.Command = fmt.Sprintf("ip link set dev %s alias '%s", nicname, makeAlias(nic))
+			b.Run()
+		}
 	}
 
 	tree.Apply(false)
@@ -131,6 +141,18 @@ func removeNic(ctx *server.CommandContext) interface{} {
 	tree.Apply(false)
 
 	return nil
+}
+
+func makeAlias(nic nicInfo) string {
+	result := ""
+	if nic.L2Type != "" {
+		result += fmt.Sprintf("l2type:%s;", nic.L2Type)
+	}
+	if nic.Category != "" {
+		result += fmt.Sprintf("category:%s;", nic.Category)
+	}
+	result += fmt.Sprintf("vni:%s;", nic.Vni)
+	return result
 }
 
 func ConfigureNicEntryPoint()  {

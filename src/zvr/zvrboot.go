@@ -28,6 +28,9 @@ type nic struct {
 	netmask string
 	isDefaultRoute bool
 	gateway string
+	category string
+	l2type string
+	vni int
 }
 
 var bootstrapInfo map[string]interface{} = make(map[string]interface{})
@@ -137,6 +140,11 @@ func configureVyos()  {
 	eth0.ip, ok = mgmtNic["ip"].(string); utils.PanicIfError(ok, errors.New("cannot find 'ip' field for the management nic"))
 	eth0.isDefaultRoute = mgmtNic["isDefaultRoute"].(bool)
 	eth0.gateway = mgmtNic["gateway"].(string)
+	eth0.l2type = mgmtNic["l2type"].(string)
+	eth0.category = mgmtNic["category"].(string)
+	if mgmtNic["vni"] != nil {
+		eth0.vni = int(mgmtNic["vni"].(float64))
+	}
 	nics[eth0.name] = eth0
 
 	otherNics := bootstrapInfo["additionalNics"].([]interface{})
@@ -150,6 +158,11 @@ func configureVyos()  {
 			n.ip, ok = onic["ip"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'ip' field for the nic[name:%s]", n.name))
 			n.gateway = onic["gateway"].(string)
 			n.isDefaultRoute = onic["isDefaultRoute"].(bool)
+			n.l2type = onic["l2type"].(string)
+			n.category = onic["category"].(string)
+			if onic["vni"] != nil {
+				n.vni = int(onic["vni"].(float64))
+			}
 			nics[n.name] = n
 		}
 	}
@@ -225,6 +238,18 @@ func configureVyos()  {
 	tree.Setf("system login user vyos authentication public-keys %s key %s", id, key)
 	tree.Setf("system login user vyos authentication public-keys %s type %s", id, sshtype)
 
+	makeAlias := func(nic *nic) string {
+		result := ""
+		if nic.l2type != "" {
+			result += fmt.Sprintf("l2type:%s;", nic.l2type)
+		}
+		if nic.category != "" {
+			result += fmt.Sprintf("category:%s;", nic.category)
+		}
+		result += fmt.Sprintf("vni:%v;", nic.vni)
+		return result
+	}
+
 	setNic := func(nic *nic) {
 		cidr, err := utils.NetmaskToCIDR(nic.netmask); utils.PanicOnError(err)
 		//tree.Setf("interfaces ethernet %s hw-id %s", nic.name, nic.mac)
@@ -234,6 +259,13 @@ func configureVyos()  {
 		tree.Setf("interfaces ethernet %s speed auto", nic.name)
 		if nic.isDefaultRoute {
 			tree.Setf("system gateway-address %v", nic.gateway)
+		}
+
+		log.Debugf("weiw: get nic.l2type: %s", nic.l2type)
+		if nic.l2type != "" {
+			b := utils.NewBash()
+			b.Command = fmt.Sprintf("ip link set dev %s alias '%s'", nic.name, makeAlias(nic))
+			b.Run()
 		}
 	}
 
