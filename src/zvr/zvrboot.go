@@ -140,8 +140,10 @@ func configureVyos()  {
 	eth0.ip, ok = mgmtNic["ip"].(string); utils.PanicIfError(ok, errors.New("cannot find 'ip' field for the management nic"))
 	eth0.isDefaultRoute = mgmtNic["isDefaultRoute"].(bool)
 	eth0.gateway = mgmtNic["gateway"].(string)
-	eth0.l2type = mgmtNic["l2type"].(string)
-	eth0.category = mgmtNic["category"].(string)
+	if mgmtNic["l2type"] != nil {
+		eth0.l2type = mgmtNic["l2type"].(string)
+		eth0.category = mgmtNic["category"].(string)
+	}
 	if mgmtNic["vni"] != nil {
 		eth0.vni = int(mgmtNic["vni"].(float64))
 	}
@@ -158,8 +160,10 @@ func configureVyos()  {
 			n.ip, ok = onic["ip"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'ip' field for the nic[name:%s]", n.name))
 			n.gateway = onic["gateway"].(string)
 			n.isDefaultRoute = onic["isDefaultRoute"].(bool)
-			n.l2type = onic["l2type"].(string)
-			n.category = onic["category"].(string)
+			if onic["l2type"] != nil {
+				n.l2type = onic["l2type"].(string)
+				n.category = onic["category"].(string)
+			}
 			if onic["vni"] != nil {
 				n.vni = int(onic["vni"].(float64))
 			}
