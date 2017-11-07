@@ -4,6 +4,7 @@ import (
 	"zvr/server"
 	"zvr/utils"
 	"fmt"
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -34,6 +35,10 @@ type syncSnatCmd struct {
 
 var SNAT_RULE_NUMBER = 9999
 
+func getNicSNATRuleNumber(nicNo int)  (ruleNo int){
+	return SNAT_RULE_NUMBER - nicNo
+}
+
 func setSnatHandler(ctx *server.CommandContext) interface{} {
 	cmd := &setSnatCmd{}
 	ctx.GetCommand(cmd)
@@ -45,13 +50,13 @@ func setSnatHandler(ctx *server.CommandContext) interface{} {
 	nicNumber, err := utils.GetNicNumber(inNic); utils.PanicOnError(err)
 	address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
 
-	if hasRuleNumberForAddress(tree, address) {
+	if hasRuleNumberForAddress(tree, address, nicNumber) {
 		return nil
 	}
 
 	// make source nat rule as the latest rule
 	// in case there are EIP rules
-	tree.SetSnatWithRuleNumber(SNAT_RULE_NUMBER - nicNumber,
+	tree.SetSnatWithRuleNumber(getNicSNATRuleNumber(nicNumber),
 		fmt.Sprintf("outbound-interface %s", outNic),
 		fmt.Sprintf("source address %v", address),
 		fmt.Sprintf("translation address %s", s.PublicIp),
@@ -67,19 +72,18 @@ func removeSnatHandler(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(&cmd)
 
 	tree := server.NewParserFromShowConfiguration().Tree
-	rs := tree.Get("nat source rule")
-	if rs == nil {
-		return nil
-	}
+
 
 	for _, s := range cmd.NatInfo {
-		address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
-
-		for _, r := range rs.Children() {
-			if addr := r.Get("source address"); addr != nil && addr.Value() == address {
-				addr.Delete()
-			}
+		inNic, err := utils.GetNicNameByMac(s.PrivateNicMac); utils.PanicOnError(err)
+		nicNumber, err := utils.GetNicNumber(inNic); utils.PanicOnError(err)
+		rs := tree.Get(fmt.Sprint("nat source rule %v", getNicSNATRuleNumber(nicNumber)))
+		if rs == nil {
+			log.Debugf(fmt.Sprint("nat source rule %v not found", getNicSNATRuleNumber(nicNumber)))
+			continue
 		}
+
+		rs.Delete()
 	}
 
 	tree.Apply(false)
@@ -87,19 +91,13 @@ func removeSnatHandler(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
-func hasRuleNumberForAddress(tree *server.VyosConfigTree, address string) bool {
-	rs := tree.Get("nat source rule")
+func hasRuleNumberForAddress(tree *server.VyosConfigTree, address string, nicNo int) bool {
+	rs := tree.Get(fmt.Sprint("nat source rule %v", getNicSNATRuleNumber(nicNo)))
 	if rs == nil {
 		return false
 	}
 
-	for _, r := range rs.Children() {
-		if addr := r.Get("source address"); addr != nil && addr.Value() == address {
-			return true
-		}
-	}
-
-	return false
+	return true
 }
 
 func syncSnatHandler(ctx *server.CommandContext) interface{} {
@@ -113,11 +111,11 @@ func syncSnatHandler(ctx *server.CommandContext) interface{} {
 		inNic, err := utils.GetNicNameByMac(s.PrivateNicMac); utils.PanicOnError(err)
 		nicNumber, err := utils.GetNicNumber(inNic); utils.PanicOnError(err)
 		address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
-		if rs := tree.Getf("nat source rule %v", SNAT_RULE_NUMBER - nicNumber); rs != nil {
+		if rs := tree.Getf("nat source rule %v", getNicSNATRuleNumber(nicNumber)); rs != nil {
 			rs.Delete()
 		}
 
-		tree.SetSnatWithRuleNumber(SNAT_RULE_NUMBER - nicNumber,
+		tree.SetSnatWithRuleNumber(getNicSNATRuleNumber(nicNumber),
 			fmt.Sprintf("outbound-interface %s", outNic),
 			fmt.Sprintf("source address %s", address),
 			fmt.Sprintf("translation address %s", s.PublicIp),
