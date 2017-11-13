@@ -139,34 +139,69 @@ func GetIpFromUrl(url string) (string, error) {
 	return ip, nil
 }
 
-func SetZStackRoute(ip string, nic string) error {
-	SetZStackRouteProtoIdentifier()
+func CheckZStackRouteExists(ip string) bool {
 	bash := Bash{
-		Command: fmt.Sprintf("ip route add %s/32 dev %s proto %s", ip, nic, ZSTACK_ROUTE_PROTO),
+		Command: fmt.Sprintf("ip r list %s/32 proto zstack", ip),
 	}
+	_, o, _, _ := bash.RunWithReturn()
+	if o == "" {
+		return false
+	}
+	return true
+}
+
+func DeleteRouteIfExists(ip string) error {
+	if CheckZStackRouteExists(ip) == true {
+		bash := Bash{
+			Command: fmt.Sprintf("ip route del %s/32", ip),
+		}
+		_, _, _, err := bash.RunWithReturn()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func SetZStackRoute(ip string, nic string, gw string) error {
+	SetZStackRouteProtoIdentifier()
+	DeleteRouteIfExists(ip)
+
+	var bash Bash
+	if gw == "" {
+		bash = Bash{
+			Command: fmt.Sprintf("ip route add %s/32 dev %s proto %s", ip, nic, ZSTACK_ROUTE_PROTO),
+		}
+	} else {
+		bash = Bash{
+			Command: fmt.Sprintf("ip route add %s/32 via %s dev %s proto %s", ip, gw, nic, ZSTACK_ROUTE_PROTO),
+		}
+	}
+
 	ret, _, _, err := bash.RunWithReturn()
 	if err != nil {
 		return err
 	}
 	// NOTE(WeiW): It will return 2 if exists
 	if ret != 0 && ret != 2{
-		return errors.New(fmt.Sprintf("add route to %s/32 use dev %s failed", ip, nic))
+		return errors.New(fmt.Sprintf("add route to %s/32 via %s dev %s failed", ip, gw, nic))
 	}
 
 	return nil
 }
 
-func RemoveZStackRoute(ip string, nic string) error {
+func RemoveZStackRoute(ip string) error {
 	SetZStackRouteProtoIdentifier()
 	bash := Bash{
-		Command: fmt.Sprintf("ip route del %s/32 dev %s proto %s", ip, nic, ZSTACK_ROUTE_PROTO),
+		Command: fmt.Sprintf("ip route del %s/32 proto %s", ip, ZSTACK_ROUTE_PROTO),
 	}
 	ret, _, _, err := bash.RunWithReturn()
 	if err != nil {
 		return err
 	}
 	if ret != 0 {
-		return errors.New(fmt.Sprintf("del route to %s/32 use dev %s failed", ip, nic))
+		return errors.New(fmt.Sprintf("del route to %s/32 proto %s failed", ip, ZSTACK_ROUTE_PROTO))
 	}
 
 	return nil
