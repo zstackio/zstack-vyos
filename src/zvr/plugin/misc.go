@@ -5,6 +5,9 @@ import (
 	"zvr/utils"
 	log "github.com/Sirupsen/logrus"
 	"fmt"
+	"io/ioutil"
+	"encoding/json"
+	"net"
 )
 
 const (
@@ -60,11 +63,41 @@ func addRouteIfCallbackIpChanged() {
 		}
 		// NOTE(WeiW): Since our mgmt nic is always eth0
 		if server.CURRENT_CALLBACK_IP != "" {
-			err := utils.RemoveZStackRoute(server.CURRENT_CALLBACK_IP, "eth0");
+			err := utils.RemoveZStackRoute(server.CURRENT_CALLBACK_IP);
 			utils.PanicOnError(err)
 		}
-		err := utils.SetZStackRoute(server.CALLBACK_IP, "eth0"); utils.PanicOnError(err)
+
+		mgmtNic := getMgmtInfoFromBootInfo()
+		if (mgmtNic == nil || checkMgmtCidrContainsIp(server.CALLBACK_IP, mgmtNic) == false) {
+			err := utils.SetZStackRoute(server.CALLBACK_IP, "eth0", mgmtNic["gateway"].(string)); utils.PanicOnError(err)
+		} else if mgmtNic == nil {
+			log.Debugf("can not get mgmt nic info, skip to configure route")
+		} else {
+			log.Debugf("the cidr of vr mgmt contains callback ip, skip to configure route")
+		}
 		server.CURRENT_CALLBACK_IP = server.CALLBACK_IP
 	}
 }
 
+func checkMgmtCidrContainsIp(ip string, mgmtNic map[string]interface{}) bool {
+	maskCidr, err := utils.NetmaskToCIDR(mgmtNic["netmask"].(string)); utils.PanicOnError(err)
+	_, mgmtNet, err := net.ParseCIDR(fmt.Sprintf("%s/%d", mgmtNic["ip"], maskCidr)); utils.PanicOnError(err)
+
+	return mgmtNet.Contains(net.ParseIP(ip))
+}
+
+func getMgmtInfoFromBootInfo() map[string]interface{} {
+	content, err := ioutil.ReadFile(BOOTSTRAP_INFO_CACHE); utils.PanicOnError(err)
+	if len(content) == 0 {
+		log.Debugf("no content in %s, can not get mgmt gateway", BOOTSTRAP_INFO_CACHE)
+		return nil
+	}
+
+	if err := json.Unmarshal(content, &bootstrapInfo); err != nil {
+		log.Debugf("can not parse info from %s, can not get mgmt gateway", BOOTSTRAP_INFO_CACHE)
+		return nil
+	}
+
+	mgmtNic := bootstrapInfo["managementNic"].(map[string]interface{})
+	return mgmtNic
+}
