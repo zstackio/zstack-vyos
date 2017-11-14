@@ -30,6 +30,7 @@ type nic struct {
 	gateway string
 	category string
 	l2type string
+	l2PhysicalInterface string
 	vni int
 }
 
@@ -147,6 +148,9 @@ func configureVyos()  {
 	if mgmtNic["vni"] != nil {
 		eth0.vni = int(mgmtNic["vni"].(float64))
 	}
+	if mgmtNic["physicalInterface"] != nil {
+		eth0.l2PhysicalInterface = mgmtNic["physicalInterface"].(string)
+	}
 	nics[eth0.name] = eth0
 
 	otherNics := bootstrapInfo["additionalNics"].([]interface{})
@@ -166,6 +170,9 @@ func configureVyos()  {
 			}
 			if onic["vni"] != nil {
 				n.vni = int(onic["vni"].(float64))
+			}
+			if onic["physicalInterface"] != nil {
+				n.l2PhysicalInterface = onic["physicalInterface"].(string)
 			}
 			nics[n.name] = n
 		}
@@ -250,6 +257,9 @@ func configureVyos()  {
 		if nic.category != "" {
 			result += fmt.Sprintf("category:%s;", nic.category)
 		}
+		if nic.l2PhysicalInterface != "" {
+			result += fmt.Sprintf("physicalInterface:%s;", nic.l2PhysicalInterface)
+		}
 		result += fmt.Sprintf("vni:%v;", nic.vni)
 		return result
 	}
@@ -265,7 +275,6 @@ func configureVyos()  {
 			tree.Setf("system gateway-address %v", nic.gateway)
 		}
 
-		log.Debugf("weiw: get nic.l2type: %s", nic.l2type)
 		if nic.l2type != "" {
 			b := utils.NewBash()
 			b.Command = fmt.Sprintf("ip link set dev %s alias '%s'", nic.name, makeAlias(nic))

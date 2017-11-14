@@ -23,6 +23,7 @@ type nicInfo struct {
 	Mac string `json:"Mac"`
 	Category string `json:"category"`
 	L2Type string `json:"l2type"`
+	PhysicalInterface string `json:"physicalInterface"`
 	Vni int `json:"vni"`
 }
 
@@ -91,10 +92,9 @@ func configureNic(ctx *server.CommandContext) interface{} {
 		tree.AttachFirewallToInterface(nicname, "local")
 		tree.AttachFirewallToInterface(nicname, "in")
 
-		log.Debugf("weiw: get nic.l2type: %s", nic.L2Type)
 		if nic.L2Type != "" {
 			b := utils.NewBash()
-			b.Command = fmt.Sprintf("ip link set dev %s alias '%s", nicname, makeAlias(nic))
+			b.Command = fmt.Sprintf("ip link set dev %s alias '%s'", nicname, makeAlias(nic))
 			b.Run()
 		}
 	}
@@ -151,7 +151,10 @@ func makeAlias(nic nicInfo) string {
 	if nic.Category != "" {
 		result += fmt.Sprintf("category:%s;", nic.Category)
 	}
-	result += fmt.Sprintf("vni:%s;", nic.Vni)
+	if nic.PhysicalInterface != "" {
+		result += fmt.Sprintf("physicalInterface:%s;", nic.PhysicalInterface)
+	}
+	result += fmt.Sprintf("vni:%d;", nic.Vni)
 	return result
 }
 
