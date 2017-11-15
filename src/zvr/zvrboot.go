@@ -362,6 +362,16 @@ func configureVyos()  {
 	for _, nic := range nics {
 		arping(nic.name, nic.ip, nic.gateway)
 	}
+
+
+	mgmtNodeIp := bootstrapInfo["managementNodeIp"].(string)
+	if mgmtNodeIp == "" {
+		log.Debugf("can not get management node ip from bootstrap info, skip to config route")
+	} else if (utils.CheckMgmtCidrContainsIp(mgmtNodeIp, mgmtNic) == false) {
+		err := utils.SetZStackRoute(mgmtNodeIp, "eth0", mgmtNic["gateway"].(string)); utils.PanicOnError(err)
+	} else {
+		log.Debugf("the cidr of vr mgmt contains callback ip, skip to configure route")
+	}
 }
 
 func startZvr()  {
