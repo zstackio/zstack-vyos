@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"encoding/json"
-	"net"
 )
 
 const (
@@ -68,7 +67,7 @@ func addRouteIfCallbackIpChanged() {
 		}
 
 		mgmtNic := getMgmtInfoFromBootInfo()
-		if (mgmtNic == nil || checkMgmtCidrContainsIp(server.CALLBACK_IP, mgmtNic) == false) {
+		if (mgmtNic == nil || utils.CheckMgmtCidrContainsIp(server.CALLBACK_IP, mgmtNic) == false) {
 			err := utils.SetZStackRoute(server.CALLBACK_IP, "eth0", mgmtNic["gateway"].(string)); utils.PanicOnError(err)
 		} else if mgmtNic == nil {
 			log.Debugf("can not get mgmt nic info, skip to configure route")
@@ -79,12 +78,7 @@ func addRouteIfCallbackIpChanged() {
 	}
 }
 
-func checkMgmtCidrContainsIp(ip string, mgmtNic map[string]interface{}) bool {
-	maskCidr, err := utils.NetmaskToCIDR(mgmtNic["netmask"].(string)); utils.PanicOnError(err)
-	_, mgmtNet, err := net.ParseCIDR(fmt.Sprintf("%s/%d", mgmtNic["ip"], maskCidr)); utils.PanicOnError(err)
 
-	return mgmtNet.Contains(net.ParseIP(ip))
-}
 
 func getMgmtInfoFromBootInfo() map[string]interface{} {
 	content, err := ioutil.ReadFile(BOOTSTRAP_INFO_CACHE); utils.PanicOnError(err)
