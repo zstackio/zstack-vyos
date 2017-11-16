@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"encoding/json"
 	log "github.com/Sirupsen/logrus"
+	"net"
 )
 
 const (
@@ -230,3 +231,9 @@ func GetNicNumber(nic string) (int, error) {
 	return int(num), nil
 }
 
+func CheckMgmtCidrContainsIp(ip string, mgmtNic map[string]interface{}) bool {
+	maskCidr, err := NetmaskToCIDR(mgmtNic["netmask"].(string)); PanicOnError(err)
+	_, mgmtNet, err := net.ParseCIDR(fmt.Sprintf("%s/%d", mgmtNic["ip"], maskCidr)); PanicOnError(err)
+
+	return mgmtNet.Contains(net.ParseIP(ip))
+}
