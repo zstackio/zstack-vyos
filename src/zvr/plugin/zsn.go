@@ -75,7 +75,7 @@ type getConnRsp struct {
 }
 
 type setDistributedRoutingRsp struct {
-	Enabled bool `json:"enabled"`
+	Enabled string `json:"enabled"`
 }
 
 type zsnsetDistributedRoutingRsp struct {
@@ -109,13 +109,13 @@ func setDistributedRouting(ctx *server.CommandContext) interface{} {
 	err := json.Unmarshal([]byte(r), &t)
 	if  err != nil {
 		log.Warnf("can not unmarshal json from %s, return empty", r)
-		return ""
+		return setDistributedRoutingRsp{}
 	}
 
 	if t.DistributedRouting == "true" {
-		return setDistributedRoutingRsp{Enabled:true}
+		return setDistributedRoutingRsp{Enabled:"true"}
 	} else {
-		return setDistributedRoutingRsp{Enabled:false}
+		return setDistributedRoutingRsp{Enabled:"false"}
 	}
 }
 
