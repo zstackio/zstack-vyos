@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"encoding/json"
 	log "github.com/Sirupsen/logrus"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -100,6 +101,33 @@ func configureNic(ctx *server.CommandContext) interface{} {
 	}
 
 	tree.Apply(false)
+	checkNicIsUp(nicname, true)
+	return nil
+}
+
+func checkNicIsUp(nicname string, panicIfDown bool) error {
+	var retryTimes uint = 10
+	var retryInterval uint = 1
+
+	bash := utils.Bash{
+		Command:fmt.Sprintf("ip link show dev %s up", nicname),
+	}
+	err := utils.Retry(func() error {
+		_, o, _, _ := bash.RunWithReturn()
+		if o == "" {
+			return errors.New(fmt.Sprintf("nic %s is down", nicname))
+		} else {
+			return nil
+		}
+	}, retryTimes, retryInterval)
+	error := errors.New(fmt.Sprintf("nic %s still down after %d secondes", nicname, retryTimes * retryInterval))
+
+	if err != nil && panicIfDown == true {
+		utils.PanicOnError(error)
+	} else if err != nil {
+		return error
+	}
+
 	return nil
 }
 
