@@ -536,12 +536,16 @@ func delQosRule(publicInterface string, direct direction, qosRule qosRule) inter
 
 func deleteQosRulesOfVip(publicInterface string, vip string)  {
 	if _, ok := totalQosRules[publicInterface]; ok {
-		for _, rule := range totalQosRules[publicInterface][INGRESS].rules[vip].portRules {
-			totalQosRules[publicInterface][INGRESS].InterfaceQosRuleDelRule(*rule)
+		if _, rok := totalQosRules[publicInterface][INGRESS].rules[vip]; rok {
+			for _, rule := range totalQosRules[publicInterface][INGRESS].rules[vip].portRules {
+				totalQosRules[publicInterface][INGRESS].InterfaceQosRuleDelRule(*rule)
+			}
 		}
 
-		for _, rule := range totalQosRules[publicInterface][EGRESS].rules[vip].portRules {
-			totalQosRules[publicInterface][INGRESS].InterfaceQosRuleDelRule(*rule)
+		if _, rok := totalQosRules[publicInterface][EGRESS].rules[vip]; rok {
+			for _, rule := range totalQosRules[publicInterface][EGRESS].rules[vip].portRules {
+				totalQosRules[publicInterface][EGRESS].InterfaceQosRuleDelRule(*rule)
+			}
 		}
 
 		if ((len(totalQosRules[publicInterface][INGRESS].rules) == 0) &&
