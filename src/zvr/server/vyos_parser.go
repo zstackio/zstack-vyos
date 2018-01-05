@@ -365,6 +365,10 @@ func (t *VyosConfigTree) AttachFirewallToInterface(ethname, direction string) {
 }
 
 func (t *VyosConfigTree) FindFirewallRuleByDescription(ethname, direction, des string) *VyosConfigNode {
+	return t.FindFirewallRuleByDescriptionRegex(ethname, direction, des, utils.StringCompareFn)
+}
+
+func (t *VyosConfigTree) FindFirewallRuleByDescriptionRegex(ethname, direction, des string, fn utils.CompareStringFunc) *VyosConfigNode {
 	rs := t.Getf("firewall name %v.%v rule", ethname, direction)
 
 	if rs == nil {
@@ -372,7 +376,7 @@ func (t *VyosConfigTree) FindFirewallRuleByDescription(ethname, direction, des s
 	}
 
 	for _, r := range rs.children {
-		if d := r.Get("description"); d != nil && d.Value() == des {
+		if d := r.Get("description"); d != nil && fn(des, d.Value()) == true {
 			return r
 		}
 	}
@@ -441,13 +445,17 @@ func (t *VyosConfigTree) SetDnat(rules...string) int {
 }
 
 func (t *VyosConfigTree) FindDnatRuleDescription(des string) *VyosConfigNode {
+	return t.FindDnatRuleDescriptionRegex(des, utils.StringCompareFn)
+}
+
+func (t *VyosConfigTree) FindDnatRuleDescriptionRegex(des string, fn utils.CompareStringFunc) *VyosConfigNode {
 	rs := t.Get("nat destination rule")
 	if rs == nil {
 		return nil
 	}
 
 	for _, r := range rs.children {
-		if d := r.Get("description"); d != nil && d.Value() == des {
+		if d := r.Get("description"); d != nil && fn(des, d.Value()) == true {
 			return r
 		}
 	}
@@ -456,6 +464,10 @@ func (t *VyosConfigTree) FindDnatRuleDescription(des string) *VyosConfigNode {
 }
 
 func (t *VyosConfigTree) FindSnatRuleDescription(des string) *VyosConfigNode {
+	return t.FindSnatRuleDescriptionRegex(des, utils.StringCompareFn)
+}
+
+func (t *VyosConfigTree) FindSnatRuleDescriptionRegex(des string, fn utils.CompareStringFunc) *VyosConfigNode {
 	rs := t.Get("nat source rule")
 
 	if rs == nil {
@@ -463,7 +475,7 @@ func (t *VyosConfigTree) FindSnatRuleDescription(des string) *VyosConfigNode {
 	}
 
 	for _, r := range rs.children {
-		if d := r.Get("description"); d != nil && d.Value() == des {
+		if d := r.Get("description"); d != nil && fn(des, d.Value()) == true {
 			return r
 		}
 	}
