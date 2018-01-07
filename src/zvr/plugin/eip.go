@@ -39,9 +39,43 @@ func makeEipDescription(info eipInfo) string {
 	return fmt.Sprintf("EIP-%v-%v-%v", info.VipIp, info.GuestIp, info.PrivateMac)
 }
 
+func makeEipDescriptionReg(info eipInfo) string {
+	return fmt.Sprintf("^EIP-%v-", info.VipIp)
+}
+
 func makeEipDescriptionForPrivateMac(info eipInfo) string {
 	return fmt.Sprintf("EIP-%v-%v-%v-private", info.VipIp, info.GuestIp, info.PrivateMac)
 }
+
+func cleanupOldEip(tree *server.VyosConfigTree, eip eipInfo) {
+	desReg := makeEipDescriptionReg(eip)
+	for i := 0; i < 1; {
+		if r := tree.FindSnatRuleDescriptionRegex(desReg, utils.StringRegCompareFn); r != nil {
+			r.Delete()
+		} else {
+			break
+		}
+	}
+	for i := 0; i < 1; {
+		if r := tree.FindDnatRuleDescriptionRegex(desReg, utils.StringRegCompareFn); r != nil {
+			r.Delete()
+		} else {
+			break
+		}
+	}
+	if nics, nicErr := utils.GetAllNics(); nicErr == nil {
+		for _, val := range nics {
+			for i := 0; i < 1; {
+				if r := tree.FindFirewallRuleByDescriptionRegex(val.Name, "in", desReg, utils.StringRegCompareFn); r != nil {
+					r.Delete()
+				} else {
+					break
+				}
+			}
+		}
+	}
+}
+
 
 func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	des := makeEipDescription(eip)
@@ -62,6 +96,9 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	utils.PanicOnError(err)
 
 	prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
+
+	/* delete old rule in case deleted failed when delete EIP */
+	cleanupOldEip(tree, eip)
 
 	if r := tree.FindSnatRuleDescription(des); r == nil {
 		tree.SetSnat(
