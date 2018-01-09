@@ -111,6 +111,8 @@ chown vyos:users $SBIN_DIR/zvr
 chown vyos:users $ZSN_DIR/zsn-agent
 chown vyos:users $SBIN_DIR/haproxy
 $SBIN_DIR/zvrboot >/home/vyos/zvr/zvrboot.log 2>&1 < /dev/null &
+# disable distributed routing by default
+export ZSNP_TMOUT=-960
 /etc/init.d/zstack-network-agent start
 exit 0
 END
