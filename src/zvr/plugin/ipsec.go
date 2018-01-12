@@ -82,11 +82,14 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 	tree.Setf("vpn ipsec site-to-site peer %s ike-group %s", info.PeerAddress, info.Uuid)
 
 	tree.Setf("vpn ipsec site-to-site peer %s local-address %s", info.PeerAddress, info.Vip)
-	utils.Assertf(len(info.LocalCidrs) == 1, "localCidrs%v containing more than one CIDR is not supported yet", info.LocalCidrs)
-	localCidr := info.LocalCidrs[0]
-	for i, remoteCidr := range info.PeerCidrs {
-		tree.Setf("vpn ipsec site-to-site peer %v tunnel %v local prefix %v", info.PeerAddress, i+1, localCidr)
-		tree.Setf("vpn ipsec site-to-site peer %v tunnel %v remote prefix %v", info.PeerAddress, i+1, remoteCidr)
+
+	tunnelNo := 1
+	for _, localCidr := range info.LocalCidrs {
+		for _, remoteCidr := range info.PeerCidrs {
+			tree.Setf("vpn ipsec site-to-site peer %v tunnel %v local prefix %v", info.PeerAddress, tunnelNo, localCidr)
+			tree.Setf("vpn ipsec site-to-site peer %v tunnel %v remote prefix %v", info.PeerAddress, tunnelNo, remoteCidr)
+		}
+		tunnelNo++
 	}
 
 	// configure firewall
@@ -146,16 +149,18 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 	tree.AttachFirewallToInterface(nicname, "in")
 
 	if info.ExcludeSnat {
-		for _, remoteCidr := range info.PeerCidrs {
-			des = fmt.Sprintf("ipsec-%s-%s-%s", info.Uuid, localCidr, remoteCidr)
-			if r := tree.FindSnatRuleDescription(des); r == nil {
-				tree.SetSnat(
-					fmt.Sprintf("destination address %v", remoteCidr),
-					fmt.Sprintf("source address %v", localCidr),
-					fmt.Sprintf("outbound-interface %v", nicname),
-					fmt.Sprintf("description %v", des),
-					"exclude",
-				)
+		for _, localCidr := range info.LocalCidrs {
+			for _, remoteCidr := range info.PeerCidrs {
+				des = fmt.Sprintf("ipsec-%s-%s-%s", info.Uuid, localCidr, remoteCidr)
+				if r := tree.FindSnatRuleDescription(des); r == nil {
+					tree.SetSnat(
+						fmt.Sprintf("destination address %v", remoteCidr),
+						fmt.Sprintf("source address %v", localCidr),
+						fmt.Sprintf("outbound-interface %v", nicname),
+						fmt.Sprintf("description %v", des),
+						"exclude",
+					)
+				}
 			}
 		}
 	}
@@ -182,9 +187,8 @@ func syncIPsecConnection(ctx *server.CommandContext) interface{} {
 	vyos := server.NewParserFromShowConfiguration()
 	tree := vyos.Tree
 
-	tree.Delete("vpn ipsec")
-
 	for _, info := range cmd.Infos {
+		deleteIPsec(tree, info)
 		createIPsec(tree, info)
 	}
 	tree.Apply(false)
@@ -214,13 +218,12 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 	tree.Deletef("vpn ipsec site-to-site peer %s", info.PeerAddress)
 
 	if info.ExcludeSnat {
-		utils.Assertf(len(info.LocalCidrs) == 1, "localCidrs%v containing more than one CIDR is not supported yet", info.LocalCidrs)
-		localCidr := info.LocalCidrs[0]
-
-		for _, remoteCidr := range info.PeerCidrs {
-			des := fmt.Sprintf("ipsec-%s-%s-%s", info.Uuid, localCidr, remoteCidr)
-			if r := tree.FindSnatRuleDescription(des); r != nil {
-				r.Delete()
+		for _, localCidr := range info.LocalCidrs {
+			for _, remoteCidr := range info.PeerCidrs {
+				des := fmt.Sprintf("ipsec-%s-%s-%s", info.Uuid, localCidr, remoteCidr)
+				if r := tree.FindSnatRuleDescription(des); r != nil {
+					r.Delete()
+				}
 			}
 		}
 	}
