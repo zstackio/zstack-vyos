@@ -69,12 +69,23 @@ func configureNic(ctx *server.CommandContext) interface{} {
 			fmt.Sprintf("destination address %v", nic.Ip),
 		)
 
-		tree.SetFirewallOnInterface(nicname, "in",
-			"action accept",
-			"state established enable",
-			"state related enable",
-			"state new enable",
-		)
+		if nic.Category == "Private" {
+			tree.SetFirewallOnInterface(nicname, "in",
+				"action accept",
+				"state established enable",
+				"state related enable",
+				"state invalid enable",
+				"state new enable",
+			)
+		} else {
+			tree.SetFirewallOnInterface(nicname, "in",
+				"action accept",
+				"state established enable",
+				"state related enable",
+				"state new enable",
+			)
+		}
+
 		tree.SetFirewallOnInterface(nicname, "in",
 			"action accept",
 			"protocol icmp",
