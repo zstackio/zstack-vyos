@@ -297,17 +297,28 @@ func configureVyos()  {
 			"state related enable",
 			fmt.Sprintf("destination address %v", nic.ip),
 		)
+
 		tree.SetFirewallOnInterface(nic.name, "local",
 			"action accept",
 			"protocol icmp",
 			fmt.Sprintf("destination address %v", nic.ip),
 		)
 
-		tree.SetFirewallOnInterface(nic.name, "in",
-			"action accept",
-			"state established enable",
-			"state related enable",
-		)
+		if nic.category == "Private" {
+			tree.SetFirewallOnInterface(nic.name, "in",
+				"action accept",
+				"state established enable",
+				"state related enable",
+				"state invalid enable",
+				"state new enable",
+			)
+		} else {
+			tree.SetFirewallOnInterface(nic.name, "in",
+				"action accept",
+				"state established enable",
+				"state related enable",
+			)
+		}
 
 		tree.SetFirewallWithRuleNumber(nic.name, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
 			"action accept",
