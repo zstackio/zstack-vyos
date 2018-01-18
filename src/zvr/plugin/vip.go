@@ -560,6 +560,7 @@ type vipInfo struct {
 	Netmask string `json:"netmask"`
 	Gateway string `json:"gateway"`
 	OwnerEthernetMac string `json:"ownerEthernetMac"`
+	Nic string `json:"nic"`             /* this is used for delete */
 }
 
 type vipQosSettings struct {
@@ -617,6 +618,19 @@ func setVip(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
+func getDeleteFailVip (info []vipInfo) ([]vipInfo) {
+	toDeletelVip := []vipInfo{}
+	for _, vip := range info {
+		nic, err := utils.GetNicNameByIp(vip.Ip)
+		if (err == nil) {
+			vip.Nic = nic
+			toDeletelVip = append(toDeletelVip, vip)
+		}
+	}
+
+	return toDeletelVip
+}
+
 func removeVip(ctx *server.CommandContext) interface{} {
 	cmd := &removeVipCmd{}
 	ctx.GetCommand(cmd)
@@ -634,7 +648,24 @@ func removeVip(ctx *server.CommandContext) interface{} {
 
 	tree.Apply(false)
 
-	return nil
+	/* find vip delete failed */
+	toDeletelVip := getDeleteFailVip(cmd.Vips)
+	return utils.Retry(func() error {
+		for _, vip := range toDeletelVip {
+			cidr, err := utils.NetmaskToCIDR(vip.Netmask); utils.PanicOnError(err)
+			bash := utils.Bash {
+				Command: fmt.Sprintf("sudo ip add del %s/%s dev %s ", vip.Ip, cidr, vip.Nic),
+			}
+			bash.Run()
+		}
+
+		toDeletelVip := getDeleteFailVip(toDeletelVip)
+		if (len(toDeletelVip) == 0) {
+			return nil
+		} else {
+			return fmt.Errorf("delete vips address %v failed", toDeletelVip)
+		}
+	}, 3, 1)
 }
 
 func setVipQos(ctx *server.CommandContext) interface{} {

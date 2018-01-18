@@ -154,6 +154,25 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	}
 }
 
+func checkEipExists(tree *server.VyosConfigTree, eip eipInfo) error {
+	des := makeEipDescription(eip)
+	priDes := makeEipDescriptionForPrivateMac(eip)
+
+	if r := tree.FindSnatRuleDescription(des); r != nil {
+		return fmt.Errorf("%s snat deletion fail", des)
+	}
+
+	if r := tree.FindSnatRuleDescription(priDes); r != nil {
+		return fmt.Errorf("%s snat deletion fail", priDes)
+	}
+
+	if r := tree.FindDnatRuleDescription(des); r != nil {
+		return fmt.Errorf("%s dnat deletion fail", des)
+	}
+
+	return nil
+}
+
 func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 	des := makeEipDescription(eip)
 	priDes := makeEipDescriptionForPrivateMac(eip)
@@ -212,11 +231,13 @@ func removeEip(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 	eip := cmd.Eip
 
-	tree := server.NewParserFromShowConfiguration().Tree
-	deleteEip(tree, eip)
-	tree.Apply(false)
+        return utils.Retry(func() error {
+                tree := server.NewParserFromShowConfiguration().Tree
+                deleteEip(tree, eip)
+                tree.Apply(false)
 
-	return nil
+                return checkEipExists(tree, eip);
+        }, 3, 1)
 }
 
 func syncEip(ctx *server.CommandContext) interface{} {
