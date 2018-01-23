@@ -88,8 +88,8 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 		for _, remoteCidr := range info.PeerCidrs {
 			tree.Setf("vpn ipsec site-to-site peer %v tunnel %v local prefix %v", info.PeerAddress, tunnelNo, localCidr)
 			tree.Setf("vpn ipsec site-to-site peer %v tunnel %v remote prefix %v", info.PeerAddress, tunnelNo, remoteCidr)
+			tunnelNo++
 		}
-		tunnelNo++
 	}
 
 	// configure firewall
@@ -164,6 +164,9 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 			}
 		}
 	}
+
+	/* for multiple ipsec connection, need restart vpn to make ipsec up */
+	server.RunVyosScript("restart vpn", nil)
 }
 
 func createIPsecConnection(ctx *server.CommandContext) interface{} {
@@ -217,21 +220,25 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 	tree.Deletef("vpn ipsec esp-group %s", info.Uuid)
 	tree.Deletef("vpn ipsec site-to-site peer %s", info.PeerAddress)
 
+	/* in sync ipsec, we don't know what is localcidr, remotecidr is missing
+	 * so use reg expression to delete all rules
+	 */
 	if info.ExcludeSnat {
-		for _, localCidr := range info.LocalCidrs {
-			for _, remoteCidr := range info.PeerCidrs {
-				des := fmt.Sprintf("ipsec-%s-%s-%s", info.Uuid, localCidr, remoteCidr)
-				if r := tree.FindSnatRuleDescription(des); r != nil {
-					r.Delete()
-				}
+		for {
+			des := fmt.Sprintf("^ipsec-%s-", info.Uuid)
+			if r := tree.FindSnatRuleDescriptionRegex(des, utils.StringRegCompareFn); r != nil {
+				r.Delete()
+			} else {
+				break;
 			}
 		}
 	}
-
-	for _, cidr := range info.PeerCidrs {
-		des := fmt.Sprintf("IPSEC-%s-%s", info.Uuid, cidr)
-		if r := tree.FindFirewallRuleByDescription(nicname, "in", des); r != nil {
+	des := fmt.Sprintf("^IPSEC-%s-", info.Uuid)
+	for {
+		if r := tree.FindFirewallRuleByDescriptionRegex(nicname, "in", des, utils.StringRegCompareFn); r != nil {
 			r.Delete()
+		} else {
+			break;
 		}
 	}
 
