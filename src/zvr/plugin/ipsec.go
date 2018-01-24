@@ -4,6 +4,8 @@ import (
 	"zvr/server"
 	"zvr/utils"
 	"fmt"
+	"strings"
+	"time"
 )
 
 const(
@@ -52,6 +54,120 @@ type updateIPsecReq struct {
 
 type updateIPsecReply struct {
 	Infos []ipsecInfo `json:"infos"`
+}
+
+func getIPsecPeers() (peers []string) {
+	vyos := server.NewParserFromShowConfiguration()
+	tree := vyos.Tree
+
+	peers = []string{}
+	rs := tree.Getf("vpn ipsec site-to-site peer")
+	if rs == nil {
+		return
+	}
+
+	for _, r := range rs.Children() {
+		peerStr := strings.Split(r.String(), " ")
+		peers = append(peers, peerStr[len(peerStr) - 1])
+	}
+
+	return
+}
+
+/* /opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl is a tool to display ipsec status, it has options:
+           "show-ipsec-sa!"                 => \$show_ipsec_sa,
+           "show-ipsec-sa-detail!"          => \$show_ipsec_sa_detail,
+           "get-peers-for-cli!"             => \$get_peers_for_cli,
+           "get-conn-for-cli=s"             => \$get_conn_for_cli,
+           "show-ipsec-sa-peer=s"           => \$show_ipsec_sa_peer,
+           "show-ipsec-sa-peer-detail=s"    => \$show_ipsec_sa_peer_detail,
+           "show-ipsec-sa-natt!"            => \$show_ipsec_sa_natt,
+           "show-ipsec-sa-stats!"           => \$show_ipsec_sa_stats,
+           "show-ipsec-sa-stats-peer=s"     => \$show_ipsec_sa_stats_peer,
+           "show-ipsec-sa-stats-conn=s{2}"  => \@show_ipsec_sa_stats_conn,
+           "show-ipsec-sa-conn-detail=s{2}" => \@show_ipsec_sa_conn_detail,
+           "show-ipsec-sa-conn=s{2}"        => \@show_ipsec_sa_conn,
+           "show-ike-sa!"                   => \$show_ike_sa,
+           "show-ike-sa-peer=s"             => \$show_ike_sa_peer,
+           "show-ike-sa-natt!"              => \$show_ike_sa_natt,
+           "show-ike-status!"               => \$show_ike_status,
+           "show-ike-secrets!"              => \$show_ike_secrets);
+           */
+
+/* get vpn peer status */
+func getVpnPeerStatus(peer string)  (status bool) {
+	/*
+	/opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl --show-ipsec-sa-peer=10.86.0.3
+	Peer ID / IP                            Local ID / IP
+	------------                            -------------
+	10.86.0.3                               10.86.0.2
+
+    	Tunnel  State  Bytes Out/In   Encrypt  Hash    NAT-T  A-Time  L-Time  Proto
+    	------  -----  -------------  -------  ----    -----  ------  ------  -----
+    	1       down   n/a            n/a      n/a     no     0       3600    all
+	*/
+	bash := utils.Bash{
+		Command: fmt.Sprintf("/opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl --show-ipsec-sa-peer=%s | grep -w 'down'", peer),
+	}
+	ret, _, _, err := bash.RunWithReturn()
+	/* command fail, will try again */
+	if (err != nil) {
+		return false
+	}
+
+	/* ret = 0 means some tunnel is down */
+	if (ret == 0) {
+		return false
+	} else {
+		return true
+	}
+}
+
+func checkVpnStateUp()  error {
+	peers := getIPsecPeers()
+	peersRestart := []string{}
+	for _, peer := range peers {
+		if (getVpnPeerStatus(peer) == false) {
+			peersRestart = append(peersRestart, peer)
+		}
+	}
+
+	if (len(peersRestart) != 0) {
+		return fmt.Errorf("peers [%s] still has tunnel down after 4 times retry", peersRestart)
+	}
+
+	return nil
+}
+
+/* /opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl is a tool to change ipsec config, it has options:
+	clear-vpn-ipsec-process
+	show-vpn-debug
+	show-vpn-debug-detail
+	get-all-peers
+	get-tunnels-for-peer
+	clear-tunnels-for-peer
+	clear-specific-tunnel-for-peer
+	clear-vtis-for-peer
+	*/
+func restartVpnAfterConfig()  {
+	if (checkVpnStateUp() == nil) {
+		return
+	}
+
+	bash := utils.Bash{
+		Command: "/opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl -op clear-vpn-ipsec-process",
+	}
+	bash.Run()
+	time.Sleep(20 * time.Second)
+
+	/* it need a log time to make sure checkVpnState can find new created tunnels */
+	err := utils.Retry(func() (err error) {
+		if err = checkVpnStateUp(); err != nil {
+			bash.Run()
+		}
+
+		return err
+	}, 3, 20);utils.LogError(err)
 }
 
 func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
@@ -164,9 +280,6 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 			}
 		}
 	}
-
-	/* for multiple ipsec connection, need restart vpn to make ipsec up */
-	server.RunVyosScript("restart vpn", nil)
 }
 
 func createIPsecConnection(ctx *server.CommandContext) interface{} {
@@ -179,6 +292,8 @@ func createIPsecConnection(ctx *server.CommandContext) interface{} {
 		createIPsec(tree, info)
 	}
 	tree.Apply(false)
+
+	go restartVpnAfterConfig()
 
 	return nil
 }
@@ -195,6 +310,8 @@ func syncIPsecConnection(ctx *server.CommandContext) interface{} {
 		createIPsec(tree, info)
 	}
 	tree.Apply(false)
+
+	go restartVpnAfterConfig()
 
 	return nil
 }
