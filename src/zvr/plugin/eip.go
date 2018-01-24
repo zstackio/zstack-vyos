@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"zvr/utils"
 	"strings"
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -154,7 +155,8 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	}
 }
 
-func checkEipExists(tree *server.VyosConfigTree, eip eipInfo) error {
+func checkEipExists(eip eipInfo) error {
+	tree := server.NewParserFromShowConfiguration().Tree
 	des := makeEipDescription(eip)
 	priDes := makeEipDescriptionForPrivateMac(eip)
 
@@ -169,6 +171,8 @@ func checkEipExists(tree *server.VyosConfigTree, eip eipInfo) error {
 	if r := tree.FindDnatRuleDescription(des); r != nil {
 		return fmt.Errorf("%s dnat deletion fail", des)
 	}
+
+	log.Debugf("checkEipExists %v des %s priDes %s successfuuly deleted", eip, des, priDes)
 
 	return nil
 }
@@ -231,13 +235,14 @@ func removeEip(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 	eip := cmd.Eip
 
-        return utils.Retry(func() error {
+	err := utils.Retry(func() error {
                 tree := server.NewParserFromShowConfiguration().Tree
                 deleteEip(tree, eip)
                 tree.Apply(false)
 
-                return checkEipExists(tree, eip);
-        }, 3, 1)
+                return checkEipExists(eip);
+        }, 3, 1); utils.LogError(err)
+	return nil
 }
 
 func syncEip(ctx *server.CommandContext) interface{} {

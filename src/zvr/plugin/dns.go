@@ -46,15 +46,16 @@ func setDnsHandler(ctx *server.CommandContext) interface{} {
 	}
 
 	/* delete previous config */
-	tree.Deletef("service dns forwarding name-server")
+	tree.Deletef("service dns forwarding")
 
-	for mac, dns := range dnsByMac {
-		for _, info := range dns {
-			tree.SetfWithoutCheckExisting("service dns forwarding name-server %s", info.DnsAddress)
-		}
+	/* dns is ordered in management node, should not be changed in vyos */
+	for _, info := range cmd.Dns {
+		tree.SetfWithoutCheckExisting("service dns forwarding name-server %s", info.DnsAddress)
+	}
+
+	for mac, _ := range dnsByMac {
 		eth, err := utils.GetNicNameByMac(mac); utils.PanicOnError(err)
 		tree.SetfWithoutCheckExisting("service dns forwarding listen-on %s", eth)
-
 
 		des := makeDnsFirewallRuleDescription(eth)
 		if r := tree.FindFirewallRuleByDescription(eth, "local", des); r == nil {

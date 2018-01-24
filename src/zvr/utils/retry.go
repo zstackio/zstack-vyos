@@ -18,7 +18,7 @@ func Retry(fn func() error, retryTimes uint, interval uint) error {
 
 		//TODO: add line number
 		log.Warnf("failed to execute a function, sleep %d seconds and will retry %s times, %v",
-			retryTimes, interval, err)
+			interval, retryTimes, err)
 		time.Sleep(time.Duration(interval) * time.Second)
 		retryTimes --
 	}
