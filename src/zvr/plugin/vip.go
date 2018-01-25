@@ -76,10 +76,16 @@ func (rule *qosRule) AddRule (nic string, direct direction) interface{} {
 	}
 	bash.Run()
 
+	/* minimium  bandwidth is 1M */
+	bandwidth := rule.bandwidth / (1024 * 1024);
+	if (bandwidth <= 0) {
+		bandwidth = 1
+	}
+
 	bash1 := utils.Bash{
-		Command:fmt.Sprintf("sudo tc class add dev %s parent 1:0 classid 1:%x htb rate %d ceil %d burst 15k cburst 15k;" +
+		Command:fmt.Sprintf("sudo tc class add dev %s parent 1:0 classid 1:%x htb rate %dMbit ceil %dMbit burst 15k cburst 15k;" +
 			"sudo tc qdisc add dev %s parent 1:%x sfq;",
-			nic, rule.classId, rule.bandwidth, rule.bandwidth,
+			nic, rule.classId, bandwidth, bandwidth,
 			nic, rule.classId),
 	}
 	bash1.Run()
@@ -263,7 +269,7 @@ func (vipRules *vipQosRules) VipQosAddRule(rule qosRule, nicName string, direct 
 	/* add rules to map */
 	vipRules.portRules[rule.port] = &rule
 
-	log.Debugf("AddRuleToInterface ip %s port %d, classId %d, prio %d, filter %03x:%03x, port number %s",
+	log.Debugf("AddRuleToInterface ip %s port %d, classId %d, prio %d, filter %03x:%03x, port number %d",
 		rule.ip, rule.port, rule.classId, rule.prioId, rule.filterId, rule.filterPos, len(vipRules.portRules))
 
 	return nil
@@ -286,7 +292,7 @@ func (vipRules *vipQosRules) VipQosDelRule(rule qosRule, nicName string, direct 
 		bash.PanicIfError()
 		vipRules.filterMap.Reset()
 	}
-	log.Debugf("VipQosDelRule ip %s port %d, remain port number %d", rule.ip, rule.port, len(vipRules.portRules))
+	log.Debugf("VipQosDelRule ip %s port %d, filterPos %d, remain port number %d", rule.ip, rule.port, rule.filterPos, len(vipRules.portRules))
 
 	return nil
 }
@@ -483,9 +489,10 @@ func (rules *interfaceQosRules) InterfaceQosRuleDelRule(rule qosRule) interface{
 		name = rules.ifbName
 	}
 
+	classId := rules.rules[rule.ip].portRules[rule.port].classId
 	rules.rules[rule.ip].VipQosDelRule(*rules.rules[rule.ip].portRules[rule.port], name, rules.direct)
 
-	rules.classBitmap.DelNumber(rule.classId)
+	rules.classBitmap.DelNumber(classId)
 	if (len(rules.rules[rule.ip].portRules) ==0) {
 		rules.prioBitMap.DelNumber(rules.rules[rule.ip].prioId)
 		delete(rules.rules, rule.ip)
@@ -496,7 +503,7 @@ func (rules *interfaceQosRules) InterfaceQosRuleDelRule(rule qosRule) interface{
 		}
 	}
 
-	log.Debugf("DelRule for ip %s port %d, name %s, remain vip number %d", rule.ip, rule.port, name, len(rules.rules))
+	log.Debugf("DelRule for ip %s port %d, classid %d, name %s, remain vip number %d", rule.ip, rule.port, classId, name, len(rules.rules))
 	return nil
 }
 
