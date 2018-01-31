@@ -657,7 +657,7 @@ func removeVip(ctx *server.CommandContext) interface{} {
 
 	/* find vip delete failed */
 	toDeletelVip := getDeleteFailVip(cmd.Vips)
-	return utils.Retry(func() error {
+	err := utils.Retry(func() error {
 		for _, vip := range toDeletelVip {
 			cidr, err := utils.NetmaskToCIDR(vip.Netmask); utils.PanicOnError(err)
 			bash := utils.Bash {
@@ -672,7 +672,9 @@ func removeVip(ctx *server.CommandContext) interface{} {
 		} else {
 			return fmt.Errorf("delete vips address %v failed", toDeletelVip)
 		}
-	}, 3, 1)
+	}, 3, 1);utils.LogError(err)
+
+	return nil
 }
 
 func setVipQos(ctx *server.CommandContext) interface{} {
