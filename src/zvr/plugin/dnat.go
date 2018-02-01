@@ -44,7 +44,27 @@ func syncDnatHandler(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 
 	tree := server.NewParserFromShowConfiguration().Tree
-	tree.Delete("nat destination")
+	dnatRegex := ".*(\\w.){3}\\w-\\w{1,}-\\w{1,}-(\\w{2}:){5}\\w{2}-\\w{1,}-\\w{1,}-\\w{1,}"
+
+	// delete all portforwarding related rules
+	for {
+		if r := tree.FindDnatRuleDescriptionRegex(dnatRegex, utils.StringRegCompareFn); r != nil {
+			r.Delete()
+		} else {
+			break
+		}
+	}
+
+	// TODO(WeiW): use all public nics rather than eth0
+	for {
+		if r := tree.FindFirewallRuleByDescriptionRegex(
+			"eth0", "in", dnatRegex, utils.StringRegCompareFn); r != nil {
+			r.Delete()
+		} else {
+			break
+		}
+	}
+
 	setRuleInTree(tree, cmd.Rules)
 	tree.Apply(false)
 	return nil
@@ -66,6 +86,10 @@ func getRule(tree *server.VyosConfigTree, description string) *server.VyosConfig
 }
 
 func makeDnatDescription(r dnatInfo) string {
+	return fmt.Sprintf("PF-%v-%v-%v-%v-%v-%v-%v", r.VipIp, r.VipPortStart, r.VipPortEnd, r.PrivateMac, r.PrivatePortStart, r.PrivatePortEnd, r.ProtocolType)
+}
+
+func makeOrphanDnatDescription(r dnatInfo) string {
 	return fmt.Sprintf("%v-%v-%v-%v-%v-%v-%v", r.VipIp, r.VipPortStart, r.VipPortEnd, r.PrivateMac, r.PrivatePortStart, r.PrivatePortEnd, r.ProtocolType)
 }
 
@@ -74,6 +98,9 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 		des := makeDnatDescription(r)
 		if currentRule := getRule(tree, des); currentRule != nil {
 			log.Debugf("dnat rule %s exists, skip it", des)
+			continue
+		} else if currentRule := getRule(tree, makeOrphanDnatDescription(r)); currentRule != nil {
+			log.Debugf("dnat rule %s exists orphan rule, skip it", des)
 			continue
 		}
 
@@ -151,6 +178,11 @@ func removeDnatHandler(ctx *server.CommandContext) interface{} {
 		des := makeDnatDescription(r)
 		if c := getRule(tree, des); c != nil {
 			c.Delete()
+		} else {
+			des = makeOrphanDnatDescription(r)
+			if c := getRule(tree, des); c != nil {
+				c.Delete()
+			}
 		}
 
 		pubNicName, err := utils.GetNicNameByIp(r.VipIp); utils.PanicOnError(err)
