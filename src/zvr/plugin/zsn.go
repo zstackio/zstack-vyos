@@ -120,7 +120,7 @@ func setDistributedRouting(ctx *server.CommandContext) interface{} {
 }
 
 func ZsnEntryPoint()  {
-	server.RegisterAsyncCommandHandler(ZSN_SET_DR_PATH, server.VyosLock(setDistributedRouting))
-	server.RegisterAsyncCommandHandler(ZSN_STATUS_PATH, server.VyosLock(getStatus))
-	server.RegisterAsyncCommandHandler(ZSN_CONNECTION_PATH, server.VyosLock(getConnections))
+	server.RegisterAsyncCommandHandler(ZSN_SET_DR_PATH, setDistributedRouting)
+	server.RegisterAsyncCommandHandler(ZSN_STATUS_PATH, getStatus)
+	server.RegisterAsyncCommandHandler(ZSN_CONNECTION_PATH, getConnections)
 }
