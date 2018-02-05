@@ -27,7 +27,7 @@ type dhcpInfo struct {
 
 type addDhcpCmd struct {
 	DhcpEntries []dhcpInfo `json:"dhcpEntries"`
-	rebuild bool `json:"rebuild"`
+	Rebuild     bool       `json:"rebuild"`
 }
 
 type removeDhcpCmd struct {
@@ -38,7 +38,7 @@ func addDhcpHandler(ctx *server.CommandContext) interface{} {
 	cmd := &addDhcpCmd{}
 	ctx.GetCommand(cmd)
 
-	if cmd.rebuild {
+	if cmd.Rebuild {
 		deleteDhcp(cmd.DhcpEntries)
 		setDhcp(cmd.DhcpEntries)
 	} else {
