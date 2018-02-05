@@ -77,9 +77,9 @@ func removeSnatHandler(ctx *server.CommandContext) interface{} {
 	for _, s := range cmd.NatInfo {
 		inNic, err := utils.GetNicNameByMac(s.PrivateNicMac); utils.PanicOnError(err)
 		nicNumber, err := utils.GetNicNumber(inNic); utils.PanicOnError(err)
-		rs := tree.Get(fmt.Sprint("nat source rule %v", getNicSNATRuleNumber(nicNumber)))
+		rs := tree.Get(fmt.Sprintf("nat source rule %v", getNicSNATRuleNumber(nicNumber)))
 		if rs == nil {
-			log.Debugf(fmt.Sprint("nat source rule %v not found", getNicSNATRuleNumber(nicNumber)))
+			log.Debugf(fmt.Sprintf("nat source rule %v not found", getNicSNATRuleNumber(nicNumber)))
 			continue
 		}
 
@@ -92,7 +92,7 @@ func removeSnatHandler(ctx *server.CommandContext) interface{} {
 }
 
 func hasRuleNumberForAddress(tree *server.VyosConfigTree, address string, nicNo int) bool {
-	rs := tree.Get(fmt.Sprint("nat source rule %v", getNicSNATRuleNumber(nicNo)))
+	rs := tree.Get(fmt.Sprintf("nat source rule %v", getNicSNATRuleNumber(nicNo)))
 	if rs == nil {
 		return false
 	}
