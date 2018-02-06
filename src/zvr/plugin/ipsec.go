@@ -340,17 +340,16 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 	/* in sync ipsec, we don't know what is localcidr, remotecidr is missing
 	 * so use reg expression to delete all rules
 	 */
-	if info.ExcludeSnat {
-		for {
-			des := fmt.Sprintf("^ipsec-%s-", info.Uuid)
-			if r := tree.FindSnatRuleDescriptionRegex(des, utils.StringRegCompareFn); r != nil {
-				r.Delete()
-			} else {
-				break;
-			}
+	des := fmt.Sprintf("^ipsec-%s-", info.Uuid)
+	for {
+		if r := tree.FindSnatRuleDescriptionRegex(des, utils.StringRegCompareFn); r != nil {
+			r.Delete()
+		} else {
+			break;
 		}
 	}
-	des := fmt.Sprintf("^IPSEC-%s-", info.Uuid)
+
+	des = fmt.Sprintf("^IPSEC-%s-", info.Uuid)
 	for {
 		if r := tree.FindFirewallRuleByDescriptionRegex(nicname, "in", des, utils.StringRegCompareFn); r != nil {
 			r.Delete()
