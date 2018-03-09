@@ -364,7 +364,7 @@ func configureVyos()  {
 	tree.Apply(true)
 
 	arping := func(nicname, ip, gateway string) {
-		b := utils.Bash{ Command: fmt.Sprintf("arping -A -U -c 1 -I %s -s %s %s", nicname, ip, gateway) }
+		b := utils.Bash{ Command: fmt.Sprintf("sudo arping -q -A -w 1.5 -c 1 -I %s %s > /dev/null", nicname, ip) }
 		b.Run()
 	}
 
