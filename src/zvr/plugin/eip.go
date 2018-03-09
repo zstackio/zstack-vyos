@@ -82,13 +82,15 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	des := makeEipDescription(eip)
 	priDes := makeEipDescriptionForPrivateMac(eip)
 	nicname, err := utils.GetNicNameByIp(eip.VipIp)
-	if err != nil && eip.PublicMac != "" {
+	if (nicname == "" || err != nil) && eip.PublicMac != "" {
 		var nicname string
 		err = utils.Retry(func() error {
 			var e error
 			nicname, e = utils.GetNicNameByMac(eip.PublicMac)
 			if e != nil {
 				return e
+			} else if nicname == "" {
+				return fmt.Errorf("empty nic name found for mac[%s]", eip.PublicMac)
 			} else {
 				return nil
 			}
