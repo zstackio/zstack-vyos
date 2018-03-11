@@ -8,10 +8,12 @@ import (
 	"encoding/json"
 	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
+	"strings"
 )
 
 const (
 	VR_CONFIGURE_NIC = "/configurenic"
+	VR_CONFIGURE_NIC_FIREWALL_DEFAULT_ACTION_PATH = "/configurenicdefaultaction";
 	VR_REMOVE_NIC_PATH = "/removenic"
 	BOOTSTRAP_INFO_CACHE = "/home/vyos/zvr/bootstrap-info.json"
 	DEFAULT_SSH_PORT = 22
@@ -26,6 +28,7 @@ type nicInfo struct {
 	L2Type string `json:"l2type"`
 	PhysicalInterface string `json:"physicalInterface"`
 	Vni int `json:"vni"`
+	FirewallDefaultAction string `json:"firewallDefaultAction"`
 }
 
 type configureNicCmd struct {
@@ -182,6 +185,36 @@ func removeNic(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
+func configureNicFirewallDefaultAction(ctx *server.CommandContext) interface{} {
+	cmd := &configureNicCmd{}
+	ctx.GetCommand(cmd)
+
+	tree := server.NewParserFromShowConfiguration().Tree
+	var nicname string
+	for _, nic := range cmd.Nics {
+		err := utils.Retry(func() error {
+			var e error
+			nicname, e = utils.GetNicNameByMac(nic.Mac)
+			if e != nil {
+				return e
+			} else {
+				return nil
+			}
+		}, 5, 1); utils.PanicOnError(err)
+
+		if (strings.Compare(nic.FirewallDefaultAction, "reject") == 0) {
+			tree.SetFirewallDefaultAction(nicname, "local", "reject")
+			tree.SetFirewallDefaultAction(nicname, "in", "reject")
+		} else {
+			tree.SetFirewallDefaultAction(nicname, "local", "accept")
+			tree.SetFirewallDefaultAction(nicname, "in", "accept")
+		}
+	}
+
+	tree.Apply(false)
+	return nil
+}
+
 func makeAlias(nic nicInfo) string {
 	result := ""
 	if nic.L2Type != "" {
@@ -200,4 +233,5 @@ func makeAlias(nic nicInfo) string {
 func ConfigureNicEntryPoint()  {
 	server.RegisterAsyncCommandHandler(VR_CONFIGURE_NIC, server.VyosLock(configureNic))
 	server.RegisterAsyncCommandHandler(VR_REMOVE_NIC_PATH, server.VyosLock(removeNic))
+	server.RegisterAsyncCommandHandler(VR_CONFIGURE_NIC_FIREWALL_DEFAULT_ACTION_PATH, server.VyosLock(configureNicFirewallDefaultAction))
 }
