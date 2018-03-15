@@ -53,11 +53,18 @@ func parseCommandOptions() {
 func configureZvrFirewall() {
 	tree := server.NewParserFromShowConfiguration().Tree
 
+	/* add description to avoid duplicated firewall rule when reconnect vr */
+	des := "management-port-rule"
+	if r := tree.FindFirewallRuleByDescription("eth0", "local", des); r != nil {
+		r.Delete()
+	}
+
 	tree.SetFirewallOnInterface("eth0", "local",
 		fmt.Sprintf("destination address %v", options.Ip),
 		fmt.Sprintf("destination port %v", options.Port),
 		"protocol tcp",
 		"action accept",
+		fmt.Sprintf("description %s", des),
 	)
 
 	tree.Apply(false)
