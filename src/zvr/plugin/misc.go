@@ -71,6 +71,8 @@ func addRouteIfCallbackIpChanged() {
 			err := utils.SetZStackRoute(server.CALLBACK_IP, "eth0", mgmtNic["gateway"].(string)); utils.PanicOnError(err)
 		} else if mgmtNic == nil {
 			log.Debugf("can not get mgmt nic info, skip to configure route")
+		} else if utils.GetNicForRoute(server.CALLBACK_IP) != "eth0" {
+			err := utils.SetZStackRoute(server.CALLBACK_IP, "eth0", ""); utils.PanicOnError(err)
 		} else {
 			log.Debugf("the cidr of vr mgmt contains callback ip, skip to configure route")
 		}

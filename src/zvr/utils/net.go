@@ -192,6 +192,14 @@ func SetZStackRoute(ip string, nic string, gw string) error {
 	return nil
 }
 
+func GetNicForRoute(ip string) string {
+	bash := Bash{
+		Command: fmt.Sprintf("ip -o r get %s | awk '{print $3}'", ip),
+	}
+	_, o, _, err := bash.RunWithReturn(); PanicOnError(err)
+	return o
+}
+
 func RemoveZStackRoute(ip string) error {
 	SetZStackRouteProtoIdentifier()
 	bash := Bash{
