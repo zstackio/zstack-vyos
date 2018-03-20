@@ -382,8 +382,8 @@ func configureVyos()  {
 		if (utils.CheckMgmtCidrContainsIp(mgmtNodeIpStr, mgmtNic) == false) {
 			err := utils.SetZStackRoute(mgmtNodeIpStr, "eth0", mgmtNic["gateway"].(string));
 			utils.PanicOnError(err)
-		} else if utils.GetNicForRoute(server.CALLBACK_IP) != "eth0" {
-			err := utils.SetZStackRoute(server.CALLBACK_IP, "eth0", ""); utils.PanicOnError(err)
+		} else if utils.GetNicForRoute(mgmtNodeIpStr) != "eth0" {
+			err := utils.SetZStackRoute(mgmtNodeIpStr, "eth0", ""); utils.PanicOnError(err)
 		} else {
 			log.Debugf("the cidr of vr mgmt contains callback ip, skip to configure route")
 		}
