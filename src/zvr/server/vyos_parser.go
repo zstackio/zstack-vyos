@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"zvr/utils"
 	log "github.com/Sirupsen/logrus"
+	"strconv"
 )
 
 type VyosParser struct {
@@ -171,6 +172,21 @@ func (n *VyosConfigNode) ChildNodeKeys() []string {
 	return keys
 }
 
+
+func (n *VyosConfigNode) FullString() []string {
+	var r []string
+	if n.isValueNode() {
+		t := []string{n.String()}
+		return append(r, strings.Join(t, " "))
+	}
+
+	for _, c := range n.children {
+		r = append(r, c.FullString()...)
+	}
+
+	return r
+}
+
 func (n *VyosConfigNode) String() string {
 	stack := &utils.Stack{}
 	p := n
@@ -298,7 +314,6 @@ func (n *VyosConfigNode) addNode(name string) *VyosConfigNode {
 	newNode.parent = n
 	return newNode
 }
-
 
 type VyosConfigTree struct {
 	Root *VyosConfigNode
@@ -514,6 +529,48 @@ func (t *VyosConfigTree) SetSnat(rules...string) int {
 	return t.SetSnatWithStartRuleNumber(1, rules...)
 }
 
+func (t *VyosConfigTree) FindFirstNotExcludeSNATRule(startNum int) int {
+	currentRuleNum := -1
+
+	for i := startNum; i <= 9999; i++ {
+		c := t.Getf("nat source rule %v", i)
+		if c == nil || (c.Get("exclude") == nil) {
+			currentRuleNum = i
+			break
+		}
+	}
+
+	if currentRuleNum == -1 {
+		panic("No rule number available for source nat. You have set more than 9999 rules???")
+	}
+
+	return currentRuleNum
+}
+
+func (t *VyosConfigTree) SwapSnatRule(leftRuleNumber int, rightRuleNumber int) {
+	l := t.Getf("nat source rule %v", leftRuleNumber)
+	r := t.Getf("nat source rule %v", rightRuleNumber)
+
+	if l == nil && r == nil {
+		return
+	} else if r == nil {
+		l.Delete()
+		l.name = strconv.Itoa(rightRuleNumber)
+		t.SetMultiple(l.FullString()...)
+		return
+	} else if l == nil {
+		r.Delete()
+		r.name = strconv.Itoa(rightRuleNumber)
+		t.SetMultiple(r.FullString()...)
+		return
+	}
+
+	l.name = strconv.Itoa(rightRuleNumber)
+	r.name = strconv.Itoa(leftRuleNumber)
+	t.SetMultiple(l.FullString()...)
+	t.SetMultiple(r.FullString()...)
+}
+
 // set the config without checking any existing config with the same path
 // usually used for set multi-value keys
 func (t *VyosConfigTree) SetWithoutCheckExisting(config string) {
@@ -571,6 +628,15 @@ func (t *VyosConfigTree) Set(config string) bool {
 		t.changeCommands = append(t.changeCommands, fmt.Sprintf("$SET %s", config))
 		return true
 	}
+}
+
+func (t *VyosConfigTree) SetMultiple(config...string) bool {
+	for _, c := range(config){
+		if r := t.Set(c); r == false {
+			return false
+		}
+	}
+	return true
 }
 
 func (t *VyosConfigTree) Getf(f string, args...interface{}) *VyosConfigNode {
