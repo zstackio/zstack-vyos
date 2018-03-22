@@ -53,12 +53,34 @@ nat {
     source {
         rule 100 {
             outbound-interface eth0
+            description test1
             source {
                 address 192.168.0.0/24
             }
             translation {
                 address masquerade
             }
+        }
+        rule 101 {
+            outbound-interface eth0
+            description test2
+            source {
+                address 192.168.1.0/24
+            }
+            translation {
+                address 100.64.10.10
+            }
+        }
+        rule 102 {
+            outbound-interface eth0
+            description test3
+            source {
+                address 192.168.2.0/24
+            }
+            translation {
+                address 100.64.11.10
+            }
+			exclude
         }
     }
 }
@@ -152,7 +174,137 @@ ABC E
 	tree.Set("protocols static route 0.0.0.0/0 next-hop 172.20.0.1 distance 2")
 	n := tree.Get("system package")
 	n.Delete()
+	tree.SwapSnatRule(100, 101)
+	tree.SwapSnatRule(102, 99)
 	fmt.Println(tree.CommandsAsString())
 	fmt.Println(tree.String())
 }
 
+func Test_FindFirstNotExcludeSNATRule1(t *testing.T) {
+	text := `
+nat {
+    source {
+		rule 2 {
+            outbound-interface eth0
+            description ipsec-123
+            source {
+                address 192.168.0.0/24
+            }
+            translation {
+                address 100.64.100.0/24
+            }
+            exclude
+        }
+        rule 3 {
+            outbound-interface eth0
+            description test1
+            source {
+                address 192.168.0.0/24
+            }
+            translation {
+                address masquerade
+            }
+        }
+        rule 5 {
+            outbound-interface eth0
+            description test1
+            source {
+                address 192.168.1.0/24
+            }
+            translation {
+                address 100.64.10.10
+            }
+        }
+    }
+}
+`
+	p := VyosParser{}
+	tree := p.Parse(text)
+	utils.Assert(tree.FindFirstNotExcludeSNATRule(1) == 1, fmt.Sprintf(
+		"assert is 2, and actually %v", tree.FindFirstNotExcludeSNATRule(1)))
+	fmt.Printf("\nFindFirstNotExcludeSNATRule1: \n")
+	fmt.Println(tree.String())
+}
+
+func Test_FindFirstNotExcludeSNATRule2(t *testing.T) {
+	text := `
+nat {
+    source {
+		rule 1 {
+            outbound-interface eth0
+            description ipsec-123
+            source {
+                address 192.168.0.0/24
+            }
+            translation {
+                address 100.64.100.0/24
+            }
+            exclude
+        }
+        rule 3 {
+            outbound-interface eth0
+            description test1
+            source {
+                address 192.168.0.0/24
+            }
+            translation {
+                address masquerade
+            }
+        }
+        rule 5 {
+            outbound-interface eth0
+            description test1
+            source {
+                address 192.168.1.0/24
+            }
+            translation {
+                address 100.64.10.10
+            }
+        }
+    }
+}
+`
+	p := VyosParser{}
+	tree := p.Parse(text)
+	utils.Assert(tree.FindFirstNotExcludeSNATRule(1) == 2, fmt.Sprintf(
+		"assert is 2, and actually %v", tree.FindFirstNotExcludeSNATRule(1)))
+	fmt.Printf("\nFindFirstNotExcludeSNATRule2: \n")
+	fmt.Println(tree.String())
+}
+
+func Test_FindFirstNotExcludeSNATRule3(t *testing.T) {
+	text := `
+nat {
+    source {
+        rule 1 {
+            outbound-interface eth0
+            description ipsec-123
+            source {
+                address 192.168.0.0/24
+            }
+            translation {
+                address 100.64.100.0/24
+            }
+            exclude
+        }
+        rule 2 {
+            outbound-interface eth0
+            description ipsec-123
+            source {
+                address 192.168.0.0/24
+            }
+            translation {
+                address 100.64.100.0/24
+            }
+            exclude
+        }
+    }
+}
+`
+	p := VyosParser{}
+	tree := p.Parse(text)
+	utils.Assert(tree.FindFirstNotExcludeSNATRule(1) == 3, fmt.Sprintf(
+		"assert is 2, and actually %v", tree.FindFirstNotExcludeSNATRule(1)))
+	fmt.Printf("\nTest_FindFirstNotExcludeSNATRule3: \n")
+	fmt.Println(tree.String())
+}
