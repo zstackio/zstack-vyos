@@ -308,3 +308,35 @@ nat {
 	fmt.Printf("\nTest_FindFirstNotExcludeSNATRule3: \n")
 	fmt.Println(tree.String())
 }
+
+func Test_SwapSNATRule1(t *testing.T) {
+	text := `
+nat {
+    source {
+        rule 1 {
+            outbound-interface eth0
+            description eip123
+            source {
+                address 192.168.0.0/24
+            }
+            translation {
+                address 100.64.100.0/24
+            }
+        }
+    }
+}
+`
+	p := VyosParser{}
+	tree := p.Parse(text)
+	tree.SetSnatWithRuleNumber(2,
+		"outbound-interface 1",
+			  "description 2",
+			  "source address 3",
+			  "translation address 4",
+			  "exclude")
+	fmt.Printf("\nTest_SwapSNATRule1: \n")
+	fmt.Println(tree.String())
+	tree.SwapSnatRule(1, 2)
+	fmt.Printf("\nTest_SwapSNATRule1: \n")
+	fmt.Println(tree.String())
+}
