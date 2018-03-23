@@ -274,11 +274,12 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 						fmt.Sprintf("source address %v", localCidr),
 						fmt.Sprintf("outbound-interface %v", nicname),
 						fmt.Sprintf("description %v", des),
-						"exclude",
 					)
 					if f := tree.FindFirstNotExcludeSNATRule(1); num != 1 && num > f {
 						tree.SwapSnatRule(num, f)
+						num = f
 					}
+					tree.SetSnatWithRuleNumber(num, "exclude")
 				}
 			}
 		}

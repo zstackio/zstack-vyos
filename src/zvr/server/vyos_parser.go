@@ -567,6 +567,7 @@ func (t *VyosConfigTree) SwapSnatRule(leftRuleNumber int, rightRuleNumber int) {
 
 	l.name = strconv.Itoa(rightRuleNumber)
 	r.name = strconv.Itoa(leftRuleNumber)
+
 	t.SetMultiple(l.FullString()...)
 	t.SetMultiple(r.FullString()...)
 }
@@ -632,9 +633,7 @@ func (t *VyosConfigTree) Set(config string) bool {
 
 func (t *VyosConfigTree) SetMultiple(config...string) bool {
 	for _, c := range(config){
-		if r := t.Set(c); r == false {
-			return false
-		}
+		t.SetWithoutCheckExisting(c)
 	}
 	return true
 }
