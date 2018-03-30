@@ -388,6 +388,21 @@ func configureVyos()  {
 			log.Debugf("the cidr of vr mgmt contains callback ip, skip to configure route")
 		}
 	}
+
+	enableLbLog()
+}
+
+func enableLbLog()  {
+	lb_log_file := "/etc/rsyslog.d/haproxy.conf"
+	conf := `$ModLoad imudp
+$UDPServerRun 514
+local1.*     /var/log/haproxy.log`
+	err := ioutil.WriteFile(lb_log_file, []byte(conf), 0755); utils.PanicOnError(err)
+
+	bash := utils.Bash{
+		Command: "/etc/init.d/rsyslog restart",
+	}
+	err = bash.Run();utils.PanicOnError(err)
 }
 
 func startZvr()  {
