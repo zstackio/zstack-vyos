@@ -49,6 +49,7 @@ type HttpInterceptor func(http.HandlerFunc) http.HandlerFunc
 
 var (
 	commandHandlers map[string]*commandHandlerWrap = make(map[string]*commandHandlerWrap)
+	rawHandlers map[string]http.HandlerFunc = make(map[string]http.HandlerFunc)
 	commandOptions Options
 	CALLBACK_IP = ""
 	CURRENT_CALLBACK_IP = ""
@@ -70,6 +71,10 @@ func RegisterSyncCommandHandler(path string, chandler CommandHandler)  {
 
 func RegisterAsyncCommandHandler(path string, chandler CommandHandler) {
 	registerCommandHandler(path, chandler, true)
+}
+
+func RegisterRawHttpHandler(path string, handler http.HandlerFunc) {
+	rawHandlers[path] = handler
 }
 
 func registerCommandHandler(path string, chandler CommandHandler, async bool) {
@@ -227,6 +232,13 @@ func (d dispatcher) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 func dispatch(w http.ResponseWriter, req *http.Request) {
 	path := req.URL.Path
+
+	// specially handle prometheus scrape
+	if rawHandler, ok := rawHandlers[path]; ok {
+		rawHandler(w, req)
+		return
+	}
+
 	wrap, ok := commandHandlers[path]
 	if !ok {
 		log.Warnf("no plugin registered the path[%s], drop it", path)

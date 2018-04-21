@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"strconv"
 	"sort"
+	prom "github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -23,6 +24,9 @@ const (
 	TC_MAX_FILTER = 0xFFF
 	MAX_UINT32  = uint32(0xFFFFFFFF)
 	MAX_PUBLIC_INTERFACE = 128
+
+	/* 16G */
+	MAX_BINDWIDTH = uint64(0x4FFFFFFFF)
 )
 
 type direction int
@@ -58,6 +62,7 @@ type qosRule struct {
 	ip     		string
 	port 		uint16
 	bandwidth	uint64
+	vipUuid         string
 }
 
 type qosRuleHook interface {
@@ -217,6 +222,7 @@ type vipQosRules struct {
 	prioId         uint32
 	filterHandleID uint32
 	filterMap      Bitmap
+	vipUuid        string
 }
 type vipQosHook interface {
 	VipQosRulesInit(string) interface{}
@@ -298,9 +304,10 @@ func (vipRules *vipQosRules) VipQosDelRule(rule qosRule, nicName string, direct 
 }
 
 /* tc rules per interface per direction
- * rules       		#### 	map key is the vip uuid, value is another map of rules of same vip
+ * rules       		#### 	map key is the vip ip, value is another map of rules of same vip
  * classBitmap      	#### 	record the classID used
  * fliterBitMap     	#### 	filter priority also use this id
+ * cntMap               ####    map classId to vip ip
  */
 type interfaceQosRules struct {
 	name        string
@@ -309,6 +316,7 @@ type interfaceQosRules struct {
 	rules       map[string]*vipQosRules
 	classBitmap Bitmap
 	prioBitMap  Bitmap
+	classIdMap  map[uint32]string
 }
 
 type interfaceQosHook interface {
@@ -326,7 +334,7 @@ func getInterfaceIndex(name string) string  {
 	return strings.TrimFunc(name, f)
 }
 
-func (rules *interfaceQosRules) InterfaceQosRuleFind(newRule qosRule)  interface{} {
+func (rules *interfaceQosRules) InterfaceQosRuleFind(newRule qosRule)  *qosRule {
 	if _, ok := rules.rules[newRule.ip]; ok == false {
 		return nil
 	}
@@ -353,6 +361,7 @@ func (rules *interfaceQosRules) InterfaceQosRuleInit(direct direction) interface
 	rules.prioBitMap.AddNumber(1)
 	rules.prioBitMap.AddNumber(TC_MAX_CLASSID)
 	rules.rules = make(map[string]*vipQosRules)
+	rules.classIdMap = make(map[uint32]string)
 
 	if (rules.direct == INGRESS) {
 		/* get interface index */
@@ -446,7 +455,7 @@ func (rules *interfaceQosRules) InterfaceQosRuleAddRule(rule qosRule) interface{
 		}
 		prioId := rules.prioBitMap.FindFirstAvailable()
 		rules.prioBitMap.AddNumber(prioId)
-		rules.rules[rule.ip] = &(vipQosRules{vip: rule.ip, prioId: prioId, portRules: make(map[uint16]*qosRule)})
+		rules.rules[rule.ip] = &(vipQosRules{vip: rule.ip, prioId: prioId, portRules: make(map[uint16]*qosRule), vipUuid:rule.vipUuid})
 		rules.rules[rule.ip].VipQosRulesInit(name)
 	}
 
@@ -454,6 +463,19 @@ func (rules *interfaceQosRules) InterfaceQosRuleAddRule(rule qosRule) interface{
 		/* delete old rule first */
 		log.Debugf("AddRuleToInterface delete existed rule for ip %s port %d", rule.ip, rule.port)
 		rules.InterfaceQosRuleDelRule(*oldRule)
+
+		/* if this rule is the only rule for the vip, we need re-init the data structure */
+		if _, vipOk := rules.rules[rule.ip]; vipOk == false {
+			log.Debugf("AddRuleToInterface create map for ip %s", rule.ip)
+			if (len(rules.rules) >= TC_MAX_FILTER) {
+				utils.PanicOnError(fmt.Errorf("VipQos Reach the max number %d of interface %s ifbname %s",
+					TC_MAX_FILTER, rules.name, rules.ifbName))
+			}
+			prioId := rules.prioBitMap.FindFirstAvailable()
+			rules.prioBitMap.AddNumber(prioId)
+			rules.rules[rule.ip] = &(vipQosRules{vip: rule.ip, prioId: prioId, portRules: make(map[uint16]*qosRule), vipUuid:rule.vipUuid})
+			rules.rules[rule.ip].VipQosRulesInit(name)
+		}
 	}
 
 	classId := rules.classBitmap.FindFirstAvailable()
@@ -462,6 +484,7 @@ func (rules *interfaceQosRules) InterfaceQosRuleAddRule(rule qosRule) interface{
 	}
 	rules.classBitmap.AddNumber(classId)
 	rule.classId = classId
+	rules.classIdMap[classId] = rule.ip
 
 	rules.rules[rule.ip].VipQosAddRule(rule, name, rules.direct)
 
@@ -491,6 +514,7 @@ func (rules *interfaceQosRules) InterfaceQosRuleDelRule(rule qosRule) interface{
 
 	classId := rules.rules[rule.ip].portRules[rule.port].classId
 	rules.rules[rule.ip].VipQosDelRule(*rules.rules[rule.ip].portRules[rule.port], name, rules.direct)
+	delete(rules.classIdMap, classId)
 
 	rules.classBitmap.DelNumber(classId)
 	if (len(rules.rules[rule.ip].portRules) ==0) {
@@ -568,6 +592,7 @@ type vipInfo struct {
 	Gateway string `json:"gateway"`
 	OwnerEthernetMac string `json:"ownerEthernetMac"`
 	Nic string `json:"nic"`             /* this is used for delete */
+	VipUuid string `json:"vipUuid"`
 }
 
 type vipQosSettings struct {
@@ -621,6 +646,28 @@ func setVip(ctx *server.CommandContext) interface{} {
 	}
 
 	tree.Apply(false)
+
+	/* ad default qos for vip traffic counter */
+	for _, vip := range cmd.Vips {
+		publicInterface, err := utils.GetNicNameByIp(vip.Ip); utils.PanicOnError(err)
+		ingressrule := qosRule{ip: vip.Ip, port: 0, bandwidth: MAX_BINDWIDTH, vipUuid: vip.VipUuid}
+		if biRule, ok := totalQosRules[publicInterface]; ok {
+			if biRule[INGRESS].InterfaceQosRuleFind(ingressrule) == nil {
+				addQosRule(publicInterface, INGRESS, ingressrule)
+			}
+		} else {
+			addQosRule(publicInterface, INGRESS, ingressrule)
+		}
+
+		egressrule := qosRule{ip: vip.Ip, port: 0, bandwidth: MAX_BINDWIDTH, vipUuid: vip.VipUuid}
+		if biRule, ok := totalQosRules[publicInterface]; ok {
+			if biRule[EGRESS].InterfaceQosRuleFind(egressrule) == nil {
+				addQosRule(publicInterface, EGRESS, egressrule)
+			}
+		} else {
+			addQosRule(publicInterface, EGRESS, egressrule)
+		}
+	}
 
 	return nil
 }
@@ -686,11 +733,13 @@ func setVipQos(ctx *server.CommandContext) interface{} {
 	for _, setting := range cmd.Settings {
 		publicInterface, err := utils.GetNicNameByIp(setting.Vip); utils.PanicOnError(err)
 		if (setting.InboundBandwidth != 0) {
-			ingressrule := qosRule{ip: setting.Vip, port: uint16(setting.Port), bandwidth: uint64(setting.InboundBandwidth)}
+			ingressrule := qosRule{ip: setting.Vip, port: uint16(setting.Port), bandwidth: uint64(setting.InboundBandwidth),
+				vipUuid: setting.VipUuid}
 			addQosRule(publicInterface, INGRESS, ingressrule)
 		}
 		if (setting.OutboundBandwidth != 0) {
-			egressrule := qosRule{ip: setting.Vip, port: uint16(setting.Port), bandwidth: uint64(setting.OutboundBandwidth)}
+			egressrule := qosRule{ip: setting.Vip, port: uint16(setting.Port), bandwidth: uint64(setting.OutboundBandwidth),
+				vipUuid: setting.VipUuid}
 			addQosRule(publicInterface, EGRESS, egressrule)
 		}
 	}
@@ -705,7 +754,7 @@ func deleteVipQos(ctx *server.CommandContext) interface{} {
 	sort.Sort(vipQosSettingsArray(cmd.Settings))
 	for _, setting := range cmd.Settings {
 		publicInterface, error := utils.GetNicNameByIp(setting.Vip);utils.PanicOnError(error)
-		qosRule := qosRule{ip: setting.Vip, port: uint16(setting.Port)}
+		qosRule := qosRule{ip: setting.Vip, port: uint16(setting.Port), vipUuid: setting.VipUuid}
 		delQosRule(publicInterface, INGRESS, qosRule)
 		delQosRule(publicInterface, EGRESS, qosRule)
 	}
@@ -721,17 +770,211 @@ func syncVipQos(ctx *server.CommandContext) interface{} {
 	for _, setting := range cmd.Settings {
 		publicInterface, err := utils.GetNicNameByIp(setting.Vip);utils.PanicOnError(err)
 		if (setting.InboundBandwidth != 0) {
-			ingressrule := qosRule{ip: setting.Vip, port: uint16(setting.Port), bandwidth: uint64(setting.InboundBandwidth)}
-			addQosRule(publicInterface, INGRESS, ingressrule)
+			ingressrule := qosRule{ip: setting.Vip, port: uint16(setting.Port), bandwidth: uint64(setting.InboundBandwidth),
+				vipUuid: setting.VipUuid}
+			if biRule, ok := totalQosRules[publicInterface]; !ok {
+				if biRule[INGRESS].InterfaceQosRuleFind(ingressrule) == nil {
+					addQosRule(publicInterface, INGRESS, ingressrule)
+				}
+			} else {
+				addQosRule(publicInterface, INGRESS, ingressrule)
+			}
 		}
 
 		if (setting.OutboundBandwidth != 0) {
-			egressrule := qosRule{ip: setting.Vip, port: uint16(setting.Port), bandwidth: uint64(setting.OutboundBandwidth)}
-			addQosRule(publicInterface, EGRESS, egressrule)
+			egressrule := qosRule{ip: setting.Vip, port: uint16(setting.Port), bandwidth: uint64(setting.OutboundBandwidth),
+				vipUuid:setting.VipUuid}
+			if biRule, ok := totalQosRules[publicInterface]; !ok {
+				if biRule[EGRESS].InterfaceQosRuleFind(egressrule) == nil {
+					addQosRule(publicInterface, EGRESS, egressrule)
+				}
+			} else {
+				addQosRule(publicInterface, EGRESS, egressrule)
+			}
 		}
 	}
 
 	return nil
+}
+
+
+func init() {
+	RegisterPrometheusCollector(NewVipPrometheusCollector())
+}
+
+type vipCollector struct {
+	inByteEntry *prom.Desc
+	inPktEntry *prom.Desc
+	outByteEntry *prom.Desc
+	outPktEntry *prom.Desc
+
+	vipUUIds map[string]string
+}
+
+const (
+	LABEL_VIP_UUID = "VipUUID"
+)
+
+func NewVipPrometheusCollector() MetricCollector {
+	return &vipCollector{
+		inByteEntry: prom.NewDesc(
+			"zstack_vip_in_bytes",
+			"VIP inbound traffic in bytes",
+			[]string{LABEL_VIP_UUID}, nil,
+		),
+		inPktEntry: prom.NewDesc(
+			"zstack_vip_in_packages",
+			"VIP inbound traffic packages",
+			[]string{LABEL_VIP_UUID}, nil,
+		),
+		outByteEntry: prom.NewDesc(
+			"zstack_vip_out_bytes",
+			"VIP outbound traffic in bytes",
+			[]string{LABEL_VIP_UUID}, nil,
+		),
+		outPktEntry: prom.NewDesc(
+			"zstack_vip_out_packages",
+			"VIP outbound traffic packages",
+			[]string{LABEL_VIP_UUID}, nil,
+		),
+
+		vipUUIds: make(map[string]string),
+	}
+}
+
+func (c *vipCollector) Describe(ch chan<- *prom.Desc) error {
+	ch <- c.inByteEntry
+	ch <- c.inPktEntry
+	ch <- c.outByteEntry
+	ch <- c.outPktEntry
+	return nil
+}
+
+type monitoringRule struct {
+	pkts uint64
+	bytes uint64
+	source string
+	destination string
+	vipUuid     string
+}
+
+func (c *vipCollector) Update(ch chan<- prom.Metric) error {
+	rules := getMonitoringRules(INGRESS)
+	for _, rule := range rules {
+		vipUuid := rule.vipUuid
+		ch <- prom.MustNewConstMetric(c.outByteEntry, prom.GaugeValue, float64(rule.bytes), vipUuid)
+		ch <- prom.MustNewConstMetric(c.outPktEntry, prom.GaugeValue, float64(rule.pkts), vipUuid)
+	}
+
+	rules = getMonitoringRules(EGRESS)
+	for _, rule := range rules {
+		vipUuid := rule.vipUuid
+		ch <- prom.MustNewConstMetric(c.inByteEntry, prom.GaugeValue, float64(rule.bytes), vipUuid)
+		ch <- prom.MustNewConstMetric(c.inPktEntry, prom.GaugeValue, float64(rule.pkts), vipUuid)
+	}
+
+	return nil
+}
+
+/*
+output example
+# tc -s class show dev eth0 | grep -A 1 'class htb'
+class htb 1:1 root leaf 8003: prio 0 rate 10000Mbit ceil 10000Mbit burst 0b cburst 0b
+ Sent 353013 bytes 2725 pkt (dropped 0, overlimits 0 requeues 0)
+--
+class htb 1:2 root leaf 8004: prio 0 rate 100000Kbit ceil 100000Kbit burst 15337b cburst 15337b
+ Sent 29400 bytes 300 pkt (dropped 0, overlimits 0 requeues 0)
+--
+*/
+func getInterfaceMonitorRules(direct direction, qosRules *interfaceQosRules) map[string]*monitoringRule  {
+	name := qosRules.name
+	if direct == INGRESS {
+		name = qosRules.ifbName
+	}
+
+	bash := &utils.Bash{
+		Command: fmt.Sprintf("sudo tc -s class show dev %s | grep -A 1 'class htb'", name),
+		NoLog: true,
+	}
+	ret, stdout, _, _ := bash.RunWithReturn()
+	if (ret != 0 ){
+		return nil
+	}
+
+	lines := strings.Split(stdout, "\n")
+	var cnt, classId uint32
+	var byteCnt, pktCnt uint64
+	var vipIp string
+	var vipOk bool
+	monitorRules := make(map[string]*monitoringRule)
+
+	for _, line := range lines {
+		switch cnt {
+		case 0:
+			strs := strings.Split(line, " ")
+			classStr := strings.Split(strs[2], ":")
+			id, _ := strconv.ParseUint(strings.Trim(classStr[1], " "), 10, 64)
+			classId = (uint32)(id)
+			/* in case class delete fail, just skip lines for this classid */
+			vipIp, vipOk = qosRules.classIdMap[classId]
+			cnt++;
+			break;
+		case 1:
+			if (vipOk) {
+				strs := strings.Split(strings.Trim(line, " "), " ")
+				byteCnt, _ = strconv.ParseUint(strings.Trim(strs[1], " "), 10, 64)
+				pktCnt, _ = strconv.ParseUint(strings.Trim(strs[3], " "), 10, 64)
+			}
+			cnt++;
+			break;
+		case 2:
+			if (vipOk) {
+				if qosRule, ok := qosRules.rules[vipIp]; ok {
+					vipUuid := qosRule.vipUuid
+					if _, ok := monitorRules[vipUuid]; !ok {
+						monitorRules[vipUuid] = &monitoringRule{}
+					}
+					monitorRule := monitorRules[vipUuid]
+					monitorRule.pkts += pktCnt
+					monitorRule.bytes += byteCnt
+					monitorRule.vipUuid = vipUuid
+
+					if (direct == INGRESS) {
+						monitorRule.destination = qosRules.rules[vipIp].vip
+					} else {
+						monitorRule.source = qosRules.rules[vipIp].vip
+					}
+				}
+			}
+			cnt = 0
+			classId = 0
+			vipOk = false
+			byteCnt = 0
+			pktCnt = 0
+			break;
+		default:
+			cnt = 0
+			classId = 0
+			vipOk = false
+			byteCnt = 0
+			pktCnt = 0
+			break;
+		}
+	}
+
+	return monitorRules
+}
+
+func getMonitoringRules(direct direction) map[string]*monitoringRule {
+	monitoringRules := make(map[string]*monitoringRule)
+	for _, biRules := range totalQosRules {
+		rules := getInterfaceMonitorRules(direct, biRules[direct])
+		for k, v := range rules {
+			monitoringRules[k] = v
+		}
+	}
+
+	return monitoringRules
 }
 
 func VipEntryPoint()  {

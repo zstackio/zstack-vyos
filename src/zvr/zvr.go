@@ -23,6 +23,7 @@ func loadPlugins()  {
 	plugin.ConfigureNicEntryPoint()
 	plugin.RouteEntryPoint()
 	plugin.ZsnEntryPoint()
+	plugin.PrometheusEntryPoint()
 }
 
 var options server.Options
