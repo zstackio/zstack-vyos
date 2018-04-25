@@ -80,7 +80,6 @@ func cleanupOldEip(tree *server.VyosConfigTree, eip eipInfo) {
 
 func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	des := makeEipDescription(eip)
-	priDes := makeEipDescriptionForPrivateMac(eip)
 	nicname, err := utils.GetNicNameByIp(eip.VipIp)
 	if (nicname == "" || err != nil) && eip.PublicMac != "" {
 		var nicname string
@@ -107,15 +106,6 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 		tree.SetSnat(
 			fmt.Sprintf("description %v", des),
 			fmt.Sprintf("outbound-interface %v", nicname),
-			fmt.Sprintf("source address %v", eip.GuestIp),
-			fmt.Sprintf("translation address %v", eip.VipIp),
-		)
-	}
-
-	if r := tree.FindSnatRuleDescription(priDes); r == nil {
-		tree.SetSnat(
-			fmt.Sprintf("description %v", priDes),
-			fmt.Sprintf("outbound-interface %v", prinicname),
 			fmt.Sprintf("source address %v", eip.GuestIp),
 			fmt.Sprintf("translation address %v", eip.VipIp),
 		)
