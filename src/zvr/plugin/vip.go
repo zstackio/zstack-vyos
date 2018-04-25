@@ -464,8 +464,13 @@ func (rules *interfaceQosRules) InterfaceQosRuleAddRule(rule qosRule) interface{
 		log.Debugf("AddRuleToInterface delete existed rule for ip %s port %d", rule.ip, rule.port)
 		rules.InterfaceQosRuleDelRule(*oldRule)
 
-		/* if this rule is the only rule for the vip, we need re-init the data structure */
+		/* if this rule of this ip is the only rule for the vip*/
 		if _, vipOk := rules.rules[rule.ip]; vipOk == false {
+                        /* all rules of interface has been deleted */
+                        if (len(rules.rules) == 0 ) {
+                                rules.InterfaceQosRuleInit(rules.direct)
+                        }
+
 			log.Debugf("AddRuleToInterface create map for ip %s", rule.ip)
 			if (len(rules.rules) >= TC_MAX_FILTER) {
 				utils.PanicOnError(fmt.Errorf("VipQos Reach the max number %d of interface %s ifbname %s",
@@ -751,13 +756,29 @@ func deleteVipQos(ctx *server.CommandContext) interface{} {
 	cmd := &deleteVipQosCmd{}
 	ctx.GetCommand(cmd)
 
+        /* port 0 will not be deleted, but changed bandwidth to MAX_BINDWIDTH */
 	sort.Sort(vipQosSettingsArray(cmd.Settings))
 	for _, setting := range cmd.Settings {
+		if (setting.Port == 0) {
+                        continue
+                }
+
 		publicInterface, error := utils.GetNicNameByIp(setting.Vip);utils.PanicOnError(error)
 		qosRule := qosRule{ip: setting.Vip, port: uint16(setting.Port), vipUuid: setting.VipUuid}
 		delQosRule(publicInterface, INGRESS, qosRule)
 		delQosRule(publicInterface, EGRESS, qosRule)
 	}
+
+        for _, setting := range cmd.Settings {
+                if (setting.Port != 0) {
+                        continue
+                }
+
+                publicInterface, error := utils.GetNicNameByIp(setting.Vip);utils.PanicOnError(error)
+                qosRule := qosRule{ip: setting.Vip, port: 0, bandwidth: MAX_BINDWIDTH, vipUuid: setting.VipUuid}
+                addQosRule(publicInterface, INGRESS, qosRule)
+                addQosRule(publicInterface, EGRESS, qosRule)
+        }
 
 	return nil
 }
