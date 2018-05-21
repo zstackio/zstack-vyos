@@ -245,3 +245,31 @@ func CheckMgmtCidrContainsIp(ip string, mgmtNic map[string]interface{}) bool {
 
 	return mgmtNet.Contains(net.ParseIP(ip))
 }
+
+func GetPrivteInterface() []string  {
+	bash := Bash{
+		Command: fmt.Sprintf("ip link | grep -B 2 'category:Private' | grep '<BROADCAST,MULTICAST' | awk -F ':' '{print $2}'"),
+	}
+	ret, o, _, err := bash.RunWithReturn()
+	if err != nil {
+		return nil
+	}
+	if ret != 0 {
+		return nil
+	}
+
+	lines := strings.Split(o, "\n")
+	var nics []string
+	for _, name := range lines {
+		name = strings.Trim(name, " ")
+		if (name != "") {
+			nics = append(nics, name)
+		}
+	}
+
+	if len(nics) == 0 {
+		return nil
+	}
+
+	return nics
+}
