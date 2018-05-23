@@ -13,6 +13,9 @@ const (
 	INIT_PATH = "/init"
 	PING_PATH = "/ping"
 	ECHO_PATH = "/echo"
+	/* please follow following rule to change the version:
+	  http://confluence.zstack.io/pages/viewpage.action?pageId=34014178 */
+	VERSION_FILE_PATH = "/home/vyos/zvr/version"
 )
 
 type InitConfig struct {
@@ -22,6 +25,7 @@ type InitConfig struct {
 
 type pingRsp struct {
 	Uuid string `json:"uuid"`
+	Version string `json:"version"`
 }
 
 var (
@@ -36,7 +40,12 @@ func initHandler(ctx *server.CommandContext) interface{} {
 
 func pingHandler(ctx *server.CommandContext) interface{} {
 	addRouteIfCallbackIpChanged()
-	return pingRsp{ Uuid: initConfig.Uuid }
+	version, err := ioutil.ReadFile(VERSION_FILE_PATH)
+	if err != nil {
+		version = []byte("")
+	}
+
+	return pingRsp{ Uuid: initConfig.Uuid, Version: string(version) }
 }
 
 func echoHandler(ctx *server.CommandContext) interface{} {
