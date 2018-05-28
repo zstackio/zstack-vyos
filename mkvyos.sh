@@ -68,6 +68,7 @@ ZVRSCRIPT=$tmpdir/zstack-virtualrouteragent
 HAPROXY=$tmpdir/haproxy
 SBIN_DIR=/opt/vyatta/sbin
 VERSION=`date +%Y%m%d`
+ZVR_VERSION=$tmpdir/version
 
 guestfish <<_EOF_
 add $imgfile
@@ -78,6 +79,7 @@ upload $ZVR $SBIN_DIR/zvr
 upload $ZVRBOOT $SBIN_DIR/zvrboot
 upload $ZVRSCRIPT /etc/init.d/zstack-virtualrouteragent
 upload $HAPROXY $SBIN_DIR/haproxy
+upload ZVR_VERSION /home/vyos/zvr/version
 upload -<<END /opt/vyatta/etc/config/scripts/vyatta-postconfig-bootup.script
 #!/bin/bash
 chmod +x $SBIN_DIR/zvrboot
