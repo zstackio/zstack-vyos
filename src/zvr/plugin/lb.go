@@ -173,7 +173,7 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 	time.Sleep(time.Duration(1) * time.Second)
 
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -f %s -p %s -sf $(cat %s)", confPath, pidPath, pidPath),
+		Command: fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -N %s -f %s -p %s -sf $(cat %s)", m["MaxConnection"], confPath, pidPath, pidPath),
 	}
 
 	if ret, _, _, err := bash.RunWithReturn(); ret != 0 || err != nil {
