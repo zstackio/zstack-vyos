@@ -12,7 +12,7 @@ import (
 	"io/ioutil"
 	"time"
 	"os"
-	//"github.com/Sirupsen/logrus"
+	//logger "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -87,6 +87,9 @@ listen {{.ListenerUuid}}
 mode http
 {{else}}
 mode {{.Mode}}
+{{end}}
+{{if ne .Mode "tcp"}}
+option forwardfor
 {{end}}
 timeout client {{.ConnectionIdleTimeout}}s
 timeout server {{.ConnectionIdleTimeout}}s
