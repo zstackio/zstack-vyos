@@ -119,8 +119,11 @@ func GetNicNameByMac(mac string) (string, error) {
 }
 
 func GetNicNameByIp(ip string) (string, error) {
+	// Modify IPv4 regex pattern from "a.b.c.d" to "a\.b\.c\.d" to avoid matching the line
+	// that contains IPv6 address, of which pattern is like 2001:db8::a:b:c:d
+	ipv4regex := strings.Replace(ip, ".", `\.`, -1)
 	bash := Bash{
-		Command: fmt.Sprintf("ip addr | grep -w %s", ip),
+		Command: fmt.Sprintf("ip addr | grep -w '%s'", ipv4regex),
 	}
 	ret, o, _, err := bash.RunWithReturn()
 	if err != nil {
