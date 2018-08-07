@@ -12,7 +12,10 @@ import (
 	"io/ioutil"
 	"time"
 	"os"
-	//logger "github.com/Sirupsen/logrus"
+	"regexp"
+	logger "github.com/Sirupsen/logrus"
+	prom "github.com/prometheus/client_golang/prometheus"
+	haproxy "github.com/bcicen/go-haproxy"
 )
 
 const (
@@ -23,8 +26,11 @@ const (
 	LB_ROOT_DIR = "/home/vyos/zvr/lb/"
 	LB_CONF_DIR = "/home/vyos/zvr/lb/conf/"
 	CERTIFICATE_ROOT_DIR = "/home/vyos/zvr/certificate/"
+	LB_SOCKET_DIR = "/home/vyos/zvr/lb/sock/"
 
 	LB_MODE_HTTPS = "https"
+
+	LB_BACKEND_PREFIX_REG = "^nic-"
 )
 
 type lbInfo struct {
@@ -56,6 +62,10 @@ func makeCertificatePath(certificateUuid string) string {
 	return filepath.Join(CERTIFICATE_ROOT_DIR, fmt.Sprintf("certificate-%s.pem", certificateUuid))
 }
 
+func makeLbSocketPath(lb lbInfo) string {
+	return filepath.Join(LB_SOCKET_DIR, fmt.Sprintf("%s.sock", lb.ListenerUuid))
+}
+
 type refreshLbCmd struct {
 	Lbs []lbInfo `json:"lbs"`
 }
@@ -75,6 +85,7 @@ log 127.0.0.1 local1
 user vyos
 group users
 daemon
+stats socket {{.SocketPath}} user vyos
 
 defaults
 log global
@@ -125,6 +136,7 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 		}
 	}
 	m["CertificatePath"] = makeCertificatePath(lb.CertificateUuid)
+	m["SocketPath"] = makeLbSocketPath(lb)
 
 	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
 
@@ -248,6 +260,7 @@ func refreshLb(ctx *server.CommandContext) interface{} {
 func delLb(lb lbInfo) {
 	pidPath := makeLbPidFilePath(lb)
 	confPath := makeLbConfFilePath(lb)
+	sockPath := makeLbSocketPath(lb)
 
 	pid, err := utils.FindPIDByPS(pidPath, confPath)
 	if pid > 0 {
@@ -267,6 +280,9 @@ func delLb(lb lbInfo) {
 	}
 	if e, _ := utils.PathExists(confPath); e {
 		err = os.Remove(confPath); utils.LogError(err)
+	}
+	if e, _ := utils.PathExists(sockPath); e {
+		err = os.Remove(sockPath); utils.LogError(err)
 	}
 }
 
@@ -299,6 +315,143 @@ func createCertificate(ctx *server.CommandContext) interface{} {
 	err = ioutil.WriteFile(certificatePath, []byte(certificate.Certificate), 0755); utils.PanicOnError(err)
 
 	return nil
+}
+
+func init() {
+	os.Mkdir(LB_ROOT_DIR, os.ModePerm)
+	os.Mkdir(LB_SOCKET_DIR, os.ModePerm | os.ModeSocket)
+	RegisterPrometheusCollector(NewLbPrometheusCollector())
+}
+
+type loadBalancerCollector struct {
+	statusEntry *prom.Desc
+	inByteEntry *prom.Desc
+	outByteEntry *prom.Desc
+	curSessionNumEntry *prom.Desc
+}
+
+const (
+	LB_LISTENER_UUID = "ListenerUuid"
+	LB_LISTENER_BACKEND_IP = "NicIpAddress"
+)
+
+func NewLbPrometheusCollector() MetricCollector {
+	return &loadBalancerCollector{
+		statusEntry: prom.NewDesc(
+			"zstack_lb_status",
+			"Backend server health status",
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+		),
+		curSessionNumEntry: prom.NewDesc(
+			"zstack_lb_cur_session_num",
+			"Backend server active session number",
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+		),
+		inByteEntry: prom.NewDesc(
+			"zstack_lb_in_bytes",
+			"Backend server traffic in bytes",
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+		),
+		outByteEntry: prom.NewDesc(
+			"zstack_lb_out_bytes",
+			"Backend server traffic in bytes",
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+		),
+
+		//vipUUIds: make(map[string]string),
+	}
+}
+
+func (c *loadBalancerCollector) Describe(ch chan<- *prom.Desc) error {
+	ch <- c.statusEntry
+	ch <- c.curSessionNumEntry
+	ch <- c.inByteEntry
+	ch <- c.outByteEntry
+	return nil
+}
+
+func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
+	counters, num := getHaproxyCounter()
+	for i := 0; i < num; i++ {
+		cnt := counters[i]
+		ch <- prom.MustNewConstMetric(c.statusEntry, prom.GaugeValue, float64(cnt.status), cnt.listenerUuid, cnt.ip)
+		ch <- prom.MustNewConstMetric(c.inByteEntry, prom.GaugeValue, float64(cnt.bytesIn), cnt.listenerUuid, cnt.ip)
+		ch <- prom.MustNewConstMetric(c.outByteEntry, prom.GaugeValue, float64(cnt.bytesOut), cnt.listenerUuid, cnt.ip)
+		ch <- prom.MustNewConstMetric(c.curSessionNumEntry, prom.GaugeValue, float64(cnt.sessionNumber), cnt.listenerUuid, cnt.ip)
+	}
+
+	return nil
+}
+
+type haproxyCounter struct {
+	listenerUuid    string
+	ip              string
+	status          uint64
+	bytesIn         uint64
+	bytesOut        uint64
+	sessionNumber   uint64
+}
+
+func getLbListenerUuidFromFileName(path string) string {
+	filename := filepath.Base(path)
+	res := strings.Split(filename, ".")
+	return res[0]
+}
+
+func getIpFromLbStat(name string)  string {
+	res := strings.Split(name, "-")
+	return res[1]
+}
+
+func statusFormat(status string) int  {
+	switch status {
+	case "UP":
+		return 1
+	/*case "DOWN":
+		return 0*/
+	default:
+		return 0
+	}
+}
+
+func getHaproxyCounter() ([]*haproxyCounter, int) {
+	var counters []*haproxyCounter
+	num := 0
+	files, err := ioutil.ReadDir(LB_SOCKET_DIR)
+	if err != nil {
+		return nil, 0
+	}
+
+	for _, file := range files {
+		client := &haproxy.HAProxyClient{
+			Addr: "unix://" + LB_SOCKET_DIR + file.Name(),
+		}
+
+		listenerUuid := getLbListenerUuidFromFileName(file.Name())
+		stats, err := client.Stats()
+		if (err != nil) {
+			logger.Infof("client.Stats failed %v", err)
+			continue
+		}
+
+		for _, stat := range stats {
+			if m, err := regexp.MatchString(LB_BACKEND_PREFIX_REG, stat.SvName); err != nil || !m  {
+				continue
+			}
+
+			counter := haproxyCounter{}
+			counter.listenerUuid = listenerUuid
+			counter.ip = getIpFromLbStat(stat.SvName)
+			counter.status = (uint64)(statusFormat(stat.Status))
+			counter.bytesIn = stat.Bin
+			counter.bytesOut = stat.Bout
+			counter.sessionNumber = stat.Scur
+			counters = append(counters, &counter)
+			num++
+		}
+	}
+
+	return counters, num
 }
 
 func LbEntryPoint() {
