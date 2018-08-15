@@ -24,4 +24,15 @@ fi
 chown vyos:users $TARGET_HAPROXY
 chmod +x $TARGET_HAPROXY
 
+TARGET_GOBETWEEN=/opt/vyatta/sbin/gobetween
+diff gobetween $TARGET_GOBETWEEN
+if [ $? -ne 0 ]; then
+    yes | cp gobetween $TARGET_GOBETWEEN
+    cp healthcheck.sh /usr/share/
+fi
+chown vyos:users $TARGET_GOBETWEEN
+chmod +x $TARGET_GOBETWEEN
+chown vyos:users usr/share/healthcheck.sh
+chmod +x usr/share/healthcheck.sh
+
 exit 0

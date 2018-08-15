@@ -12,7 +12,7 @@ import (
 	"io/ioutil"
 	"time"
 	"os"
-	//logger "github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -68,7 +68,104 @@ func makeLbFirewallRuleDescription(lb lbInfo) string {
 	return fmt.Sprintf("LB-%v-%v", lb.LbUuid, lb.ListenerUuid)
 }
 
-func setLb(lb lbInfo) {
+func conLbudp(m map[string]interface{},lb lbInfo) (retCode int, err error){
+	conf := `[logging]
+level = "info"   # "debug" | "info" | "warn" | "error"
+output = "/var/log/gobetwwen_{{.ListenerUuid}}.log" # "stdout" | "stderr" | "/path/to/gobetween.log"
+
+[servers.{{.ListenerUuid}}]
+bind = "{{.Vip}}:{{.LoadBalancerPort}}"
+protocol = "{{.Mode}}"
+{{if eq .BalancerAlgorithm "source"}}
+balance = "iphash"
+{{else}}
+balance = "{{.BalancerAlgorithm}}"
+{{end}}
+max_connections = {{.MaxConnection}}
+client_idle_timeout = "{{.ConnectionIdleTimeout}}s"
+backend_idle_timeout = "{{.ConnectionIdleTimeout}}s"
+backend_connection_timeout = "60s"
+
+    [servers.{{.ListenerUuid}}.discovery]
+    kind = "static"
+    failpolicy = "keeplast"
+    static_list = [
+	{{ range $index, $ip := .NicIps }}
+      "{{$ip}}:{{$.CheckPort}}",
+    {{ end }}
+    ]
+
+    [servers.{{.ListenerUuid}}.healthcheck]
+    fails = {{$.UnhealthyThreshold}}
+    passes = {{$.HealthyThreshold}}
+    interval = "{{$.HealthCheckInterval}}s"
+    timeout="{{$.HealthCheckInterval}}s"
+    kind = "exec"
+    exec_command = "/usr/share/healthcheck.sh"  # (required) command to execute
+    exec_expected_positive_output = "success"           # (required) expected output of command in case of success
+    exec_expected_negative_output = "fail"
+`
+
+	var buf bytes.Buffer
+	tmpl, err := template.New("conf").Parse(conf); utils.PanicOnError(err)
+	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
+
+	pidPath := makeLbPidFilePath(lb)
+	err = utils.MkdirForFile(pidPath, 0755); utils.PanicOnError(err)
+	confPath := makeLbConfFilePath(lb)
+	err = utils.MkdirForFile(confPath, 0755); utils.PanicOnError(err)
+	err = ioutil.WriteFile(confPath, buf.Bytes(), 0755); utils.PanicOnError(err)
+	bakPath := fmt.Sprintf("%s.md5", confPath)
+
+	pid, err := utils.FindFirstPIDByPS( confPath)
+	if pid > 0 {
+		log.Debugf("lb %s pid: %v", confPath, pid)
+		confbakChecksum := ""
+		confChecksum := ""
+		if e, _ := utils.PathExists(bakPath); e {
+
+			bash := utils.Bash{
+				//Command: fmt.Sprintf("sudo /opt/vyatta/sbin/gobetween -c %s&echo $! >%s", confPath, pidPath),
+				Command: fmt.Sprintf("cat %s", bakPath),
+			}
+			ret, out, _, err := bash.RunWithReturn();bash.PanicIfError()
+			if ret != 0 || err != nil {
+				return ret, err
+			}
+			confbakChecksum = out
+		}
+
+		bash := utils.Bash{
+			//Command: fmt.Sprintf("sudo /opt/vyatta/sbin/gobetween -c %s&echo $! >%s", confPath, pidPath),
+			Command: fmt.Sprintf("md5sum %s |awk '{print $1}'", confPath),
+		}
+
+		ret, confChecksum, _, err := bash.RunWithReturn();bash.PanicIfError()
+		if  ret != 0 || err != nil {
+			return ret, err
+		}
+
+		log.Debugf("lb %s confChecksum: %v, confbakChecksum: %v", confPath, confChecksum, confbakChecksum)
+
+		if confChecksum != confbakChecksum {
+			err := utils.KillProcess(pid); utils.PanicOnError(err)
+		} else {
+			return 0, nil
+		}
+	}
+
+	bash := utils.Bash{
+		//Command: fmt.Sprintf("sudo /opt/vyatta/sbin/gobetween -c %s&echo $! >%s", confPath, pidPath),
+		Command: fmt.Sprintf("sudo /opt/vyatta/sbin/gobetween -c %s >/dev/null 2>&1&echo $! >%s &&  " +
+			"md5sum %s |awk '{print $1}' >%s", confPath, pidPath, confPath, bakPath),
+	}
+
+	ret, _, _, err := bash.RunWithReturn();bash.PanicIfError()
+
+	return ret, err
+}
+
+func conLbtcp(m map[string]interface{},lb lbInfo) (retCode int, err error){
 	conf := `global
 maxconn {{.MaxConnection}}
 log 127.0.0.1 local1
@@ -104,8 +201,35 @@ bind {{.Vip}}:{{.LoadBalancerPort}}
 server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
 {{ end }}`
 
-	tmpl, err := template.New("conf").Parse(conf); utils.PanicOnError(err)
 	var buf bytes.Buffer
+	tmpl, err := template.New("conf").Parse(conf); utils.PanicOnError(err)
+	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
+
+	pidPath := makeLbPidFilePath(lb)
+	err = utils.MkdirForFile(pidPath, 0755); utils.PanicOnError(err)
+	confPath := makeLbConfFilePath(lb)
+	err = utils.MkdirForFile(confPath, 0755); utils.PanicOnError(err)
+	err = ioutil.WriteFile(confPath, buf.Bytes(), 0755); utils.PanicOnError(err)
+	bash := utils.Bash{
+		Command: fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -N %s -f %s -p %s -sf $(cat %s)", m["MaxConnection"], confPath, pidPath, pidPath),
+	}
+
+	ret, _, _, err := bash.RunWithReturn();bash.PanicIfError()
+
+	return ret, err
+}
+
+type CON_FUNC func( map[string]interface{}, lbInfo) (int, error)
+
+func setLb(lb lbInfo) {
+	//var conFun CON_FUNC
+	conFun := conLbtcp
+	prot :="tcp"
+
+	if lb.Mode == "udp" {
+		prot = "udp"
+		conFun = conLbudp
+	}
 	m := structs.Map(lb)
 	for _, param := range lb.Parameters {
 		kv := strings.SplitN(param, "::", 2)
@@ -126,37 +250,30 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 	}
 	m["CertificatePath"] = makeCertificatePath(lb.CertificateUuid)
 
-	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
-
-	pidPath := makeLbPidFilePath(lb)
-	err = utils.MkdirForFile(pidPath, 0755); utils.PanicOnError(err)
-	confPath := makeLbConfFilePath(lb)
-	err = utils.MkdirForFile(confPath, 0755); utils.PanicOnError(err)
-	err = ioutil.WriteFile(confPath, buf.Bytes(), 0755); utils.PanicOnError(err)
-
 	// drop SYN packets to make clients to resend
 	// this is for restarting LB without losing packets
 	nicname, err := utils.GetNicNameByIp(lb.Vip); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
 	dropRuleDes := fmt.Sprintf("lb-%v-%s-drop", lb.LbUuid, lb.ListenerUuid)
-	if r := tree.FindFirewallRuleByDescription(nicname, "local", dropRuleDes); r == nil {
-		tree.SetFirewallOnInterface(nicname, "local",
-			fmt.Sprintf("description %v", dropRuleDes),
-			fmt.Sprintf("destination address %v", lb.Vip),
-			fmt.Sprintf("destination port %v", lb.LoadBalancerPort),
-			"protocol tcp",
-			"tcp flags SYN",
-			"action drop",
-		)
+	if prot =="tcp" {
+		if r := tree.FindFirewallRuleByDescription(nicname, "local", dropRuleDes); r == nil {
+			tree.SetFirewallOnInterface(nicname, "local",
+				fmt.Sprintf("description %v", dropRuleDes),
+				fmt.Sprintf("destination address %v", lb.Vip),
+				fmt.Sprintf("destination port %v", lb.LoadBalancerPort),
+				"protocol tcp",
+				"tcp flags SYN",
+				"action drop",
+			)
+		}
 	}
-
 	des := makeLbFirewallRuleDescription(lb)
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
 		tree.SetFirewallOnInterface(nicname, "local",
 			fmt.Sprintf("description %v", des),
 			fmt.Sprintf("destination address %v", lb.Vip),
 			fmt.Sprintf("destination port %v", lb.LoadBalancerPort),
-			"protocol tcp",
+			fmt.Sprintf("protocol %v",prot),
 			"action accept",
 		)
 	}
@@ -166,20 +283,17 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 
 	defer func() {
 		// delete the DROP SYNC rule on exit
-		tree := server.NewParserFromShowConfiguration().Tree
-		if r := tree.FindFirewallRuleByDescription(nicname, "local", dropRuleDes); r != nil {
-			r.Delete()
+		if prot =="tcp" {
+			tree := server.NewParserFromShowConfiguration().Tree
+			if r := tree.FindFirewallRuleByDescription(nicname, "local", dropRuleDes); r != nil {
+				r.Delete()
+			}
+			tree.Apply(false)
 		}
-		tree.Apply(false)
 	}()
 
 	time.Sleep(time.Duration(1) * time.Second)
-
-	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -N %s -f %s -p %s -sf $(cat %s)", m["MaxConnection"], confPath, pidPath, pidPath),
-	}
-
-	if ret, _, _, err := bash.RunWithReturn(); ret != 0 || err != nil {
+	if  ret,err := conFun(m, lb); ret != 0 || err != nil {
 		// fail, cleanup the firewall rule
 		tree = server.NewParserFromShowConfiguration().Tree
 		if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r != nil {
@@ -187,8 +301,6 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 		}
 		tree.Apply(false)
 	}
-
-	bash.PanicIfError()
 }
 
 func getCertificateList() []string {
@@ -249,7 +361,8 @@ func delLb(lb lbInfo) {
 	pidPath := makeLbPidFilePath(lb)
 	confPath := makeLbConfFilePath(lb)
 
-	pid, err := utils.FindPIDByPS(pidPath, confPath)
+	//miao zhanyong the udp lb configured by gobetween, there is no pid configure in the shell cmd line
+	pid, err := utils.FindFirstPIDByPS( confPath)
 	if pid > 0 {
 		err := utils.KillProcess(pid); utils.PanicOnError(err)
 	}
