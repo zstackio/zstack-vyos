@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func FindPIDByPS(cmdline...string) (int, error) {
+func FindFirstPIDByPS(cmdline...string) (int, error) {
 	Assert(cmdline != nil, "cmdline must have one parameter at least")
 
 	cmds := []string {"ps aux"}
@@ -15,6 +15,7 @@ func FindPIDByPS(cmdline...string) (int, error) {
 		cmds = append(cmds, fmt.Sprintf("grep '%s'", c))
 	}
 	cmds = append(cmds, "grep -v grep")
+	cmds = append(cmds, "head -n1")
 	cmds = append(cmds, "awk '{print $2}'")
 
 	b := Bash{
@@ -40,7 +41,7 @@ func KillProcess(pid int) error {
 
 func KillProcess1(pid int, waitTime uint) error {
 	b := Bash{
-		Command: fmt.Sprintf("kill %v", pid),
+		Command: fmt.Sprintf("sudo kill %v", pid),
 	}
 	b.Run()
 
