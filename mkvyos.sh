@@ -79,7 +79,6 @@ upload $ZVR $SBIN_DIR/zvr
 upload $ZVRBOOT $SBIN_DIR/zvrboot
 upload $ZVRSCRIPT /etc/init.d/zstack-virtualrouteragent
 upload $HAPROXY $SBIN_DIR/haproxy
-upload ZVR_VERSION /home/vyos/zvr/version
 upload -<<END /opt/vyatta/etc/config/scripts/vyatta-postconfig-bootup.script
 #!/bin/bash
 chmod +x $SBIN_DIR/zvrboot
@@ -93,6 +92,7 @@ chown vyos:users $SBIN_DIR/haproxy
 $SBIN_DIR/zvrboot >/home/vyos/zvr/zvrboot.log 2>&1 < /dev/null &
 exit 0
 END
+upload $ZVR_VERSION /home/vyos/zvr/version
 download /boot/grub/grub.cfg /tmp/grub.cfg
 ! sed -e 's/^set[[:space:]]\+timeout[[:space:]]*=[[:space:]]*[[:digit:]]\+/set timeout=0/g' -e '/^echo.*Grub menu/,/^fi$/d' /tmp/grub.cfg > /tmp/grub.cfg.new
 upload /tmp/grub.cfg.new /boot/grub/grub.cfg
