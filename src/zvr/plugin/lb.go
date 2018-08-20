@@ -284,6 +284,12 @@ func delLb(lb lbInfo) {
 	if e, _ := utils.PathExists(sockPath); e {
 		err = os.Remove(sockPath); utils.LogError(err)
 	}
+
+	proto := "udp"
+	if lb.Mode != "udp" {
+		proto = "tcp"
+	}
+	utils.CleanConnTrackConnection(lb.Vip, proto, lb.LoadBalancerPort)
 }
 
 func deleteLb(ctx *server.CommandContext) interface{} {

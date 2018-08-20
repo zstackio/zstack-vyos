@@ -208,6 +208,8 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 	if r := tree.FindFirewallRuleByDescription(prinicname, "in", des); r != nil {
 		r.Delete()
 	}
+
+	utils.CleanConnTrackConnection(eip.VipIp, "", 0)
 }
 
 func createEip(ctx *server.CommandContext) interface{} {
