@@ -14,7 +14,8 @@ if [ "$line" != "0"  ];then
   exit 0
 fi
 
-if [ `/bin/nc -unvz -w 1 $1 $2 2>&1 | egrep 'open' &> /dev/null` ]; then
+ret=`/bin/nc -unvz -w 1 $1 $2 2>&1 | egrep 'open'& > /dev/null`
+if [ $? -ne 0 ] || [ "$ret" = "" ]; then
   echo -n "fail"
 else
   echo -n "success"
