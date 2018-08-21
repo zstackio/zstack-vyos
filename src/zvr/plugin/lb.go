@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"io/ioutil"
-	//"time"
+	"strconv"
 	"os"
 	"sort"
 	log "github.com/Sirupsen/logrus"
@@ -72,16 +72,64 @@ type GBListener struct {
 	confPath string
 	pidPath	string
 	firewallDes string
+	apiPort string // restapi binding port range from 50000-60000
 }
 
-func GetListener(lb lbInfo) Listener {
+func getGBApiPort(confPath string, pidPath string) (port string) {
+	bash := utils.Bash{
+		Command: fmt.Sprintf("sudo /bin/netstat -tnlp"),
+	}
+
+	if ret, out, _, err := bash.RunWithReturn(); ret != 0 || err != nil {
+		bash.PanicIfError()
+	} else {
+		port =""
+		pid, _ := utils.FindFirstPIDByPSExtern(true, confPath)
+		if pid > 0 {
+			//get current port used
+			kv := strings.SplitN(out, "\n", -1)
+			for start := 50000; start < 60000; start++ {
+				port = strconv.Itoa(start)
+				//find the record ":port * pid/gobetween"
+				if strings.Contains(out, ":" + port) {
+					for _, str := range kv {
+						if strings.Contains(str, ":" + port) && strings.Contains(str, strconv.Itoa(pid) + "/gobetween") {
+							log.Debugf("lb %s pid: %v api port: %v ", confPath, pid, port)
+							return port
+						}
+					}
+				}
+
+			}
+			log.Debugf("%v port&%d not found in \n %v\n", pidPath, pid, out)
+		}
+
+		for start := 50000; start < 60000; start++ {
+			if !strings.Contains(out, ":" + strconv.Itoa(start)) {
+				port = strconv.Itoa(start)
+				log.Debugf("lb %s pid: %v api port: %v ", confPath, pid, port)
+				break
+			}
+		}
+
+	}
+
+	return port
+}
+
+func getListener(lb lbInfo) Listener {
 	pidPath := makeLbPidFilePath(lb)
 	confPath := makeLbConfFilePath(lb)
 	des := makeLbFirewallRuleDescription(lb)
 
 	switch lb.Mode {
 	case "udp":
-		return &GBListener{lb:lb, confPath: confPath, pidPath:pidPath,  firewallDes:des}
+		port := getGBApiPort(confPath, pidPath)
+		if port == "" {
+			log.Errorf("there is no free port for rest api for listener: %v \n", lb.ListenerUuid)
+			return nil
+		}
+		return &GBListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, apiPort:port}
 	case "tcp", "https", "http":
 		return &HaproxyListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des}
 	default:
@@ -289,8 +337,11 @@ func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error
 
 
 func (this *GBListener) createListenerServiceConfigure(lb lbInfo)  (err error) {
-		conf := `[logging]
-level = "info"   # "debug" | "info" | "warn" | "error"
+		conf := `[api]
+enabled = true  # true | false
+bind = ":{{.ApiPort}}"  # bind host:port
+[logging]
+level = "debug"   # "debug" | "info" | "warn" | "error"
 output = "./zvr/lb/gobetwwen_{{.ListenerUuid}}.log" # "stdout" | "stderr" | "/path/to/gobetween.log"
 
 [servers.{{.ListenerUuid}}]
@@ -305,6 +356,10 @@ max_connections = {{.MaxConnection}}
 client_idle_timeout = "{{.ConnectionIdleTimeout}}s"
 backend_idle_timeout = "{{.ConnectionIdleTimeout}}s"
 backend_connection_timeout = "60s"
+[servers.{{.ListenerUuid}}.udp] # (optional)
+max_requests  = {{.MaxConnection}}     # (optional) if > 0 accepts no more requests than max_requests and closes session (since 0.5.0)
+max_responses = {{.MaxConnection}}    # (required) if > 0 accepts no more responses that max_responses from backend and closes session (will be optional since 0.5.0)
+
 
     [servers.{{.ListenerUuid}}.discovery]
     kind = "static"
@@ -331,7 +386,7 @@ backend_connection_timeout = "60s"
 
 	tmpl, err := template.New("conf").Parse(conf); utils.PanicOnError(err)
 	m, err = parseListenerPrameter(lb);utils.PanicOnError(err)
-
+	m["ApiPort"] = this.apiPort
 	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
 	err = utils.MkdirForFile(this.pidPath, 0755); utils.PanicOnError(err)
 	err = utils.MkdirForFile(this.confPath, 0755); utils.PanicOnError(err)
@@ -387,11 +442,19 @@ func (this *GBListener) rollbackPreActionListenerServiceStart() ( err error) {
 	return nil
 }
 func (this *GBListener) postActionListenerServiceStart() ( err error) {
-	// drop SYN packets to make clients to resend, this is for restarting LB without losing packets
 	nicname, err := utils.GetNicNameByIp(this.lb.Vip ); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
 
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r == nil {
+		/*for lb statistics with restful api*/
+		tree.SetFirewallOnInterface(nicname, "local",
+			fmt.Sprintf("description %v", this.firewallDes),
+			//fmt.Sprintf("destination address %v", this.lb.Vip),
+			fmt.Sprintf("destination port %v", this.apiPort),
+			fmt.Sprintf("protocol tcp"),
+			"action accept",
+		)
+
 		tree.SetFirewallOnInterface(nicname, "local",
 			fmt.Sprintf("description %v", this.firewallDes),
 			fmt.Sprintf("destination address %v", this.lb.Vip),
@@ -399,6 +462,7 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 			fmt.Sprintf("protocol udp"),
 			"action accept",
 		)
+
 		tree.AttachFirewallToInterface(nicname, "local")
 		tree.Apply(false)
 	}
@@ -428,8 +492,10 @@ func (this *GBListener) stopListenerService() ( err error) {
 func (this *GBListener) postActionListenerServiceStop() (ret int, err error) {
 	nicname, err := utils.GetNicNameByIp(this.lb.Vip); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
-	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r != nil {
+	r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes)
+	for r != nil{
 		r.Delete()
+		r = tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes)
 	}
 	tree.Apply(false)
 
@@ -474,7 +540,7 @@ func makeLbFirewallRuleDescription(lb lbInfo) string {
 }
 
 func setLb(lb lbInfo) {
-	listener := GetListener(lb)
+	listener := getListener(lb)
 	if  listener == nil {
 		return
 	}
@@ -561,7 +627,7 @@ func refreshLb(ctx *server.CommandContext) interface{} {
 }
 
 func delLb(lb lbInfo) {
-	listener := GetListener(lb)
+	listener := getListener(lb)
 	if  listener == nil {
 		return
 	}

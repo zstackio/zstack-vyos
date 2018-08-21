@@ -8,11 +8,18 @@ import (
 )
 
 func FindFirstPIDByPS(cmdline...string) (int, error) {
+	return FindFirstPIDByPSExtern(false, cmdline...)
+}
+
+func FindFirstPIDByPSExtern(non_sudo bool, cmdline...string) (int, error) {
 	Assert(cmdline != nil, "cmdline must have one parameter at least")
 
 	cmds := []string {"ps aux"}
 	for _, c := range cmdline {
 		cmds = append(cmds, fmt.Sprintf("grep '%s'", c))
+	}
+	if non_sudo {
+		cmds = append(cmds, "grep -v ' sudo '")
 	}
 	cmds = append(cmds, "grep -v grep")
 	cmds = append(cmds, "head -n1")
@@ -34,6 +41,7 @@ func FindFirstPIDByPS(cmdline...string) (int, error) {
 
 	return strconv.Atoi(o)
 }
+
 
 func KillProcess(pid int) error {
 	return KillProcess1(pid, 15)
