@@ -325,7 +325,9 @@ func createCertificate(ctx *server.CommandContext) interface{} {
 
 func init() {
 	os.Mkdir(LB_ROOT_DIR, os.ModePerm)
+	os.Mkdir(LB_CONF_DIR, os.ModePerm)
 	os.Mkdir(LB_SOCKET_DIR, os.ModePerm | os.ModeSocket)
+	enableLbLog()
 	RegisterPrometheusCollector(NewLbPrometheusCollector())
 }
 
@@ -458,6 +460,32 @@ func getHaproxyCounter() ([]*haproxyCounter, int) {
 	}
 
 	return counters, num
+}
+
+func enableLbLog() {
+	lb_log_file, err := ioutil.TempFile(LB_CONF_DIR, "rsyslog"); utils.PanicOnError(err)
+	conf := `$ModLoad imudp
+$UDPServerRun 514
+local1.*     /var/log/haproxy.log`
+	_, err = lb_log_file.Write([]byte(conf)); utils.PanicOnError(err)
+
+	lb_log_rotatoe_file, err := ioutil.TempFile(LB_CONF_DIR, "rotation"); utils.PanicOnError(err)
+	rotate_conf := `/var/log/haproxy.log {
+daily
+size 1024k
+rotate 20
+compress
+notifempty
+missingok
+}`
+	_, err = lb_log_rotatoe_file.Write([]byte(rotate_conf)); utils.PanicOnError(err)
+
+	bash := utils.Bash{
+		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/haproxy.conf && sudo mv %s /etc/logrotate.d/haproxy && sudo /etc/init.d/rsyslog restart",
+			lb_log_file.Name(), lb_log_rotatoe_file.Name()),
+	}
+	err = bash.Run();utils.PanicOnError(err)
+
 }
 
 func LbEntryPoint() {
