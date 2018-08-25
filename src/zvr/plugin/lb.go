@@ -101,14 +101,14 @@ func getGBApiPort(confPath string, pidPath string) (port string) {
 				if strings.Contains(out, ":" + port) {
 					for _, str := range kv {
 						if strings.Contains(str, ":" + port) && strings.Contains(str, strconv.Itoa(pid) + "/gobetween") {
-							log.Debugf("lb %s pid: %v api port: %v ", confPath, pid, port)
+							//log.Debugf("lb %s pid: %v api port: %v ", confPath, pid, port)
 							return port
 						}
 					}
 				}
 
 			}
-			log.Debugf("%v port&%d not found in \n %v\n", pidPath, pid, out)
+			//log.Debugf("%v port&%d not found in \n %v\n", pidPath, pid, out)
 		}
 
 		for start := 50000; start < 60000; start++ {
@@ -236,7 +236,7 @@ func (this *HaproxyListener) startListenerService() ( ret int, err error) {
 func (this *HaproxyListener) checkIfListenerServiceUpdate(origChecksum string, currChecksum string) ( bool, error) {
 	pid, err := utils.FindFirstPIDByPS( this.confPath, this.pidPath)
 	if pid > 0 {
-		log.Debugf("lb %s pid: %v orig: %v curr: %v", this.confPath, pid, origChecksum, currChecksum)
+		//log.Debugf("lb %s pid: %v orig: %v curr: %v", this.confPath, pid, origChecksum, currChecksum)
 		return strings.EqualFold(origChecksum, currChecksum) == false, nil
 	} else if (pid == -1) {
 		err = nil
@@ -316,7 +316,7 @@ func (this *HaproxyListener) preActionListenerServiceStop() (ret int, err error)
 func (this *HaproxyListener) stopListenerService() ( err error) {
 	//miao zhanyong the udp lb configured by gobetween, there is no pid configure in the shell cmd line
 	pid, err := utils.FindFirstPIDByPS(this.confPath, this.pidPath)
-	log.Debugf("lb %s pid: %v result:%v", this.confPath, pid, err)
+	//log.Debugf("lb %s pid: %v result:%v", this.confPath, pid, err)
 	if pid > 0 {
 		err = utils.KillProcess(pid); utils.PanicOnError(err)
 	} else if (pid == -1) {
@@ -354,7 +354,8 @@ enabled = true  # true | false
 bind = ":{{.ApiPort}}"  # bind host:port
 [logging]
 level = "debug"   # "debug" | "info" | "warn" | "error"
-output = "./zvr/lb/gobetwwen_{{.ListenerUuid}}.log" # "stdout" | "stderr" | "/path/to/gobetween.log"
+#output = "/var/log/gobetween_{{.ListenerUuid}}.log" # "stdout" | "stderr" | "/path/to/gobetween.log"
+output = "/var/log/gobetween.log"
 
 [servers.{{.ListenerUuid}}]
 bind = "{{.Vip}}:{{.LoadBalancerPort}}"
@@ -490,7 +491,7 @@ func (this *GBListener) preActionListenerServiceStop() (ret int, err error) {
 func (this *GBListener) stopListenerService() ( err error) {
 	//miao zhanyong the udp lb configured by gobetween, there is no pid configure in the shell cmd line
 	pid, err := utils.FindFirstPIDByPS(this.confPath)
-	log.Debugf("lb %s pid: %v result:%v", this.confPath, pid, err)
+	//log.Debugf("lb %s pid: %v result:%v", this.confPath, pid, err)
 	err = nil
 	if pid > 0 {
 		err = utils.KillProcess(pid); utils.PanicOnError(err)
@@ -517,12 +518,7 @@ func (this *GBListener) postActionListenerServiceStop() (ret int, err error) {
 	if e, _ := utils.PathExists(this.confPath); e {
 		err = os.Remove(this.confPath); utils.LogError(err)
 	}
-
-	logPath := fmt.Sprintf("./zvr/lb/gobetwwen_%s.log", this.lb.ListenerUuid)
-	if e, _ := utils.PathExists(logPath); e {
-		err = os.Remove(logPath); utils.LogError(err)
-	}
-
+	
 	return 0, err
 }
 
@@ -570,7 +566,7 @@ func setLb(lb lbInfo) {
 	err = listener.createListenerServiceConfigure(lb); utils.PanicOnError(err)
 	newChecksum, err1 := getFileChecksum(makeLbConfFilePath(lb)); utils.PanicOnError(err1)
 	if update, err := listener.checkIfListenerServiceUpdate(checksum, newChecksum); err == nil && !update {
-		log.Debugf("no need refresh the listener: %v\n", lb.ListenerUuid)
+		//log.Debugf("no need refresh the listener: %v\n", lb.ListenerUuid)
 		return
 	}
 	utils.PanicOnError(err)
@@ -831,10 +827,18 @@ local1.*     /var/log/haproxy.log`
 
 	lb_log_rotatoe_file, err := ioutil.TempFile(LB_CONF_DIR, "rotation"); utils.PanicOnError(err)
 	rotate_conf := `/var/log/haproxy.log {
-daily
-size 1024k
+size 10240k
 rotate 20
 compress
+copytruncate
+notifempty
+missingok
+}
+/var/log/gobetween*.log {
+size 10240k
+rotate 20
+compress
+copytruncate
 notifempty
 missingok
 }`
