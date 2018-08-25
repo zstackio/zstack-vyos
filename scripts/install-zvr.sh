@@ -19,7 +19,7 @@ chmod +x /etc/init.d/zstack-virtualrouteragent
 TARGET_HAPROXY=/opt/vyatta/sbin/haproxy
 diff haproxy $TARGET_HAPROXY
 if [ $? -ne 0 ]; then
-    yes | cp haproxy $TARGET_HAPROXY
+    yes | cp -f haproxy $TARGET_HAPROXY
 fi
 chown vyos:users $TARGET_HAPROXY
 chmod +x $TARGET_HAPROXY
@@ -27,12 +27,12 @@ chmod +x $TARGET_HAPROXY
 TARGET_GOBETWEEN=/opt/vyatta/sbin/gobetween
 diff gobetween $TARGET_GOBETWEEN
 if [ $? -ne 0 ]; then
-    yes | cp gobetween $TARGET_GOBETWEEN
-    cp healthcheck.sh /usr/share/
+    yes | cp -f gobetween $TARGET_GOBETWEEN
+    yes | cp -f healthcheck.sh /usr/share/
 fi
 chown vyos:users $TARGET_GOBETWEEN
 chmod +x $TARGET_GOBETWEEN
-chown vyos:users usr/share/healthcheck.sh
-chmod +x usr/share/healthcheck.sh
+chown vyos:users /usr/share/healthcheck.sh
+chmod +x /usr/share/healthcheck.sh
 
 exit 0
