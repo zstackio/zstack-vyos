@@ -17,6 +17,10 @@ import (
 	haproxy "github.com/bcicen/go-haproxy"
 	"sort"
 	log "github.com/Sirupsen/logrus"
+	"net/http"
+	"time"
+	"encoding/json"
+	"errors"
 )
 
 const (
@@ -32,6 +36,8 @@ const (
 	LB_MODE_HTTPS = "https"
 
 	LB_BACKEND_PREFIX_REG = "^nic-"
+
+	LISTENER_MAP_SIZE = 128
 )
 
 type lbInfo struct {
@@ -61,6 +67,7 @@ type Listener interface {
 	preActionListenerServiceStop() (ret int, err error)
 	stopListenerService() ( err error)
 	postActionListenerServiceStop() (ret int, err error)
+        getGoBetweenCounters(listenerUuid string) ([]*LbCounter, int)
 }
 
 // the listener implemented with HaProxy
@@ -219,6 +226,7 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 	err = utils.MkdirForFile(this.pidPath, 0755); utils.PanicOnError(err)
 	err = utils.MkdirForFile(this.confPath, 0755); utils.PanicOnError(err)
 	err = ioutil.WriteFile(this.confPath, buf.Bytes(), 0755); utils.PanicOnError(err)
+	LbListeners[this.lb.ListenerUuid] = this
 	return err
 }
 
@@ -305,10 +313,6 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 	return nil
 }
 
-
-
-
-
 func (this *HaproxyListener) preActionListenerServiceStop() (ret int, err error) {
 	return 0, nil
 }
@@ -327,6 +331,8 @@ func (this *HaproxyListener) stopListenerService() ( err error) {
 }
 
 func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error) {
+	delete(LbListeners, this.lb.ListenerUuid)
+
 	nicname, err := utils.GetNicNameByIp(this.lb.Vip); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r != nil {
@@ -404,6 +410,7 @@ max_responses = {{.MaxConnection}}    # (required) if > 0 accepts no more respon
 	err = utils.MkdirForFile(this.pidPath, 0755); utils.PanicOnError(err)
 	err = utils.MkdirForFile(this.confPath, 0755); utils.PanicOnError(err)
 	err = ioutil.WriteFile(this.confPath, buf.Bytes(), 0755); utils.PanicOnError(err)
+	LbListeners[this.lb.ListenerUuid] = this
 	return err
 }
 
@@ -454,6 +461,7 @@ func (this *GBListener) preActionListenerServiceStart() ( err error) {
 func (this *GBListener) rollbackPreActionListenerServiceStart() ( err error) {
 	return nil
 }
+
 func (this *GBListener) postActionListenerServiceStart() ( err error) {
 	nicname, err := utils.GetNicNameByIp(this.lb.Vip ); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
@@ -503,6 +511,8 @@ func (this *GBListener) stopListenerService() ( err error) {
 }
 
 func (this *GBListener) postActionListenerServiceStop() (ret int, err error) {
+	delete(LbListeners, this.lb.ListenerUuid)
+
 	nicname, err := utils.GetNicNameByIp(this.lb.Vip); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
 	r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes)
@@ -683,6 +693,7 @@ func init() {
 	os.Mkdir(LB_ROOT_DIR, os.ModePerm)
 	os.Mkdir(LB_CONF_DIR, os.ModePerm)
 	os.Mkdir(LB_SOCKET_DIR, os.ModePerm | os.ModeSocket)
+	LbListeners = make(map[string]interface{}, LISTENER_MAP_SIZE)
 	enableLbLog()
 	RegisterPrometheusCollector(NewLbPrometheusCollector())
 }
@@ -735,31 +746,43 @@ func (c *loadBalancerCollector) Describe(ch chan<- *prom.Desc) error {
 }
 
 func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
-	counters, num := getHaproxyCounter()
-	for i := 0; i < num; i++ {
-		cnt := counters[i]
-		ch <- prom.MustNewConstMetric(c.statusEntry, prom.GaugeValue, float64(cnt.status), cnt.listenerUuid, cnt.ip)
-		ch <- prom.MustNewConstMetric(c.inByteEntry, prom.GaugeValue, float64(cnt.bytesIn), cnt.listenerUuid, cnt.ip)
-		ch <- prom.MustNewConstMetric(c.outByteEntry, prom.GaugeValue, float64(cnt.bytesOut), cnt.listenerUuid, cnt.ip)
-		ch <- prom.MustNewConstMetric(c.curSessionNumEntry, prom.GaugeValue, float64(cnt.sessionNumber), cnt.listenerUuid, cnt.ip)
+	for listenerUuid, listener := range LbListeners {
+		var counters []*LbCounter
+		num := 0
+
+		switch listener.(type) {
+		case *GBListener:
+			gbListener, _ := listener.(*GBListener)
+			counters, num = gbListener.getGoBetweenCounters(listenerUuid)
+			break
+		case *HaproxyListener:
+			haproxyListener, _ := listener.(*HaproxyListener)
+			counters, num = haproxyListener.getGoBetweenCounters(listenerUuid)
+			break
+		default:
+			log.Infof("can not assert listerner[uuid %s] type", listenerUuid)
+			break
+		}
+
+		for i := 0; i < num; i++ {
+			cnt := counters[i]
+			ch <- prom.MustNewConstMetric(c.statusEntry, prom.GaugeValue, float64(cnt.status), cnt.listenerUuid, cnt.ip)
+			ch <- prom.MustNewConstMetric(c.inByteEntry, prom.GaugeValue, float64(cnt.bytesIn), cnt.listenerUuid, cnt.ip)
+			ch <- prom.MustNewConstMetric(c.outByteEntry, prom.GaugeValue, float64(cnt.bytesOut), cnt.listenerUuid, cnt.ip)
+			ch <- prom.MustNewConstMetric(c.curSessionNumEntry, prom.GaugeValue, float64(cnt.sessionNumber), cnt.listenerUuid, cnt.ip)
+		}
 	}
 
 	return nil
 }
 
-type haproxyCounter struct {
+type LbCounter struct {
 	listenerUuid    string
 	ip              string
 	status          uint64
 	bytesIn         uint64
 	bytesOut        uint64
 	sessionNumber   uint64
-}
-
-func getLbListenerUuidFromFileName(path string) string {
-	filename := filepath.Base(path)
-	res := strings.Split(filename, ".")
-	return res[0]
 }
 
 func getIpFromLbStat(name string)  string {
@@ -778,41 +801,105 @@ func statusFormat(status string) int  {
 	}
 }
 
-func getHaproxyCounter() ([]*haproxyCounter, int) {
-	var counters []*haproxyCounter
+func (this *HaproxyListener) getGoBetweenCounters(listenerUuid string) ([]*LbCounter, int) {
+	var counters []*LbCounter
 	num := 0
-	files, err := ioutil.ReadDir(LB_SOCKET_DIR)
-	if err != nil {
+
+	client := &haproxy.HAProxyClient{
+		Addr: "unix://" + this.sockPath,
+		Timeout: 5,
+	}
+
+	stats, err := client.Stats()
+	if (err != nil) {
+		log.Infof("client.Stats failed %v", err)
 		return nil, 0
 	}
 
-	for _, file := range files {
-		client := &haproxy.HAProxyClient{
-			Addr: "unix://" + LB_SOCKET_DIR + file.Name(),
-		}
-
-		listenerUuid := getLbListenerUuidFromFileName(file.Name())
-		stats, err := client.Stats()
-		if (err != nil) {
-			log.Infof("client.Stats failed %v", err)
+	for _, stat := range stats {
+		if m, err := regexp.MatchString(LB_BACKEND_PREFIX_REG, stat.SvName); err != nil || !m  {
 			continue
 		}
 
-		for _, stat := range stats {
-			if m, err := regexp.MatchString(LB_BACKEND_PREFIX_REG, stat.SvName); err != nil || !m  {
-				continue
-			}
+		counter := LbCounter{}
+		counter.listenerUuid = listenerUuid
+		counter.ip = getIpFromLbStat(stat.SvName)
+		counter.status = (uint64)(statusFormat(stat.Status))
+		counter.bytesIn = stat.Bin
+		counter.bytesOut = stat.Bout
+		counter.sessionNumber = stat.Scur
+		counters = append(counters, &counter)
+		num++
+	}
 
-			counter := haproxyCounter{}
-			counter.listenerUuid = listenerUuid
-			counter.ip = getIpFromLbStat(stat.SvName)
-			counter.status = (uint64)(statusFormat(stat.Status))
-			counter.bytesIn = stat.Bin
-			counter.bytesOut = stat.Bout
-			counter.sessionNumber = stat.Scur
-			counters = append(counters, &counter)
-			num++
+	return counters, num
+}
+
+
+type GoBetweenServerBackendStat struct {
+	Live bool `json:"live"`
+	Active_connections uint64 `json:"active_connections"`
+	Rx uint64 `json:"rx"`
+	Tx uint64 `json:"tx"`
+}
+
+type GoBetweenServerBackend struct {
+	Host string `json:"host"`
+	Stats GoBetweenServerBackendStat `json:"stats"`
+}
+
+type GoBetweenServerStat struct {
+	Backends []GoBetweenServerBackend `json:"backends"`
+}
+
+/* map to store: <listenerUuid, GBListerner> pair or  or <listenerUuid, HaProxyListener> */
+var LbListeners map[string]interface{}
+var goBetweenClient = &http.Client{
+	Timeout: time.Second * 5,
+}
+
+func getGoBetweenStat(port string, server string )  (*GoBetweenServerStat, error){
+	resp, err := goBetweenClient.Get(fmt.Sprintf("http://127.0.0.1:%s/servers/%s/stats", port, server))
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("get goBetween stats failed because %v", err))
+	}
+	defer resp.Body.Close()
+
+	stats := &GoBetweenServerStat{}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err = json.Unmarshal(body, &stats); err != nil {
+		return nil, errors.New(fmt.Sprintf("Unmarshal statistics failed %s", string(body)))
+	}
+
+	return stats, nil
+}
+
+func (this *GBListener) getGoBetweenCounters(listenerUuid string) ([]*LbCounter, int) {
+	var counters []*LbCounter
+	var stats *GoBetweenServerStat
+	var err error
+	num := 0
+
+	port := this.apiPort
+	if stats, err = getGoBetweenStat(port, listenerUuid); err != nil {
+		log.Debugf("get getGoBetweenStat stats failed because %+v", err)
+		return nil, 0
+	}
+
+	for _, stat := range stats.Backends {
+		counter := LbCounter{}
+		counter.listenerUuid = listenerUuid
+		counter.ip = stat.Host
+		if (stat.Stats.Live) {
+			counter.status = 1
+		} else {
+			counter.status = 0
 		}
+		counter.bytesIn = stat.Stats.Rx
+		counter.bytesOut = stat.Stats.Tx
+		counter.sessionNumber = stat.Stats.Active_connections
+		counters = append(counters, &counter)
+		num++
 	}
 
 	return counters, num
