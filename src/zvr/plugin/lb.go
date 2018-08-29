@@ -367,7 +367,7 @@ output = "/var/log/gobetween.log"
 bind = "{{.Vip}}:{{.LoadBalancerPort}}"
 protocol = "{{.Mode}}"
 {{if eq .BalancerAlgorithm "source"}}
-balance = "iphash"
+balance = "iphash1"
 {{else}}
 balance = "{{.BalancerAlgorithm}}"
 {{end}}
@@ -376,8 +376,8 @@ client_idle_timeout = "{{.ConnectionIdleTimeout}}s"
 backend_idle_timeout = "{{.ConnectionIdleTimeout}}s"
 backend_connection_timeout = "60s"
 [servers.{{.ListenerUuid}}.udp] # (optional)
-max_requests  = {{.MaxConnection}}     # (optional) if > 0 accepts no more requests than max_requests and closes session (since 0.5.0)
-max_responses = {{.MaxConnection}}    # (required) if > 0 accepts no more responses that max_responses from backend and closes session (will be optional since 0.5.0)
+max_requests  = 0     # (optional) if > 0 accepts no more requests than max_requests and closes session (since 0.5.0)
+max_responses = 0    # (required) if > 0 accepts no more responses that max_responses from backend and closes session (will be optional since 0.5.0)
 
 
     [servers.{{.ListenerUuid}}.discovery]
