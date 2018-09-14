@@ -101,6 +101,7 @@ upload $tmpdir/zsn-agent $ZSN_DIR/zsn-agent
 upload $tmpdir/zstack-network-agent /etc/init.d/zstack-network-agent
 upload $HAPROXY $SBIN_DIR/haproxy
 upload $GOBETWEEN $SBIN_DIR/gobetween
+mkdir-p /home/vyos/zvr/
 upload $ZVR_VERSION /home/vyos/zvr/version
 upload $HEALTHCHECK /usr/share/healthcheck.sh
 upload -<<END /opt/vyatta/etc/config/scripts/vyatta-postconfig-bootup.script
