@@ -82,6 +82,7 @@ upload $ZVRBOOT $SBIN_DIR/zvrboot
 upload $ZVRSCRIPT /etc/init.d/zstack-virtualrouteragent
 upload $HAPROXY $SBIN_DIR/haproxy
 upload $GOBETWEEN $SBIN_DIR/gobetween
+mkdir-p /home/vyos/zvr/
 upload $ZVR_VERSION /home/vyos/zvr/version
 upload $HEALTHCHECK /usr/share/healthcheck.sh
 upload -<<END /opt/vyatta/etc/config/scripts/vyatta-postconfig-bootup.script
