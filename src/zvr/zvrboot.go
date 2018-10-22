@@ -122,8 +122,16 @@ func resetVyos()  {
 	tree.Delete("interfaces ethernet")
 	tree.Apply(true)
 
+	/*the API RunVyosScriptAsUserVyos doesn't work for this command.
+	the correct command sequence is that
+	configur
+	load
+	commit
+	save
+	exit
+	current for workaround ,just */
 	// reload default configuration
-	server.RunVyosScriptAsUserVyos("load /opt/vyatta/etc/config.boot.default\nsave")
+	//server.RunVyosScriptAsUserVyos("load /opt/vyatta/etc/config.boot.default\nsave")
 }
 
 func configureVyos()  {
