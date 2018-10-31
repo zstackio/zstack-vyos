@@ -12,6 +12,7 @@ import (
 
 var (
 	vyosScriptLock = &sync.Mutex{}
+	fileLockPath = "/home/vyos/zvr/.vyosfilelock"
 )
 
 func FindNicNameByMacFromConfiguration(mac, configuration string) (string, bool) {
@@ -138,7 +139,24 @@ func VyosLock(fn CommandHandler) CommandHandler {
 	return func(ctx *CommandContext) interface{} {
 		vyosScriptLock.Lock()
 		defer vyosScriptLock.Unlock()
+
+		if vyosFileLock, err := utils.LockFileExcl(fileLockPath); err == nil {
+			defer vyosFileLock.Unlock()
+		}
+
 		return fn(ctx)
 	}
 }
 
+func VyosLockInterface(fn func()) (func()) {
+	return func()  {
+		vyosScriptLock.Lock()
+		defer vyosScriptLock.Unlock()
+
+		if vyosFileLock, err := utils.LockFileExcl(fileLockPath); err == nil {
+			defer vyosFileLock.Unlock()
+		}
+
+		fn()
+	}
+}
