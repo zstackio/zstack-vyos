@@ -72,9 +72,11 @@ func configureZvrFirewall() {
 }
 
 func main()  {
+
 	parseCommandOptions()
 	utils.InitLog(options.LogFile, false)
 	loadPlugins()
-	configureZvrFirewall()
+	server.VyosLockInterface(configureZvrFirewall)()
+
 	server.Start()
 }

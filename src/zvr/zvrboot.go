@@ -134,15 +134,16 @@ func resetVyos()  {
 	//server.RunVyosScriptAsUserVyos("load /opt/vyatta/etc/config.boot.default\nsave")
 }
 
-func configureVyos()  {
+func configureVyos() {
 	resetVyos()
+	var defaultNic, defaultGW string = "", ""
 
 	mgmtNic := bootstrapInfo["managementNic"].(map[string]interface{})
 	if mgmtNic == nil {
 		panic(errors.New("no field 'managementNic' in bootstrap info"))
 	}
 
-	eth0 := &nic{ name: "eth0" }
+	eth0 := &nic{name: "eth0" }
 	var ok bool
 	eth0.mac, ok = mgmtNic["mac"].(string); utils.PanicIfError(ok, errors.New("cannot find 'mac' field for the management nic"))
 	eth0.netmask, ok = mgmtNic["netmask"].(string); utils.PanicIfError(ok, errors.New("cannot find 'netmask' field for the management nic"))
@@ -188,8 +189,8 @@ func configureVyos()  {
 
 	type deviceName struct {
 		expected string
-		actual string
-		swap string
+		actual   string
+		swap     string
 	}
 
 	devNames := make([]*deviceName, 0)
@@ -298,7 +299,10 @@ func configureVyos()  {
 	// configure firewall
 	for _, nic := range nics {
 		setNic(nic)
-
+		if nic.isDefaultRoute {
+			defaultGW = nic.gateway
+			defaultNic = nic.name
+		}
 		tree.SetFirewallOnInterface(nic.name, "local",
 			"action accept",
 			"state established enable",
@@ -372,7 +376,7 @@ func configureVyos()  {
 	tree.Apply(true)
 
 	arping := func(nicname, ip, gateway string) {
-		b := utils.Bash{ Command: fmt.Sprintf("sudo arping -q -A -w 1.5 -c 1 -I %s %s > /dev/null", nicname, ip) }
+		b := utils.Bash{Command: fmt.Sprintf("sudo arping -q -A -w 1.5 -c 1 -I %s %s > /dev/null", nicname, ip) }
 		b.Run()
 	}
 
@@ -394,6 +398,21 @@ func configureVyos()  {
 			err := utils.SetZStackRoute(mgmtNodeIpStr, "eth0", ""); utils.PanicOnError(err)
 		} else {
 			log.Debugf("the cidr of vr mgmt contains callback ip, skip to configure route")
+		}
+	}
+	/* this is workaround for zstac*/
+	if defaultGW != "" {
+		//check default gw in route and it's workaround for ZSTAC-15742
+		bash := utils.Bash{
+			Command: fmt.Sprintf("route -n| grep -w %s|grep -w %s", defaultGW, defaultNic),
+		}
+		ret, _, _, err := bash.RunWithReturn()
+		if err == nil && ret != 0 {
+			b := utils.Bash{
+				Command: fmt.Sprintf("route add default gw %s", defaultGW),
+			}
+			b.Run()
+			b.PanicIfError()
 		}
 	}
 }
