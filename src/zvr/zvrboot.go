@@ -401,15 +401,19 @@ func configureVyos() {
 		}
 	}
 	/* this is workaround for zstac*/
+	log.Debugf("the vr public network %s at %s", defaultGW, defaultNic)
 	if defaultGW != "" {
-		//check default gw in route and it's workaround for ZSTAC-15742
+		//check default gw in route and it's workaround for ZSTAC-15742, the manage and public are in same cidr with different ranges
 		bash := utils.Bash{
 			Command: fmt.Sprintf("route -n| grep -w %s|grep -w %s", defaultGW, defaultNic),
 		}
 		ret, _, _, err := bash.RunWithReturn()
 		if err == nil && ret != 0 {
+			tree := server.NewParserFromShowConfiguration().Tree
+			tree.Deletef("system gateway-address %v", defaultGW)
+			tree.Apply(true)
 			b := utils.Bash{
-				Command: fmt.Sprintf("route add default gw %s", defaultGW),
+				Command: fmt.Sprintf("ip route add default via %s dev %s", defaultGW, defaultNic),
 			}
 			b.Run()
 			b.PanicIfError()

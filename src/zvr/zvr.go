@@ -58,6 +58,7 @@ func configureZvrFirewall() {
 	des := "management-port-rule"
 	if r := tree.FindFirewallRuleByDescription("eth0", "local", des); r != nil {
 		r.Delete()
+		tree.Apply(false)
 	}
 
 	tree.SetFirewallOnInterface("eth0", "local",
