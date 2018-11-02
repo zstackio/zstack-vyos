@@ -401,7 +401,7 @@ func configureVyos() {
 		}
 	}
 	/* this is workaround for zstac*/
-	log.Debugf("the cidr of vr public network %s at %s", defaultGW, defaultNic)
+	log.Debugf("the vr public network %s at %s", defaultGW, defaultNic)
 	if defaultGW != "" {
 		//check default gw in route and it's workaround for ZSTAC-15742, the manage and public are in same cidr with different ranges
 		bash := utils.Bash{
