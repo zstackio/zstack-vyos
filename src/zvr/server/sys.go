@@ -57,6 +57,12 @@ DISCARD=${vyatta_sbindir}/my_discard
 SAVE=${vyatta_sbindir}/vyatta-save-config.pl
 API=/bin/cli-shell-api
 
+function atexit() {
+    $API teardownSession
+}
+
+trap atexit EXIT SIGHUP SIGINT SIGTERM
+
 session_env=$($API getSessionEnv $PPID)
 echo $session_env
 eval $session_env
@@ -70,11 +76,6 @@ if [ $? -ne 0 ]; then
 	exit 1
 fi
 
-function atexit() {
-    $API teardownSession
-}
-
-trap atexit EXIT SIGHUP SIGINT SIGTERM
 `
 	command = fmt.Sprintf(template, command)
 	tmpfile, err := ioutil.TempFile("", "zvr"); utils.PanicOnError(err)
@@ -106,6 +107,12 @@ DISCARD=${vyatta_sbindir}/my_discard
 SAVE=${vyatta_sbindir}/vyatta-save-config.pl
 API=/bin/cli-shell-api
 
+function atexit() {
+    $API teardownSession
+}
+
+trap atexit EXIT SIGHUP SIGINT SIGTERM
+
 session_env=$($API getSessionEnv $PPID)
 echo $session_env
 eval $session_env
@@ -119,11 +126,6 @@ if [ $? -ne 0 ]; then
 	exit 1
 fi
 
-function atexit() {
-    $API teardownSession
-}
-
-trap atexit EXIT SIGHUP SIGINT SIGTERM
 `
 	bash := &utils.Bash{
 		Command: fmt.Sprintf(template, command),
