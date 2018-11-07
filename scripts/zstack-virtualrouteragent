@@ -117,10 +117,10 @@ stop_server() {
         echo "zstack virtual router agent stopped already"
 	return
     fi
-    {
+    (
         flock -e 300
         do_stop
-    } 300<>$LOCKFILE
+    ) 300>$LOCKFILE
 
 }
 
