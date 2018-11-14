@@ -12,11 +12,11 @@ PKG_TAR_DIR=$(TARGET_DIR)/pkg-tar
 
 DEPS=github.com/Sirupsen/logrus github.com/pkg/errors github.com/fatih/structs github.com/prometheus/client_golang/prometheus github.com/bcicen/go-haproxy
 
-zvr: deps
+zvr:
 	mkdir -p $(TARGET_DIR)
 	$(GO) build -o $(TARGET_DIR)/zvr src/zvr/zvr.go
 
-zvrboot: deps
+zvrboot:
 	mkdir -p $(TARGET_DIR)
 	$(GO) build -o $(TARGET_DIR)/zvrboot src/zvr/zvrboot.go
 
