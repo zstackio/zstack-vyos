@@ -23,9 +23,8 @@ _testmain.go
 *.test
 *.prof
 .idea/
+.cache/
 *.iml
 zvr.log
 target/
-src/github.com/
-src/golang.org/
 bin/
