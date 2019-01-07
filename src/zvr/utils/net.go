@@ -111,7 +111,9 @@ func GetNicNameByMac(mac string) (string, error) {
 
 	for _, nic := range nics {
 		if nic.Mac == mac {
-			return nic.Name, nil
+			/* for vlan sub interface, nic.name is eth1.100 */
+			name := strings.Split(nic.Name, ".")
+			return name[0], nil
 		}
 	}
 
