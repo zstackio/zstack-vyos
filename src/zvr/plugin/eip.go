@@ -77,6 +77,55 @@ func cleanupOldEip(tree *server.VyosConfigTree, eip eipInfo) {
 	}
 }
 
+func checkEipIpTableRules(eip eipInfo) error {
+	/* the correct result of a Eip iptable nat rules:
+	 *    # iptables-save  | grep 172.20.16.250
+	 *	-A PREROUTING -d 172.20.16.250/32 -m comment --comment DST-NAT-1 -j DNAT --to-destination 10.86.4.132
+	 *	-A POSTROUTING -s 10.86.4.132/32 -o eth0 -m comment --comment SRC-NAT-1 -j SNAT --to-source 172.20.16.250
+	 */
+	bash := &utils.Bash{
+		Command: fmt.Sprintf("sudo iptables-save  | grep -w %s ", eip.VipIp),
+		NoLog: true,
+	}
+	ret, o, e, _ := bash.RunWithReturn()
+	if (ret != 0 ) {
+		/* this case should NOT happen */
+		log.Debugf("check eip iptables rules: failed for %s, because %s", fmt.Sprintf("%+v", eip), e)
+		return nil
+	}
+
+	o = strings.TrimSpace(o)
+	lines := strings.Split(o, "\n")
+	if (len(lines) != 2) {
+		return fmt.Errorf("check eip iptables rules: eip %s, stdout %s, err %s", fmt.Sprintf("%+v", eip), o, e)
+	}
+
+	snatRule := false
+	dnatRule := false
+	for _, line := range lines {
+		/* DNAT */
+		if strings.Contains(line, "-A PREROUTING") {
+			fileds := strings.Split(line, " ")
+			if strings.Compare(fileds[3], fmt.Sprintf("%s/32", eip.VipIp)) == 0 && strings.Compare(fileds[11], eip.GuestIp) == 0 {
+				dnatRule = true;
+			}
+		}
+
+		/* SNAT */
+		if strings.Contains(line, "-A POSTROUTING") {
+			fileds := strings.Split(line, " ")
+			if strings.Compare(fileds[3], fmt.Sprintf("%s/32", eip.GuestIp)) == 0 && strings.Compare(fileds[13], eip.VipIp) == 0 {
+				snatRule = true;
+			}
+		}
+	}
+
+	if (dnatRule == true && snatRule == true) {
+		return nil
+	} else {
+		return fmt.Errorf("check eip iptables rules: eip %s, stdout %s, err %s", fmt.Sprintf("%+v", eip), o, e)
+	}
+}
 
 func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	des := makeEipDescription(eip)
@@ -221,7 +270,16 @@ func createEip(ctx *server.CommandContext) interface{} {
 	setEip(tree, eip)
 	tree.Apply(false)
 
-	return nil
+	err := checkEipIpTableRules(eip);
+	if (err != nil) {
+		/* rollback */
+		deleteEip(tree, eip)
+		tree.Apply(false)
+		/* utils.PanicOnError(err) will response error message to ZStack, return value can not do it */
+		utils.PanicOnError(err)
+	}
+
+	return err;
 }
 
 func removeEip(ctx *server.CommandContext) interface{} {
@@ -279,6 +337,15 @@ func syncEip(ctx *server.CommandContext) interface{} {
 	}
 
 	tree.Apply(false)
+
+	for _, eip := range cmd.Eips {
+		/* utils.PanicOnError(err) will response error message to ZStack, return value can not do it */
+		err := checkEipIpTableRules(eip);utils.PanicOnError(err)
+		/* even sync failed, ZStack will not remove eip configuration */
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
