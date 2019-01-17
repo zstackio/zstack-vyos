@@ -94,12 +94,22 @@ func configureNic(ctx *server.CommandContext) interface{} {
 			"protocol icmp",
 		)
 
-		tree.SetFirewallOnInterface(nicname, "local",
-			fmt.Sprintf("destination port %v", int(getSshPortFromBootInfo())),
-			fmt.Sprintf("destination address %v", nic.Ip),
-			"protocol tcp",
-			"action accept",
-		)
+		// only allow ssh traffic on eth0, disable on others
+		if nicname == "eth0" {
+			tree.SetFirewallOnInterface(nicname, "local",
+				fmt.Sprintf("destination port %v", int(getSshPortFromBootInfo())),
+				fmt.Sprintf("destination address %v", nic.Ip),
+				"protocol tcp",
+				"action accept",
+			)
+		} else {
+			tree.SetFirewallOnInterface(nicname, "local",
+				fmt.Sprintf("destination port %v", int(getSshPortFromBootInfo())),
+				fmt.Sprintf("destination address %v", nic.Ip),
+				"protocol tcp",
+				"action reject",
+			)
+		}
 
 		tree.SetFirewallDefaultAction(nicname, "local", "reject")
 		tree.SetFirewallDefaultAction(nicname, "in", "reject")
