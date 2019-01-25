@@ -38,6 +38,9 @@ const (
 	LB_BACKEND_PREFIX_REG = "^nic-"
 
 	LISTENER_MAP_SIZE = 128
+	//reserve some sockets for haproxy if specify the parameter "ulimit-n"
+	RESERVE_SOCK_COUNT = 100
+	MAX_SOCK_COUNT = 1048576
 )
 
 type lbInfo struct {
@@ -178,6 +181,15 @@ func parseListenerPrameter(lb lbInfo) (map[string]interface{}, error) {
 	return m, nil
 }
 
+func getListenerMaxCocurrenceSocket(maxConnect string) (string) {
+	maxSocket, err := strconv.Atoi(maxConnect); utils.PanicOnError(err)
+	maxSocket = maxSocket*2 + RESERVE_SOCK_COUNT
+
+	if maxSocket > MAX_SOCK_COUNT {
+		utils.PanicOnError(errors.New(fmt.Sprintf("invalid prameter maxconn %v,please check it", maxConnect)))
+	}
+	return strconv.Itoa(maxSocket)
+}
 
 func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo)  (err error) {
 	conf := `global
@@ -187,6 +199,7 @@ user vyos
 group users
 daemon
 stats socket {{.SocketPath}} user vyos
+ulimit-n {{.ulimit}}
 
 defaults
 log global
@@ -218,11 +231,15 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 
 	var buf bytes.Buffer
 	var m map[string]interface{}
+
 	tmpl, err := template.New("conf").Parse(conf); utils.PanicOnError(err)
 	m, err = parseListenerPrameter(lb);utils.PanicOnError(err)
+	this.maxConnect = m["MaxConnection"].(string)
+
+	m["ulimit"] = getListenerMaxCocurrenceSocket(this.maxConnect)
 
 	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
-	this.maxConnect = m["MaxConnection"].(string)
+
 	err = utils.MkdirForFile(this.pidPath, 0755); utils.PanicOnError(err)
 	err = utils.MkdirForFile(this.confPath, 0755); utils.PanicOnError(err)
 	err = ioutil.WriteFile(this.confPath, buf.Bytes(), 0755); utils.PanicOnError(err)
@@ -406,6 +423,8 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 	tmpl, err := template.New("conf").Parse(conf); utils.PanicOnError(err)
 	m, err = parseListenerPrameter(lb);utils.PanicOnError(err)
 	m["ApiPort"] = this.apiPort
+	//m["ulimit"] = getListenerMaxCocurrenceSocket(m["MaxConnection"].(string))
+
 	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
 	err = utils.MkdirForFile(this.pidPath, 0755); utils.PanicOnError(err)
 	err = utils.MkdirForFile(this.confPath, 0755); utils.PanicOnError(err)
