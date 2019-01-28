@@ -186,7 +186,8 @@ func getListenerMaxCocurrenceSocket(maxConnect string) (string) {
 	maxSocket = maxSocket*2 + RESERVE_SOCK_COUNT
 
 	if maxSocket > MAX_SOCK_COUNT {
-		utils.PanicOnError(errors.New(fmt.Sprintf("invalid prameter maxconn %v,please check it", maxConnect)))
+		log.Errorf("invalid prameter maxconn %v,please check it", maxConnect)
+		maxSocket = MAX_SOCK_COUNT
 	}
 	return strconv.Itoa(maxSocket)
 }
