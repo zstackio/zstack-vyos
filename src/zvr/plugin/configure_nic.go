@@ -4,9 +4,6 @@ import (
 	"zvr/server"
 	"zvr/utils"
 	"fmt"
-	"io/ioutil"
-	"encoding/json"
-	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
 	"strings"
 )
@@ -15,8 +12,6 @@ const (
 	VR_CONFIGURE_NIC = "/configurenic"
 	VR_CONFIGURE_NIC_FIREWALL_DEFAULT_ACTION_PATH = "/configurenicdefaultaction";
 	VR_REMOVE_NIC_PATH = "/removenic"
-	BOOTSTRAP_INFO_CACHE = "/home/vyos/zvr/bootstrap-info.json"
-	DEFAULT_SSH_PORT = 22
 )
 
 type nicInfo struct {
@@ -34,8 +29,6 @@ type nicInfo struct {
 type configureNicCmd struct {
 	Nics []nicInfo `json:"nics"`
 }
-
-var bootstrapInfo map[string]interface{} = make(map[string]interface{})
 
 func configureNic(ctx *server.CommandContext) interface{} {
 	cmd := &configureNicCmd{}
@@ -60,62 +53,70 @@ func configureNic(ctx *server.CommandContext) interface{} {
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s smp_affinity auto", nicname)
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s speed auto", nicname)
 
-		tree.SetFirewallOnInterface(nicname, "local",
-			"action accept",
-			"state established enable",
-			"state related enable",
-			fmt.Sprintf("destination address %v", nic.Ip),
-		)
-		tree.SetFirewallOnInterface(nicname, "local",
-			"action accept",
-			"protocol icmp",
-			fmt.Sprintf("destination address %v", nic.Ip),
-		)
-
-		if nic.Category == "Private" {
-			tree.SetFirewallOnInterface(nicname, "in",
+		if utils.IsSkipVyosIptables() {
+			if nic.Category == "Private" {
+				utils.InitNicFirewall(nicname, nic.Ip, false, utils.REJECT)
+			} else {
+				utils.InitNicFirewall(nicname, nic.Ip, true, utils.REJECT)
+			}
+		} else {
+			tree.SetFirewallOnInterface(nicname, "local",
 				"action accept",
 				"state established enable",
 				"state related enable",
-				"state invalid enable",
-				"state new enable",
+				fmt.Sprintf("destination address %v", nic.Ip),
 			)
-		} else {
+			tree.SetFirewallOnInterface(nicname, "local",
+				"action accept",
+				"protocol icmp",
+				fmt.Sprintf("destination address %v", nic.Ip),
+			)
+
+			if nic.Category == "Private" {
+				tree.SetFirewallOnInterface(nicname, "in",
+					"action accept",
+					"state established enable",
+					"state related enable",
+					"state invalid enable",
+					"state new enable",
+				)
+			} else {
+				tree.SetFirewallOnInterface(nicname, "in",
+					"action accept",
+					"state established enable",
+					"state related enable",
+					"state new enable",
+				)
+			}
+
 			tree.SetFirewallOnInterface(nicname, "in",
 				"action accept",
-				"state established enable",
-				"state related enable",
-				"state new enable",
+				"protocol icmp",
 			)
+
+			// only allow ssh traffic on eth0, disable on others
+			if nicname == "eth0" {
+				tree.SetFirewallOnInterface(nicname, "local",
+					fmt.Sprintf("destination port %v", int(utils.GetSshPortFromBootInfo())),
+					fmt.Sprintf("destination address %v", nic.Ip),
+					"protocol tcp",
+					"action accept",
+				)
+			} else {
+				tree.SetFirewallOnInterface(nicname, "local",
+					fmt.Sprintf("destination port %v", int(utils.GetSshPortFromBootInfo())),
+					fmt.Sprintf("destination address %v", nic.Ip),
+					"protocol tcp",
+					"action reject",
+				)
+			}
+
+			tree.SetFirewallDefaultAction(nicname, "local", "reject")
+			tree.SetFirewallDefaultAction(nicname, "in", "reject")
+
+			tree.AttachFirewallToInterface(nicname, "local")
+			tree.AttachFirewallToInterface(nicname, "in")
 		}
-
-		tree.SetFirewallOnInterface(nicname, "in",
-			"action accept",
-			"protocol icmp",
-		)
-
-		// only allow ssh traffic on eth0, disable on others
-		if nicname == "eth0" {
-			tree.SetFirewallOnInterface(nicname, "local",
-				fmt.Sprintf("destination port %v", int(getSshPortFromBootInfo())),
-				fmt.Sprintf("destination address %v", nic.Ip),
-				"protocol tcp",
-				"action accept",
-			)
-		} else {
-			tree.SetFirewallOnInterface(nicname, "local",
-				fmt.Sprintf("destination port %v", int(getSshPortFromBootInfo())),
-				fmt.Sprintf("destination address %v", nic.Ip),
-				"protocol tcp",
-				"action reject",
-			)
-		}
-
-		tree.SetFirewallDefaultAction(nicname, "local", "reject")
-		tree.SetFirewallDefaultAction(nicname, "in", "reject")
-
-		tree.AttachFirewallToInterface(nicname, "local")
-		tree.AttachFirewallToInterface(nicname, "in")
 
 		if nic.L2Type != "" {
 			b := utils.NewBash()
@@ -155,21 +156,6 @@ func checkNicIsUp(nicname string, panicIfDown bool) error {
 	return nil
 }
 
-func getSshPortFromBootInfo() float64 {
-	content, err := ioutil.ReadFile(BOOTSTRAP_INFO_CACHE); utils.PanicOnError(err)
-	if len(content) == 0 {
-		log.Debugf("no content in %s, use default ssh port %d", BOOTSTRAP_INFO_CACHE, DEFAULT_SSH_PORT)
-		return DEFAULT_SSH_PORT
-	}
-
-	if err := json.Unmarshal(content, &bootstrapInfo); err != nil {
-		log.Debugf("can not parse info from %s, use default ssh port %d", BOOTSTRAP_INFO_CACHE, DEFAULT_SSH_PORT)
-		return DEFAULT_SSH_PORT
-	}
-
-	return bootstrapInfo["sshPort"].(float64)
-}
-
 func removeNic(ctx *server.CommandContext) interface{} {
 	cmd := &configureNicCmd{}
 	ctx.GetCommand(cmd)
@@ -187,8 +173,12 @@ func removeNic(ctx *server.CommandContext) interface{} {
 			}
 		}, 5, 1); utils.PanicOnError(err)
 		tree.Deletef("interfaces ethernet %s", nicname)
-		tree.Deletef("firewall name %s.in", nicname)
-		tree.Deletef("firewall name %s.local", nicname)
+		if utils.IsSkipVyosIptables() {
+			utils.DestroyNicFirewall(nicname)
+		} else {
+			tree.Deletef("firewall name %s.in", nicname)
+			tree.Deletef("firewall name %s.local", nicname)
+		}
 	}
 	tree.Apply(false)
 
@@ -212,12 +202,16 @@ func configureNicFirewallDefaultAction(ctx *server.CommandContext) interface{} {
 			}
 		}, 5, 1); utils.PanicOnError(err)
 
-		if (strings.Compare(nic.FirewallDefaultAction, "reject") == 0) {
-			tree.SetFirewallDefaultAction(nicname, "local", "reject")
-			tree.SetFirewallDefaultAction(nicname, "in", "reject")
+		if utils.IsSkipVyosIptables() {
+			utils.SetDefaultRule(nicname, nic.FirewallDefaultAction)
 		} else {
-			tree.SetFirewallDefaultAction(nicname, "local", "accept")
-			tree.SetFirewallDefaultAction(nicname, "in", "accept")
+			if (strings.Compare(nic.FirewallDefaultAction, "reject") == 0) {
+				tree.SetFirewallDefaultAction(nicname, "local", "reject")
+				tree.SetFirewallDefaultAction(nicname, "in", "reject")
+			} else {
+				tree.SetFirewallDefaultAction(nicname, "local", "accept")
+				tree.SetFirewallDefaultAction(nicname, "in", "accept")
+			}
 		}
 	}
 
