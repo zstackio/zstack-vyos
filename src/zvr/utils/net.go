@@ -85,7 +85,7 @@ func GetAllNics() (map[string]Nic, error) {
 
 	nics := make(map[string]Nic)
 	for _, f := range files {
-		if f.IsDir() || f.Name() == "lo" {
+		if f.IsDir() || f.Name() == "lo" || strings.Contains(f.Name(), "ifb") {
 			continue
 		}
 
