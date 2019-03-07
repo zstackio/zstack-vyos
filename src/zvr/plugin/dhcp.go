@@ -60,6 +60,13 @@ func makeDhcpFirewallRuleDescription(netname string) string {
 	return fmt.Sprintf("DHCP-for-%s", netname)
 }
 
+func setDhcpFirewallRules(nicname string)  {
+	rule := utils.NewIptablesRule(utils.UDP, "", "", 0, 67, nil, utils.ACCEPT, utils.DHCPRuleComment)
+	utils.InsertFireWallRule(nicname, rule, utils.LOCAL)
+	rule = utils.NewIptablesRule(utils.UDP, "", "", 0, 68, nil, utils.ACCEPT, utils.DHCPRuleComment)
+	utils.InsertFireWallRule(nicname, rule, utils.LOCAL)
+}
+
 func setDhcp(infos []dhcpInfo) {
 	parser := server.NewParserFromShowConfiguration()
 
@@ -83,16 +90,20 @@ func setDhcp(infos []dhcpInfo) {
 		tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s ip-address %s", netName, subnet, serverName, info.Gateway)
 		tree.Setf("service dhcp-server shared-network-name %s subnet %s static-mapping %s mac-address %s", netName, subnet, serverName, info.VrNicMac)
 
-		des := makeDhcpFirewallRuleDescription(netName)
-		if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
-			tree.SetFirewallOnInterface(nicname, "local",
-				fmt.Sprintf("description %v", des),
-				"destination port 67-68",
-				"protocol tcp_udp",
-				"action accept",
-			)
+		if utils.IsSkipVyosIptables() {
+			setDhcpFirewallRules(nicname)
+		} else {
+			des := makeDhcpFirewallRuleDescription(netName)
+			if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
+				tree.SetFirewallOnInterface(nicname, "local",
+					fmt.Sprintf("description %v", des),
+					"destination port 67-68",
+					"protocol tcp_udp",
+					"action accept",
+				)
 
-			tree.AttachFirewallToInterface(nicname, "local")
+				tree.AttachFirewallToInterface(nicname, "local")
+			}
 		}
 	}
 

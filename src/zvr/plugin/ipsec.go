@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	log "github.com/Sirupsen/logrus"
 )
 
 const(
@@ -13,6 +14,8 @@ const(
 	DELETE_IPSEC_CONNECTION = "/vyos/deleteipsecconnection"
 	SYNC_IPSEC_CONNECTION = "/vyos/syncipsecconnection"
 	UPDATE_IPSEC_CONNECTION = "/vyos/updateipsecconnection"
+
+	IPSecInfoMaxSize = 256
 )
 
 type ipsecInfo struct {
@@ -55,6 +58,8 @@ type updateIPsecReq struct {
 type updateIPsecReply struct {
 	Infos []ipsecInfo `json:"infos"`
 }
+
+var ipsecMap map[string]ipsecInfo
 
 func getIPsecPeers() (peers []string) {
 	vyos := server.NewParserFromShowConfiguration()
@@ -170,6 +175,67 @@ func restartVpnAfterConfig()  {
 	}, 3, 20);utils.LogError(err)
 }
 
+func syncIpSecRulesByIptables()  {
+	snatRules := []utils.IptablesRule{}
+	filterRules := make(map[string][]utils.IptablesRule)
+	vipNicNameMap := make(map[string]string)
+
+	for _, info := range ipsecMap {
+		if _, ok := vipNicNameMap[info.Vip] ; ok {
+			continue
+		}
+		nicname, err := utils.GetNicNameByIp(info.Vip); utils.PanicOnError(err)
+		vipNicNameMap[info.Vip] = nicname
+	}
+
+	for _, info := range ipsecMap {
+		nicname, _ := vipNicNameMap[info.Vip]
+		if _, ok := filterRules[nicname]; ok {
+			continue
+		}
+
+		rule := utils.NewIptablesRule(utils.UDP,  "", "", 0, 500, nil, utils.RETURN, utils.IpsecRuleComment)
+		filterRules[nicname] = append(filterRules[nicname], rule)
+
+		rule = utils.NewIptablesRule(utils.UDP,  "", "", 0, 4500, nil, utils.RETURN, utils.IpsecRuleComment)
+		filterRules[nicname] = append(filterRules[nicname], rule)
+
+		rule = utils.NewIptablesRule(utils.ESP,  "", "", 0, 0, nil, utils.RETURN, utils.IpsecRuleComment)
+		filterRules[nicname] = append(filterRules[nicname], rule)
+
+		rule = utils.NewIptablesRule(utils.AH,  "", "", 0, 0, nil, utils.RETURN, utils.IpsecRuleComment)
+		filterRules[nicname] = append(filterRules[nicname], rule)
+	}
+
+	for _, info := range ipsecMap {
+		nicname, _ := vipNicNameMap[info.Vip]
+		for _, remoteCidr := range info.PeerCidrs {
+			rule := utils.NewIptablesRule("",  remoteCidr, "", 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
+				utils.RETURN, utils.IpsecRuleComment + info.Uuid)
+			filterRules[nicname] = append(filterRules[nicname], rule)
+		}
+
+		/* nat rule */
+		for _, srcCidr := range info.LocalCidrs {
+			for _, remoteCidr := range info.PeerCidrs {
+				rule := utils.NewIpsecsIptablesRule("", srcCidr, remoteCidr, 0, 0, nil, utils.RETURN,
+					utils.IpsecRuleComment + info.Uuid, "", nicname)
+				snatRules = append(snatRules, rule)
+			}
+		}
+	}
+
+	if err := utils.SyncNatRule(snatRules, nil, utils.IpsecRuleComment); err != nil {
+		log.Warn("SyncEipNatRule failed %s", err.Error())
+		utils.PanicOnError(err)
+	}
+
+	if err := utils.SyncFirewallRule(filterRules, utils.IpsecRuleComment, utils.IN); err != nil {
+		log.Warn("SyncEipFirewallRule failed %s", err.Error())
+		utils.PanicOnError(err)
+	}
+}
+
 func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 	nicname, err := utils.GetNicNameByIp(info.Vip); utils.PanicOnError(err)
 
@@ -206,6 +272,10 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 			tree.Setf("vpn ipsec site-to-site peer %v tunnel %v remote prefix %v", info.PeerAddress, tunnelNo, remoteCidr)
 			tunnelNo++
 		}
+	}
+
+	if utils.IsSkipVyosIptables() {
+		return
 	}
 
 	// configure firewall
@@ -297,6 +367,14 @@ func createIPsecConnection(ctx *server.CommandContext) interface{} {
 	}
 	tree.Apply(false)
 
+	for _, info := range cmd.Infos {
+		ipsecMap[info.Uuid] = info
+	}
+
+	if utils.IsSkipVyosIptables() {
+		syncIpSecRulesByIptables()
+	}
+
 	go restartVpnAfterConfig()
 
 	return nil
@@ -309,11 +387,18 @@ func syncIPsecConnection(ctx *server.CommandContext) interface{} {
 	vyos := server.NewParserFromShowConfiguration()
 	tree := vyos.Tree
 
+	ipsecMap = make(map[string]ipsecInfo, IPSecInfoMaxSize)
+
 	for _, info := range cmd.Infos {
+		ipsecMap[info.Uuid] = info
 		deleteIPsec(tree, info)
 		createIPsec(tree, info)
 	}
 	tree.Apply(false)
+
+	if utils.IsSkipVyosIptables() {
+		syncIpSecRulesByIptables()
+	}
 
 	go restartVpnAfterConfig()
 
@@ -331,6 +416,13 @@ func deleteIPsecConnection(ctx *server.CommandContext) interface{} {
 	}
 	tree.Apply(false)
 
+	for _, info := range cmd.Infos {
+		delete(ipsecMap, info.Uuid)
+	}
+	if utils.IsSkipVyosIptables() {
+		syncIpSecRulesByIptables()
+	}
+
 	return nil
 }
 
@@ -340,6 +432,10 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 	tree.Deletef("vpn ipsec ike-group %s", info.Uuid)
 	tree.Deletef("vpn ipsec esp-group %s", info.Uuid)
 	tree.Deletef("vpn ipsec site-to-site peer %s", info.PeerAddress)
+
+	if utils.IsSkipVyosIptables() {
+		return
+	}
 
 	/* in sync ipsec, we don't know what is localcidr, remotecidr is missing
 	 * so use reg expression to delete all rules
@@ -417,6 +513,7 @@ func updateIPsecConnection(ctx *server.CommandContext) interface{} {
 }
 
 func IPsecEntryPoint() {
+	ipsecMap = make(map[string]ipsecInfo, IPSecInfoMaxSize)
 	server.RegisterAsyncCommandHandler(CREATE_IPSEC_CONNECTION, server.VyosLock(createIPsecConnection))
 	server.RegisterAsyncCommandHandler(DELETE_IPSEC_CONNECTION, server.VyosLock(deleteIPsecConnection))
 	server.RegisterAsyncCommandHandler(SYNC_IPSEC_CONNECTION, server.VyosLock(syncIPsecConnection))
