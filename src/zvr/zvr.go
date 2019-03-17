@@ -24,6 +24,7 @@ func loadPlugins()  {
 	plugin.RouteEntryPoint()
 	plugin.ZsnEntryPoint()
 	plugin.PrometheusEntryPoint()
+	plugin.OspfEntryPoint()
 }
 
 var options server.Options
