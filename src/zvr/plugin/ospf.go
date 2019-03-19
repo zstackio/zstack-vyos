@@ -84,6 +84,21 @@ type ospfProtocol struct {
 func (this *ospfProtocol) init(tree *server.VyosConfigTree)  ( err error) {
 	err = nil
 	this.Tree = tree;
+	/* clear all the configure of OSPF
+	*/
+	this.Tree.Deletef("protocols ospf");
+	if nics, nicErr := utils.GetAllNics(); nicErr == nil {
+		for _, val := range nics {
+			this.Tree.Deletef("interfaces ethernet %s ip ospf", val.Name)
+
+			if r := this.Tree.FindFirewallRuleByDescription(val.Name, "in", FIREWALL_DESCRIPTION); r != nil {
+				r.Delete()
+			}
+			if r := this.Tree.FindFirewallRuleByDescription(val.Name, "local", FIREWALL_DESCRIPTION); r != nil {
+				r.Delete()
+			}
+		}
+	}
 	return err;
 }
 
@@ -134,7 +149,7 @@ func (this *ospfProtocol) setNetwork()  ( error) {
 			if _, cidr, err := net.ParseCIDR(n.Network); err != nil {
 				return err
 			} else {
-				this.Tree.Setf("protocols ospf area %s network %s", info.AreaId, cidr.String())
+				this.Tree.SetfWithoutCheckExisting("protocols ospf area %s network %s", info.AreaId, cidr.String())
 			}
 			nic, err := utils.GetNicNameByMac(n.NicMac)
 			if err != nil {
@@ -160,24 +175,16 @@ func (this *ospfProtocol) setNetwork()  ( error) {
 			}
 
 			if info.AuthType == Plaintext {
-				this.Tree.Setf("interfaces ethernet %s ip ospf authentication plaintext-password %s", nic, info.AuthParam)
+				this.Tree.SetfWithoutCheckExisting("interfaces ethernet %s ip ospf authentication plaintext-password %s", nic, info.AuthParam)
 			} else if info.AuthType == MD5 {
-				this.Tree.Setf("interfaces ethernet %s ip ospf authentication md5 key-id %s md5-key %s", nic, info.AuthParam, info.AuthParam)
+				pos := strings.IndexByte(info.AuthParam, '/')
+				if pos < 0 {
+					return fmt.Errorf("invalid authentication parametere:%s",info.AuthParam)
+				}
+				keyID, password := info.AuthParam[:pos], info.AuthParam[pos+1:]
+				this.Tree.SetfWithoutCheckExisting("interfaces ethernet %s ip ospf authentication md5 key-id %s md5-key %s", nic, keyID, password)
 			}
 
-		}
-		if info.AreaType == Standard {
-			this.Tree.Setf("protocols ospf area %s area-type %s", info.AreaId, "normal")
-		} else if info.AreaType == NSSA {
-			this.Tree.Setf("protocols ospf area %s area-type %s", info.AreaId, "nssa")
-		} else {
-			this.Tree.Setf("protocols ospf area %s area-type %s", info.AreaId, "stub")
-		}
-
-		if info.AuthType == Plaintext {
-			this.Tree.Setf("protocols ospf area %s authentication plaintext-password", info.AreaId)
-		} else if info.AuthType == MD5 {
-			this.Tree.Setf("protocols ospf area %s authentication md5", info.AreaId)
 		}
 	}
 	return nil
@@ -231,7 +238,7 @@ func refreshOspf(ctx *server.CommandContext) interface{} {
 	log.Debugf(fmt.Sprintf("ospf refresh cmd for %v %v %v ", cmd.RouterId, cmd.AreaInfos, cmd.NetworkInfos))
 	p := getProtocol(cmd.RouterId, cmd.AreaInfos, cmd.NetworkInfos);
 	err := p.init(server.NewParserFromShowConfiguration().Tree); utils.PanicOnError(err)
-	err = p.delRawCmd("protocols ospf"); utils.PanicOnError(err)
+
 	if cmd.NetworkInfos != nil && len(cmd.NetworkInfos) > 0 {
 		err = p.setRouterId(); utils.PanicOnError(err)
 		err = p.setArea(); utils.PanicOnError(err)
