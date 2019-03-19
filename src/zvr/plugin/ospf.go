@@ -8,6 +8,7 @@ import (
 	"github.com/pkg/errors"
 	"strings"
 	"unicode"
+	"net"
 )
 
 const (
@@ -117,9 +118,9 @@ func (this *ospfProtocol) setArea()  ( err error) {
 	return nil;
 }
 
-func (this *ospfProtocol) setNetwork()  (err error) {
+func (this *ospfProtocol) setNetwork()  ( error) {
 	if this.Tree == nil {
-		panic(fmt.Errorf("missing initial.."))
+		return (fmt.Errorf("missing initial.."))
 	}
 
 	for _, info := range this.AreaInfos {
@@ -127,8 +128,18 @@ func (this *ospfProtocol) setNetwork()  (err error) {
 			if n.AreaId != info.AreaId {
 				continue;
 			}
-			nic, err := utils.GetNicNameByMac(n.NicMac); utils.PanicOnError(err)
-			this.Tree.Setf("protocols ospf area %s network %s", info.AreaId, n.Network)
+			/*
+			ZSTAC-19018, modify network 192.168.48.1/24 to 192.168.48.0/24
+			 */
+			if _, cidr, err := net.ParseCIDR(n.Network); err != nil {
+				return err
+			} else {
+				this.Tree.Setf("protocols ospf area %s network %s", info.AreaId, cidr.String())
+			}
+			nic, err := utils.GetNicNameByMac(n.NicMac)
+			if err != nil {
+				return err;
+			}
 
 			if r := this.Tree.FindFirewallRuleByDescription(nic, "in", FIREWALL_DESCRIPTION); r == nil {
 				this.Tree.SetFirewallOnInterface(nic, "in",
@@ -139,10 +150,19 @@ func (this *ospfProtocol) setNetwork()  (err error) {
 
 			}
 
+			if r := this.Tree.FindFirewallRuleByDescription(nic, "local", FIREWALL_DESCRIPTION); r == nil {
+				this.Tree.SetFirewallOnInterface(nic, "local",
+					fmt.Sprintf("description %v", FIREWALL_DESCRIPTION),
+					fmt.Sprintf("protocol ospf"),
+					"action accept",
+				)
+
+			}
+
 			if info.AuthType == Plaintext {
 				this.Tree.Setf("interfaces ethernet %s ip ospf authentication plaintext-password %s", nic, info.AuthParam)
 			} else if info.AuthType == MD5 {
-				this.Tree.Setf("interfaces ethernet %s ip ospf authentication md5 key-id %s", nic, info.AuthParam)
+				this.Tree.Setf("interfaces ethernet %s ip ospf authentication md5 key-id %s md5-key %s", nic, info.AuthParam, info.AuthParam)
 			}
 
 		}
@@ -160,7 +180,7 @@ func (this *ospfProtocol) setNetwork()  (err error) {
 			this.Tree.Setf("protocols ospf area %s authentication md5", info.AreaId)
 		}
 	}
-	return err
+	return nil
 }
 
 func (this *ospfProtocol) setRawCmd(f string, args...interface{})  ( err error) {
@@ -193,6 +213,9 @@ func (this *ospfProtocol) commit() (err error) {
 }
 
 func getProtocol(id string, area []areaInfo, networks []networkInfo) protocol {
+	if ip := net.ParseIP(id); ip == nil {
+		panic(fmt.Errorf("router id[%s] is not formatted Ipv4 address.", id))
+	}
 	return &ospfProtocol{Id:id, AreaInfos:area, NetworkInfos:networks}
 }
 
