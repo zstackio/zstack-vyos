@@ -305,6 +305,6 @@ func getNeighbors(ctx *server.CommandContext) interface{} {
 }
 
 func OspfEntryPoint()  {
-	server.RegisterAsyncCommandHandler(ROUTER_PROTOCOL_REFRESH_OSPF, refreshOspf)
-	server.RegisterAsyncCommandHandler(ROUTER_PROTOCOL_GET_OSPF_NEIGHBOR, getNeighbors)
+	server.RegisterAsyncCommandHandler(ROUTER_PROTOCOL_REFRESH_OSPF, server.VyosLock(refreshOspf))
+	server.RegisterAsyncCommandHandler(ROUTER_PROTOCOL_GET_OSPF_NEIGHBOR, server.VyosLock(getNeighbors))
 }
