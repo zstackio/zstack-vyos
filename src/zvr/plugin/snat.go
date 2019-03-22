@@ -186,6 +186,15 @@ func syncSnatHandler(ctx *server.CommandContext) interface{} {
 
 	applySnatRules(cmd.Snats, true)
 
+	// clear contrack records
+	bash := utils.Bash{
+		Command: "sudo conntrack -D",
+	}
+	err := bash.Run()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
