@@ -77,7 +77,7 @@ func cleanupOldEip(tree *server.VyosConfigTree, eip eipInfo) {
 	}
 }
 
-func checkEipIpTableRules(eip eipInfo) error {
+func checkEipIpTableRules(eip eipInfo, addEip bool) error {
 	/* the correct result of a Eip iptable nat rules:
 	 *    # iptables-save  | grep 172.20.16.250
 	 *	-A PREROUTING -d 172.20.16.250/32 -m comment --comment DST-NAT-1 -j DNAT --to-destination 10.86.4.132
@@ -120,10 +120,18 @@ func checkEipIpTableRules(eip eipInfo) error {
 		}
 	}
 
-	if (dnatRule == true && snatRule == true) {
-		return nil
+	if (addEip) {
+		if (dnatRule == true && snatRule == true) {
+			return nil
+		} else {
+			return fmt.Errorf("check eip iptables rules: eip %s, stdout %s, err %s", fmt.Sprintf("%+v", eip), o, e)
+		}
 	} else {
-		return fmt.Errorf("check eip iptables rules: eip %s, stdout %s, err %s", fmt.Sprintf("%+v", eip), o, e)
+		if (dnatRule == false && snatRule == false) {
+			return nil
+		} else {
+			return fmt.Errorf("check eip iptables rules: eip %s, stdout %s, err %s", fmt.Sprintf("%+v", eip), o, e)
+		}
 	}
 }
 
@@ -270,7 +278,7 @@ func createEip(ctx *server.CommandContext) interface{} {
 	setEip(tree, eip)
 	tree.Apply(false)
 
-	err := checkEipIpTableRules(eip);
+	err := checkEipIpTableRules(eip, true);
 	if (err != nil) {
 		/* rollback */
 		deleteEip(tree, eip)
@@ -292,7 +300,7 @@ func removeEip(ctx *server.CommandContext) interface{} {
                 deleteEip(tree, eip)
                 tree.Apply(false)
 
-                return checkEipExists(eip);
+                return checkEipIpTableRules(eip, false);
         }, 3, 1); utils.LogError(err)
 	return nil
 }
@@ -340,7 +348,7 @@ func syncEip(ctx *server.CommandContext) interface{} {
 
 	for _, eip := range cmd.Eips {
 		/* utils.PanicOnError(err) will response error message to ZStack, return value can not do it */
-		err := checkEipIpTableRules(eip);utils.PanicOnError(err)
+		err := checkEipIpTableRules(eip, true);utils.PanicOnError(err)
 		/* even sync failed, ZStack will not remove eip configuration */
 		if err != nil {
 			return err

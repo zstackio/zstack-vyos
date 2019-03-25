@@ -11,6 +11,7 @@ const (
 	SET_SNAT_PATH = "/setsnat"
 	REMOVE_SNAT_PATH = "/removesnat"
 	SYNC_SNAT_PATH = "/syncsnat"
+	SET_SNAT_STATE_PATH = "/setsnatservicestate"
 )
 
 type snatInfo struct {
@@ -31,6 +32,15 @@ type removeSnatCmd struct {
 
 type syncSnatCmd struct {
 	Snats []snatInfo `json:"snats"`
+}
+
+type setSnatStateCmd struct {
+	Snats []snatInfo `json:"snats"`
+	Enable bool `json:"enabled"`
+}
+
+type setNetworkServiceRsp struct {
+	ServiceStatus string `json:"serviceStatus"`
 }
 
 var SNAT_RULE_NUMBER = 9999
@@ -120,13 +130,10 @@ func hasRuleNumberForAddress(tree *server.VyosConfigTree, address string, ruleNo
 	return true
 }
 
-func syncSnatHandler(ctx *server.CommandContext) interface{} {
-	cmd := &syncSnatCmd{}
-	ctx.GetCommand(cmd)
-
+func applySnatRules(Snats []snatInfo, state bool) {
 	tree := server.NewParserFromShowConfiguration().Tree
 
-	for _, s := range cmd.Snats {
+	for _, s := range Snats {
 		outNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
 		inNic, err := utils.GetNicNameByMac(s.PrivateNicMac); utils.PanicOnError(err)
 		nicNumber, err := utils.GetNicNumber(inNic); utils.PanicOnError(err)
@@ -136,23 +143,57 @@ func syncSnatHandler(ctx *server.CommandContext) interface{} {
 		if rs := tree.Getf("nat source rule %v", pubNicRuleNo); rs != nil {
 			rs.Delete()
 		}
-		tree.SetSnatWithRuleNumber(pubNicRuleNo,
-			fmt.Sprintf("outbound-interface %s", outNic),
-			fmt.Sprintf("source address %s", address),
-			fmt.Sprintf("translation address %s", s.PublicIp),
-		)
 
 		if rs := tree.Getf("nat source rule %v", priNicRuleNo); rs != nil {
 			rs.Delete()
 		}
-		tree.SetSnatWithRuleNumber(priNicRuleNo,
-			fmt.Sprintf("outbound-interface %s", inNic),
-			fmt.Sprintf("source address %v", address),
-			fmt.Sprintf("translation address %s", s.PublicIp),
-		)
+
+		if state == true {
+			tree.SetSnatWithRuleNumber(pubNicRuleNo,
+				fmt.Sprintf("outbound-interface %s", outNic),
+				fmt.Sprintf("source address %s", address),
+				fmt.Sprintf("translation address %s", s.PublicIp),
+			)
+
+			tree.SetSnatWithRuleNumber(priNicRuleNo,
+				fmt.Sprintf("outbound-interface %s", inNic),
+				fmt.Sprintf("source address %v", address),
+				fmt.Sprintf("translation address %s", s.PublicIp),
+			)
+		}
 	}
 
 	tree.Apply(false)
+	return
+}
+
+func setSnatStateHandler(ctx *server.CommandContext) interface{} {
+	cmd := &setSnatStateCmd{}
+	ctx.GetCommand(cmd)
+
+	applySnatRules(cmd.Snats, cmd.Enable)
+
+	if cmd.Enable {
+		return setNetworkServiceRsp{ServiceStatus:"enable"}
+	} else {
+		return setNetworkServiceRsp{ServiceStatus:"disable"}
+	}
+}
+
+func syncSnatHandler(ctx *server.CommandContext) interface{} {
+	cmd := &syncSnatCmd{}
+	ctx.GetCommand(cmd)
+
+	applySnatRules(cmd.Snats, true)
+
+	// clear contrack records
+	bash := utils.Bash{
+		Command: "sudo conntrack -D",
+	}
+	err := bash.Run()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -161,4 +202,5 @@ func SnatEntryPoint() {
 	server.RegisterAsyncCommandHandler(SET_SNAT_PATH, server.VyosLock(setSnatHandler))
 	server.RegisterAsyncCommandHandler(REMOVE_SNAT_PATH, server.VyosLock(removeSnatHandler))
 	server.RegisterAsyncCommandHandler(SYNC_SNAT_PATH, server.VyosLock(syncSnatHandler))
+	server.RegisterAsyncCommandHandler(SET_SNAT_STATE_PATH, server.VyosLock(setSnatStateHandler))
 }
