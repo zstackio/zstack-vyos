@@ -70,7 +70,7 @@ type Listener interface {
 	preActionListenerServiceStop() (ret int, err error)
 	stopListenerService() ( err error)
 	postActionListenerServiceStop() (ret int, err error)
-        getGoBetweenCounters(listenerUuid string) ([]*LbCounter, int)
+        getLbCounters(listenerUuid string) ([]*LbCounter, int)
 }
 
 // the listener implemented with HaProxy
@@ -81,6 +81,7 @@ type HaproxyListener struct {
 	sockPath string
 	firewallDes string
 	maxConnect string
+	maxSession int   //same to maxConnect
 }
 
 // the listener implemented with gobetween
@@ -90,6 +91,8 @@ type GBListener struct {
 	pidPath	string
 	firewallDes string
 	apiPort string // restapi binding port range from 50000-60000
+	maxConnect string
+	maxSession int   //same to maxConnect
 }
 
 func getGBApiPort(confPath string, pidPath string) (port string) {
@@ -236,6 +239,7 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 	tmpl, err := template.New("conf").Parse(conf); utils.PanicOnError(err)
 	m, err = parseListenerPrameter(lb);utils.PanicOnError(err)
 	this.maxConnect = m["MaxConnection"].(string)
+	this.maxSession, _ = strconv.Atoi(this.maxConnect)
 
 	m["ulimit"] = getListenerMaxCocurrenceSocket(this.maxConnect)
 
@@ -411,7 +415,7 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
     fails = {{$.UnhealthyThreshold}}
     passes = {{$.HealthyThreshold}}
     interval = "{{$.HealthCheckInterval}}s"
-    timeout="{{$.HealthCheckInterval}}s"
+    timeout = "{{$.HealthCheckTimeout}}s"
     kind = "exec"
     exec_command = "/usr/share/healthcheck.sh"  # (required) command to execute
     exec_expected_positive_output = "success"           # (required) expected output of command in case of success
@@ -425,6 +429,8 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 	m, err = parseListenerPrameter(lb);utils.PanicOnError(err)
 	m["ApiPort"] = this.apiPort
 	//m["ulimit"] = getListenerMaxCocurrenceSocket(m["MaxConnection"].(string))
+	this.maxConnect = m["MaxConnection"].(string)
+	this.maxSession, _ = strconv.Atoi(this.maxConnect)
 
 	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
 	err = utils.MkdirForFile(this.pidPath, 0755); utils.PanicOnError(err)
@@ -723,6 +729,7 @@ type loadBalancerCollector struct {
 	inByteEntry *prom.Desc
 	outByteEntry *prom.Desc
 	curSessionNumEntry *prom.Desc
+	curSessionUsageEntry *prom.Desc
 }
 
 const (
@@ -752,6 +759,11 @@ func NewLbPrometheusCollector() MetricCollector {
 			"Backend server traffic in bytes",
 			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
 		),
+		curSessionUsageEntry: prom.NewDesc(
+			"zstack_lb_cur_session_usage",
+			"Backend server active session ratio of max session",
+			[]string{LB_LISTENER_UUID}, nil,
+		),
 
 		//vipUUIds: make(map[string]string),
 	}
@@ -762,6 +774,7 @@ func (c *loadBalancerCollector) Describe(ch chan<- *prom.Desc) error {
 	ch <- c.curSessionNumEntry
 	ch <- c.inByteEntry
 	ch <- c.outByteEntry
+	ch <- c.curSessionUsageEntry
 	return nil
 }
 
@@ -770,14 +783,27 @@ func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
 		var counters []*LbCounter
 		num := 0
 
+		var maxSessionNum, sessionNum uint64
+		sessionNum = 0
 		switch listener.(type) {
 		case *GBListener:
 			gbListener, _ := listener.(*GBListener)
-			counters, num = gbListener.getGoBetweenCounters(listenerUuid)
+			counters, num = gbListener.getLbCounters(listenerUuid)
+			maxSessionNum = (uint64)(gbListener.maxSession)
+			/* get total count */
+			for _, cnt := range counters {
+				sessionNum += cnt.sessionNumber
+			}
 			break
 		case *HaproxyListener:
 			haproxyListener, _ := listener.(*HaproxyListener)
-			counters, num = haproxyListener.getGoBetweenCounters(listenerUuid)
+			counters, num = haproxyListener.getLbCounters(listenerUuid)
+			maxSessionNum = (uint64)(haproxyListener.maxSession)
+			/* get total count */
+			for _, cnt := range counters {
+				sessionNum += cnt.sessionNumber
+			}
+
 			break
 		default:
 			log.Infof("can not assert listerner[uuid %s] type", listenerUuid)
@@ -791,6 +817,8 @@ func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
 			ch <- prom.MustNewConstMetric(c.outByteEntry, prom.GaugeValue, float64(cnt.bytesOut), cnt.listenerUuid, cnt.ip)
 			ch <- prom.MustNewConstMetric(c.curSessionNumEntry, prom.GaugeValue, float64(cnt.sessionNumber), cnt.listenerUuid, cnt.ip)
 		}
+
+		ch <- prom.MustNewConstMetric(c.curSessionUsageEntry, prom.GaugeValue, float64(sessionNum * 100 /maxSessionNum), listenerUuid)
 	}
 
 	return nil
@@ -821,7 +849,7 @@ func statusFormat(status string) int  {
 	}
 }
 
-func (this *HaproxyListener) getGoBetweenCounters(listenerUuid string) ([]*LbCounter, int) {
+func (this *HaproxyListener) getLbCounters(listenerUuid string) ([]*LbCounter, int) {
 	var counters []*LbCounter
 	num := 0
 
@@ -894,7 +922,7 @@ func getGoBetweenStat(port string, server string )  (*GoBetweenServerStat, error
 	return stats, nil
 }
 
-func (this *GBListener) getGoBetweenCounters(listenerUuid string) ([]*LbCounter, int) {
+func (this *GBListener) getLbCounters(listenerUuid string) ([]*LbCounter, int) {
 	var counters []*LbCounter
 	var stats *GoBetweenServerStat
 	var err error
