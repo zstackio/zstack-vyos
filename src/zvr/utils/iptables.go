@@ -69,7 +69,7 @@ const (
 	DefaultTopRuleComment = "Default-rules-top" /* must be at top of firewall */
 	DefaultBottomRuleComment = "Default-rules-bottom" /* must be at bottom of firewall */
 	PortFordingRuleComment = "PF-rules-for-"
-	DnsRuleComment = "Dns-rules"
+	DnsRuleComment = "DNS-rules"
 	DHCPRuleComment = "DHCP-rules"
 	EipRuleComment = "EIP-rules-for-"
 	IpsecRuleComment = "IPSEC-rules-for-"         /* must be at top of postrouting of nat */
@@ -83,10 +83,10 @@ var rulesPriority = map[string]int{
 "Management-rules": 	900,
 "Dns-rules":        	800,
 "DHCP-rules":        	700,
-"Ipsec-rules-": 	600,
-"Pf-rules-":    	500,
+"IPSEC-rules-": 	600,
+"PF-rules-":    	500,
 "LB-rules-":            400,
-"Eip-rules-":           300,
+"EIP-rules-":           300,
 "SNAT-rules-":          200,
 "Default-rules-bottom": 100,
 }

@@ -191,21 +191,21 @@ func syncIpSecRulesByIptables()  {
 
 	for _, info := range ipsecMap {
 		nicname, _ := vipNicNameMap[info.Vip]
-		if _, ok := filterRules[nicname]; ok {
+		if _, ok := localfilterRules[nicname]; ok {
 			continue
 		}
 
 		rule := utils.NewIptablesRule(utils.UDP,  "", "", 0, 500, nil, utils.RETURN, utils.IpsecRuleComment)
-		localfilterRules[nicname] = append(filterRules[nicname], rule)
+		localfilterRules[nicname] = append(localfilterRules[nicname], rule)
 
 		rule = utils.NewIptablesRule(utils.UDP,  "", "", 0, 4500, nil, utils.RETURN, utils.IpsecRuleComment)
-		localfilterRules[nicname] = append(filterRules[nicname], rule)
+		localfilterRules[nicname] = append(localfilterRules[nicname], rule)
 
 		rule = utils.NewIptablesRule(utils.ESP,  "", "", 0, 0, nil, utils.RETURN, utils.IpsecRuleComment)
-		localfilterRules[nicname] = append(filterRules[nicname], rule)
+		localfilterRules[nicname] = append(localfilterRules[nicname], rule)
 
 		rule = utils.NewIptablesRule(utils.AH,  "", "", 0, 0, nil, utils.RETURN, utils.IpsecRuleComment)
-		localfilterRules[nicname] = append(filterRules[nicname], rule)
+		localfilterRules[nicname] = append(localfilterRules[nicname], rule)
 	}
 
 	for _, info := range ipsecMap {
