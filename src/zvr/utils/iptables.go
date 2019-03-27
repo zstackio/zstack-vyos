@@ -925,3 +925,56 @@ func SyncFirewallRule(rulesMap map[string][]IptablesRule, comment string, ch Cha
 
 	return restoreIptablesRulesSet(temp, FirewallTable)
 }
+
+/* 1. splits nat rules: into 2 groups: a map include all configured filters， and other
+   2. remove to be synced type
+   3. add synced rules into zs.snat or zs.dnat
+   4. assemble zs.snat, zs.dnat into other */
+func SyncIpsecFirewallRule(rulesMap, localRulesMap map[string][]IptablesRule, comment string) error {
+	/* #1 */
+	other, filtersMap, _ := getFirewallRuleSet()
+
+	/* #2 */
+	for chainName, filters := range filtersMap {
+		filtersMap[chainName] = removeRules(filters, comment)
+	}
+
+	/* #3, ipsec forward rule */
+	for nicname, rules := range rulesMap {
+		chainName := getChainName(nicname, IN)
+		if _, ok := filtersMap[chainName]; !ok {
+			filtersMap[chainName] = []string{}
+		}
+
+		filtersMap[chainName] = insertRuleIntoBuffer(filtersMap[chainName], rules, comment, chainName)
+	}
+
+	/* #3, ipsec local rule */
+	for nicname, rules := range localRulesMap {
+		chainName := getChainName(nicname, LOCAL)
+		if _, ok := filtersMap[chainName]; !ok {
+			filtersMap[chainName] = []string{}
+		}
+
+		filtersMap[chainName] = insertRuleIntoBuffer(filtersMap[chainName], rules, comment, chainName)
+	}
+
+	/* $4, last 2 in other is "
+		COMMIT
+		# Completed on Wed Mar 13 19:37:47 2019
+	*/
+	chainNames := []string{}
+	for chainName, _ := range filtersMap {
+		chainNames = append(chainNames, chainName)
+	}
+	sort.Strings(chainNames)
+
+	temp := []string{}
+	temp = append(temp, other[:len(other) -2]...)
+	for _, name := range chainNames {
+		temp = append(temp, filtersMap[name]...)
+	}
+	temp = append(temp, other[len(other) -2:]...)
+
+	return restoreIptablesRulesSet(temp, FirewallTable)
+}

@@ -177,6 +177,7 @@ func restartVpnAfterConfig()  {
 
 func syncIpSecRulesByIptables()  {
 	snatRules := []utils.IptablesRule{}
+	localfilterRules := make(map[string][]utils.IptablesRule)
 	filterRules := make(map[string][]utils.IptablesRule)
 	vipNicNameMap := make(map[string]string)
 
@@ -195,16 +196,16 @@ func syncIpSecRulesByIptables()  {
 		}
 
 		rule := utils.NewIptablesRule(utils.UDP,  "", "", 0, 500, nil, utils.RETURN, utils.IpsecRuleComment)
-		filterRules[nicname] = append(filterRules[nicname], rule)
+		localfilterRules[nicname] = append(filterRules[nicname], rule)
 
 		rule = utils.NewIptablesRule(utils.UDP,  "", "", 0, 4500, nil, utils.RETURN, utils.IpsecRuleComment)
-		filterRules[nicname] = append(filterRules[nicname], rule)
+		localfilterRules[nicname] = append(filterRules[nicname], rule)
 
 		rule = utils.NewIptablesRule(utils.ESP,  "", "", 0, 0, nil, utils.RETURN, utils.IpsecRuleComment)
-		filterRules[nicname] = append(filterRules[nicname], rule)
+		localfilterRules[nicname] = append(filterRules[nicname], rule)
 
 		rule = utils.NewIptablesRule(utils.AH,  "", "", 0, 0, nil, utils.RETURN, utils.IpsecRuleComment)
-		filterRules[nicname] = append(filterRules[nicname], rule)
+		localfilterRules[nicname] = append(filterRules[nicname], rule)
 	}
 
 	for _, info := range ipsecMap {
@@ -226,12 +227,12 @@ func syncIpSecRulesByIptables()  {
 	}
 
 	if err := utils.SyncNatRule(snatRules, nil, utils.IpsecRuleComment); err != nil {
-		log.Warn("SyncEipNatRule failed %s", err.Error())
+		log.Warn("ipsec SyncNatRule failed %s", err.Error())
 		utils.PanicOnError(err)
 	}
 
-	if err := utils.SyncFirewallRule(filterRules, utils.IpsecRuleComment, utils.IN); err != nil {
-		log.Warn("SyncEipFirewallRule failed %s", err.Error())
+	if err := utils.SyncIpsecFirewallRule(filterRules, localfilterRules, utils.IpsecRuleComment); err != nil {
+		log.Warn("ipsec SyncFirewallRule in failed %s", err.Error())
 		utils.PanicOnError(err)
 	}
 }
