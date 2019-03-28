@@ -81,7 +81,7 @@ const (
 var rulesPriority = map[string]int{
 "Default-rules-top": 	1000,
 "Management-rules": 	900,
-"Dns-rules":        	800,
+"DNS-rules":        	800,
 "DHCP-rules":        	700,
 "IPSEC-rules-": 	600,
 "PF-rules-":    	500,

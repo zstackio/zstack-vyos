@@ -36,9 +36,9 @@ func makeDnsFirewallRuleDescription(nicname string) string {
 }
 
 func setDnsFirewallRules(nicName string) error {
-	rule := utils.NewIptablesRule(utils.UDP, "", "", 0, 53, nil, utils.ACCEPT, utils.DnsRuleComment)
+	rule := utils.NewIptablesRule(utils.UDP, "", "", 0, 53, nil, utils.RETURN, utils.DnsRuleComment)
 	utils.InsertFireWallRule(nicName, rule, utils.LOCAL)
-	rule = utils.NewIptablesRule(utils.TCP, "", "", 0, 53, nil, utils.ACCEPT, utils.DnsRuleComment)
+	rule = utils.NewIptablesRule(utils.TCP, "", "", 0, 53, nil, utils.RETURN, utils.DnsRuleComment)
 	utils.InsertFireWallRule(nicName, rule, utils.LOCAL)
 	return nil
 }

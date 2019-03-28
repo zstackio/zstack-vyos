@@ -295,6 +295,9 @@ func setEipByIptables(eip eipInfo)  error{
 	rule = utils.NewIptablesRule("",  "", eip.GuestIp, 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
 		utils.RETURN, utils.EipRuleComment + eip.VipIp)
 	utils.InsertFireWallRule(nicname, rule, utils.IN)
+
+	rule = utils.NewIptablesRule("",  eip.GuestIp, "", 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
+		utils.RETURN, utils.EipRuleComment + eip.VipIp)
 	utils.InsertFireWallRule(prinicname, rule, utils.IN)
 
 	return nil
@@ -401,6 +404,8 @@ func syncEipByIptables(eips []eipInfo) error {
 		rule = utils.NewIptablesRule("", "", eip.GuestIp, 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
 			utils.RETURN, utils.EipRuleComment + eip.VipIp)
 		filterRules[nicname] = append(filterRules[nicname], rule)
+		rule = utils.NewIptablesRule("", eip.GuestIp, "", 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
+			utils.RETURN, utils.EipRuleComment + eip.VipIp)
 		filterRules[prinicname] = append(filterRules[prinicname], rule)
 	}
 
