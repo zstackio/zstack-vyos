@@ -6,7 +6,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"fmt"
 	"io/ioutil"
-	"encoding/json"
 )
 
 const (
@@ -74,7 +73,7 @@ func addRouteIfCallbackIpChanged() {
 			utils.PanicOnError(err)
 		}
 
-		mgmtNic := getMgmtInfoFromBootInfo()
+		mgmtNic := utils.GetMgmtInfoFromBootInfo()
 		if (mgmtNic == nil || utils.CheckMgmtCidrContainsIp(server.CALLBACK_IP, mgmtNic) == false) {
 			err := utils.SetZStackRoute(server.CALLBACK_IP, "eth0", mgmtNic["gateway"].(string)); utils.PanicOnError(err)
 		} else if mgmtNic == nil {
@@ -86,24 +85,6 @@ func addRouteIfCallbackIpChanged() {
 		}
 		server.CURRENT_CALLBACK_IP = server.CALLBACK_IP
 	}
-}
-
-
-
-func getMgmtInfoFromBootInfo() map[string]interface{} {
-	content, err := ioutil.ReadFile(BOOTSTRAP_INFO_CACHE); utils.PanicOnError(err)
-	if len(content) == 0 {
-		log.Debugf("no content in %s, can not get mgmt gateway", BOOTSTRAP_INFO_CACHE)
-		return nil
-	}
-
-	if err := json.Unmarshal(content, &bootstrapInfo); err != nil {
-		log.Debugf("can not parse info from %s, can not get mgmt gateway", BOOTSTRAP_INFO_CACHE)
-		return nil
-	}
-
-	mgmtNic := bootstrapInfo["managementNic"].(map[string]interface{})
-	return mgmtNic
 }
 
 func init ()  {

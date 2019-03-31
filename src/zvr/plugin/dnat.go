@@ -12,9 +12,11 @@ const (
 	CREATE_PORT_FORWARDING_PATH = "/createportforwarding"
 	REVOKE_PORT_FORWARDING_PATH = "/revokeportforwarding"
 	SYNC_PORT_FORWARDING_PATH = "/syncportforwarding"
+	PortForwardingInfoMaxSize = 256
 )
 
 type dnatInfo struct {
+	Uuid         string `json:"uuid"`
 	VipPortStart int `json:"vipPortStart"`
 	VipPortEnd int `json:"vipPortEnd"`
 	PrivatePortStart int `json:"privatePortStart"`
@@ -39,34 +41,87 @@ type syncDnatCmd struct {
 	Rules []dnatInfo `json:"rules"`
 }
 
+var pfMap map[string]dnatInfo
+
+func syncPortForwardingRules() error {
+	dnatRules := []utils.IptablesRule{}
+	filterRules := make(map[string][]utils.IptablesRule)
+
+	for _, r := range pfMap {
+		pubNicName, err := utils.GetNicNameByIp(r.VipIp); utils.PanicOnError(err)
+		/* from ZStack side, port range is not supported */
+		protocol := utils.TCP
+		if r.ProtocolType != "TCP" {
+			protocol = utils.UDP
+		}
+		if r.AllowedCidr != "" && r.AllowedCidr != "0.0.0.0/0" {
+			ruleSpec := utils.NewIptablesRule(protocol, fmt.Sprintf("!%s", r.AllowedCidr), r.PrivateIp + "/32", 0, r.VipPortStart,
+				[]string{utils.NEW}, utils.REJECT, fmt.Sprintf("%s%s-%d", utils.PortFordingRuleComment, r.VipIp, r.VipPortStart))
+			filterRules[pubNicName] = append(filterRules[pubNicName], ruleSpec)
+		} else {
+			ruleSpec := utils.NewIptablesRule(protocol, "", r.PrivateIp + "/32", 0, r.VipPortStart,
+				[]string{utils.NEW}, utils.RETURN, fmt.Sprintf("%s%s-%d", utils.PortFordingRuleComment, r.VipIp, r.VipPortStart))
+			filterRules[pubNicName] = append(filterRules[pubNicName], ruleSpec)
+		}
+
+
+		ruleSpec := utils.NewIptablesRule(protocol, r.PrivateIp , r.VipIp + "/32", r.PrivatePortStart, r.VipPortStart,
+			nil, utils.DNAT, fmt.Sprintf("%s%s-%d", utils.PortFordingRuleComment, r.VipIp, r.VipPortStart))
+		dnatRules = append(dnatRules, ruleSpec)
+	}
+
+	if err := utils.SyncNatRule(nil, dnatRules, utils.PortFordingRuleComment); err != nil {
+		log.Warn("SyncEipNatRule failed %s", err.Error())
+		utils.PanicOnError(err)
+		return err
+	}
+
+	if err := utils.SyncFirewallRule(filterRules, utils.PortFordingRuleComment, utils.IN); err != nil {
+		log.Warn("SyncEipFirewallRule failed %s", err.Error())
+		utils.PanicOnError(err)
+		return err
+	}
+
+	return nil
+}
+
 func syncDnatHandler(ctx *server.CommandContext) interface{} {
 	cmd := &syncDnatCmd{}
 	ctx.GetCommand(cmd)
 
-	tree := server.NewParserFromShowConfiguration().Tree
-	dnatRegex := ".*(\\w.){3}\\w-\\w{1,}-\\w{1,}-(\\w{2}:){5}\\w{2}-\\w{1,}-\\w{1,}-\\w{1,}"
+	pfMap = make(map[string]dnatInfo, PortForwardingInfoMaxSize)
 
-	// delete all portforwarding related rules
-	for {
-		if r := tree.FindDnatRuleDescriptionRegex(dnatRegex, utils.StringRegCompareFn); r != nil {
-			r.Delete()
-		} else {
-			break
+	if utils.IsSkipVyosIptables() {
+		for _, rule := range cmd.Rules {
+			pfMap[rule.Uuid] = rule
 		}
-	}
+		syncPortForwardingRules()
+	} else {
+		tree := server.NewParserFromShowConfiguration().Tree
+		dnatRegex := ".*(\\w.){3}\\w-\\w{1,}-\\w{1,}-(\\w{2}:){5}\\w{2}-\\w{1,}-\\w{1,}-\\w{1,}"
 
-	// TODO(WeiW): use all public nics rather than eth0
-	for {
-		if r := tree.FindFirewallRuleByDescriptionRegex(
-			"eth0", "in", dnatRegex, utils.StringRegCompareFn); r != nil {
-			r.Delete()
-		} else {
-			break
+		// delete all portforwarding related rules
+		for {
+			if r := tree.FindDnatRuleDescriptionRegex(dnatRegex, utils.StringRegCompareFn); r != nil {
+				r.Delete()
+			} else {
+				break
+			}
 		}
-	}
 
-	setRuleInTree(tree, cmd.Rules)
-	tree.Apply(false)
+		// TODO(WeiW): use all public nics rather than eth0
+		for {
+			if r := tree.FindFirewallRuleByDescriptionRegex(
+				"eth0", "in", dnatRegex, utils.StringRegCompareFn); r != nil {
+				r.Delete()
+			} else {
+				break
+			}
+		}
+
+		setRuleInTree(tree, cmd.Rules)
+		tree.Apply(false)
+	}
 	return nil
 }
 
@@ -162,9 +217,16 @@ func setDnatHandler(ctx *server.CommandContext) interface{} {
 	cmd := &setDnatCmd{}
 	ctx.GetCommand(cmd)
 
-	tree := server.NewParserFromShowConfiguration().Tree
-	setRuleInTree(tree, cmd.Rules)
-	tree.Apply(false)
+	if utils.IsSkipVyosIptables() {
+		for _, r := range cmd.Rules {
+			pfMap[r.Uuid] = r
+		}
+		syncPortForwardingRules()
+	} else {
+		tree := server.NewParserFromShowConfiguration().Tree
+		setRuleInTree(tree, cmd.Rules)
+		tree.Apply(false)
+	}
 
 	return nil
 }
@@ -173,24 +235,31 @@ func removeDnatHandler(ctx *server.CommandContext) interface{} {
 	cmd := &removeDnatCmd{}
 	ctx.GetCommand(cmd)
 
-	tree := server.NewParserFromShowConfiguration().Tree
-	for _, r := range cmd.Rules {
-		des := makeDnatDescription(r)
-		if c := getRule(tree, des); c != nil {
-			c.Delete()
-		} else {
-			des = makeOrphanDnatDescription(r)
+	if utils.IsSkipVyosIptables() {
+		for _, r := range cmd.Rules {
+			delete(pfMap, r.Uuid)
+		}
+		syncPortForwardingRules()
+	} else {
+		tree := server.NewParserFromShowConfiguration().Tree
+		for _, r := range cmd.Rules {
+			des := makeDnatDescription(r)
 			if c := getRule(tree, des); c != nil {
 				c.Delete()
+			} else {
+				des = makeOrphanDnatDescription(r)
+				if c := getRule(tree, des); c != nil {
+					c.Delete()
+				}
+			}
+
+			pubNicName, err := utils.GetNicNameByIp(r.VipIp); utils.PanicOnError(err)
+			if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", des); fr != nil {
+				fr.Delete()
 			}
 		}
-
-		pubNicName, err := utils.GetNicNameByIp(r.VipIp); utils.PanicOnError(err)
-		if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", des); fr != nil {
-			fr.Delete()
-		}
+		tree.Apply(false)
 	}
-	tree.Apply(false)
 
 	for _, r := range cmd.Rules {
 		for port := r.VipPortStart; port <= r.VipPortEnd; port++ {
@@ -205,6 +274,7 @@ func removeDnatHandler(ctx *server.CommandContext) interface{} {
 }
 
 func DnatEntryPoint() {
+	pfMap = make(map[string]dnatInfo, PortForwardingInfoMaxSize)
 	server.RegisterAsyncCommandHandler(CREATE_PORT_FORWARDING_PATH, server.VyosLock(setDnatHandler))
 	server.RegisterAsyncCommandHandler(REVOKE_PORT_FORWARDING_PATH, server.VyosLock(removeDnatHandler))
 	server.RegisterAsyncCommandHandler(SYNC_PORT_FORWARDING_PATH, server.VyosLock(syncDnatHandler))

@@ -67,10 +67,10 @@ type Listener interface {
 	rollbackPreActionListenerServiceStart() ( err error)
 	startListenerService() (ret int, err error)
 	postActionListenerServiceStart() ( err error)
-	preActionListenerServiceStop() (ret int, err error)
 	stopListenerService() ( err error)
 	postActionListenerServiceStop() (ret int, err error)
         getLbCounters(listenerUuid string) ([]*LbCounter, int)
+	getIptablesRule()([]utils.IptablesRule, string)
 }
 
 // the listener implemented with HaProxy
@@ -154,7 +154,7 @@ func getListener(lb lbInfo) Listener {
 	case "tcp", "https", "http":
 		return &HaproxyListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, sockPath:sockPath}
 	default:
-		panic(fmt.Sprintf("No such listener %v", lb.Mode))
+		utils.PanicOnError(fmt.Errorf("No such listener %v", lb.Mode))
 	}
 	return nil
 }
@@ -275,10 +275,13 @@ func (this *HaproxyListener) checkIfListenerServiceUpdate(origChecksum string, c
 }
 
 func (this *HaproxyListener) preActionListenerServiceStart() ( err error) {
+	if utils.IsSkipVyosIptables() {
+		return
+	}
+
 	// drop SYN packets to make clients to resend, this is for restarting LB without losing packets
 	nicname, err := utils.GetNicNameByIp(this.lb.Vip ); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
-
 	dropRuleDes := fmt.Sprintf("lb-%v-%s-drop", this.lb.LbUuid, this.lb.ListenerUuid)
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", dropRuleDes); r == nil {
 		tree.SetFirewallOnInterface(nicname, "local",
@@ -296,7 +299,15 @@ func (this *HaproxyListener) preActionListenerServiceStart() ( err error) {
 	return nil
 }
 
+func deleteHaproxySynRuleByIptables(nic string, lb lbInfo)  {
+	utils.DeleteFirewallRuleByComment(nic, utils.LbRuleComment + lb.ListenerUuid + "-SYN")
+}
+
 func (this *HaproxyListener) rollbackPreActionListenerServiceStart() ( err error) {
+	if utils.IsSkipVyosIptables() {
+		return nil
+	}
+
 	// drop SYN packets to make clients to resend, this is for restarting LB without losing packets
 	nicname, err := utils.GetNicNameByIp(this.lb.Vip ); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
@@ -306,11 +317,14 @@ func (this *HaproxyListener) rollbackPreActionListenerServiceStart() ( err error
 		r.Delete()
 		tree.Apply(false)
 	}
-
 	return nil
 }
 
 func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
+	if utils.IsSkipVyosIptables() {
+		return nil
+	}
+
 	nicname, err := utils.GetNicNameByIp(this.lb.Vip ); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
 
@@ -335,10 +349,6 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 	return nil
 }
 
-func (this *HaproxyListener) preActionListenerServiceStop() (ret int, err error) {
-	return 0, nil
-}
-
 func (this *HaproxyListener) stopListenerService() ( err error) {
 	//miao zhanyong the udp lb configured by gobetween, there is no pid configure in the shell cmd line
 	pid, err := utils.FindFirstPIDByPS(this.confPath, this.pidPath)
@@ -356,11 +366,13 @@ func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error
 	delete(LbListeners, this.lb.ListenerUuid)
 
 	nicname, err := utils.GetNicNameByIp(this.lb.Vip); utils.PanicOnError(err)
-	tree := server.NewParserFromShowConfiguration().Tree
-	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r != nil {
-		r.Delete()
+	if ! utils.IsSkipVyosIptables() {
+		tree := server.NewParserFromShowConfiguration().Tree
+		if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r != nil {
+			r.Delete()
+		}
+		tree.Apply(false)
 	}
-	tree.Apply(false)
 
 	if e, _ := utils.PathExists(this.pidPath); e {
 		err = os.Remove(this.pidPath); utils.LogError(err)
@@ -373,6 +385,12 @@ func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error
 	}
 
 	return 0, err
+}
+
+func (this *HaproxyListener) getIptablesRule()([]utils.IptablesRule, string) {
+	nicname, err := utils.GetNicNameByIp(this.lb.Vip); utils.PanicOnError(err)
+	return []utils.IptablesRule{utils.NewLoadBalancerIptablesRule(utils.TCP, this.lb.Vip, this.lb.LoadBalancerPort,
+		utils.RETURN, utils.LbRuleComment + this.lb.ListenerUuid, nil)}, nicname
 }
 
 
@@ -488,7 +506,22 @@ func (this *GBListener) rollbackPreActionListenerServiceStart() ( err error) {
 	return nil
 }
 
+func (this *GBListener) setGBListenerRuleByIptables(nic string)  {
+	dport, _ := strconv.Atoi(this.apiPort)
+	rule := utils.NewLoadBalancerIptablesRule(utils.TCP, "", dport,
+		utils.ACCEPT, utils.LbRuleComment + this.lb.ListenerUuid, nil)
+	utils.InsertFireWallRule(nic, rule, utils.LOCAL)
+
+	rule = utils.NewLoadBalancerIptablesRule(utils.UDP, this.lb.Vip, this.lb.LoadBalancerPort,
+		utils.ACCEPT, utils.LbRuleComment + this.lb.ListenerUuid, nil)
+	utils.InsertFireWallRule(nic, rule, utils.LOCAL)
+}
+
 func (this *GBListener) postActionListenerServiceStart() ( err error) {
+	if utils.IsSkipVyosIptables() {
+		return nil
+	}
+
 	nicname, err := utils.GetNicNameByIp(this.lb.Vip ); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
 
@@ -517,9 +550,13 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 	return nil
 }
 
-
-func (this *GBListener) preActionListenerServiceStop() (ret int, err error) {
-	return 0, nil
+func (this *GBListener) getIptablesRule()([]utils.IptablesRule, string) {
+	nicname, err := utils.GetNicNameByIp(this.lb.Vip); utils.PanicOnError(err)
+	dport, _ := strconv.Atoi(this.apiPort)
+	return []utils.IptablesRule {
+		utils.NewLoadBalancerIptablesRule(utils.TCP, "", dport, utils.ACCEPT, utils.LbRuleComment + this.lb.ListenerUuid, nil),
+		utils.NewLoadBalancerIptablesRule(utils.UDP, this.lb.Vip, this.lb.LoadBalancerPort, utils.ACCEPT, utils.LbRuleComment + this.lb.ListenerUuid, nil)},
+		nicname
 }
 
 func (this *GBListener) stopListenerService() ( err error) {
@@ -540,13 +577,15 @@ func (this *GBListener) postActionListenerServiceStop() (ret int, err error) {
 	delete(LbListeners, this.lb.ListenerUuid)
 
 	nicname, err := utils.GetNicNameByIp(this.lb.Vip); utils.PanicOnError(err)
-	tree := server.NewParserFromShowConfiguration().Tree
-	r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes)
-	for r != nil{
-		r.Delete()
-		r = tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes)
+	if !utils.IsSkipVyosIptables() {
+		tree := server.NewParserFromShowConfiguration().Tree
+		r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes)
+		for r != nil {
+			r.Delete()
+			r = tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes)
+		}
+		tree.Apply(false)
 	}
-	tree.Apply(false)
 
 	if e, _ := utils.PathExists(this.pidPath); e {
 		err = os.Remove(this.pidPath); utils.LogError(err)
@@ -646,7 +685,7 @@ func isCertificateUsed(certificateFile string) bool {
 	}
 }
 
-func remoteUsedCertificate()  {
+func removeUnusedCertificate()  {
 	files := getCertificateList()
 	for _, file := range files {
 		if file != "" && !isCertificateUsed(file) {
@@ -669,7 +708,30 @@ func refreshLb(ctx *server.CommandContext) interface{} {
 		}
 	}
 
-	remoteUsedCertificate()
+	/* reinstall all lb firewalls */
+	if utils.IsSkipVyosIptables() {
+		filterRules := make(map[string][]utils.IptablesRule)
+		for _, listener := range LbListeners {
+			var nicname string
+			var rules []utils.IptablesRule
+			switch v := listener.(type) {
+			case *HaproxyListener:
+				rules, nicname = v.getIptablesRule()
+				break
+			case *GBListener:
+				rules, nicname = v.getIptablesRule()
+				break
+			default:
+				continue
+			}
+
+			filterRules[nicname] = append(filterRules[nicname], rules...)
+		}
+
+		err := utils.SyncFirewallRule(filterRules, utils.LbRuleComment, utils.LOCAL); utils.PanicOnError(err)
+	}
+
+	removeUnusedCertificate()
 
 	return nil
 }
@@ -679,8 +741,8 @@ func delLb(lb lbInfo) {
 	if  listener == nil {
 		return
 	}
-	_, err := listener.preActionListenerServiceStop(); utils.PanicOnError(err)
-	err = listener.stopListenerService(); utils.PanicOnError(err)
+
+	err := listener.stopListenerService(); utils.PanicOnError(err)
 	_, err = listener.postActionListenerServiceStop(); utils.PanicOnError(err)
 }
 
@@ -694,7 +756,7 @@ func deleteLb(ctx *server.CommandContext) interface{} {
 		}
 	}
 
-	remoteUsedCertificate()
+	removeUnusedCertificate()
 
 	return nil
 }
