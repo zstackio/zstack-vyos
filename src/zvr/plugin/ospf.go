@@ -156,22 +156,24 @@ func (this *ospfProtocol) setNetwork()  ( error) {
 				return err;
 			}
 
-			if r := this.Tree.FindFirewallRuleByDescription(nic, "in", FIREWALL_DESCRIPTION); r == nil {
-				this.Tree.SetFirewallOnInterface(nic, "in",
-					fmt.Sprintf("description %v", FIREWALL_DESCRIPTION),
-					fmt.Sprintf("protocol ospf"),
-					"action accept",
-				)
+			if !utils.IsSkipVyosIptables() {
+				if r := this.Tree.FindFirewallRuleByDescription(nic, "in", FIREWALL_DESCRIPTION); r == nil {
+					this.Tree.SetFirewallOnInterface(nic, "in",
+						fmt.Sprintf("description %v", FIREWALL_DESCRIPTION),
+						fmt.Sprintf("protocol ospf"),
+						"action accept",
+					)
 
-			}
+				}
 
-			if r := this.Tree.FindFirewallRuleByDescription(nic, "local", FIREWALL_DESCRIPTION); r == nil {
-				this.Tree.SetFirewallOnInterface(nic, "local",
-					fmt.Sprintf("description %v", FIREWALL_DESCRIPTION),
-					fmt.Sprintf("protocol ospf"),
-					"action accept",
-				)
+				if r := this.Tree.FindFirewallRuleByDescription(nic, "local", FIREWALL_DESCRIPTION); r == nil {
+					this.Tree.SetFirewallOnInterface(nic, "local",
+						fmt.Sprintf("description %v", FIREWALL_DESCRIPTION),
+						fmt.Sprintf("protocol ospf"),
+						"action accept",
+					)
 
+				}
 			}
 
 			if info.AuthType == Plaintext {
@@ -253,6 +255,11 @@ func refreshOspf(ctx *server.CommandContext) interface{} {
 	}
 
 	p.commit()
+
+	if utils.IsSkipVyosIptables() {
+		syncOspfRulesByIptables(cmd.NetworkInfos)
+	}
+
 	return nil
 }
 
@@ -308,6 +315,24 @@ func getNeighbors(ctx *server.CommandContext) interface{} {
 	neighbors,err := parseNeighbor(o); utils.PanicOnError(err)
 
 	return getOspfNeighborRsp{Neighbors:neighbors}
+}
+
+func syncOspfRulesByIptables(NetworkInfos []networkInfo)  {
+	localfilterRules := make(map[string][]utils.IptablesRule)
+	filterRules := make(map[string][]utils.IptablesRule)
+
+	for _, info := range NetworkInfos {
+		nicname, err := utils.GetNicNameByMac(info.NicMac); utils.PanicOnError(err)
+		rule := utils.NewIptablesRule("ospf",  "", "", 0, 0, nil, utils.RETURN, utils.OSPFComment)
+		filterRules[nicname] = append(filterRules[nicname], rule)
+		lrule := utils.NewIptablesRule("ospf",  "", "", 0, 0, nil, utils.RETURN, utils.OSPFComment)
+		localfilterRules[nicname] = append(localfilterRules[nicname], lrule)
+	}
+
+	if err := utils.SyncLocalAndInFirewallRule(filterRules, localfilterRules, utils.OSPFComment); err != nil {
+		log.Warn("ospf SyncFirewallRule in failed %s", err.Error())
+		utils.PanicOnError(err)
+	}
 }
 
 func OspfEntryPoint()  {
