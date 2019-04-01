@@ -525,8 +525,18 @@ func (t *VyosConfigTree) SetSnatWithStartRuleNumber(startNum int, rules...string
 	return currentRuleNum
 }
 
-func (t *VyosConfigTree) SetSnat(rules...string) int {
+func (t *VyosConfigTree) SetSnatExclude(rules...string) int {
 	return t.SetSnatWithStartRuleNumber(1, rules...)
+}
+
+/*now the SNAT rule is splited 3 parts,
+	[1, 1023] exclude rule, call SetSnatExclude
+	[1024,xxxx-1] normal rules (such as eip), call SetSnat
+	[xxxx, 9999] in snat (call SetSnatWithRuleNumber),
+*/
+func (t *VyosConfigTree) SetSnat(rules ...string) int {
+	var SNAT_RULE_NUMBER_FOR_EIP = 1024
+	return t.SetSnatWithStartRuleNumber(SNAT_RULE_NUMBER_FOR_EIP, rules...)
 }
 
 func (t *VyosConfigTree) FindFirstNotExcludeSNATRule(startNum int) int {

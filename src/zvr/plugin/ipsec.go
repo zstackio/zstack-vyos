@@ -340,13 +340,16 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 			for _, remoteCidr := range info.PeerCidrs {
 				des = fmt.Sprintf("ipsec-%s-%s-%s", info.Uuid, localCidr, remoteCidr)
 				if r := tree.FindSnatRuleDescription(des); r == nil {
-					num := tree.SetSnat(
+					num := tree.SetSnatExclude(
 						fmt.Sprintf("destination address %v", remoteCidr),
 						fmt.Sprintf("source address %v", localCidr),
 						fmt.Sprintf("outbound-interface %v", nicname),
 						fmt.Sprintf("description %v", des),
 					)
 					if f := tree.FindFirstNotExcludeSNATRule(1); num != 1 && num > f {
+						/*there has not been run here never*/
+						utils.LogError(fmt.Errorf("there is SNAT rule number unexcepted, rule:%v %v",
+							tree.Getf("nat source rule %v", num),  tree.Getf("nat source rule %v", f)))
 						tree.SwapSnatRule(num, f)
 						num = f
 					}
