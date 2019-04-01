@@ -77,7 +77,7 @@ do_start() {
         if [ "$c"=="1" ]
         then
             echo "failed, retrying the $retry time"
-            su - vyos -c "nohup $SERVER -ip $ETH0_IP -logfile $LOGFILE >$BOOTLOG 2>&1 < /dev/null &"
+            su - vyos -c "nohup $SERVER -ip $ETH0_IP -logfile $LOGFILE >>$BOOTLOG 2>&1 < /dev/null &"
             sleep $(( retry++ ))
         else
             retry=maxRetries+1
