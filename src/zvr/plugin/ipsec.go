@@ -231,7 +231,7 @@ func syncIpSecRulesByIptables()  {
 		utils.PanicOnError(err)
 	}
 
-	if err := utils.SyncIpsecFirewallRule(filterRules, localfilterRules, utils.IpsecRuleComment); err != nil {
+	if err := utils.SyncLocalAndInFirewallRule(filterRules, localfilterRules, utils.IpsecRuleComment); err != nil {
 		log.Warn("ipsec SyncFirewallRule in failed %s", err.Error())
 		utils.PanicOnError(err)
 	}

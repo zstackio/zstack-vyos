@@ -57,6 +57,7 @@ const (
 	NEW = "NEW"
 	RELATED = "RELATED"
 	ESTABLISHED = "ESTABLISHED"
+	INVALID = "INVALID"
 )
 
 const (
@@ -76,6 +77,7 @@ const (
 	LbRuleComment = "LB-rules-for-"
 	SNATComment = "SNAT-rules-for-"
 	ManagementComment = "Management-rules"
+	OSPFComment = "OSPF-rules"
 )
 
 var rulesPriority = map[string]int{
@@ -83,6 +85,7 @@ var rulesPriority = map[string]int{
 "Management-rules": 	900,
 "DNS-rules":        	800,
 "DHCP-rules":        	700,
+	"OSPF-rules":   650,
 "IPSEC-rules-": 	600,
 "PF-rules-":    	500,
 "LB-rules-":            400,
@@ -450,15 +453,25 @@ func InitNatRule()  {
 
 func initNicFirewallDefaultRules(nic string, ip string, pubNic bool, defaultAction string) error {
 	/* add rules for FORWARD chain */
-	rule := getDefaultIptablesRule()
-	rule.states = []string {RELATED, ESTABLISHED}
-	rule.action = RETURN
-	rule.comment = DefaultTopRuleComment
-	if err := InsertFireWallRule(nic, rule, IN); err != nil{
-		return err
+	if pubNic {
+		rule := getDefaultIptablesRule()
+		rule.states = []string{RELATED, ESTABLISHED}
+		rule.action = RETURN
+		rule.comment = DefaultTopRuleComment
+		if err := InsertFireWallRule(nic, rule, IN); err != nil {
+			return err
+		}
+	} else {
+		rule := getDefaultIptablesRule()
+		rule.states = []string{INVALID, NEW, RELATED, ESTABLISHED}
+		rule.action = RETURN
+		rule.comment = DefaultTopRuleComment
+		if err := InsertFireWallRule(nic, rule, IN); err != nil {
+			return err
+		}
 	}
 
-	rule = getDefaultIptablesRule()
+	rule := getDefaultIptablesRule()
 	rule.proto = ICMP
 	rule.action = RETURN
 	rule.comment = DefaultTopRuleComment
@@ -930,7 +943,7 @@ func SyncFirewallRule(rulesMap map[string][]IptablesRule, comment string, ch Cha
    2. remove to be synced type
    3. add synced rules into zs.snat or zs.dnat
    4. assemble zs.snat, zs.dnat into other */
-func SyncIpsecFirewallRule(rulesMap, localRulesMap map[string][]IptablesRule, comment string) error {
+func SyncLocalAndInFirewallRule(rulesMap, localRulesMap map[string][]IptablesRule, comment string) error {
 	/* #1 */
 	other, filtersMap, _ := getFirewallRuleSet()
 
