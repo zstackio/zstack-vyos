@@ -164,7 +164,7 @@ func (iptableRule IptablesRule)string() []string  {
 
 	if iptableRule.proto != "" {
 		rules = append(rules, "-p " + iptableRule.proto)
-		if iptableRule.srcPort != 0 {
+		if iptableRule.srcPort != 0 && iptableRule.action != DNAT {
 			rules = append(rules, "-m " + iptableRule.proto)
 			rules = append(rules, fmt.Sprintf("--sport %d ", iptableRule.srcPort))
 		}
@@ -440,6 +440,10 @@ func InitNicFirewall(nic string, ip string, pubNic bool, defaultAction string)  
 }
 
 func InitNatRule()  {
+	if !IsSkipVyosIptables() {
+		return
+	}
+
 	ch := PREROUTING
 	if err := newChain(NatTable, "PREROUTING", ch.string(),  ""); err != nil {
 		return
