@@ -209,9 +209,9 @@ func setSnatStateHandler(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 
 	if utils.IsSkipVyosIptables() {
-		syncSnatByIptables(cmd.Snats, true)
+		syncSnatByIptables(cmd.Snats, cmd.Enable)
 	} else {
-		applySnatRules(cmd.Snats, true)
+		applySnatRules(cmd.Snats, cmd.Enable)
 	}
 
 	if cmd.Enable {
