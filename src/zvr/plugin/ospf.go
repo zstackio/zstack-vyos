@@ -15,7 +15,8 @@ const (
 	ROUTER_PROTOCOL_REFRESH_OSPF = "/routerprotocol/ospf/refresh"
 	ROUTER_PROTOCOL_GET_OSPF_NEIGHBOR = "/routerprotocol/ospf/neighbor"
 
-	FIREWALL_DESCRIPTION="ospf-firewall"
+	FIREWALL_DESCRIPTION = "ospf-firewall"
+	SNAT_DESCRIPTION = "ospf-snat"
 )
 
 type RouterAreaType string
@@ -88,13 +89,16 @@ func (this *ospfProtocol) init(tree *server.VyosConfigTree)  ( err error) {
 	*/
 	this.Tree.Deletef("protocols ospf");
 	if nics, nicErr := utils.GetAllNics(); nicErr == nil {
-		for _, val := range nics {
-			this.Tree.Deletef("interfaces ethernet %s ip ospf", val.Name)
+		for _, nic := range nics {
+			this.Tree.Deletef("interfaces ethernet %s ip ospf", nic.Name)
 
-			if r := this.Tree.FindFirewallRuleByDescription(val.Name, "in", FIREWALL_DESCRIPTION); r != nil {
+			if r := this.Tree.FindFirewallRuleByDescription(nic.Name, "in", FIREWALL_DESCRIPTION); r != nil {
 				r.Delete()
 			}
-			if r := this.Tree.FindFirewallRuleByDescription(val.Name, "local", FIREWALL_DESCRIPTION); r != nil {
+			if r := this.Tree.FindFirewallRuleByDescription(nic.Name, "local", FIREWALL_DESCRIPTION); r != nil {
+				r.Delete()
+			}
+			if r := this.Tree.FindSnatRuleDescription(fmt.Sprintf("%s-%s", SNAT_DESCRIPTION, nic.Name)); r != nil {
 				r.Delete()
 			}
 		}
@@ -146,10 +150,12 @@ func (this *ospfProtocol) setNetwork()  ( error) {
 			/*
 			ZSTAC-19018, modify network 192.168.48.1/24 to 192.168.48.0/24
 			 */
+			var localCidr string
 			if _, cidr, err := net.ParseCIDR(n.Network); err != nil {
 				return err
 			} else {
 				this.Tree.SetfWithoutCheckExisting("protocols ospf area %s network %s", info.AreaId, cidr.String())
+				localCidr = cidr.String()
 			}
 			nic, err := utils.GetNicNameByMac(n.NicMac)
 			if err != nil {
@@ -173,6 +179,24 @@ func (this *ospfProtocol) setNetwork()  ( error) {
 						"action accept",
 					)
 
+				}
+
+				des := fmt.Sprintf("%s-%s", SNAT_DESCRIPTION, nic)
+				if r := this.Tree.FindSnatRuleDescription(des); r == nil {
+					num := this.Tree.SetSnatExclude(
+						fmt.Sprintf("protocol OSPF"),
+						fmt.Sprintf("source address %v", localCidr),
+						fmt.Sprintf("outbound-interface %v", nic),
+						fmt.Sprintf("description %v", des),
+					)
+					if f := this.Tree.FindFirstNotExcludeSNATRule(1); num != 1 && num > f {
+						/*there has not been run here never*/
+						utils.LogError(fmt.Errorf("there is SNAT rule number unexcepted, rule:%v %v",
+							this.Tree.Getf("nat source rule %v", num),  this.Tree.Getf("nat source rule %v", f)))
+						this.Tree.SwapSnatRule(num, f)
+						num = f
+					}
+					this.Tree.SetSnatWithRuleNumber(num, "exclude")
 				}
 			}
 
@@ -320,6 +344,7 @@ func getNeighbors(ctx *server.CommandContext) interface{} {
 func syncOspfRulesByIptables(NetworkInfos []networkInfo)  {
 	localfilterRules := make(map[string][]utils.IptablesRule)
 	filterRules := make(map[string][]utils.IptablesRule)
+	snatRules := []utils.IptablesRule{}
 
 	for _, info := range NetworkInfos {
 		nicname, err := utils.GetNicNameByMac(info.NicMac); utils.PanicOnError(err)
@@ -327,6 +352,15 @@ func syncOspfRulesByIptables(NetworkInfos []networkInfo)  {
 		filterRules[nicname] = append(filterRules[nicname], rule)
 		lrule := utils.NewIptablesRule("ospf",  "", "", 0, 0, nil, utils.RETURN, utils.OSPFComment)
 		localfilterRules[nicname] = append(localfilterRules[nicname], lrule)
+
+		srule := utils.NewIpsecsIptablesRule("OSPF", "", "", 0, 0, nil, utils.RETURN,
+			utils.OSPFComment + nicname, "", nicname)
+		snatRules = append(snatRules, srule)
+	}
+
+	if err := utils.SyncNatRule(snatRules, nil, utils.OSPFComment); err != nil {
+		log.Warn("ospf SyncNatRule failed %s", err.Error())
+		utils.PanicOnError(err)
 	}
 
 	if err := utils.SyncLocalAndInFirewallRule(filterRules, localfilterRules, utils.OSPFComment); err != nil {
