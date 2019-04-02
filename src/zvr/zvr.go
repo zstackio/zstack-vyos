@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"flag"
 	"os"
+	log "github.com/Sirupsen/logrus"
 )
 
 func loadPlugins()  {
@@ -53,6 +54,14 @@ func parseCommandOptions() {
 }
 
 func configureZvrFirewall() {
+	if utils.IsSkipVyosIptables() {
+		err := utils.InitNicFirewall("eth0", options.Ip, true, utils.ACCEPT)
+		if err != nil {
+			log.Debugf("zvr configureZvrFirewall failed %s", err.Error())
+		}
+		return
+	}
+
 	tree := server.NewParserFromShowConfiguration().Tree
 
 	/* add description to avoid duplicated firewall rule when reconnect vr */
@@ -76,6 +85,8 @@ func main()  {
 
 	parseCommandOptions()
 	utils.InitLog(options.LogFile, false)
+	utils.InitBootStrapInfo()
+	utils.InitNatRule()
 	loadPlugins()
 	server.VyosLockInterface(configureZvrFirewall)()
 

@@ -297,73 +297,96 @@ func configureVyos() {
 	tree.Setf("service ssh listen-address %v", eth0.ip)
 
 	// configure firewall
-	for _, nic := range nics {
-		setNic(nic)
-		if nic.isDefaultRoute {
-			defaultGW = nic.gateway
-			defaultNic = nic.name
+	/* SkipVyosIptables is a flag to indicate how to configure firewall and nat */
+	SkipVyosIptables := false
+	if v, ok := bootstrapInfo["SkipVyosIptables"]; ok {
+		SkipVyosIptables = v.(bool)
+	}
+	log.Debugf("bootstrapInfo %+v", bootstrapInfo)
+	log.Debugf("SkipVyosIptables %+v", SkipVyosIptables)
+
+	if (SkipVyosIptables) {
+		for _, nic := range nics {
+			var err error
+			setNic(nic)
+			if nic.category == "Private" {
+				err = utils.InitNicFirewall(nic.name, nic.ip, false, utils.REJECT)
+			} else {
+				err = utils.InitNicFirewall(nic.name, nic.ip, true, utils.REJECT)
+			}
+			if err != nil {
+				log.Debugf("InitNicFirewall for nic: %s failed", err.Error())
+			}
 		}
-		tree.SetFirewallOnInterface(nic.name, "local",
-			"action accept",
-			"state established enable",
-			"state related enable",
-			fmt.Sprintf("destination address %v", nic.ip),
-		)
-
-		tree.SetFirewallOnInterface(nic.name, "local",
-			"action accept",
-			"protocol icmp",
-			fmt.Sprintf("destination address %v", nic.ip),
-		)
-
-		if nic.category == "Private" {
-			tree.SetFirewallOnInterface(nic.name, "in",
+	} else {
+		for _, nic := range nics {
+			setNic(nic)
+			if nic.isDefaultRoute {
+				defaultGW = nic.gateway
+				defaultNic = nic.name
+			}
+			tree.SetFirewallOnInterface(nic.name, "local",
 				"action accept",
 				"state established enable",
 				"state related enable",
-				"state invalid enable",
+				fmt.Sprintf("destination address %v", nic.ip),
+			)
+
+			tree.SetFirewallOnInterface(nic.name, "local",
+				"action accept",
+				"protocol icmp",
+				fmt.Sprintf("destination address %v", nic.ip),
+			)
+
+			if nic.category == "Private" {
+				tree.SetFirewallOnInterface(nic.name, "in",
+					"action accept",
+					"state established enable",
+					"state related enable",
+					"state invalid enable",
+					"state new enable",
+				)
+			} else {
+				tree.SetFirewallOnInterface(nic.name, "in",
+					"action accept",
+					"state established enable",
+					"state related enable",
+				)
+			}
+
+			tree.SetFirewallWithRuleNumber(nic.name, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
+				"action accept",
 				"state new enable",
 			)
-		} else {
+
 			tree.SetFirewallOnInterface(nic.name, "in",
 				"action accept",
-				"state established enable",
-				"state related enable",
+				"protocol icmp",
 			)
+
+			// only allow ssh traffic on eth0, disable on others
+			if nic.name == "eth0" {
+				tree.SetFirewallOnInterface(nic.name, "local",
+					fmt.Sprintf("destination port %v", int(sshport)),
+					fmt.Sprintf("destination address %v", nic.ip),
+					"protocol tcp",
+					"action accept",
+				)
+			} else {
+				tree.SetFirewallOnInterface(nic.name, "local",
+					fmt.Sprintf("destination port %v", int(sshport)),
+					fmt.Sprintf("destination address %v", nic.ip),
+					"protocol tcp",
+					"action reject",
+				)
+			}
+
+			tree.SetFirewallDefaultAction(nic.name, "local", "reject")
+			tree.SetFirewallDefaultAction(nic.name, "in", "reject")
+
+			tree.AttachFirewallToInterface(nic.name, "local")
+			tree.AttachFirewallToInterface(nic.name, "in")
 		}
-
-		tree.SetFirewallWithRuleNumber(nic.name, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
-			"action accept",
-			"state new enable",
-		)
-
-		tree.SetFirewallOnInterface(nic.name, "in",
-			"action accept",
-			"protocol icmp",
-		)
-
-		// only allow ssh traffic on eth0, disable on others
-		if nic.name == "eth0" {
-			tree.SetFirewallOnInterface(nic.name, "local",
-				fmt.Sprintf("destination port %v", int(sshport)),
-				fmt.Sprintf("destination address %v", nic.ip),
-				"protocol tcp",
-				"action accept",
-			)
-		} else {
-			tree.SetFirewallOnInterface(nic.name, "local",
-				fmt.Sprintf("destination port %v", int(sshport)),
-				fmt.Sprintf("destination address %v", nic.ip),
-				"protocol tcp",
-				"action reject",
-			)
-		}
-
-		tree.SetFirewallDefaultAction(nic.name, "local", "reject")
-		tree.SetFirewallDefaultAction(nic.name, "in", "reject")
-
-		tree.AttachFirewallToInterface(nic.name, "local")
-		tree.AttachFirewallToInterface(nic.name, "in")
 	}
 
 	tree.Set("system time-zone Asia/Shanghai")
