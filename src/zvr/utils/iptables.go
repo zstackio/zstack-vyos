@@ -94,6 +94,11 @@ var rulesPriority = map[string]int{
 "Default-rules-bottom": 100,
 }
 
+const (
+	Predefined_local_chain = "VYATTA_PRE_FW_IN_HOOK"
+	Predefined_forward_chain = "VYATTA_PRE_FW_FWD_HOOK"
+)
+
 /* iptables of same kind are group together, the order is
    Default-rules-top > management-rules > Dns-rules > DHCP-rules > Ipsec-rules-for > Pf-rules-for >
    LB-rules-for > Eip-rules-for > SNAT-rules-for-> Default-rules-bottom*/
@@ -200,6 +205,10 @@ func (iptableRule IptablesRule)string() []string  {
 }
 
 func SetDefaultRule(nic string, defaultAction string) error {
+	/* old default action maybe different, it can not be deleted in InsertFireWallRule,
+	 * so delete it before */
+	DeleteFirewallRuleByComment(nic, DefaultBottomRuleComment)
+
 	rule := getDefaultIptablesRule()
 	if defaultAction == "reject" {
 		rule.action = REJECT
@@ -483,6 +492,9 @@ func initNicFirewallDefaultRules(nic string, ip string, pubNic bool, defaultActi
 		return err
 	}
 
+	/* when this func is called in zvr, delete rules installed in zvrboot first */
+	DeleteFirewallRuleByComment(nic, DefaultBottomRuleComment)
+
 	rule = getDefaultIptablesRule()
 	rule.states = []string {NEW}
 	rule.action = RETURN
@@ -626,12 +638,12 @@ func isExist(tableName, chainName string, rulespec ...string) (bool, error)  {
 
 func initNicFireWallChain(nic string)  error{
 	chainName := getChainName(nic, LOCAL)
-	if err := newChain(FirewallTable, "INPUT", chainName,  nic); err != nil {
+	if err := newChain(FirewallTable, Predefined_local_chain, chainName,  nic); err != nil {
 		return err
 	}
 
 	chainName = getChainName(nic, IN)
-	if err := newChain(FirewallTable, "FORWARD", chainName, nic); err != nil {
+	if err := newChain(FirewallTable, Predefined_forward_chain, chainName, nic); err != nil {
 		return err
 	}
 
@@ -656,9 +668,9 @@ func newChain(tableName, parentChain, chainName, nicName string) error {
 	}
 
 	if nicName == "" {
-		rule = fmt.Sprintf("sudo iptables -t %s -A %s -j %s", tableName, parentChain, chainName)
+		rule = fmt.Sprintf("sudo iptables -t %s -I %s -j %s", tableName, parentChain, chainName)
 	} else {
-		rule = fmt.Sprintf("sudo iptables -t %s -A %s -i %s -j %s", tableName, parentChain, nicName, chainName)
+		rule = fmt.Sprintf("sudo iptables -t %s -I %s -i %s -j %s", tableName, parentChain, nicName, chainName)
 	}
 
 	cmd = Bash{
