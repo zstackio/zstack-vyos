@@ -81,14 +81,13 @@ func (rule *qosRule) AddRule (nic string, direct direction) interface{} {
 	}
 	bash.Run()
 
-	/* minimium  bandwidth is 1M */
-	bandwidth := rule.bandwidth / (1024 * 1024);
+	bandwidth := rule.bandwidth;
 	if (bandwidth <= 0) {
 		bandwidth = 1
 	}
 
 	bash1 := utils.Bash{
-		Command:fmt.Sprintf("sudo tc class add dev %s parent 1:0 classid 1:%x htb rate %dMbit ceil %dMbit burst 15k cburst 15k;" +
+		Command:fmt.Sprintf("sudo tc class add dev %s parent 1:0 classid 1:%x htb rate %d ceil %d burst 15k cburst 15k;" +
 			"sudo tc qdisc add dev %s parent 1:%x sfq;",
 			nic, rule.classId, bandwidth, bandwidth,
 			nic, rule.classId),
