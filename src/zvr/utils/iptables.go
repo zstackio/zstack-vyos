@@ -78,6 +78,7 @@ const (
 	SNATComment = "SNAT-rules-for-"
 	ManagementComment = "Management-rules"
 	OSPFComment = "OSPF-rules"
+	PIMDComment = "PIMD-rules"
 )
 
 var rulesPriority = map[string]int{
@@ -85,7 +86,8 @@ var rulesPriority = map[string]int{
 "Management-rules": 	900,
 "DNS-rules":        	800,
 "DHCP-rules":        	700,
-	"OSPF-rules":   650,
+"OSPF-rules":           690,
+"PIMD-rules":           620,
 "IPSEC-rules-": 	600,
 "PF-rules-":    	500,
 "LB-rules-":            400,
