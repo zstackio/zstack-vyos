@@ -44,4 +44,12 @@ fi
 chown vyos:users $TARGET_KEEPALIVED
 chmod +x $TARGET_KEEPALIVED
 
+TARGET_PIMD=/opt/vyatta/sbin/pimd
+diff pimd $TARGET_PIMD
+if [ $? -ne 0 ]; then
+    yes | cp -f pimd $TARGET_PIMD
+fi
+chown vyos:users $TARGET_PIMD
+chmod +x $TARGET_PIMD
+
 exit 0

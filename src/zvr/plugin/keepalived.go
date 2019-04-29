@@ -78,6 +78,9 @@ sudo ip link set up dev {{$name}} || true
 #restart flow-accounting process
 (sudo flock -xn /tmp/netflow.lock -c "/opt/vyatta/bin/sudo-users/vyatta-show-acct.pl --action 'restart' 2 > null; sudo rm -f /tmp/netflow.lock")&
 
+#reload pimd config
+(sudo /opt/vyatta/sbin/pimd -l) &
+
 #notify Mn node
 (sudo curl -H "Content-Type: application/json" -H "commandpath: /vpc/hastatus" -X POST -d '{"virtualRouterUuid": "{{.VrUuid}}", "haStatus":"Master"}' {{.CallBackUrl}}) &
 `
