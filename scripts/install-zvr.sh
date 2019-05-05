@@ -35,4 +35,12 @@ chmod +x $TARGET_GOBETWEEN
 chown vyos:users /usr/share/healthcheck.sh
 chmod +x /usr/share/healthcheck.sh
 
+TARGET_PIMD=/opt/vyatta/sbin/pimd
+diff gobetween $TARGET_GOBETWEEN
+if [ $? -ne 0 ]; then
+    yes | cp -f pimd $TARGET_GOBETWEEN
+fi
+chown vyos:users $TARGET_PIMD
+chmod +x $TARGET_PIMD
+
 exit 0
