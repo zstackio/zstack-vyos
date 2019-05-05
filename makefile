@@ -34,7 +34,6 @@ package: clean zvr zvrboot
 	cp -f scripts/haproxy $(PKG_ZVR_DIR)
 	cp -f scripts/gobetween $(PKG_ZVR_DIR)
 	cp -f scripts/healthcheck.sh $(PKG_ZVR_DIR)
-	cp -f scripts/pimd $(PKG_ZVR_DIR)
 	cp -f $(TARGET_DIR)/zvrboot $(PKG_ZVRBOOT_DIR)
 	cp -f scripts/version $(TARGET_DIR)
 	$(GO) run package.go -conf package-config.json
@@ -48,7 +47,6 @@ tar: zvr zvrboot
 	cp -f scripts/healthcheck.sh $(PKG_TAR_DIR)
 	cp -f scripts/zstack-virtualrouteragent $(PKG_TAR_DIR)
 	cp -f scripts/version $(PKG_TAR_DIR)
-	cp -f scripts/pimd $(PKG_TAR_DIR)
 	cp -f $(TARGET_DIR)/zvrboot $(PKG_TAR_DIR)
 	tar czf $(TARGET_DIR)/zvr.tar.gz -C $(PKG_TAR_DIR) .
 
