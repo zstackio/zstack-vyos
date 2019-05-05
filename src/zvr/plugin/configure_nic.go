@@ -26,20 +26,6 @@ type nicInfo struct {
 	FirewallDefaultAction string `json:"firewallDefaultAction"`
 }
 
-type addNicCallback interface {
-	AddNic(nic string) error
-}
-
-var addNicCallbacks []addNicCallback
-
-func init() {
-	addNicCallbacks = make([]addNicCallback, 0)
-}
-
-func RegisterAddNicCallback(cb addNicCallback)  {
-	addNicCallbacks = append(addNicCallbacks, cb)
-}
-
 type configureNicCmd struct {
 	Nics []nicInfo `json:"nics"`
 }
@@ -140,18 +126,6 @@ func configureNic(ctx *server.CommandContext) interface{} {
 	}
 
 	tree.Apply(false)
-
-	for _, nic := range cmd.Nics {
-		nicname, err := utils.GetNicNameByMac(nic.Mac)
-		if err != nil {
-			continue
-		}
-
-		for _, cb := range addNicCallbacks {
-			cb.AddNic(nicname)
-		}
-	}
-
 	checkNicIsUp(nicname, true)
 	return nil
 }

@@ -78,7 +78,6 @@ ZVRBOOT=$tmpdir/zvrboot
 ZVRSCRIPT=$tmpdir/zstack-virtualrouteragent
 HAPROXY=$tmpdir/haproxy
 GOBETWEEN=$tmpdir/gobetween
-PIMD=$tmpdir/pimd
 HEALTHCHECK=$tmpdir/healthcheck.sh
 SBIN_DIR=/opt/vyatta/sbin
 VERSION=`date +%Y%m%d`
@@ -102,7 +101,6 @@ upload $tmpdir/zsn-agent $ZSN_DIR/zsn-agent
 upload $tmpdir/zstack-network-agent /etc/init.d/zstack-network-agent
 upload $HAPROXY $SBIN_DIR/haproxy
 upload $GOBETWEEN $SBIN_DIR/gobetween
-upload $PIMD $SBIN_DIR/pimd
 mkdir-p /home/vyos/zvr/
 upload $ZVR_VERSION /home/vyos/zvr/version
 upload $HEALTHCHECK /usr/share/healthcheck.sh
@@ -115,7 +113,6 @@ chmod +x $ZSN_DIR/zsn-agent
 chmod +x /etc/init.d/zstack-network-agent
 chmod +x $SBIN_DIR/haproxy
 chmod +x $SBIN_DIR/gobetween
-chmod +x $SBIN_DIR/pimd
 chmod +x /usr/share/healthcheck.sh
 mkdir -p /home/vyos/zvr
 chown vyos:users /home/vyos/zvr
@@ -123,7 +120,6 @@ chown vyos:users $SBIN_DIR/zvr
 chown vyos:users $ZSN_DIR/zsn-agent
 chown vyos:users $SBIN_DIR/haproxy
 chown vyos:users $SBIN_DIR/gobetween
-chown vyos:users $SBIN_DIR/pimd
 chown vyos:users /usr/share/healthcheck.sh
 $SBIN_DIR/zvrboot >/home/vyos/zvr/zvrboot.log 2>&1 < /dev/null &
 # disable distributed routing by default
