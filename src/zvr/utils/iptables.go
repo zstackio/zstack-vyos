@@ -161,7 +161,9 @@ func (iptableRule IptablesRule)string() []string  {
 		rules = append(rules, "-s " + iptableRule.src)
 	}
 
-	if iptableRule.dest != "" && iptableRule.action != SNAT {
+	if iptableRule.comment == SNATComment {
+		rules = append(rules, "! -d 224.0.0.0/8 ")
+	} else if iptableRule.dest != "" && iptableRule.action != SNAT {
 		rules = append(rules, "-d " + iptableRule.dest)
 	}
 
