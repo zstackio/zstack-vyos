@@ -189,12 +189,14 @@ func applySnatRules(Snats []snatInfo, state bool) {
 			tree.SetSnatWithRuleNumber(pubNicRuleNo,
 				fmt.Sprintf("outbound-interface %s", outNic),
 				fmt.Sprintf("source address %s", address),
+				"destination address !224.0.0.0/8",
 				fmt.Sprintf("translation address %s", s.PublicIp),
 			)
 
 			tree.SetSnatWithRuleNumber(priNicRuleNo,
 				fmt.Sprintf("outbound-interface %s", inNic),
 				fmt.Sprintf("source address %v", address),
+				"destination address !224.0.0.0/8",
 				fmt.Sprintf("translation address %s", s.PublicIp),
 			)
 		}

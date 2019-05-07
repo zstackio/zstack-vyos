@@ -150,12 +150,10 @@ func (this *ospfProtocol) setNetwork()  ( error) {
 			/*
 			ZSTAC-19018, modify network 192.168.48.1/24 to 192.168.48.0/24
 			 */
-			var localCidr string
 			if _, cidr, err := net.ParseCIDR(n.Network); err != nil {
 				return err
 			} else {
 				this.Tree.SetfWithoutCheckExisting("protocols ospf area %s network %s", info.AreaId, cidr.String())
-				localCidr = cidr.String()
 			}
 			nic, err := utils.GetNicNameByMac(n.NicMac)
 			if err != nil {
@@ -179,24 +177,6 @@ func (this *ospfProtocol) setNetwork()  ( error) {
 						"action accept",
 					)
 
-				}
-
-				des := fmt.Sprintf("%s-%s", SNAT_DESCRIPTION, nic)
-				if r := this.Tree.FindSnatRuleDescription(des); r == nil {
-					num := this.Tree.SetSnatExclude(
-						fmt.Sprintf("protocol OSPF"),
-						fmt.Sprintf("source address %v", localCidr),
-						fmt.Sprintf("outbound-interface %v", nic),
-						fmt.Sprintf("description %v", des),
-					)
-					if f := this.Tree.FindFirstNotExcludeSNATRule(1); num != 1 && num > f {
-						/*there has not been run here never*/
-						utils.LogError(fmt.Errorf("there is SNAT rule number unexcepted, rule:%v %v",
-							this.Tree.Getf("nat source rule %v", num),  this.Tree.Getf("nat source rule %v", f)))
-						this.Tree.SwapSnatRule(num, f)
-						num = f
-					}
-					this.Tree.SetSnatWithRuleNumber(num, "exclude")
 				}
 			}
 
