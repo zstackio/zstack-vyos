@@ -77,10 +77,12 @@ func updatePimdConf(cmd *enablePimdCmd)  error {
 	}
 	bash.Run()
 
-	conf := `bsr-candidate priority 1
-rp-candidate time 30 priority 255
-# All multicast groups
-group-prefix 224.0.0.0 masklen 4
+	conf := `# Bigger value means  "higher" priority
+#bsr-candidate $YOUR_BSR_CANDIDATE_IP priority 5
+# Smaller value means "higher" priority
+#rp-candidate  $YOUR_RP_CANDIDATE_IP time 30 priority 20
+#    group-prefix 224.0.0.0 masklen 4
+
 # Static rendez-vous point
 {{range .Rps}}
 rp-address {{.RpAddress}} {{.GroupAddress}}
