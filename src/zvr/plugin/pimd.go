@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"io/ioutil"
 	"github.com/fatih/structs"
+	/*log "github.com/Sirupsen/logrus"*/
 )
 
 const (
@@ -248,7 +249,7 @@ func disablePimdHandler(ctx *server.CommandContext) interface{} {
 
 func getMrouteHandler(ctx *server.CommandContext) interface{} {
 	bash := utils.Bash{
-		Command: fmt.Sprintf("ip mroute"),
+		Command: fmt.Sprintf("sudo ip mroute"),
 	}
 
 	_, out, _, _ := bash.RunWithReturn();
@@ -260,8 +261,9 @@ func getMrouteHandler(ctx *server.CommandContext) interface{} {
 	routes := []mRouteInfo{}
 	lines := strings.Split(out, "\n")
 	for _, line := range lines {
-		var src, group string
 		var ingress, egress []string
+		src := ""
+		group := ""
 		in := false
 		out := false
 		items := strings.Split(line, " ")
@@ -305,7 +307,10 @@ func getMrouteHandler(ctx *server.CommandContext) interface{} {
 					egress = append(egress, item)
 				}
 			}
+		}
 
+		if group == "" {
+			continue
 		}
 
 		route := mRouteInfo{SourceAddress: src, GroupAddress: group, IngressInterfaces: strings.Join(ingress, " "),

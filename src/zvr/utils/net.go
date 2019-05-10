@@ -89,7 +89,7 @@ func GetAllNics() (map[string]Nic, error) {
 			continue
 		}
 
-		if f.Name() == "gre0" {
+		if f.Name() == "gre0" || f.Name() == "pimreg" {
 			continue
 		}
 
