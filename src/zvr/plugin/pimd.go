@@ -134,10 +134,7 @@ func (pimd *pimdAddNic) AddNic(nic string)  error {
 		tree.Apply(false)
 	}
 
-	bash := utils.Bash{
-		Command: fmt.Sprintf("%s -l", PIMD_BINARY_PATH),
-	}
-	bash.Run()
+	restartPimd()
 
 	return nil
 }
@@ -155,21 +152,17 @@ func addPimdFirewallByIptables(nics map[string]utils.Nic)  error{
 	return nil
 }
 
-func startPimd() {
+func restartPimd() {
 	pid, err := utils.FindFirstPIDByPSExtern(true, PIMD_BINARY_PATH)
-	if err != nil || pid == 0 {
-		bash := utils.Bash{
-			Command: fmt.Sprintf("sudo %s -c %s", PIMD_BINARY_PATH, PIMD_CONF_PATH),
-		}
-
-		bash.RunWithReturn(); bash.PanicIfError()
-	} else {
-		bash := utils.Bash{
-			Command: fmt.Sprintf("sudo %s -l", PIMD_BINARY_PATH),
-		}
-
-		bash.RunWithReturn(); bash.PanicIfError()
+	if err == nil && pid != 0 {
+		utils.KillProcess(pid)
 	}
+
+	bash := utils.Bash{
+		Command: fmt.Sprintf("sudo %s -c %s", PIMD_BINARY_PATH, PIMD_CONF_PATH),
+	}
+
+	bash.RunWithReturn(); bash.PanicIfError()
 }
 
 func enablePimdHandler(ctx *server.CommandContext) interface{} {
@@ -208,7 +201,7 @@ func enablePimdHandler(ctx *server.CommandContext) interface{} {
 
 	/* generate pimd.conf */
 	updatePimdConf(cmd)
-	startPimd()
+	restartPimd()
 
 	pimdEnable = true
 
