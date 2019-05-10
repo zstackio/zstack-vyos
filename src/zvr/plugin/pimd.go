@@ -134,6 +134,11 @@ func (pimd *pimdAddNic) AddNic(nic string)  error {
 		tree.Apply(false)
 	}
 
+	bash := utils.Bash{
+		Command: fmt.Sprintf("%s -l", PIMD_BINARY_PATH),
+	}
+	bash.Run()
+
 	return nil
 }
 
