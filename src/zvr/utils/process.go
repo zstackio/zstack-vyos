@@ -27,6 +27,7 @@ func FindFirstPIDByPSExtern(non_sudo bool, cmdline...string) (int, error) {
 
 	b := Bash{
 		Command: strings.Join(cmds, " | "),
+		NoLog: true,
 	}
 
 	ret, o, _, err := b.RunWithReturn()
@@ -49,7 +50,7 @@ func KillProcess(pid int) error {
 
 func KillProcess1(pid int, waitTime uint) error {
 	b := Bash{
-		Command: fmt.Sprintf("sudo kill %v", pid),
+		Command: fmt.Sprintf("sudo kill -9 %v", pid),
 	}
 	b.Run()
 
