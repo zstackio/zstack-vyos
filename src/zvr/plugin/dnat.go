@@ -23,6 +23,7 @@ type dnatInfo struct {
 	PrivatePortEnd int `json:"privatePortEnd"`
 	ProtocolType string `json:"protocolType"`
 	VipIp string `json:"vipIp"`
+	PublicMac string `json:"publicMac"`
 	PrivateIp string `json:"privateIp"`
 	PrivateMac string `json:"privateMac"`
 	AllowedCidr string `json:"allowedCidr"`
@@ -48,7 +49,7 @@ func syncPortForwardingRules() error {
 	filterRules := make(map[string][]utils.IptablesRule)
 
 	for _, r := range pfMap {
-		pubNicName, err := utils.GetNicNameByIp(r.VipIp); utils.PanicOnError(err)
+		pubNicName, err := utils.GetNicNameByMac(r.PrivateMac); utils.PanicOnError(err)
 		/* from ZStack side, port range is not supported */
 		protocol := utils.TCP
 		if r.ProtocolType != "TCP" {
@@ -172,7 +173,7 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 			dport = fmt.Sprintf("%v-%v", r.PrivatePortStart, r.PrivatePortEnd)
 		}
 
-		pubNicName, err := utils.GetNicNameByIp(r.VipIp); utils.PanicOnError(err)
+		pubNicName, err := utils.GetNicNameByMac(r.PublicMac); utils.PanicOnError(err)
 
 		tree.SetDnat(
 			fmt.Sprintf("description %v", des),
@@ -253,7 +254,7 @@ func removeDnatHandler(ctx *server.CommandContext) interface{} {
 				}
 			}
 
-			pubNicName, err := utils.GetNicNameByIp(r.VipIp); utils.PanicOnError(err)
+			pubNicName, err := utils.GetNicNameByMac(r.PublicMac); utils.PanicOnError(err)
 			if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", des); fr != nil {
 				fr.Delete()
 			}

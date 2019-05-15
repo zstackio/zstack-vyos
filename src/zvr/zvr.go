@@ -26,6 +26,7 @@ func loadPlugins()  {
 	plugin.ZsnEntryPoint()
 	plugin.PrometheusEntryPoint()
 	plugin.OspfEntryPoint()
+	plugin.VyosHaEntryPoint()
 }
 
 var options server.Options
@@ -86,6 +87,7 @@ func main()  {
 	parseCommandOptions()
 	utils.InitLog(options.LogFile, false)
 	utils.InitBootStrapInfo()
+	plugin.InitHaNicState()
 	utils.InitNatRule()
 	loadPlugins()
 	server.VyosLockInterface(configureZvrFirewall)()
