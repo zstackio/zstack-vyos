@@ -78,6 +78,7 @@ ZVRBOOT=$tmpdir/zvrboot
 ZVRSCRIPT=$tmpdir/zstack-virtualrouteragent
 HAPROXY=$tmpdir/haproxy
 GOBETWEEN=$tmpdir/gobetween
+KEEPALIVED=$tmpdir/keepalived
 HEALTHCHECK=$tmpdir/healthcheck.sh
 SBIN_DIR=/opt/vyatta/sbin
 VERSION=`date +%Y%m%d`
@@ -101,7 +102,8 @@ upload $tmpdir/zsn-agent $ZSN_DIR/zsn-agent
 upload $tmpdir/zstack-network-agent /etc/init.d/zstack-network-agent
 upload $HAPROXY $SBIN_DIR/haproxy
 upload $GOBETWEEN $SBIN_DIR/gobetween
-mkdir-p /home/vyos/zvr/
+upload $KEEPALIVED /usr/sbin/keepalived
+mkdir-p /home/vyos/zvr/keepalived/script
 upload $ZVR_VERSION /home/vyos/zvr/version
 upload $HEALTHCHECK /usr/share/healthcheck.sh
 upload -<<END /opt/vyatta/etc/config/scripts/vyatta-postconfig-bootup.script
@@ -113,8 +115,10 @@ chmod +x $ZSN_DIR/zsn-agent
 chmod +x /etc/init.d/zstack-network-agent
 chmod +x $SBIN_DIR/haproxy
 chmod +x $SBIN_DIR/gobetween
+chmod +x /usr/sbin/keepalived
 chmod +x /usr/share/healthcheck.sh
 mkdir -p /home/vyos/zvr
+mkdir -p /home/vyos/zvr/keepalived/script
 chown vyos:users /home/vyos/zvr
 chown vyos:users $SBIN_DIR/zvr
 chown vyos:users $ZSN_DIR/zsn-agent

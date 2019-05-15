@@ -29,6 +29,7 @@ type InitConfig struct {
 type pingRsp struct {
 	Uuid string `json:"uuid"`
 	Version string `json:"version"`
+	HaStatus string `json:"haStatus"`
 }
 
 var (
@@ -43,7 +44,13 @@ func initHandler(ctx *server.CommandContext) interface{} {
 
 func pingHandler(ctx *server.CommandContext) interface{} {
 	addRouteIfCallbackIpChanged()
-	return pingRsp{ Uuid: initConfig.Uuid, Version: string(VERSION) }
+	if !IsVyosHaEnabled() {
+		return pingRsp{Uuid: initConfig.Uuid, Version: string(VERSION) }
+	} else if IsMaster() {
+		return pingRsp{Uuid: initConfig.Uuid, Version: string(VERSION), HaStatus: "Master" }
+	} else {
+		return pingRsp{Uuid: initConfig.Uuid, Version: string(VERSION), HaStatus: "Backup" }
+	}
 }
 
 func echoHandler(ctx *server.CommandContext) interface{} {

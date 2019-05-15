@@ -23,7 +23,7 @@ LOG_DIR=`dirname $LOGFILE`; mkdir -p $LOG_DIR
 
 # ETH0_IP=`ip route | grep eth0 | awk '{printf $9}'`
 # for ZSTAC-19196 zhanyong.miao
-ETH0_IP=`ip -4 -o a show dev eth0 primary | awk {'print $4'} | cut -f1 -d '/'`
+ETH0_IP=`ip -4 -o a show dev eth0 primary | awk {'print $4'} | head -1 | cut -f1 -d '/'`
 if [ x$ETH0_IP == "x" ]; then
    err_exit "unable to get the IP of eth0"
 fi
