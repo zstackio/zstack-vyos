@@ -137,6 +137,23 @@ func GetNicNameByIp(ip string) (string, error) {
 	return os[len(os)-1], nil
 }
 
+func GetIpByNicName(nic string) (string, error) {
+	bash := Bash{
+		Command: fmt.Sprintf("ip -o -f inet addr show %s | awk '/scope global/ {print $4}'", nic),
+	}
+	ret, o, _, err := bash.RunWithReturn()
+	if err != nil {
+		return "", err
+	}
+	if ret != 0 {
+		return "", errors.New(fmt.Sprintf("no ip with the nic[%s] found in the system", nic))
+	}
+
+	o = strings.TrimSpace(o)
+	os := strings.Split(o, "/")
+	return os[0], nil
+}
+
 func GetIpFromUrl(url string) (string, error) {
 	ip := strings.Split(strings.Split(url, "/")[2], ":")[0]
 	return ip, nil
