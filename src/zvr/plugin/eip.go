@@ -84,8 +84,8 @@ func checkEipIpTableRules(eip eipInfo, addEip bool) error {
 	 *	-A POSTROUTING -s 10.86.4.132/32 -o eth0 -m comment --comment SRC-NAT-1 -j SNAT --to-source 172.20.16.250
 	 */
 	bash := &utils.Bash{
-		Command: fmt.Sprintf("sudo iptables-save  | grep -w %s ", eip.VipIp),
-		NoLog: true,
+		Command: fmt.Sprintf("sudo iptables-save -t nat | grep -w %s ", eip.VipIp),
+		NoLog: false,
 	}
 	ret, o, e, _ := bash.RunWithReturn()
 	if (ret != 0 ) {
@@ -101,19 +101,13 @@ func checkEipIpTableRules(eip eipInfo, addEip bool) error {
 	dnatRule := false
 	for _, line := range lines {
 		/* DNAT */
-		if strings.Contains(line, "-j DNAT") {
-			fileds := strings.Split(line, " ")
-			if strings.Compare(fileds[3], fmt.Sprintf("%s/32", eip.VipIp)) == 0 && strings.Compare(fileds[11], eip.GuestIp) == 0 {
-				dnatRule = true;
-			}
+		if strings.Contains(line, "-j DNAT") && strings.Contains(line, eip.GuestIp){
+			dnatRule = true
 		}
 
 		/* SNAT */
-		if strings.Contains(line, "-j SNAT") {
-			fileds := strings.Split(line, " ")
-			if strings.Compare(fileds[3], fmt.Sprintf("%s/32", eip.GuestIp)) == 0 && strings.Compare(fileds[13], eip.VipIp) == 0 {
-				snatRule = true;
-			}
+		if strings.Contains(line, "-j SNAT") && strings.Contains(line, fmt.Sprintf("%s/32", eip.GuestIp)){
+			snatRule = true
 		}
 	}
 
@@ -266,7 +260,7 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 
 func setEipByIptables(eip eipInfo)  error{
 	/* nat rule */
-	nicname, err := utils.GetNicNameByIp(eip.VipIp)
+	nicname, err := utils.GetNicNameByIp(eip.VipIp); utils.PanicOnError(err)
 	rule := utils.NewEipIptablesRule(eip.GuestIp, eip.VipIp, utils.DNAT, utils.EipRuleComment + eip.VipIp, "")
 	utils.InsertNatRule(rule, utils.PREROUTING)
 

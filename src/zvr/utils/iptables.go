@@ -695,6 +695,7 @@ func listRule(tableName, chainName string) ([]string, error){
 	rule := fmt.Sprintf("sudo iptables -t %s -S %s", tableName, chainName)
 	cmd := Bash{
 		Command: rule,
+		NoLog: true,
 	}
 
 	ret,o,_,err := cmd.RunWithReturn();
@@ -721,6 +722,7 @@ func getNatRuleSet() ([]string, []string, []string, error) {
 	cmds := fmt.Sprintf("sudo iptables-save -t nat")
 	cmd := Bash{
 		Command: cmds,
+		NoLog: true,
 	}
 
 	ret,o,_,err := cmd.RunWithReturn();
@@ -766,6 +768,7 @@ func getFirewallRuleSet() ([]string, map[string][]string, error) {
 	cmds := fmt.Sprintf("sudo iptables-save -t filter")
 	cmd := Bash{
 		Command: cmds,
+		NoLog: true,
 	}
 
 	ret,o,_,err := cmd.RunWithReturn();
