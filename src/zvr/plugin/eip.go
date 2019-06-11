@@ -40,6 +40,10 @@ func makeEipDescription(info eipInfo) string {
 	return fmt.Sprintf("EIP-%v-%v-%v", info.VipIp, info.GuestIp, info.PrivateMac)
 }
 
+func makeEipDescriptionForGw(info eipInfo) string {
+        return fmt.Sprintf("EIP-%v-%v-%v-gw", info.VipIp, info.GuestIp, info.PrivateMac)
+}
+
 func makeEipDescriptionReg(info eipInfo) string {
 	return fmt.Sprintf("^EIP-%v-", info.VipIp)
 }
@@ -165,6 +169,19 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 		)
 	}
 
+        if eip.SnatInboundTraffic {
+                snatGwDes := makeEipDescriptionForGw(eip)
+                gwip, err := utils.GetIpByNicName(prinicname); utils.PanicOnError(err)
+                if r := tree.FindSnatRuleDescription(snatGwDes); r == nil {
+                        tree.SetSnat(
+                                fmt.Sprintf("description %v", snatGwDes),
+                                fmt.Sprintf("outbound-interface %v", prinicname),
+                                fmt.Sprintf("destination address %v", eip.GuestIp),
+                                fmt.Sprintf("translation address %v", gwip),
+                        )
+                }
+        }
+
 	if r := tree.FindDnatRuleDescription(des); r == nil {
 		tree.SetDnat(
 			fmt.Sprintf("description %v", des),
@@ -226,6 +243,7 @@ func checkEipExists(eip eipInfo) error {
 func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 	des := makeEipDescription(eip)
 	priDes := makeEipDescriptionForPrivateMac(eip)
+	snatGwDes := makeEipDescriptionForGw(eip)
 	nicname, err := utils.GetNicNameByIp(eip.VipIp)
 	if err != nil && eip.PublicMac != "" {
 		var nicname string
@@ -247,6 +265,10 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 	}
 
 	if r := tree.FindSnatRuleDescription(priDes); r != nil {
+		r.Delete()
+	}
+
+	if r := tree.FindSnatRuleDescription(snatGwDes); r != nil {
 		r.Delete()
 	}
 
@@ -273,6 +295,11 @@ func setEipByIptables(eip eipInfo)  error{
 	rule = utils.NewEipIptablesRule(eip.GuestIp, eip.VipIp, utils.SNAT, utils.EipRuleComment + eip.VipIp, nicname)
 	utils.InsertNatRule(rule, utils.POSTROUTING)
 
+	prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
+	/*if eip.SnatInboundTraffic {
+		//not support the feature by iptables currently, the iptables module need the new parameters 'to source' &'to dest'
+	}*/
+
 	/* firewall rule */
 	if (nicname == "" || err != nil) && eip.PublicMac != "" {
 		var nicname string
@@ -289,8 +316,6 @@ func setEipByIptables(eip eipInfo)  error{
 		}, 5, 1)
 	}
 	utils.PanicOnError(err)
-
-	prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
 
 	rule = utils.NewIptablesRule("",  "", eip.GuestIp, 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
 		utils.RETURN, utils.EipRuleComment + eip.VipIp)
@@ -339,6 +364,7 @@ func deleteEipByIptables(eip eipInfo)  {
 	/* nat rule */
 	utils.DeleteSNatRuleByComment(utils.EipRuleComment + eip.VipIp)
 	utils.DeleteDNatRuleByComment(utils.EipRuleComment + eip.VipIp)
+	utils.DeleteSNatRuleByComment(utils.EipRuleComment + eip.VipIp + "gw")
 
 	/* firewall rule */
 	nicname, err := utils.GetNicNameByIp(eip.VipIp)
@@ -398,9 +424,18 @@ func syncEipByIptables(eips []eipInfo) error {
 		rule = utils.NewEipIptablesRule(eip.GuestIp, eip.VipIp, utils.SNAT, utils.EipRuleComment + eip.VipIp, nicname)
 		snatRules = append(snatRules, rule)
 
-		/* firewall rule */
 		prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
 
+		//not support the feature by iptables currently, the iptables module need the new parameters 'to source' &'to dest'
+		/*
+		if eip.SnatInboundTraffic {
+			gwip, err := utils.GetIpByNicName(prinicname); utils.PanicOnError(err)
+			rule = utils.NewEipIptablesRule(eip.GuestIp, gwip, utils.SNAT, utils.EipRuleComment + eip.VipIp + "gw", prinicname)
+			snatRules = append(snatRules, rule)
+		}
+		*/
+
+		/* firewall rule */
 		rule = utils.NewIptablesRule("", "", eip.GuestIp, 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
 			utils.RETURN, utils.EipRuleComment + eip.VipIp)
 		filterRules[nicname] = append(filterRules[nicname], rule)
