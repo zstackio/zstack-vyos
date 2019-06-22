@@ -47,6 +47,7 @@ type lbInfo struct {
 	LbUuid string `json:"lbUuid"`
 	ListenerUuid string `json:"listenerUuid"`
 	Vip string `json:"vip"`
+	PublicNic string `json:"publicNic"`
 	NicIps []string `json:"nicIps"`
 	InstancePort int `json:"instancePort"`
 	LoadBalancerPort int `json:"loadBalancerPort"`
@@ -253,6 +254,10 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 }
 
 func (this *HaproxyListener) startListenerService() ( ret int, err error) {
+	if !IsMaster() {
+		return 0, nil
+	}
+
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -N %s -f %s -p %s -sf $(cat %s)",
 			this.maxConnect, this.confPath, this.pidPath, this.pidPath),
@@ -280,7 +285,7 @@ func (this *HaproxyListener) preActionListenerServiceStart() ( err error) {
 	}
 
 	// drop SYN packets to make clients to resend, this is for restarting LB without losing packets
-	nicname, err := utils.GetNicNameByIp(this.lb.Vip ); utils.PanicOnError(err)
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
 	dropRuleDes := fmt.Sprintf("lb-%v-%s-drop", this.lb.LbUuid, this.lb.ListenerUuid)
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", dropRuleDes); r == nil {
@@ -309,7 +314,7 @@ func (this *HaproxyListener) rollbackPreActionListenerServiceStart() ( err error
 	}
 
 	// drop SYN packets to make clients to resend, this is for restarting LB without losing packets
-	nicname, err := utils.GetNicNameByIp(this.lb.Vip ); utils.PanicOnError(err)
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
 
 	dropRuleDes := fmt.Sprintf("lb-%v-%s-drop", this.lb.LbUuid, this.lb.ListenerUuid)
@@ -325,7 +330,7 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 		return nil
 	}
 
-	nicname, err := utils.GetNicNameByIp(this.lb.Vip ); utils.PanicOnError(err)
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
 
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r == nil {
@@ -365,7 +370,7 @@ func (this *HaproxyListener) stopListenerService() ( err error) {
 func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error) {
 	delete(LbListeners, this.lb.ListenerUuid)
 
-	nicname, err := utils.GetNicNameByIp(this.lb.Vip); utils.PanicOnError(err)
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
 	if ! utils.IsSkipVyosIptables() {
 		tree := server.NewParserFromShowConfiguration().Tree
 		if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r != nil {
@@ -388,7 +393,7 @@ func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error
 }
 
 func (this *HaproxyListener) getIptablesRule()([]utils.IptablesRule, string) {
-	nicname, err := utils.GetNicNameByIp(this.lb.Vip); utils.PanicOnError(err)
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
 	return []utils.IptablesRule{utils.NewLoadBalancerIptablesRule(utils.TCP, this.lb.Vip, this.lb.LoadBalancerPort,
 		utils.RETURN, utils.LbRuleComment + this.lb.ListenerUuid, nil)}, nicname
 }
@@ -459,6 +464,10 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 }
 
 func (this *GBListener) startListenerService() ( ret int, err error) {
+	if !IsMaster() {
+		return 0, nil
+	}
+
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo /opt/vyatta/sbin/gobetween -c %s >/dev/null 2>&1&echo $! >%s",
 			this.confPath, this.pidPath),
@@ -522,7 +531,7 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 		return nil
 	}
 
-	nicname, err := utils.GetNicNameByIp(this.lb.Vip ); utils.PanicOnError(err)
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
 
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r == nil {
@@ -551,7 +560,7 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 }
 
 func (this *GBListener) getIptablesRule()([]utils.IptablesRule, string) {
-	nicname, err := utils.GetNicNameByIp(this.lb.Vip); utils.PanicOnError(err)
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
 	dport, _ := strconv.Atoi(this.apiPort)
 	return []utils.IptablesRule {
 		utils.NewLoadBalancerIptablesRule(utils.TCP, "", dport, utils.ACCEPT, utils.LbRuleComment + this.lb.ListenerUuid, nil),
@@ -576,7 +585,7 @@ func (this *GBListener) stopListenerService() ( err error) {
 func (this *GBListener) postActionListenerServiceStop() (ret int, err error) {
 	delete(LbListeners, this.lb.ListenerUuid)
 
-	nicname, err := utils.GetNicNameByIp(this.lb.Vip); utils.PanicOnError(err)
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
 	if !utils.IsSkipVyosIptables() {
 		tree := server.NewParserFromShowConfiguration().Tree
 		r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes)
@@ -732,6 +741,7 @@ func refreshLb(ctx *server.CommandContext) interface{} {
 	}
 
 	removeUnusedCertificate()
+	generateLbHaScript()
 
 	return nil
 }
@@ -757,6 +767,7 @@ func deleteLb(ctx *server.CommandContext) interface{} {
 	}
 
 	removeUnusedCertificate()
+	generateLbHaScript()
 
 	return nil
 }
@@ -775,6 +786,27 @@ func createCertificate(ctx *server.CommandContext) interface{} {
 	err = ioutil.WriteFile(certificatePath, []byte(certificate.Certificate), 0755); utils.PanicOnError(err)
 
 	return nil
+}
+
+func generateLbHaScript()  {
+	cmds := []string{}
+	for _, listener := range LbListeners {
+		switch v := listener.(type) {
+		case *HaproxyListener:
+			cmds = append(cmds, fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -N %s -f %s -p %s -sf $(cat %s)",
+				v.maxConnect, v.confPath, v.pidPath, v.pidPath))
+			break
+		case *GBListener:
+			cmds = append(cmds, fmt.Sprintf("sudo /opt/vyatta/sbin/gobetween -c %s >/dev/null 2>&1&echo $! >%s",
+				v.confPath, v.pidPath))
+			break
+		default:
+			continue
+		}
+	}
+
+	content := []byte(strings.Join(cmds, "\n"))
+	err := ioutil.WriteFile(HaproxyHaScriptFile, content, 0755);utils.PanicOnError(err)
 }
 
 func init() {
@@ -841,6 +873,10 @@ func (c *loadBalancerCollector) Describe(ch chan<- *prom.Desc) error {
 }
 
 func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
+	if !IsMaster() {
+		return nil
+	}
+
 	for listenerUuid, listener := range LbListeners {
 		var counters []*LbCounter
 		num := 0
@@ -1019,7 +1055,7 @@ func enableLbLog() {
 	lb_log_file, err := ioutil.TempFile(LB_CONF_DIR, "rsyslog"); utils.PanicOnError(err)
 	conf := `$ModLoad imudp
 $UDPServerRun 514
-local1.*     /var/log/haproxy.log`
+local1.debug     /var/log/haproxy.log`
 	_, err = lb_log_file.Write([]byte(conf)); utils.PanicOnError(err)
 
 	lb_log_rotatoe_file, err := ioutil.TempFile(LB_CONF_DIR, "rotation"); utils.PanicOnError(err)

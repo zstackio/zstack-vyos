@@ -27,6 +27,7 @@ func FindFirstPIDByPSExtern(non_sudo bool, cmdline...string) (int, error) {
 
 	b := Bash{
 		Command: strings.Join(cmds, " | "),
+		NoLog: true,
 	}
 
 	ret, o, _, err := b.RunWithReturn()

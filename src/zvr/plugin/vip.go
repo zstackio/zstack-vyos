@@ -601,6 +601,7 @@ type vipInfo struct {
 
 type vipQosSettings struct {
 	Vip                          string `json:"vip"`
+	PublicNic                    string `json:"publicNic"`
 	VipUuid                     string `json:"vipUuid"`
 	Port                        int   `json:"port"`
 	InboundBandwidth            int64 `json:"inboundBandwidth"`
@@ -630,6 +631,8 @@ type syncVipQosCmd struct {
 	Settings []vipQosSettings `json:"vipQosSettings"`
 }
 
+var vyosVips map[string][]string
+
 type vipQosSettingsArray []vipQosSettings
 func (a vipQosSettingsArray) Len() int           { return len(a) }
 func (a vipQosSettingsArray) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
@@ -644,8 +647,11 @@ func setVip(ctx *server.CommandContext) interface{} {
 		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac); utils.PanicOnError(err)
 		cidr, err := utils.NetmaskToCIDR(vip.Netmask); utils.PanicOnError(err)
 		addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
-		if n := tree.Getf("interfaces ethernet %s address %v", nicname, addr); n == nil {
-			tree.SetfWithoutCheckExisting("interfaces ethernet %s address %v", nicname, addr)
+
+		if IsMaster() {
+			if n := tree.Getf("interfaces ethernet %s address %v", nicname, addr); n == nil {
+				tree.SetfWithoutCheckExisting("interfaces ethernet %s address %v", nicname, addr)
+			}
 		}
 	}
 
@@ -653,7 +659,7 @@ func setVip(ctx *server.CommandContext) interface{} {
 
 	/* ad default qos for vip traffic counter */
 	for _, vip := range cmd.Vips {
-		publicInterface, err := utils.GetNicNameByIp(vip.Ip); utils.PanicOnError(err)
+		publicInterface, err := utils.GetNicNameByMac(vip.OwnerEthernetMac); utils.PanicOnError(err)
 		ingressrule := qosRule{ip: vip.Ip, port: 0, bandwidth: MAX_BINDWIDTH, vipUuid: vip.VipUuid}
 		if biRule, ok := totalQosRules[publicInterface]; ok {
 			if biRule[INGRESS].InterfaceQosRuleFind(ingressrule) == nil {
@@ -673,13 +679,23 @@ func setVip(ctx *server.CommandContext) interface{} {
 		}
 	}
 
+	vyosVips := []nicVipPair{}
+	for _, vip := range cmd.Vips {
+		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac); utils.PanicOnError(err)
+		cidr, err := utils.NetmaskToCIDR(vip.Netmask); utils.PanicOnError(err)
+		addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
+
+		vyosVips = append(vyosVips, nicVipPair{NicName:nicname, Vip:addr})
+	}
+	addHaNicVipPair(vyosVips)
+
 	return nil
 }
 
 func getDeleteFailVip (info []vipInfo) ([]vipInfo) {
 	toDeletelVip := []vipInfo{}
 	for _, vip := range info {
-		nic, err := utils.GetNicNameByIp(vip.Ip)
+		nic, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
 		if (err == nil) {
 			vip.Nic = nic
 			toDeletelVip = append(toDeletelVip, vip)
@@ -698,21 +714,17 @@ func removeVip(ctx *server.CommandContext) interface{} {
 		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac); utils.PanicOnError(err)
 		cidr, err := utils.NetmaskToCIDR(vip.Netmask); utils.PanicOnError(err)
 		addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
-
 		tree.Deletef("interfaces ethernet %s address %v", nicname, addr)
-
 		deleteQosRulesOfVip(nicname, vip.Ip)
 	}
-
 	tree.Apply(false)
 
-	/* find vip delete failed */
 	toDeletelVip := getDeleteFailVip(cmd.Vips)
 	err := utils.Retry(func() error {
 		for _, vip := range toDeletelVip {
 			cidr, err := utils.NetmaskToCIDR(vip.Netmask); utils.PanicOnError(err)
 			bash := utils.Bash {
-				Command: fmt.Sprintf("sudo ip add del %s/%s dev %s ", vip.Ip, cidr, vip.Nic),
+				Command: fmt.Sprintf("sudo ip add del %s/%d dev %s ", vip.Ip, cidr, vip.Nic),
 			}
 			bash.Run()
 		}
@@ -725,6 +737,16 @@ func removeVip(ctx *server.CommandContext) interface{} {
 		}
 	}, 3, 1);utils.LogError(err)
 
+	vyosVips := []nicVipPair{}
+	for _, vip := range cmd.Vips {
+		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac); utils.PanicOnError(err)
+		cidr, err := utils.NetmaskToCIDR(vip.Netmask); utils.PanicOnError(err)
+		addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
+
+		vyosVips = append(vyosVips, nicVipPair{NicName:nicname, Vip:addr})
+	}
+	removeHaNicVipPair(vyosVips)
+
 	return nil
 }
 
@@ -735,7 +757,7 @@ func setVipQos(ctx *server.CommandContext) interface{} {
 	/* sort will make sure vip with port rule is added first to avoid adjust filter position */
 	sort.Sort(vipQosSettingsArray(cmd.Settings))
 	for _, setting := range cmd.Settings {
-		publicInterface, err := utils.GetNicNameByIp(setting.Vip); utils.PanicOnError(err)
+		publicInterface, err := utils.GetNicNameByMac(setting.PublicNic); utils.PanicOnError(err)
 		if (setting.InboundBandwidth != 0) {
 			ingressrule := qosRule{ip: setting.Vip, port: uint16(setting.Port), bandwidth: uint64(setting.InboundBandwidth),
 				vipUuid: setting.VipUuid}
@@ -762,7 +784,7 @@ func deleteVipQos(ctx *server.CommandContext) interface{} {
                         continue
                 }
 
-		publicInterface, error := utils.GetNicNameByIp(setting.Vip);utils.PanicOnError(error)
+		publicInterface, error := utils.GetNicNameByMac(setting.PublicNic);utils.PanicOnError(error)
 		qosRule := qosRule{ip: setting.Vip, port: uint16(setting.Port), vipUuid: setting.VipUuid}
 		delQosRule(publicInterface, INGRESS, qosRule)
 		delQosRule(publicInterface, EGRESS, qosRule)
@@ -773,7 +795,7 @@ func deleteVipQos(ctx *server.CommandContext) interface{} {
                         continue
                 }
 
-                publicInterface, error := utils.GetNicNameByIp(setting.Vip);utils.PanicOnError(error)
+                publicInterface, error := utils.GetNicNameByMac(setting.PublicNic);utils.PanicOnError(error)
                 qosRule := qosRule{ip: setting.Vip, port: 0, bandwidth: MAX_BINDWIDTH, vipUuid: setting.VipUuid}
                 addQosRule(publicInterface, INGRESS, qosRule)
                 addQosRule(publicInterface, EGRESS, qosRule)
@@ -788,7 +810,7 @@ func syncVipQos(ctx *server.CommandContext) interface{} {
 
 	sort.Sort(vipQosSettingsArray(cmd.Settings))
 	for _, setting := range cmd.Settings {
-		publicInterface, err := utils.GetNicNameByIp(setting.Vip);utils.PanicOnError(err)
+		publicInterface, err := utils.GetNicNameByMac(setting.PublicNic);utils.PanicOnError(err)
 		if (setting.InboundBandwidth != 0) {
 			ingressrule := qosRule{ip: setting.Vip, port: uint16(setting.Port), bandwidth: uint64(setting.InboundBandwidth),
 				vipUuid: setting.VipUuid}
@@ -819,6 +841,7 @@ func syncVipQos(ctx *server.CommandContext) interface{} {
 
 
 func init() {
+	vyosVips = make(map[string][]string)
 	RegisterPrometheusCollector(NewVipPrometheusCollector())
 }
 
@@ -879,6 +902,10 @@ type monitoringRule struct {
 }
 
 func (c *vipCollector) Update(ch chan<- prom.Metric) error {
+	if !IsMaster() {
+		return nil
+	}
+
 	rules := getMonitoringRules(INGRESS)
 	for _, rule := range rules {
 		vipUuid := rule.vipUuid
