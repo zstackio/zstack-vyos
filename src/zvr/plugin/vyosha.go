@@ -57,7 +57,7 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 	for _, p := range cmd.Vips {
 		nicname, err := utils.GetNicNameByMac(p.NicMac); utils.PanicOnError(err)
 		cidr, err := utils.NetmaskToCIDR(p.Netmask); utils.PanicOnError(err)
-		pairs = append(pairs, nicVipPair{NicName: nicname, Vip: fmt.Sprintf("%v/%v", p.NicVip, cidr)})
+		pairs = append(pairs, nicVipPair{NicName: nicname, Vip: p.NicVip, Prefix:cidr})
 
 		addSecondaryIpFirewall(nicname, p.NicVip, tree)
 
@@ -146,6 +146,7 @@ func keepAlivedCheckTask()  {
 type nicVipPair struct {
 	NicName string
 	Vip     string
+	Prefix  int
 }
 
 type vyosNicVipPairs struct {
