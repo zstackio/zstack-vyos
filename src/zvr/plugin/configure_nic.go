@@ -183,8 +183,7 @@ func configureNic(ctx *server.CommandContext) interface{} {
 		nicname, _ = utils.GetNicNameByMac(nic.Mac)
 		cidr, err := utils.NetmaskToCIDR(nic.Netmask); utils.PanicOnError(err)
 		for _, sip := range nic.SecondaryIps {
-			addr := fmt.Sprintf("%v/%v", sip, cidr)
-			vyosNics = append(vyosNics, nicVipPair{NicName:nicname, Vip:addr})
+			vyosNics = append(vyosNics, nicVipPair{NicName:nicname, Vip:sip, Prefix: cidr})
 		}
 	}
 	addHaNicVipPair(vyosNics)
@@ -253,8 +252,7 @@ func removeNic(ctx *server.CommandContext) interface{} {
 		nicname, _ := utils.GetNicNameByMac(nic.Mac)
 		cidr, err := utils.NetmaskToCIDR(nic.Netmask); utils.PanicOnError(err)
 		for _, sip := range nic.SecondaryIps {
-			addr := fmt.Sprintf("%v/%v", sip, cidr)
-			vyosNics = append(vyosNics, nicVipPair{NicName:nicname, Vip:addr})
+			vyosNics = append(vyosNics, nicVipPair{NicName:nicname, Vip:sip, Prefix:cidr})
 		}
 	}
 	removeHaNicVipPair(vyosNics)

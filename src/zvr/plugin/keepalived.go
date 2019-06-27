@@ -23,8 +23,8 @@ const (
 )
 
 type KeepalivedNotify struct {
-	VyosHaVips []nicVipPair
-
+	VyosHaVipPairs []nicVipPair
+	Vip            []string
 	KeepalivedStateFile string
 	HaproxyHaScriptFile string
 }
@@ -32,11 +32,11 @@ type KeepalivedNotify struct {
 const tKeepalivedNotifyMaster = `#!/bin/sh
 # This file is auto-generated, DO NOT EDIT! DO NOT EDIT!! DO NOT EDIT!!!
 echo $1 > {{.KeepalivedStateFile}}
-{{ range .VyosHaVips }}
-sudo ip add add {{.Vip}} dev {{.NicName}} || true
+{{ range .VyosHaVipPairs }}
+sudo ip add add {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 {{ end }}
-{{ range .VyosHaVips }}
-arping -q -U -w 1 -c 2 -I {{.NicName}} {{.Vip}} || true
+{{ range .VyosHaVipPairs }}
+arping -q -A -w 1 -c 2 -I {{.NicName}} {{.Vip}} || true
 {{ end }}
 #haproxy section
 /bin/sh {{.HaproxyHaScriptFile}}
@@ -45,8 +45,8 @@ arping -q -U -w 1 -c 2 -I {{.NicName}} {{.Vip}} || true
 const tKeepalivedNotifyBackup = `#!/bin/sh
 # This file is auto-generated, DO NOT EDIT! DO NOT EDIT!! DO NOT EDIT!!!
 echo $1 > {{.KeepalivedStateFile}}
-{{ range .VyosHaVips }}
-sudo ip add del {{.Vip}} dev {{.NicName}} || true
+{{ range .VyosHaVipPairs }}
+sudo ip add del {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 {{ end }}
 #haproxy section
 pkill -9 haproxy
@@ -55,7 +55,7 @@ pkill -9 haproxy
 
 func NewKeepalivedNotifyConf(vyosHaVips []nicVipPair) *KeepalivedNotify {
 	knc := &KeepalivedNotify{
-		VyosHaVips: vyosHaVips,
+		VyosHaVipPairs: vyosHaVips,
 		KeepalivedStateFile: KeepalivedStateFile,
 		HaproxyHaScriptFile: HaproxyHaScriptFile,
 	}

@@ -683,9 +683,8 @@ func setVip(ctx *server.CommandContext) interface{} {
 	for _, vip := range cmd.Vips {
 		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac); utils.PanicOnError(err)
 		cidr, err := utils.NetmaskToCIDR(vip.Netmask); utils.PanicOnError(err)
-		addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
 
-		vyosVips = append(vyosVips, nicVipPair{NicName:nicname, Vip:addr})
+		vyosVips = append(vyosVips, nicVipPair{NicName:nicname, Vip:vip.Ip, Prefix: cidr})
 	}
 	addHaNicVipPair(vyosVips)
 
@@ -741,9 +740,8 @@ func removeVip(ctx *server.CommandContext) interface{} {
 	for _, vip := range cmd.Vips {
 		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac); utils.PanicOnError(err)
 		cidr, err := utils.NetmaskToCIDR(vip.Netmask); utils.PanicOnError(err)
-		addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
 
-		vyosVips = append(vyosVips, nicVipPair{NicName:nicname, Vip:addr})
+		vyosVips = append(vyosVips, nicVipPair{NicName:nicname, Vip:vip.Ip, Prefix:cidr})
 	}
 	removeHaNicVipPair(vyosVips)
 
