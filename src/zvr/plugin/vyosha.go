@@ -4,7 +4,7 @@ import (
 	"zvr/server"
 	"fmt"
 	"zvr/utils"
-	//log "github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"strings"
 	"time"
 )
@@ -72,14 +72,17 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 	if cmd.PeerIp == "" {
 		cmd.PeerIp = cmd.LocalIp
 	}
+	checksum, err := getFileChecksum(KeepalivedConfigFile);utils.PanicOnError(err)
 	keepalivedConf := NewKeepalivedConf(heartbeatNicNme, cmd.LocalIp, cmd.PeerIp, cmd.Monitors, cmd.Keepalive)
 	keepalivedConf.BuildConf()
-	keepalivedConf.RestartKeepalived()
+	newCheckSum, err := getFileChecksum(KeepalivedConfigFile);utils.PanicOnError(err)
+	if newCheckSum != checksum {
+		keepalivedConf.RestartKeepalived()
+	} else {
+		log.Debugf("keepalived configure file unchanged")
+	}
 
 	vyosHaEnabled = true
-
-	go vyosHaStatusCheckTask()
-	go keepAlivedCheckTask()
 
 	return nil
 }
@@ -117,16 +120,18 @@ func vyosHaStatusCheckTask()  {
 	for  {
 		select {
 		case <-ticker.C:
-			newHaStatus := getHaStatus()
-			if newHaStatus == vyosIsMaster {
-				continue
-			}
+		        if vyosHaEnabled {
+				newHaStatus := getHaStatus()
+				if newHaStatus == vyosIsMaster {
+					continue
+				}
 
-		        /* there is a situation when zvr write the keepalived notify script,
-		           at the same time keepalived is changing state,
-		           so when zvr detect status change, all script again to make sure no missing config */
-			vyosIsMaster = newHaStatus
-			server.VyosLockInterface(callStatusChangeScripts)()
+				/* there is a situation when zvr write the keepalived notify script,
+		           	at the same time keepalived is changing state,
+		           	so when zvr detect status change, all script again to make sure no missing config */
+				vyosIsMaster = newHaStatus
+				server.VyosLockInterface(callStatusChangeScripts)()
+			}
 		}
 	}
 }
@@ -138,7 +143,9 @@ func keepAlivedCheckTask()  {
 	for  {
 		select {
 		case <-ticker.C:
-			checkKeepalivedRunning()
+		        if vyosHaEnabled {
+				checkKeepalivedRunning()
+			}
 		}
 	}
 }
@@ -210,4 +217,6 @@ func init() {
 
 func VyosHaEntryPoint() {
 	server.RegisterAsyncCommandHandler(SET_VYOSHA_PATH, server.VyosLock(setVyosHaHandler))
+	go vyosHaStatusCheckTask()
+	go keepAlivedCheckTask()
 }
