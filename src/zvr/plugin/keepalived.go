@@ -129,7 +129,7 @@ vrrp_script monitor_zvr {
 
 {{ range .MonitorIps }}
 vrrp_script monitor_{{.}} {
-	script "/bin/ping {{.}} -c 1 > /dev/null"
+	script "/bin/ping {{.}} -w 1 -c 1 > /dev/null"
 	interval 1
 	weight -2
 	fall 3
@@ -250,7 +250,7 @@ func init()  {
 	os.Mkdir(KeepalivedConfigPath, os.ModePerm)
 	os.Mkdir(KeepalivedSciptPath, os.ModePerm)
 	bash := utils.Bash{
-		Command: fmt.Sprintf("echo BACKUP > %s && echo ''> %s", KeepalivedStateFile, HaproxyHaScriptFile),
+		Command: fmt.Sprintf("echo BACKUP > %s && echo ''> %s && echo ''> %s", KeepalivedStateFile, HaproxyHaScriptFile, KeepalivedConfigFile),
 	}
 	err := bash.Run();utils.PanicOnError(err)
 	enableKeepalivedLog()
