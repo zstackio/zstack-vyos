@@ -44,12 +44,12 @@ func initHandler(ctx *server.CommandContext) interface{} {
 
 func pingHandler(ctx *server.CommandContext) interface{} {
 	addRouteIfCallbackIpChanged()
-	if !IsVyosHaEnabled() {
-		return pingRsp{Uuid: initConfig.Uuid, Version: string(VERSION) }
+	if !utils.IsHaEabled() {
+		return pingRsp{Uuid: initConfig.Uuid, Version: string(VERSION), HaStatus: utils.NOHA }
 	} else if IsMaster() {
-		return pingRsp{Uuid: initConfig.Uuid, Version: string(VERSION), HaStatus: "Master" }
+		return pingRsp{Uuid: initConfig.Uuid, Version: string(VERSION), HaStatus: utils.HAMASTER }
 	} else {
-		return pingRsp{Uuid: initConfig.Uuid, Version: string(VERSION), HaStatus: "Backup" }
+		return pingRsp{Uuid: initConfig.Uuid, Version: string(VERSION), HaStatus: utils.HABACKUP }
 	}
 }
 

@@ -88,12 +88,6 @@ func configureNic(ctx *server.CommandContext) interface{} {
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s duplex auto", nicname)
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s smp_affinity auto", nicname)
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s speed auto", nicname)
-		if (IsMaster()) {
-			for _, sip := range nic.SecondaryIps {
-				addr := fmt.Sprintf("%v/%v", sip, cidr)
-				tree.SetfWithoutCheckExisting("interfaces ethernet %s address %v", nicname, addr)
-			}
-		}
 
 		if utils.IsSkipVyosIptables() {
 			if nic.Category == "Private" {
@@ -172,8 +166,23 @@ func configureNic(ctx *server.CommandContext) interface{} {
 	}
 
 	tree.Apply(false)
-	checkNicIsUp(nicname, true)
+	if (IsMaster()) {
+		checkNicIsUp(nicname, true)
+	} else {
+		cmds := []string{}
+		for _, nic := range cmd.Nics {
+			nicname, _ = utils.GetNicNameByMac(nic.Mac)
+			cmds = append(cmds, fmt.Sprintf("ip link set dev %v down", nicname))
+		}
+		b := utils.Bash{
+			Command: strings.Join(cmds, "\n"),
+		}
 
+		b.Run()
+		b.PanicIfError()
+	}
+
+	/*
 	vyosNics := []nicVipPair{}
 	for _, nic := range cmd.Nics {
 		if nic.SecondaryIps == nil {
@@ -186,7 +195,7 @@ func configureNic(ctx *server.CommandContext) interface{} {
 			vyosNics = append(vyosNics, nicVipPair{NicName:nicname, Vip:sip, Prefix: cidr})
 		}
 	}
-	addHaNicVipPair(vyosNics)
+	addHaNicVipPair(vyosNics)*/
 
 	return nil
 }
@@ -243,6 +252,7 @@ func removeNic(ctx *server.CommandContext) interface{} {
 	}
 	tree.Apply(false)
 
+	/*
 	vyosNics := []nicVipPair{}
 	for _, nic := range cmd.Nics {
 		if nic.SecondaryIps == nil {
@@ -255,7 +265,7 @@ func removeNic(ctx *server.CommandContext) interface{} {
 			vyosNics = append(vyosNics, nicVipPair{NicName:nicname, Vip:sip, Prefix:cidr})
 		}
 	}
-	removeHaNicVipPair(vyosNics)
+	removeHaNicVipPair(vyosNics)*/
 
 	return nil
 }

@@ -50,7 +50,7 @@ func KillProcess(pid int) error {
 
 func KillProcess1(pid int, waitTime uint) error {
 	b := Bash{
-		Command: fmt.Sprintf("sudo kill %v", pid),
+		Command: fmt.Sprintf("sudo kill -9 %v", pid),
 	}
 	b.Run()
 

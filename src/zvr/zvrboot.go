@@ -143,6 +143,11 @@ func configureVyos() {
 		panic(errors.New("no field 'managementNic' in bootstrap info"))
 	}
 
+	haStatus := "NoHa"
+	if v, ok := bootstrapInfo["haStatus"]; ok {
+		haStatus = v.(string)
+	}
+
 	eth0 := &nic{name: "eth0" }
 	var ok bool
 	eth0.mac, ok = mgmtNic["mac"].(string); utils.PanicIfError(ok, errors.New("cannot find 'mac' field for the management nic"))
@@ -238,6 +243,26 @@ func configureVyos() {
 		}
 
 		b = utils.Bash{
+			Command: strings.Join(cmds, "\n"),
+		}
+
+		b.Run()
+		b.PanicIfError()
+	}
+
+	log.Debugf("haStatus %+v, nics %+v", haStatus, nics)
+	cmds := []string{}
+	if haStatus != "NoHa" {
+		for _, nic := range nics {
+			/* when ha enaled, all nics except eth0 is shutdown when bootup */
+			if nic.name == "eth0" {
+				continue
+			}
+
+			cmds = append(cmds, fmt.Sprintf("ip link set dev %v down", nic.name))
+		}
+
+		b := utils.Bash{
 			Command: strings.Join(cmds, "\n"),
 		}
 

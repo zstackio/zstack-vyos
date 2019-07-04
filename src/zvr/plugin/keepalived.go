@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"html/template"
 	"os"
+	"strings"
 )
 
 const (
@@ -27,6 +28,7 @@ type KeepalivedNotify struct {
 	Vip            []string
 	KeepalivedStateFile string
 	HaproxyHaScriptFile string
+	Nics           []string
 }
 
 const tKeepalivedNotifyMaster = `#!/bin/sh
@@ -38,8 +40,9 @@ sudo ip add add {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 {{ range .VyosHaVipPairs }}
 arping -q -A -w 1 -c 2 -I {{.NicName}} {{.Vip}} || true
 {{ end }}
-#haproxy section
-/bin/sh {{.HaproxyHaScriptFile}}
+{{ range $index, $nic := .Nics }}
+ip link set up dev {{$nic}} || true
+{{ end }}
 `
 
 const tKeepalivedNotifyBackup = `#!/bin/sh
@@ -48,16 +51,30 @@ echo $1 > {{.KeepalivedStateFile}}
 {{ range .VyosHaVipPairs }}
 sudo ip add del {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 {{ end }}
-#haproxy section
-pkill -9 haproxy
+{{ range $index, $nic := .Nics }}
+ip link set down dev {{$nic}} || true
+{{ end }}
 
 `
 
 func NewKeepalivedNotifyConf(vyosHaVips []nicVipPair) *KeepalivedNotify {
+	notifyNics := []string{}
+	nics, _ := utils.GetAllNics()
+	for _, nic := range nics {
+		if nic.Name == "eth0" {
+			continue
+		}
+
+		if strings.Contains(nic.Name, "eth") {
+			notifyNics = append(notifyNics, nic.Name)
+		}
+	}
+
 	knc := &KeepalivedNotify{
 		VyosHaVipPairs: vyosHaVips,
 		KeepalivedStateFile: KeepalivedStateFile,
 		HaproxyHaScriptFile: HaproxyHaScriptFile,
+		Nics: notifyNics,
 	}
 
 	return knc
@@ -226,7 +243,7 @@ func checkKeepalivedRunning()  {
 			Command: fmt.Sprintf("sudo %s -D -S 2 -f %s", KeepalivedBinaryFile, KeepalivedConfigFile),
 		}
 
-		bash.RunWithReturn(); bash.PanicIfError()
+		bash.RunWithReturn();
 	}
 
 }

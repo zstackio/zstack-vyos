@@ -254,9 +254,9 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 }
 
 func (this *HaproxyListener) startListenerService() ( ret int, err error) {
-	if !IsMaster() {
+	/*if !IsMaster() {
 		return 0, nil
-	}
+	}*/
 
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -N %s -f %s -p %s -sf $(cat %s)",
@@ -741,7 +741,7 @@ func refreshLb(ctx *server.CommandContext) interface{} {
 	}
 
 	removeUnusedCertificate()
-	generateLbHaScript()
+	//generateLbHaScript()
 
 	return nil
 }
@@ -767,7 +767,7 @@ func deleteLb(ctx *server.CommandContext) interface{} {
 	}
 
 	removeUnusedCertificate()
-	generateLbHaScript()
+	//generateLbHaScript()
 
 	return nil
 }

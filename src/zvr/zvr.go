@@ -87,6 +87,7 @@ func main()  {
 	parseCommandOptions()
 	utils.InitLog(options.LogFile, false)
 	utils.InitBootStrapInfo()
+	plugin.InitHaNicState()
 	utils.InitNatRule()
 	loadPlugins()
 	server.VyosLockInterface(configureZvrFirewall)()
