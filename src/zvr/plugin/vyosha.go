@@ -29,7 +29,6 @@ type macVipPair struct {
 	Category     string  	`json:"category"`
 }
 
-var vyosHaEnabled bool
 var vyosIsMaster bool
 
 func setVyosHaHandler(ctx *server.CommandContext) interface{} {
@@ -82,16 +81,14 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 		log.Debugf("keepalived configure file unchanged")
 	}
 
-	vyosHaEnabled = true
-
 	return nil
 }
 
-func IsVyosHaEnabled() bool {
-	return vyosHaEnabled
-}
-
 func IsMaster() bool {
+	if !utils.IsHaEabled() {
+		return true
+	}
+
 	return vyosIsMaster
 }
 
@@ -120,7 +117,7 @@ func vyosHaStatusCheckTask()  {
 	for  {
 		select {
 		case <-ticker.C:
-		        if vyosHaEnabled {
+		        if utils.IsHaEabled() {
 				newHaStatus := getHaStatus()
 				if newHaStatus == vyosIsMaster {
 					continue
@@ -143,7 +140,7 @@ func keepAlivedCheckTask()  {
 	for  {
 		select {
 		case <-ticker.C:
-		        if vyosHaEnabled {
+		        if utils.IsHaEabled() {
 				checkKeepalivedRunning()
 			}
 		}
@@ -208,15 +205,46 @@ func removeHaNicVipPair(pairs []nicVipPair)  {
 	}
 }
 
+func InitHaNicState()  {
+	if !utils.IsHaEabled() {
+		return
+	}
+
+	/* if ha is enable, shutdown all interface except eth0 */
+	cmds := []string{}
+	nics, _ := utils.GetAllNics()
+	for _, nic := range nics {
+		if nic.Name == "eth0" {
+			continue
+		}
+
+		if strings.Contains(nic.Name, "eth") {
+			cmds = append(cmds, fmt.Sprintf("ip link set dev %v down", nic.Name))
+		}
+	}
+
+	cmds = append(cmds, fmt.Sprintf("sudo sysctl -w net.ipv4.ip_nonlocal_bind=1"))
+	b := utils.Bash{
+		Command: strings.Join(cmds, "\n"),
+	}
+
+	b.Run()
+	b.PanicIfError()
+
+	callStatusChangeScripts()
+}
+
+
 var haVipPairs  vyosNicVipPairs
 func init() {
-	vyosHaEnabled = false
 	vyosIsMaster = false
 	haVipPairs.pairs = []nicVipPair{}
 }
 
 func VyosHaEntryPoint() {
 	server.RegisterAsyncCommandHandler(SET_VYOSHA_PATH, server.VyosLock(setVyosHaHandler))
-	go vyosHaStatusCheckTask()
-	go keepAlivedCheckTask()
+	if utils.IsHaEabled() {
+		go vyosHaStatusCheckTask()
+		go keepAlivedCheckTask()
+	}
 }
