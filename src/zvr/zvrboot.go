@@ -339,7 +339,7 @@ func configureVyos() {
 			)
 
 			if nic.category == "Private" {
-				tree.SetFirewallOnInterface(nic.name, "in",
+				tree.SetZStackFirewallRuleOnInterface(nic.name, "behind","in",
 					"action accept",
 					"state established enable",
 					"state related enable",
@@ -347,7 +347,7 @@ func configureVyos() {
 					"state new enable",
 				)
 			} else {
-				tree.SetFirewallOnInterface(nic.name, "in",
+				tree.SetZStackFirewallRuleOnInterface(nic.name, "behind","in",
 					"action accept",
 					"state established enable",
 					"state related enable",
@@ -359,7 +359,7 @@ func configureVyos() {
 				"state new enable",
 			)
 
-			tree.SetFirewallOnInterface(nic.name, "in",
+			tree.SetZStackFirewallRuleOnInterface(nic.name, "behind","in",
 				"action accept",
 				"protocol icmp",
 			)
