@@ -164,7 +164,7 @@ func (this *ospfProtocol) setNetwork()  ( error) {
 
 			if !utils.IsSkipVyosIptables() {
 				if r := this.Tree.FindFirewallRuleByDescription(nic, "in", FIREWALL_DESCRIPTION); r == nil {
-					this.Tree.SetFirewallOnInterface(nic, "in",
+					this.Tree.SetZStackFirewallRuleOnInterface(nic, "front","in",
 						fmt.Sprintf("description %v", FIREWALL_DESCRIPTION),
 						fmt.Sprintf("protocol ospf"),
 						"action accept",

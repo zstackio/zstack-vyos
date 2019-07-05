@@ -186,7 +186,7 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 
 		if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", des); fr == nil {
 			if r.AllowedCidr != "" && r.AllowedCidr != "0.0.0.0/0" {
-				tree.SetFirewallOnInterface(pubNicName, "in",
+				tree.SetZStackFirewallRuleOnInterface(pubNicName, "behind","in",
 					"action reject",
 					fmt.Sprintf("source address !%v", r.AllowedCidr),
 					fmt.Sprintf("description %v", des),
@@ -198,7 +198,7 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 					"state new enable",
 				)
 			} else {
-				tree.SetFirewallOnInterface(pubNicName, "in",
+				tree.SetZStackFirewallRuleOnInterface(pubNicName, "behind","in",
 					"action accept",
 					fmt.Sprintf("description %v", des),
 					fmt.Sprintf("destination address %v", r.PrivateIp),
