@@ -41,7 +41,7 @@ sudo ip add add {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 arping -q -A -w 1 -c 2 -I {{.NicName}} {{.Vip}} || true
 {{ end }}
 {{ range $index, $nic := .Nics }}
-ip link set up dev {{$nic}} || true
+sudo ip link set up dev {{$nic}} || true
 {{ end }}
 `
 
@@ -52,7 +52,7 @@ echo $1 > {{.KeepalivedStateFile}}
 sudo ip add del {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 {{ end }}
 {{ range $index, $nic := .Nics }}
-ip link set down dev {{$nic}} || true
+sudo ip link set down dev {{$nic}} || true
 {{ end }}
 
 `
@@ -192,11 +192,6 @@ func (k *KeepalivedConf) BuildConf() (error) {
 }
 
 func (k *KeepalivedConf) RestartKeepalived() (error) {
-	pid, err := utils.FindFirstPIDByPSExtern(true, KeepalivedBinaryName)
-	if err == nil && pid != 0 {
-		utils.KillProcess(pid)
-	}
-
 	/* # ./keepalived -h
 	    Usage: ./keepalived [OPTION...]
             -f, --use-file=FILE          Use the specified configuration file
@@ -204,7 +199,7 @@ func (k *KeepalivedConf) RestartKeepalived() (error) {
             -S, --log-facility=[0-7]     Set syslog facility to LOG_LOCAL[0-7]
         */
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo %s -D -S 2 -f %s", KeepalivedBinaryFile, KeepalivedConfigFile),
+		Command: fmt.Sprintf("sudo pkill -9 keepalived || sudo %s -D -S 2 -f %s", KeepalivedBinaryFile, KeepalivedConfigFile),
 	}
 
 	bash.RunWithReturn(); bash.PanicIfError()
