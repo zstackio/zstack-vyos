@@ -50,6 +50,22 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 				fmt.Sprintf("protocol vrrp"),
 			)
 		}
+
+		if r := tree.FindSnatRuleDescription(des); r == nil {
+			num := tree.SetSnatExclude(
+				fmt.Sprintf("protocol vrrp"),
+				fmt.Sprintf("outbound-interface %v", heartbeatNicNme),
+				fmt.Sprintf("description %v", des),
+			)
+			if f := tree.FindFirstNotExcludeSNATRule(1); num != 1 && num > f {
+				/* there has not been run here never */
+				utils.LogError(fmt.Errorf("there is SNAT rule number unexcepted, rule:%v %v",
+					tree.Getf("nat source rule %v", num),  tree.Getf("nat source rule %v", f)))
+				tree.SwapSnatRule(num, f)
+				num = f
+			}
+			tree.SetSnatWithRuleNumber(num, "exclude")
+		}
 	}
 
 	pairs := []nicVipPair{}
