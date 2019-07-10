@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"os"
 	"strings"
+	//log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -42,6 +43,9 @@ arping -q -A -w 1 -c 2 -I {{.NicName}} {{.Vip}} || true
 {{ range $index, $nic := .Nics }}
 sudo ip link set up dev {{$nic}} || true
 {{ end }}
+
+#restart ipsec process
+sudo /opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl -op clear-vpn-ipsec-process
 `
 
 const tKeepalivedNotifyBackup = `#!/bin/sh
@@ -52,7 +56,6 @@ sudo ip add del {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 {{ range $index, $nic := .Nics }}
 sudo ip link set down dev {{$nic}} || true
 {{ end }}
-
 `
 
 func NewKeepalivedNotifyConf(vyosHaVips []nicVipPair) *KeepalivedNotify {

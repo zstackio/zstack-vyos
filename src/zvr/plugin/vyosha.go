@@ -160,8 +160,8 @@ type vyosNicVipPairs struct {
 	pairs []nicVipPair
 }
 
-func generateNotigyScripts(vyosHaVips []nicVipPair)  {
-	keepalivedNofityConf := NewKeepalivedNotifyConf(vyosHaVips)
+func generateNotityScripts()  {
+	keepalivedNofityConf := NewKeepalivedNotifyConf(haVipPairs.pairs)
 	keepalivedNofityConf.CreateMasterScript()
 	keepalivedNofityConf.CreateBackupScript()
 }
@@ -183,7 +183,7 @@ func addHaNicVipPair(pairs []nicVipPair)  {
 		}
 	}
 
-	generateNotigyScripts(haVipPairs.pairs)
+	generateNotityScripts()
 }
 
 func removeHaNicVipPair(pairs []nicVipPair)  {
@@ -204,7 +204,7 @@ func removeHaNicVipPair(pairs []nicVipPair)  {
 
 	if len(newPair) != len(haVipPairs.pairs) {
 		haVipPairs.pairs = newPair
-		generateNotigyScripts(haVipPairs.pairs)
+		generateNotityScripts()
 	}
 }
 
