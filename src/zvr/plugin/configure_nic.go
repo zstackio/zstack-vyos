@@ -182,6 +182,7 @@ func configureNic(ctx *server.CommandContext) interface{} {
 		b.PanicIfError()
 	}
 
+	generateNotityScripts()
 	/*
 	vyosNics := []nicVipPair{}
 	for _, nic := range cmd.Nics {
@@ -252,6 +253,7 @@ func removeNic(ctx *server.CommandContext) interface{} {
 	}
 	tree.Apply(false)
 
+	generateNotityScripts()
 	/*
 	vyosNics := []nicVipPair{}
 	for _, nic := range cmd.Nics {
