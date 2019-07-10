@@ -455,7 +455,8 @@ func InitNatRule()  {
 
 	/*flush raw table to clear NOTRACK rule at startup*/
 	cmd := Bash{
-		Command: "sudo iptables -t raw -F",
+		Command: "sudo iptables -t raw -D PREROUTING -j NOTRACK \n" +
+			"sudo iptables -t raw -D OUTPUT -j NOTRACK",
 	}
 
 	cmd.Run(); cmd.PanicIfError()
@@ -817,6 +818,50 @@ func getFirewallRuleSet() ([]string, map[string][]string, error) {
 	}
 
 	return other, zsRules, nil
+}
+
+func getRuleSet(table string) ([]string, error) {
+	cmds := fmt.Sprintf("sudo iptables-save -t %s", table)
+	cmd := Bash{
+		Command: cmds,
+		NoLog: true,
+	}
+
+	ret,o,_,err := cmd.RunWithReturn();
+	if err != nil {
+		log.Debugf("%s failed %s", cmds, err.Error())
+		return nil, err
+	}
+
+	if ret != 0 {
+		log.Debugf("%s failed ret = %d", cmds, ret)
+		return nil, errors.Errorf("%s failed ret = %d", cmds, ret)
+	}
+	rules := strings.Split(o, "\n")
+
+	// strip trailing newline
+	if len(rules) > 0 && rules[len(rules)-1] == "" {
+		rules = rules[:len(rules)-1]
+	}
+
+
+	return rules, nil
+}
+
+func AppendIptalbesRuleSet(ruleset []string, table string) (error) {
+	if len(ruleset) == 0 {
+		return nil
+	}
+
+	if rules, err := getRuleSet(table); err == nil {
+		temp := []string{}
+		temp = append(temp, rules[:len(rules) -2]...)
+		temp = append(temp, ruleset...)
+		temp = append(temp, rules[len(rules) -2:]...)
+		return restoreIptablesRulesSet(temp, table)
+	} else {
+		return err;
+	}
 }
 
 func insertRuleIntoBuffer(ruleset []string, rules []IptablesRule, comment, chainName string) []string {
