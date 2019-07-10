@@ -262,12 +262,14 @@ func configureVyos() {
 			cmds = append(cmds, fmt.Sprintf("ip link set dev %v down", nic.name))
 		}
 
-		b := utils.Bash{
-			Command: strings.Join(cmds, "\n"),
-		}
+		if len(cmds) != 0 {
+			b := utils.Bash{
+				Command: strings.Join(cmds, "\n"),
+			}
 
-		b.Run()
-		b.PanicIfError()
+			b.Run()
+			b.PanicIfError()
+		}
 	}
 
 	vyos := server.NewParserFromShowConfiguration()
