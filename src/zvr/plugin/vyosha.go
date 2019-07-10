@@ -108,24 +108,6 @@ func IsMaster() bool {
 	return vyosIsMaster
 }
 
-func getHaStatus() bool {
-	bash := utils.Bash{
-		Command: fmt.Sprintf("cat %s", KeepalivedStateFile),
-		NoLog: true,
-	}
-
-	ret, o, _, err := bash.RunWithReturn()
-	if err != nil || ret != 0 {
-		return vyosIsMaster
-	}
-
-	if strings.Contains(o, "MASTER") {
-		return true
-	} else {
-		return false
-	}
-}
-
 func vyosHaStatusCheckTask()  {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -134,7 +116,7 @@ func vyosHaStatusCheckTask()  {
 		select {
 		case <-ticker.C:
 		        if utils.IsHaEabled() {
-				newHaStatus := getHaStatus()
+				newHaStatus := getKeepAlivedStatus()
 				if newHaStatus == vyosIsMaster {
 					continue
 				}
@@ -143,6 +125,11 @@ func vyosHaStatusCheckTask()  {
 		           	at the same time keepalived is changing state,
 		           	so when zvr detect status change, all script again to make sure no missing config */
 				vyosIsMaster = newHaStatus
+				if newHaStatus {
+					log.Debugf("!!!HA Status changed to MASTER");
+				} else {
+					log.Debugf("!!!HA Status changed to BACKUP");
+				}
 				server.VyosLockInterface(callStatusChangeScripts)()
 			}
 		}

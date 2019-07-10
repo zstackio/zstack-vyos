@@ -33,7 +33,6 @@ type KeepalivedNotify struct {
 
 const tKeepalivedNotifyMaster = `#!/bin/sh
 # This file is auto-generated, DO NOT EDIT! DO NOT EDIT!! DO NOT EDIT!!!
-echo $1 > {{.KeepalivedStateFile}}
 {{ range .VyosHaVipPairs }}
 sudo ip add add {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 {{ end }}
@@ -47,7 +46,6 @@ sudo ip link set up dev {{$nic}} || true
 
 const tKeepalivedNotifyBackup = `#!/bin/sh
 # This file is auto-generated, DO NOT EDIT! DO NOT EDIT!! DO NOT EDIT!!!
-echo $1 > {{.KeepalivedStateFile}}
 {{ range .VyosHaVipPairs }}
 sudo ip add del {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 {{ end }}
@@ -255,6 +253,26 @@ func callStatusChangeScripts()  {
 		}
 	}
 	bash.RunWithReturn();
+}
+
+/* true master, false backup */
+func getKeepAlivedStatus() bool {
+	bash := utils.Bash{
+		Command: fmt.Sprintf("sudo kill -USR1 $(cat /var/run/keepalived.pid) && cp /tmp/keepalived.data %s && grep 'State' %s  | awk -F '=' '{print $2}'",
+			KeepalivedStateFile, KeepalivedStateFile),
+		NoLog: true,
+	}
+
+	ret, o, _, err := bash.RunWithReturn()
+	if err != nil || ret != 0 {
+		return false
+	}
+
+	if strings.Contains(o, "MASTER") {
+		return true
+	} else {
+		return false
+	}
 }
 
 func init()  {
