@@ -826,7 +826,10 @@ type loadBalancerCollector struct {
 	inByteEntry *prom.Desc
 	outByteEntry *prom.Desc
 	curSessionNumEntry *prom.Desc
+	refusedSessionNumEntry *prom.Desc
+	totalSessionNumEntry *prom.Desc
 	curSessionUsageEntry *prom.Desc
+	concurrentSessionUsageEntry *prom.Desc
 }
 
 const (
@@ -862,6 +865,21 @@ func NewLbPrometheusCollector() MetricCollector {
 			[]string{LB_LISTENER_UUID}, nil,
 		),
 
+		refusedSessionNumEntry: prom.NewDesc(
+			"zstack_lb_refused_session_num",
+			"Backend server refused session number",
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+		),
+		totalSessionNumEntry: prom.NewDesc(
+			"zstack_lb_total_session_num",
+			"Backend server total session number",
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+		),
+		concurrentSessionUsageEntry: prom.NewDesc(
+			"zstack_lb_concurrent_session_num",
+			"Backend server session number including active and waiting state session",
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+		),
 		//vipUUIds: make(map[string]string),
 	}
 }
@@ -872,6 +890,9 @@ func (c *loadBalancerCollector) Describe(ch chan<- *prom.Desc) error {
 	ch <- c.inByteEntry
 	ch <- c.outByteEntry
 	ch <- c.curSessionUsageEntry
+	ch <- c.refusedSessionNumEntry
+	ch <- c.totalSessionNumEntry
+	ch <- c.concurrentSessionUsageEntry
 	return nil
 }
 
@@ -917,6 +938,9 @@ func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
 			ch <- prom.MustNewConstMetric(c.inByteEntry, prom.GaugeValue, float64(cnt.bytesIn), cnt.listenerUuid, cnt.ip)
 			ch <- prom.MustNewConstMetric(c.outByteEntry, prom.GaugeValue, float64(cnt.bytesOut), cnt.listenerUuid, cnt.ip)
 			ch <- prom.MustNewConstMetric(c.curSessionNumEntry, prom.GaugeValue, float64(cnt.sessionNumber), cnt.listenerUuid, cnt.ip)
+			ch <- prom.MustNewConstMetric(c.refusedSessionNumEntry, prom.GaugeValue, float64(cnt.refusedSessionNumber), cnt.listenerUuid, cnt.ip)
+			ch <- prom.MustNewConstMetric(c.totalSessionNumEntry, prom.GaugeValue, float64(cnt.totalSessionNumber), cnt.listenerUuid, cnt.ip)
+			ch <- prom.MustNewConstMetric(c.concurrentSessionUsageEntry, prom.GaugeValue, float64(cnt.concurrentSessionNumber), cnt.listenerUuid, cnt.ip)
 		}
 
 		ch <- prom.MustNewConstMetric(c.curSessionUsageEntry, prom.GaugeValue, float64(sessionNum * 100 /maxSessionNum), listenerUuid)
@@ -932,6 +956,9 @@ type LbCounter struct {
 	bytesIn         uint64
 	bytesOut        uint64
 	sessionNumber   uint64
+	refusedSessionNumber   uint64
+	totalSessionNumber   uint64
+	concurrentSessionNumber uint64
 }
 
 func getIpFromLbStat(name string)  string {
@@ -977,6 +1004,9 @@ func (this *HaproxyListener) getLbCounters(listenerUuid string) ([]*LbCounter, i
 		counter.bytesIn = stat.Bin
 		counter.bytesOut = stat.Bout
 		counter.sessionNumber = stat.Scur
+		counter.refusedSessionNumber = stat.Dreq
+		counter.concurrentSessionNumber = stat.Scur + stat.Qcur
+		counter.totalSessionNumber = stat.Stot
 		counters = append(counters, &counter)
 		num++
 	}
@@ -988,6 +1018,8 @@ func (this *HaproxyListener) getLbCounters(listenerUuid string) ([]*LbCounter, i
 type GoBetweenServerBackendStat struct {
 	Live bool `json:"live"`
 	Active_connections uint64 `json:"active_connections"`
+	Total_connections uint64 `json:"total_connections"`
+	Refused_connections uint64 `json:"refused_connections"`
 	Rx uint64 `json:"rx"`
 	Tx uint64 `json:"tx"`
 }
@@ -998,6 +1030,7 @@ type GoBetweenServerBackend struct {
 }
 
 type GoBetweenServerStat struct {
+	Active_connections uint64 `json:"active_connections"`
 	Backends []GoBetweenServerBackend `json:"backends"`
 }
 
@@ -1044,9 +1077,12 @@ func (this *GBListener) getLbCounters(listenerUuid string) ([]*LbCounter, int) {
 		} else {
 			counter.status = 0
 		}
-		counter.bytesIn = stat.Stats.Rx
-		counter.bytesOut = stat.Stats.Tx
+                counter.bytesIn = stat.Stats.Tx //the direction of LB is different from backend direction
+                counter.bytesOut = stat.Stats.Rx
 		counter.sessionNumber = stat.Stats.Active_connections
+		counter.refusedSessionNumber = stat.Stats.Refused_connections
+		counter.totalSessionNumber = stat.Stats.Total_connections
+		counter.concurrentSessionNumber = stat.Stats.Active_connections
 		counters = append(counters, &counter)
 		num++
 	}
