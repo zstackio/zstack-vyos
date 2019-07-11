@@ -29,7 +29,7 @@ type KeepalivedNotify struct {
 	Vip            []string
 	KeepalivedStateFile string
 	HaproxyHaScriptFile string
-	Nics           []string
+	Nics           []nicVipPair
 }
 
 const tKeepalivedNotifyMaster = `#!/bin/sh
@@ -37,11 +37,14 @@ const tKeepalivedNotifyMaster = `#!/bin/sh
 {{ range .VyosHaVipPairs }}
 sudo ip add add {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 {{ end }}
-{{ range .VyosHaVipPairs }}
-arping -q -A -w 1 -c 2 -I {{.NicName}} {{.Vip}} || true
+{{ range .Nics }}
+sudo ip link set up dev {{.NicName}} || true
 {{ end }}
-{{ range $index, $nic := .Nics }}
-sudo ip link set up dev {{$nic}} || true
+{{ range .VyosHaVipPairs }}
+sudo arping -q -A -w 1 -c 2 -I {{.NicName}} {{.Vip}} || true
+{{ end }}
+{{ range .Nics }}
+sudo arping -q -A -w 1 -c 2 -I {{.NicName}} {{.Vip}} || true
 {{ end }}
 
 #restart ipsec process
@@ -53,13 +56,13 @@ const tKeepalivedNotifyBackup = `#!/bin/sh
 {{ range .VyosHaVipPairs }}
 sudo ip add del {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 {{ end }}
-{{ range $index, $nic := .Nics }}
-sudo ip link set down dev {{$nic}} || true
+{{ range .Nics }}
+sudo ip link set down dev {{.NicName}} || true
 {{ end }}
 `
 
 func NewKeepalivedNotifyConf(vyosHaVips []nicVipPair) *KeepalivedNotify {
-	notifyNics := []string{}
+	notifyNics := []nicVipPair{}
 	nics, _ := utils.GetAllNics()
 	for _, nic := range nics {
 		if nic.Name == "eth0" {
@@ -67,7 +70,17 @@ func NewKeepalivedNotifyConf(vyosHaVips []nicVipPair) *KeepalivedNotify {
 		}
 
 		if strings.Contains(nic.Name, "eth") {
-			notifyNics = append(notifyNics, nic.Name)
+			bash := utils.Bash{
+				Command: fmt.Sprintf("sudo ip -4 -o a show dev %s primary | awk {'print $4'} | head -1 | cut -f1 -d '/'", nic.Name),
+			}
+			ret, o, _, err := bash.RunWithReturn()
+			if err != nil || ret != 0 {
+				continue
+			}
+
+			o = strings.Trim(o, "\n")
+			p := nicVipPair{NicName: nic.Name, Vip: o}
+			notifyNics = append(notifyNics, p)
 		}
 	}
 
