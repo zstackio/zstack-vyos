@@ -135,13 +135,10 @@ func makeEnv() interface{} {
 -A VYATTA_CT_IGNORE -j RETURN
 -A VYATTA_CT_OUTPUT_HOOK -j RETURN
 -A VYATTA_CT_PREROUTING_HOOK -j RETURN
--A VYATTA_CT_TIMEOUT -j RETURN
--A PREROUTING -j VYATTA_CT_IGNORE
--A PREROUTING -j VYATTA_CT_TIMEOUT
--A PREROUTING -j VYATTA_CT_PREROUTING_HOOK`
+-A VYATTA_CT_TIMEOUT -j RETURN`
 
         bash := utils.Bash {
-                Command: "sudo iptables-save |grep \"\\-A PREROUTING -j VYATTA_CT_PREROUTING_HOOK\"",
+                Command: "sudo iptables -t raw -C  PREROUTING -j VYATTA_CT_PREROUTING_HOOK",
         }
         ret, o, _, err := bash.RunWithReturn(); utils.PanicOnError(err)
         log.Debugf(fmt.Sprintf("iptables raw output: %v ", o))
