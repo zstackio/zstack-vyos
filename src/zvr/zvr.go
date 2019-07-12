@@ -26,6 +26,7 @@ func loadPlugins()  {
 	plugin.ZsnEntryPoint()
 	plugin.PrometheusEntryPoint()
 	plugin.OspfEntryPoint()
+	plugin.FlowMeterEntryPoint()
 }
 
 var options server.Options
