@@ -8,8 +8,29 @@ import (
 	"html/template"
 	"os"
 	"strings"
-	//log "github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 )
+
+type KeepAlivedStatus int
+const (
+	KeepAlivedStatus_Unknown KeepAlivedStatus = iota
+	KeepAlivedStatus_Master
+	KeepAlivedStatus_Backup
+)
+
+func (s KeepAlivedStatus) string() string {
+	switch s {
+	case KeepAlivedStatus_Unknown:
+		return "UNKNOWN"
+	case KeepAlivedStatus_Master:
+		return "MASTER"
+	case KeepAlivedStatus_Backup:
+		return "BACKUP"
+	default:
+		log.Debugf("!!! get a unexpected keepalived status")
+		return "DEFAULT"
+	}
+}
 
 const (
 	KeepalivedRootPath = "/home/vyos/zvr/keepalived/"
@@ -268,11 +289,12 @@ func checkKeepalivedRunning()  {
 
 func callStatusChangeScripts()  {
 	var bash utils.Bash
-	if vyosIsMaster {
+	log.Debugf("!!! KeepAlived status change to %s", keepAlivedStatus.string())
+	if keepAlivedStatus == KeepAlivedStatus_Master {
 		bash = utils.Bash{
 			Command: fmt.Sprintf("%s MASTER", KeepalivedSciptNotifyMaster),
 		}
-	} else {
+	} else if keepAlivedStatus == KeepAlivedStatus_Backup {
 		bash = utils.Bash{
 			Command: fmt.Sprintf("%s BACKUP", KeepalivedSciptNotifyBackup),
 		}
@@ -281,24 +303,38 @@ func callStatusChangeScripts()  {
 }
 
 /* true master, false backup */
-func getKeepAlivedStatus() bool {
+func getKeepAlivedStatus() KeepAlivedStatus {
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo kill -USR1 $(cat /var/run/keepalived.pid) && cp /tmp/keepalived.data %s && grep 'State' %s  | awk -F '=' '{print $2}'",
-			KeepalivedStateFile, KeepalivedStateFile),
+		Command: fmt.Sprintf("sudo cat /var/run/keepalived.pid | awk '{print $1}'"),
+		NoLog: true,
+	}
+	ret, pid, e, err := bash.RunWithReturn()
+	if err != nil || ret != 0 {
+		log.Debugf("get keepalived pid failed %s", e)
+		return KeepAlivedStatus_Unknown
+	}
+
+	pid = strings.Trim(pid, " \n\t")
+	bash = utils.Bash{
+		Command: fmt.Sprintf("sudo kill -USR1 %s && cp /tmp/keepalived.data %s && grep 'State' %s  | awk -F '=' '{print $2}'",
+			pid, KeepalivedStateFile, KeepalivedStateFile),
 		NoLog: true,
 	}
 
-	ret, o, _, err := bash.RunWithReturn()
+	ret, o, e, err := bash.RunWithReturn()
 	if err != nil || ret != 0 {
-		return false
+		log.Debugf("get keepalived status %s", e)
+		return KeepAlivedStatus_Unknown
 	}
 
 	if strings.Contains(o, "MASTER") {
-		return true
+		return KeepAlivedStatus_Master
 	} else {
-		return false
+		return KeepAlivedStatus_Backup
 	}
 }
+
+var keepAlivedStatus KeepAlivedStatus
 
 func init()  {
 	os.Mkdir(KeepalivedRootPath, os.ModePerm)
@@ -309,4 +345,5 @@ func init()  {
 	}
 	err := bash.Run();utils.PanicOnError(err)
 	enableKeepalivedLog()
+	keepAlivedStatus = KeepAlivedStatus_Backup
 }

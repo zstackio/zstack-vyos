@@ -29,8 +29,6 @@ type macVipPair struct {
 	Category     string  	`json:"category"`
 }
 
-var vyosIsMaster bool
-
 func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 	cmd := &setVyosHaCmd{}
 	ctx.GetCommand(cmd)
@@ -105,10 +103,10 @@ func IsMaster() bool {
 		return true
 	}
 
-	return vyosIsMaster
+	return keepAlivedStatus == KeepAlivedStatus_Master
 }
 
-func vyosHaStatusCheckTask()  {
+func getKeepAlivedStatusTask()  {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
@@ -117,19 +115,14 @@ func vyosHaStatusCheckTask()  {
 		case <-ticker.C:
 		        if utils.IsHaEabled() {
 				newHaStatus := getKeepAlivedStatus()
-				if newHaStatus == vyosIsMaster {
+				if newHaStatus == KeepAlivedStatus_Unknown || newHaStatus == keepAlivedStatus {
 					continue
 				}
 
 				/* there is a situation when zvr write the keepalived notify script,
 		           	at the same time keepalived is changing state,
 		           	so when zvr detect status change, all script again to make sure no missing config */
-				vyosIsMaster = newHaStatus
-				if newHaStatus {
-					log.Debugf("!!!HA Status changed to MASTER");
-				} else {
-					log.Debugf("!!!HA Status changed to BACKUP");
-				}
+				keepAlivedStatus = newHaStatus
 				server.VyosLockInterface(callStatusChangeScripts)()
 			}
 		}
@@ -240,14 +233,13 @@ func InitHaNicState()  {
 
 var haVipPairs  vyosNicVipPairs
 func init() {
-	vyosIsMaster = false
 	haVipPairs.pairs = []nicVipPair{}
 }
 
 func VyosHaEntryPoint() {
 	server.RegisterAsyncCommandHandler(SET_VYOSHA_PATH, server.VyosLock(setVyosHaHandler))
 	if utils.IsHaEabled() {
-		go vyosHaStatusCheckTask()
+		go getKeepAlivedStatusTask()
 		go keepAlivedCheckTask()
 	}
 }
