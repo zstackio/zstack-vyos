@@ -73,7 +73,7 @@ func configureNic(ctx *server.CommandContext) interface{} {
 			)
 
 			if nic.Category == "Private" {
-				tree.SetFirewallOnInterface(nicname, "in",
+				tree.SetZStackFirewallRuleOnInterface(nicname, "behind","in",
 					"action accept",
 					"state established enable",
 					"state related enable",
@@ -81,7 +81,7 @@ func configureNic(ctx *server.CommandContext) interface{} {
 					"state new enable",
 				)
 			} else {
-				tree.SetFirewallOnInterface(nicname, "in",
+				tree.SetZStackFirewallRuleOnInterface(nicname, "behind","in",
 					"action accept",
 					"state established enable",
 					"state related enable",
@@ -89,7 +89,7 @@ func configureNic(ctx *server.CommandContext) interface{} {
 				)
 			}
 
-			tree.SetFirewallOnInterface(nicname, "in",
+			tree.SetZStackFirewallRuleOnInterface(nicname, "behind","in",
 				"action accept",
 				"protocol icmp",
 			)

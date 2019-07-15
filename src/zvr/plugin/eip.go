@@ -185,10 +185,16 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 		)
 	}
 
-	if r := tree.FindFirewallRuleByDescription(nicname, "in", des); r == nil {
-		tree.SetFirewallOnInterface(nicname, "in",
-			fmt.Sprintf("description %v", des),
-			fmt.Sprintf("destination address %v", eip.GuestIp),
+	//create eipaddress group
+	eipAddressGroup := "eip-group"
+	tree.SetGroup("address", eipAddressGroup, eip.GuestIp)
+
+	eipPubMacFirewallDes := "zstack-pub-eip-firewall-rule"
+	eipPriMacFirewallDes := "zstack-pri-eip-firewall-rule"
+	if r := tree.FindFirewallRuleByDescription(nicname, "in", eipPubMacFirewallDes); r == nil {
+		tree.SetZStackFirewallRuleOnInterface(nicname, "behind","in",
+			fmt.Sprintf("description %v", eipPubMacFirewallDes),
+			fmt.Sprintf("destination group address-group %s", eipAddressGroup),
 			"state new enable",
 			"state established enable",
 			"state related enable",
@@ -196,12 +202,13 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 		)
 
 		tree.AttachFirewallToInterface(nicname, "in")
+
 	}
 
-	if r := tree.FindFirewallRuleByDescription(prinicname, "in", des); r == nil {
-		tree.SetFirewallOnInterface(prinicname, "in",
-			fmt.Sprintf("description %v", des),
-			fmt.Sprintf("source address %v", eip.GuestIp),
+	if r := tree.FindFirewallRuleByDescription(prinicname, "in", eipPriMacFirewallDes); r == nil {
+		tree.SetZStackFirewallRuleOnInterface(prinicname, "behind", "in",
+			fmt.Sprintf("description %v", eipPriMacFirewallDes),
+			fmt.Sprintf("source group address-group %s", eipAddressGroup),
 			"state new enable",
 			"state established enable",
 			"state related enable",
@@ -236,6 +243,7 @@ func checkEipExists(eip eipInfo) error {
 
 func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 	des := makeEipDescription(eip)
+	eipAddressGroup := "eip-group"
 	priDes := makeEipDescriptionForPrivateMac(eip)
 	snatGwDes := makeEipDescriptionForGw(eip)
 	nicname, err := utils.GetNicNameByIp(eip.VipIp)
@@ -270,12 +278,16 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 		r.Delete()
 	}
 
+	prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
+	if r := tree.FindFirewallRuleByDescription(prinicname, "in", des); r != nil {
+		r.Delete()
+	}
+
 	if r := tree.FindFirewallRuleByDescription(nicname, "in", des); r != nil {
 		r.Delete()
 	}
 
-	prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
-	if r := tree.FindFirewallRuleByDescription(prinicname, "in", des); r != nil {
+	if r := tree.FindGroupByName(eip.GuestIp, eipAddressGroup, "address"); r != nil {
 		r.Delete()
 	}
 }
