@@ -5,6 +5,7 @@ import (
         "zvr/utils"
         "fmt"
         log "github.com/Sirupsen/logrus"
+        "github.com/pkg/errors"
         "strings"
 )
 
@@ -49,31 +50,43 @@ type setFlowMeterCmd struct {
         FlowMeterInfo flowMeterInfo `json:"flowMeterInfor"`
 }
 
-type getFlowCounterRsp struct {
+type counter struct {
+        Device string `json:"device"`
+        TotalEntries string `json:"totalEntries"`
+        TotalFlows string `json:"totalFlows"`
+        TotalPkts string `json:"totalPkts"`
+        TotalBytes string `json:"totalBytes"`
+}
 
+type getFlowCounterRsp struct {
+        Counters []counter `json:"counters"`
 }
 
 
 func configFlowMeter(config flowMeterInfo) (error) {
         /*
-       1. if NetworkInfos null, deleteOspf else
-       2. remove the whole ospf configure
-       3. re-configure the ospf and commit
+       1. if NetworkInfos null, delete flowmeter else
+       2. remove the whole flowmeter configure
+       3. re-configure the flowmeter and commit
         */
         tree := server.NewParserFromShowConfiguration().Tree
-        tree.Deletef("system flow-accounting")
+        if rs := tree.Getf("system flow-accounting"); rs != nil {
+                tree.Deletef("system flow-accounting")
+                //tree.Apply(false)
+                //tree = server.NewParserFromShowConfiguration().Tree
+        }
 
         if config.NetworkInfos != nil && len(config.NetworkInfos) > 0 {
                 for _, n := range config.NetworkInfos {
                         nic, err := utils.GetNicNameByMac(n.NicMac); utils.PanicOnError(err)
-                        tree.Setf("system flow-accounting interface %s", nic)
+                        tree.SetfWithoutCheckExisting("system flow-accounting interface %s", nic)
                 }
         }
 
         if config.Type == NetFlow {
                 if config.Collectors != nil && len(config.Collectors) > 0 {
                         for _, collector := range config.Collectors {
-                                tree.Setf("system flow-accounting netflow server %s port %d", collector.Server, collector.Port)
+                                tree.SetfWithoutCheckExisting("system flow-accounting netflow server %s port %d", collector.Server, collector.Port)
                         }
                 }
                 if config.Ver == V9 {
@@ -88,16 +101,16 @@ func configFlowMeter(config flowMeterInfo) (error) {
         } else if config.Type == SFlow {
                 if config.Collectors != nil && len(config.Collectors) > 0 {
                         for _, collector := range config.Collectors {
-                                tree.Setf("system flow-accounting sflow server %s port %d", collector.Server, collector.Port)
+                                tree.SetfWithoutCheckExisting("system flow-accounting sflow server %s port %d", collector.Server, collector.Port)
                         }
                 }
                 tree.Setf("system flow-accounting sflow sampling-rate %s", config.SampleRate)
                 tree.Setf("system flow-accounting sflow agent-address %s", config.RouterId)
         }
 
-
-        tree.Apply(false)
-
+        if rs := tree.Getf("system flow-accounting"); rs != nil {
+                tree.Apply(false)
+        }
         return nil
 }
 
@@ -113,15 +126,56 @@ func refreshFlowMeter(ctx *server.CommandContext) interface{} {
         return nil
 }
 
-/*test :=  []counter{
-	Total entries: 406
-        Total flows  : 483
-        Total pkts   : 3,816
-        Total bytes  : 330,391
-
+/*input :=  []string{
+	flow-accounting for [eth1]
+        Total entries: 3
+        Total flows  : 3
+        Total pkts   : 9
+        Total bytes  : 10,116
 }*/
+func parseCounter(input string) ( []counter,  error) {
+        counters := make([]counter,0,30)
+
+        if input =="" {
+                return counters, nil
+        }
+        rows := strings.Split(strings.Trim(input,"\\s+"), "\n")
+        if len(rows) < 5 {
+                log.Debugf(fmt.Sprintf("invalid len:%d rows: %v", len(rows), rows))
+                return counters, nil
+        }
+
+        var cut [5]string
+        for idx := 0; idx <= len(rows)-len(cut); {
+                if rows[idx] == "" {
+                        idx = idx + 1
+                        continue
+                }
+                for i := 0; i < len(cut); i=i+1 {
+                        columns := strings.Split(strings.Trim(rows[idx+i], "\\s+"), " ")
+                        cut[i] = columns[len(columns) - 1]
+                }
+                idx = idx + len(cut)
+
+                counters = append(counters, counter{Device:cut[0],TotalEntries:cut[1],TotalFlows:cut[2],
+                        TotalPkts:cut[3],TotalBytes:cut[4]})
+        }
+        return counters, nil
+}
+
 func getFlowCounter(ctx *server.CommandContext) interface{} {
-        return getFlowCounterRsp{}
+        log.Debugf(fmt.Sprintf("start get flow counter: %v", ctx))
+        bash := utils.Bash {
+                Command: fmt.Sprintf("sudo /opt/vyatta/bin/sudo-users/vyatta-show-acct.pl -a show |egrep 'flow-accounting|Total' 2>/dev/null"),
+        }
+        ret, o, _, err := bash.RunWithReturn(); utils.PanicOnError(err)
+        if ret != 0 {
+                utils.PanicOnError(errors.Errorf(("get counter from zebra error")))
+        }
+
+        counters,err := parseCounter(o); utils.PanicOnError(err)
+        log.Debugf(fmt.Sprintf("end get flow counter: %v", counters))
+        return getFlowCounterRsp{Counters:counters}
 }
 
 func makeEnv() interface{} {
