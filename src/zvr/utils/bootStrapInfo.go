@@ -62,3 +62,11 @@ func IsHaEabled() bool {
 
 	return false
 }
+
+func GetVirtualRouterUuid()  string {
+	if _, ok := bootstrapInfo["uuid"]; ok {
+		return bootstrapInfo["uuid"].(string)
+	}
+
+	return ""
+}
