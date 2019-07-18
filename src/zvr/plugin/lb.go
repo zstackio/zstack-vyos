@@ -857,6 +857,7 @@ func (c *loadBalancerCollector) Describe(ch chan<- *prom.Desc) error {
 	ch <- c.curSessionUsageEntry
 	ch <- c.refusedSessionNumEntry
 	ch <- c.totalSessionNumEntry
+	ch <- c.concurrentSessionUsageEntry
 	return nil
 }
 
@@ -952,7 +953,9 @@ func (this *HaproxyListener) getLbCounters(listenerUuid string) ([]*LbCounter, i
 		return nil, 0
 	}
 
+	log.Debugf("haproxy stats: %v", stats)
 	for _, stat := range stats {
+		log.Debugf("haproxy stats: %v", stat)
 		if m, err := regexp.MatchString(LB_BACKEND_PREFIX_REG, stat.SvName); err != nil || !m  {
 			continue
 		}
@@ -966,7 +969,7 @@ func (this *HaproxyListener) getLbCounters(listenerUuid string) ([]*LbCounter, i
 		counter.sessionNumber = stat.Scur
 		counter.refusedSessionNumber = stat.Dreq
 		counter.concurrentSessionNumber = stat.Scur + stat.Qcur
-		counter.concurrentSessionNumber = stat.Stot
+		counter.totalSessionNumber = stat.Stot
 		counters = append(counters, &counter)
 		num++
 	}
