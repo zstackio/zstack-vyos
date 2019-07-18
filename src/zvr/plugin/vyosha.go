@@ -20,6 +20,7 @@ type setVyosHaCmd struct {
 	PeerIp string `json:"peerIp"`
 	Monitors []string `json:"monitors"`
 	Vips []macVipPair `json:"vips"`
+	CallbackUrl string `json:"callbackUrl"`
 }
 
 type macVipPair struct {
@@ -28,6 +29,8 @@ type macVipPair struct {
 	Netmask     string  	`json:"netmask"`
 	Category     string  	`json:"category"`
 }
+
+var haStatusCallbackUrl = ""
 
 func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 	cmd := &setVyosHaCmd{}
@@ -95,6 +98,8 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 		log.Debugf("keepalived configure file unchanged")
 	}
 
+	haStatusCallbackUrl = cmd.CallbackUrl
+
 	return nil
 }
 
@@ -105,6 +110,17 @@ func IsMaster() bool {
 
 	return keepAlivedStatus == KeepAlivedStatus_Master
 }
+
+type haStatusCallback struct {
+	VirtualRouterUuid string     	`json:"virtualRouterUuid"`
+	HaStatus     string  	`json:"haStatus"`
+}
+
+/*
+func postHaStatusToManageNode(status KeepAlivedStatus) {
+	cmd := haStatusCallback{VirtualRouterUuid: utils.GetVirtualRouterUuid(), HaStatus: status.string()}
+	err := utils.HttpPostForObject(haStatusCallbackUrl, map[string]string{"commandpath": "/vpc/hastatus", }, cmd, nil)
+}*/
 
 func getKeepAlivedStatusTask()  {
 	ticker := time.NewTicker(1 * time.Second)
@@ -229,7 +245,6 @@ func InitHaNicState()  {
 
 	callStatusChangeScripts()
 }
-
 
 var haVipPairs  vyosNicVipPairs
 func init() {

@@ -694,7 +694,7 @@ func setVip(ctx *server.CommandContext) interface{} {
 func getDeleteFailVip (info []vipInfo) ([]vipInfo) {
 	toDeletelVip := []vipInfo{}
 	for _, vip := range info {
-		nic, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
+		nic, err := utils.GetNicNameByIp(vip.Ip)
 		if (err == nil) {
 			vip.Nic = nic
 			toDeletelVip = append(toDeletelVip, vip)

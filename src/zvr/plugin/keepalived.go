@@ -21,11 +21,11 @@ const (
 func (s KeepAlivedStatus) string() string {
 	switch s {
 	case KeepAlivedStatus_Unknown:
-		return "UNKNOWN"
+		return "Unknown"
 	case KeepAlivedStatus_Master:
-		return "MASTER"
+		return "Master"
 	case KeepAlivedStatus_Backup:
-		return "BACKUP"
+		return "Backup"
 	default:
 		log.Debugf("!!! get a unexpected keepalived status")
 		return "DEFAULT"
@@ -52,6 +52,8 @@ type KeepalivedNotify struct {
 	HaproxyHaScriptFile string
 	NicIps           []nicVipPair
 	NicNames          []string
+	VrUuid           string
+	CallBackUrl      string
 }
 
 const tKeepalivedNotifyMaster = `#!/bin/sh
@@ -63,14 +65,17 @@ sudo ip add add {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 sudo ip link set up dev {{$name}} || true
 {{ end }}
 {{ range .VyosHaVipPairs }}
-sudo arping -q -A -w 1 -c 2 -I {{.NicName}} {{.Vip}} || true
+(sudo arping -q -A -c 3 -I {{.NicName}} {{.Vip}}) &
 {{ end }}
 {{ range .NicIps }}
-sudo arping -q -A -w 1 -c 2 -I {{.NicName}} {{.Vip}} || true
+(sudo arping -q -A -c 3 -I {{.NicName}} {{.Vip}}) &
 {{ end }}
 
 #restart ipsec process
-sudo /opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl -op clear-vpn-ipsec-process
+(sudo /opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl -op clear-vpn-ipsec-process) &
+
+#notify Mn node
+(sudo curl -H "Content-Type: application/json" -H "commandpath: /vpc/hastatus" -X POST -d '{"virtualRouterUuid": "{{.VrUuid}}", "haStatus":"Master"}' {{.CallBackUrl}}) &
 `
 
 const tKeepalivedNotifyBackup = `#!/bin/sh
@@ -81,6 +86,8 @@ sudo ip add del {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 {{ range $index, $name := .NicNames }}
 sudo ip link set down dev {{$name}} || true
 {{ end }}
+#notify Mn node
+(sudo curl -H "Content-Type: application/json" -H "commandpath: /vpc/hastatus" -X POST -d '{"virtualRouterUuid": "{{.VrUuid}}", "haStatus":"Backup"}' {{.CallBackUrl}}) &
 `
 
 func NewKeepalivedNotifyConf(vyosHaVips []nicVipPair) *KeepalivedNotify {
@@ -119,6 +126,8 @@ func NewKeepalivedNotifyConf(vyosHaVips []nicVipPair) *KeepalivedNotify {
 		HaproxyHaScriptFile: HaproxyHaScriptFile,
 		NicNames: nicNames,
 		NicIps: nicIps,
+		VrUuid: utils.GetVirtualRouterUuid(),
+		CallBackUrl: haStatusCallbackUrl,
 	}
 
 	return knc
