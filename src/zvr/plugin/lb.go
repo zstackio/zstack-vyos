@@ -953,9 +953,7 @@ func (this *HaproxyListener) getLbCounters(listenerUuid string) ([]*LbCounter, i
 		return nil, 0
 	}
 
-	log.Debugf("haproxy stats: %v", stats)
 	for _, stat := range stats {
-		log.Debugf("haproxy stats: %v", stat)
 		if m, err := regexp.MatchString(LB_BACKEND_PREFIX_REG, stat.SvName); err != nil || !m  {
 			continue
 		}
