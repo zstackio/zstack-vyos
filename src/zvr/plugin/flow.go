@@ -21,8 +21,8 @@ const (
         SFlow 	 FlowType = "sFlow"
 )
 const (
-        V5 	  FlowVersion = "None"
-        V9 	  FlowVersion = "MD5"
+        V5 	  FlowVersion = "V5"
+        V9 	  FlowVersion = "V9"
 )
 
 type interfaceInfo struct {
@@ -69,11 +69,11 @@ func configFlowMeter(config flowMeterInfo) (error) {
        2. remove the whole flowmeter configure
        3. re-configure the flowmeter and commit
         */
+	deleted := false
         tree := server.NewParserFromShowConfiguration().Tree
         if rs := tree.Getf("system flow-accounting"); rs != nil {
                 tree.Deletef("system flow-accounting")
-                //tree.Apply(false)
-                //tree = server.NewParserFromShowConfiguration().Tree
+		deleted = true
         }
 
         if config.NetworkInfos != nil && len(config.NetworkInfos) > 0 {
@@ -108,7 +108,7 @@ func configFlowMeter(config flowMeterInfo) (error) {
                 tree.Setf("system flow-accounting sflow agent-address %s", config.RouterId)
         }
 
-        if rs := tree.Getf("system flow-accounting"); rs != nil {
+        if rs := tree.Getf("system flow-accounting"); rs != nil || deleted {
                 tree.Apply(false)
         }
         return nil
