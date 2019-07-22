@@ -116,7 +116,6 @@ func configFlowMeter(config flowMeterInfo) (error) {
 
 
 func refreshFlowMeter(ctx *server.CommandContext) interface{} {
-        makeEnv()
         cmd := &setFlowMeterCmd{}
         ctx.GetCommand(cmd)
 
@@ -201,6 +200,10 @@ func makeEnv() interface{} {
                 err := utils.AppendIptalbesRuleSet(ruleset,"raw"); utils.PanicOnError(err)
         }
         return nil
+}
+
+func init() {
+        makeEnv()
 }
 
 func FlowMeterEntryPoint()  {
