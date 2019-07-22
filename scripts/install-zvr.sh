@@ -35,4 +35,13 @@ chmod +x $TARGET_GOBETWEEN
 chown vyos:users /usr/share/healthcheck.sh
 chmod +x /usr/share/healthcheck.sh
 
+TARGET_KEEPALIVED=/usr/sbin/keepalived
+diff keepalived $TARGET_KEEPALIVED
+if [ $? -ne 0 ]; then
+    yes | cp -f keepalived $TARGET_KEEPALIVED
+    yes | mkdir -p /home/vyos/zvr/keepalived/script/
+fi
+chown vyos:users $TARGET_KEEPALIVED
+chmod +x $TARGET_KEEPALIVED
+
 exit 0

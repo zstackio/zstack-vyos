@@ -26,6 +26,7 @@ type ipsecInfo struct {
 	AuthMode string `json:"authMode"`
 	AuthKey string `json:"authKey"`
 	Vip string `json:"vip"`
+	PublicNic string `json:"publicNic"`
 	IkeAuthAlgorithm string `json:"ikeAuthAlgorithm"`
 	IkeEncryptionAlgorithm string `json:"ikeEncryptionAlgorithm"`
 	IkeDhGroup int `json:"ikeDhGroup"`
@@ -185,7 +186,7 @@ func syncIpSecRulesByIptables()  {
 		if _, ok := vipNicNameMap[info.Vip] ; ok {
 			continue
 		}
-		nicname, err := utils.GetNicNameByIp(info.Vip); utils.PanicOnError(err)
+		nicname, err := utils.GetNicNameByMac(info.PublicNic); utils.PanicOnError(err)
 		vipNicNameMap[info.Vip] = nicname
 	}
 
@@ -238,7 +239,7 @@ func syncIpSecRulesByIptables()  {
 }
 
 func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
-	nicname, err := utils.GetNicNameByIp(info.Vip); utils.PanicOnError(err)
+	nicname, err := utils.GetNicNameByMac(info.PublicNic); utils.PanicOnError(err)
 
 	tree.Setf("vpn ipsec ipsec-interfaces interface %s", nicname)
 
@@ -431,7 +432,7 @@ func deleteIPsecConnection(ctx *server.CommandContext) interface{} {
 }
 
 func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
-	nicname, err := utils.GetNicNameByIp(info.Vip); utils.PanicOnError(err)
+	nicname, err := utils.GetNicNameByMac(info.PublicNic); utils.PanicOnError(err)
 
 	tree.Deletef("vpn ipsec ike-group %s", info.Uuid)
 	tree.Deletef("vpn ipsec esp-group %s", info.Uuid)

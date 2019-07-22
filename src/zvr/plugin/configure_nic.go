@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"strings"
+	//log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -24,10 +25,45 @@ type nicInfo struct {
 	PhysicalInterface string `json:"physicalInterface"`
 	Vni int `json:"vni"`
 	FirewallDefaultAction string `json:"firewallDefaultAction"`
+	SecondaryIps []string `json:"secondaryIps"`
 }
 
 type configureNicCmd struct {
 	Nics []nicInfo `json:"nics"`
+}
+
+func makeNicFirewallDescription(nicname, ip string) string {
+	return fmt.Sprintf("nic-%s-secondary-ip-%s", nicname, ip)
+}
+
+func addSecondaryIpFirewall(nicname, ip string,  tree *server.VyosConfigTree)  {
+	/* todo: shixin, add iptables for secondary ip */
+	des := makeNicFirewallDescription(nicname, ip)
+	if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
+		tree.SetFirewallOnInterface(nicname, "local",
+			fmt.Sprintf("description %s", des),
+			"action accept",
+			"state established enable",
+			"state related enable",
+			fmt.Sprintf("destination address %s", ip),
+		)
+
+		tree.SetFirewallOnInterface(nicname, "local",
+			fmt.Sprintf("description %s", des),
+			"action accept",
+			"protocol icmp",
+			fmt.Sprintf("destination address %s", ip),
+		)
+
+		tree.SetFirewallOnInterface(nicname, "local",
+			fmt.Sprintf("description %s", des),
+			fmt.Sprintf("destination port %v", int(utils.GetSshPortFromBootInfo())),
+			fmt.Sprintf("destination address %s", ip),
+			"protocol tcp",
+			"action reject",
+		)
+	}
+
 }
 
 func configureNic(ctx *server.CommandContext) interface{} {
@@ -111,6 +147,10 @@ func configureNic(ctx *server.CommandContext) interface{} {
 				)
 			}
 
+			for _, sip := range nic.SecondaryIps {
+				addSecondaryIpFirewall(nicname, sip, tree)
+			}
+
 			tree.SetFirewallDefaultAction(nicname, "local", "reject")
 			tree.SetFirewallDefaultAction(nicname, "in", "reject")
 
@@ -126,7 +166,38 @@ func configureNic(ctx *server.CommandContext) interface{} {
 	}
 
 	tree.Apply(false)
-	checkNicIsUp(nicname, true)
+	if (IsMaster()) {
+		checkNicIsUp(nicname, true)
+	} else {
+		cmds := []string{}
+		for _, nic := range cmd.Nics {
+			nicname, _ = utils.GetNicNameByMac(nic.Mac)
+			cmds = append(cmds, fmt.Sprintf("ip link set dev %v down", nicname))
+		}
+		b := utils.Bash{
+			Command: strings.Join(cmds, "\n"),
+		}
+
+		b.Run()
+		b.PanicIfError()
+	}
+
+	generateNotityScripts()
+	/*
+	vyosNics := []nicVipPair{}
+	for _, nic := range cmd.Nics {
+		if nic.SecondaryIps == nil {
+			continue
+		}
+
+		nicname, _ = utils.GetNicNameByMac(nic.Mac)
+		cidr, err := utils.NetmaskToCIDR(nic.Netmask); utils.PanicOnError(err)
+		for _, sip := range nic.SecondaryIps {
+			vyosNics = append(vyosNics, nicVipPair{NicName:nicname, Vip:sip, Prefix: cidr})
+		}
+	}
+	addHaNicVipPair(vyosNics)*/
+
 	return nil
 }
 
@@ -181,6 +252,22 @@ func removeNic(ctx *server.CommandContext) interface{} {
 		}
 	}
 	tree.Apply(false)
+
+	generateNotityScripts()
+	/*
+	vyosNics := []nicVipPair{}
+	for _, nic := range cmd.Nics {
+		if nic.SecondaryIps == nil {
+			continue
+		}
+
+		nicname, _ := utils.GetNicNameByMac(nic.Mac)
+		cidr, err := utils.NetmaskToCIDR(nic.Netmask); utils.PanicOnError(err)
+		for _, sip := range nic.SecondaryIps {
+			vyosNics = append(vyosNics, nicVipPair{NicName:nicname, Vip:sip, Prefix:cidr})
+		}
+	}
+	removeHaNicVipPair(vyosNics)*/
 
 	return nil
 }
