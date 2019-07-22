@@ -857,6 +857,7 @@ func (c *loadBalancerCollector) Describe(ch chan<- *prom.Desc) error {
 	ch <- c.curSessionUsageEntry
 	ch <- c.refusedSessionNumEntry
 	ch <- c.totalSessionNumEntry
+	ch <- c.concurrentSessionUsageEntry
 	return nil
 }
 
@@ -966,7 +967,7 @@ func (this *HaproxyListener) getLbCounters(listenerUuid string) ([]*LbCounter, i
 		counter.sessionNumber = stat.Scur
 		counter.refusedSessionNumber = stat.Dreq
 		counter.concurrentSessionNumber = stat.Scur + stat.Qcur
-		counter.concurrentSessionNumber = stat.Stot
+		counter.totalSessionNumber = stat.Stot
 		counters = append(counters, &counter)
 		num++
 	}
