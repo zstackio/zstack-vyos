@@ -132,7 +132,7 @@ func checkEipIpTableRules(eip eipInfo, addEip bool) error {
 
 func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	des := makeEipDescription(eip)
-	nicname, err := utils.GetNicNameByIp(eip.VipIp)
+	nicname, err := utils.GetNicNameByMac(eip.PublicMac)
 	if (nicname == "" || err != nil) && eip.PublicMac != "" {
 		var nicname string
 		err = utils.Retry(func() error {
@@ -238,7 +238,7 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 	des := makeEipDescription(eip)
 	priDes := makeEipDescriptionForPrivateMac(eip)
 	snatGwDes := makeEipDescriptionForGw(eip)
-	nicname, err := utils.GetNicNameByIp(eip.VipIp)
+	nicname, err :=  utils.GetNicNameByMac(eip.PublicMac)
 	if err != nil && eip.PublicMac != "" {
 		var nicname string
 		err = utils.Retry(func() error {
@@ -282,7 +282,7 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 
 func setEipByIptables(eip eipInfo)  error{
 	/* nat rule */
-	nicname, err := utils.GetNicNameByIp(eip.VipIp); utils.PanicOnError(err)
+	nicname, err :=  utils.GetNicNameByMac(eip.PublicMac); utils.PanicOnError(err)
 	rule := utils.NewEipIptablesRule(eip.GuestIp, eip.VipIp, utils.DNAT, utils.EipRuleComment + eip.VipIp, "")
 	utils.InsertNatRule(rule, utils.PREROUTING)
 
@@ -361,7 +361,7 @@ func deleteEipByIptables(eip eipInfo)  {
 	utils.DeleteSNatRuleByComment(utils.EipRuleComment + eip.VipIp + "gw")
 
 	/* firewall rule */
-	nicname, err := utils.GetNicNameByIp(eip.VipIp)
+	nicname, err := utils.GetNicNameByMac(eip.PublicMac)
 	if (nicname == "" || err != nil) && eip.PublicMac != "" {
 		var nicname string
 		err = utils.Retry(func() error {
@@ -411,7 +411,7 @@ func syncEipByIptables(eips []eipInfo) error {
 	filterRules := make(map[string][]utils.IptablesRule)
 	for _, eip := range eips {
 		/* nat rule */
-		nicname, err := utils.GetNicNameByIp(eip.VipIp)
+		nicname, err := utils.GetNicNameByMac(eip.PublicMac)
 		rule := utils.NewEipIptablesRule(eip.GuestIp, eip.VipIp, utils.DNAT, utils.EipRuleComment + eip.VipIp, "")
 		dnatRules = append(dnatRules, rule)
 
