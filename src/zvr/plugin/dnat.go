@@ -12,7 +12,7 @@ const (
 	CREATE_PORT_FORWARDING_PATH = "/createportforwarding"
 	REVOKE_PORT_FORWARDING_PATH = "/revokeportforwarding"
 	SYNC_PORT_FORWARDING_PATH = "/syncportforwarding"
-	PortForwardingInfoMaxSize = 256
+	PortForwardingInfoMaxSize = 512
 )
 
 type dnatInfo struct {
@@ -49,7 +49,7 @@ func syncPortForwardingRules() error {
 	filterRules := make(map[string][]utils.IptablesRule)
 
 	for _, r := range pfMap {
-		pubNicName, err := utils.GetNicNameByMac(r.PrivateMac); utils.PanicOnError(err)
+		pubNicName, err := utils.GetNicNameByMac(r.PublicMac); utils.PanicOnError(err)
 		/* from ZStack side, port range is not supported */
 		protocol := utils.TCP
 		if r.ProtocolType != "TCP" {
@@ -65,20 +65,19 @@ func syncPortForwardingRules() error {
 			filterRules[pubNicName] = append(filterRules[pubNicName], ruleSpec)
 		}
 
-
-		ruleSpec := utils.NewIptablesRule(protocol, r.PrivateIp , r.VipIp + "/32", r.PrivatePortStart, r.VipPortStart,
-			nil, utils.DNAT, fmt.Sprintf("%s%s-%d", utils.PortFordingRuleComment, r.VipIp, r.VipPortStart))
+		ruleSpec := utils.NewNatIptablesRule(protocol, "" , r.VipIp + "/32", 0, r.VipPortStart,
+			nil, utils.DNAT, fmt.Sprintf("%s%s-%d", utils.PortFordingRuleComment, r.VipIp, r.VipPortStart), r.PrivateIp, r.PrivatePortStart)
 		dnatRules = append(dnatRules, ruleSpec)
 	}
 
 	if err := utils.SyncNatRule(nil, dnatRules, utils.PortFordingRuleComment); err != nil {
-		log.Warn("SyncEipNatRule failed %s", err.Error())
+		log.Warn("SyncNatRule for portforwarding failed %s", err.Error())
 		utils.PanicOnError(err)
 		return err
 	}
 
 	if err := utils.SyncFirewallRule(filterRules, utils.PortFordingRuleComment, utils.IN); err != nil {
-		log.Warn("SyncEipFirewallRule failed %s", err.Error())
+		log.Warn("SyncFirewallRule for portforwarding failed %s", err.Error())
 		utils.PanicOnError(err)
 		return err
 	}

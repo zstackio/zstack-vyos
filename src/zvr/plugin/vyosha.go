@@ -40,7 +40,11 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 	/* add firewall */
 	tree := server.NewParserFromShowConfiguration().Tree
 	if utils.IsSkipVyosIptables() {
-		/* TODO */
+		rule := utils.NewIptablesRule("vrrp", cmd.PeerIp, "", 0, 0, nil, utils.ACCEPT, utils.VRRPComment)
+		utils.InsertFireWallRule(heartbeatNicNme, rule, utils.LOCAL)
+
+		rule = utils.NewNatIptablesRule("vrrp", "", "", 0, 0, nil, utils.RETURN, utils.VRRPComment, "", 0)
+		utils.InsertNatRule(rule, utils.POSTROUTING)
 	} else {
 		des := "Vyos-HA"
 		if fr := tree.FindFirewallRuleByDescription(heartbeatNicNme, "local", des); fr == nil {
@@ -76,8 +80,6 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 		pairs = append(pairs, nicVipPair{NicName: nicname, Vip: p.NicVip, Prefix:cidr})
 
 		addSecondaryIpFirewall(nicname, p.NicVip, tree)
-
-		tree.AttachFirewallToInterface(nicname, "local")
 	}
 
 	tree.Apply(false)

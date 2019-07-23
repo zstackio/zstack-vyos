@@ -25,7 +25,6 @@ type nicInfo struct {
 	PhysicalInterface string `json:"physicalInterface"`
 	Vni int `json:"vni"`
 	FirewallDefaultAction string `json:"firewallDefaultAction"`
-	SecondaryIps []string `json:"secondaryIps"`
 }
 
 type configureNicCmd struct {
@@ -37,31 +36,30 @@ func makeNicFirewallDescription(nicname, ip string) string {
 }
 
 func addSecondaryIpFirewall(nicname, ip string,  tree *server.VyosConfigTree)  {
-	/* todo: shixin, add iptables for secondary ip */
-	des := makeNicFirewallDescription(nicname, ip)
-	if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
-		tree.SetFirewallOnInterface(nicname, "local",
-			fmt.Sprintf("description %s", des),
-			"action accept",
-			"state established enable",
-			"state related enable",
-			fmt.Sprintf("destination address %s", ip),
-		)
+	if (utils.IsSkipVyosIptables()) {
+		rule := utils.NewIptablesRule("", "", ip, 0, 0, []string{utils.RELATED, utils.ESTABLISHED}, utils.ACCEPT, utils.VRRPComment)
+		utils.InsertFireWallRule(nicname, rule, utils.LOCAL)
+		rule = utils.NewIptablesRule("icmp", "", ip, 0, 0, nil, utils.ACCEPT, utils.VRRPComment)
+		utils.InsertFireWallRule(nicname, rule, utils.LOCAL)
+	} else {
+		des := makeNicFirewallDescription(nicname, ip)
+		if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
+			tree.SetFirewallOnInterface(nicname, "local",
+				fmt.Sprintf("description %s", des),
+				"action accept",
+				"state established enable",
+				"state related enable",
+				fmt.Sprintf("destination address %s", ip),
+			)
 
-		tree.SetFirewallOnInterface(nicname, "local",
-			fmt.Sprintf("description %s", des),
-			"action accept",
-			"protocol icmp",
-			fmt.Sprintf("destination address %s", ip),
-		)
-
-		tree.SetFirewallOnInterface(nicname, "local",
-			fmt.Sprintf("description %s", des),
-			fmt.Sprintf("destination port %v", int(utils.GetSshPortFromBootInfo())),
-			fmt.Sprintf("destination address %s", ip),
-			"protocol tcp",
-			"action reject",
-		)
+			tree.SetFirewallOnInterface(nicname, "local",
+				fmt.Sprintf("description %s", des),
+				"action accept",
+				"protocol icmp",
+				fmt.Sprintf("destination address %s", ip),
+			)
+		}
+		tree.AttachFirewallToInterface(nicname, "local")
 	}
 
 }
@@ -145,10 +143,6 @@ func configureNic(ctx *server.CommandContext) interface{} {
 					"protocol tcp",
 					"action reject",
 				)
-			}
-
-			for _, sip := range nic.SecondaryIps {
-				addSecondaryIpFirewall(nicname, sip, tree)
 			}
 
 			tree.SetFirewallDefaultAction(nicname, "local", "reject")

@@ -717,6 +717,13 @@ func refreshLb(ctx *server.CommandContext) interface{} {
 		}
 	}
 
+	refreshLbIpTables()
+	removeUnusedCertificate()
+
+	return nil
+}
+
+func refreshLbIpTables()  {
 	/* reinstall all lb firewalls */
 	if utils.IsSkipVyosIptables() {
 		filterRules := make(map[string][]utils.IptablesRule)
@@ -739,11 +746,6 @@ func refreshLb(ctx *server.CommandContext) interface{} {
 
 		err := utils.SyncFirewallRule(filterRules, utils.LbRuleComment, utils.LOCAL); utils.PanicOnError(err)
 	}
-
-	removeUnusedCertificate()
-	//generateLbHaScript()
-
-	return nil
 }
 
 func delLb(lb lbInfo) {
@@ -766,6 +768,7 @@ func deleteLb(ctx *server.CommandContext) interface{} {
 		}
 	}
 
+	refreshLbIpTables()
 	removeUnusedCertificate()
 	//generateLbHaScript()
 

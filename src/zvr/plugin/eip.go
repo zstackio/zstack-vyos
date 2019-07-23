@@ -12,6 +12,7 @@ const (
 	VR_CREATE_EIP = "/createeip"
 	VR_REMOVE_EIP = "/removeeip"
 	VR_SYNC_EIP = "/synceip"
+	EipInfoMaxSize = 512
 )
 
 type eipInfo struct {
@@ -21,6 +22,8 @@ type eipInfo struct {
 	PublicMac string `json:"publicMac"`
 	SnatInboundTraffic bool `json:"snatInboundTraffic"`
 }
+
+var eipMap map[string]eipInfo
 
 type setEipCmd struct {
 	Eip eipInfo `json:"eip"`
@@ -280,62 +283,14 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 	}
 }
 
-func setEipByIptables(eip eipInfo)  error{
-	/* nat rule */
-	nicname, err :=  utils.GetNicNameByMac(eip.PublicMac); utils.PanicOnError(err)
-	rule := utils.NewEipIptablesRule(eip.GuestIp, eip.VipIp, utils.DNAT, utils.EipRuleComment + eip.VipIp, "")
-	utils.InsertNatRule(rule, utils.PREROUTING)
-
-	rule = utils.NewEipIptablesRule(eip.GuestIp, eip.VipIp, utils.SNAT, utils.EipRuleComment + eip.VipIp, nicname)
-	utils.InsertNatRule(rule, utils.POSTROUTING)
-
-	prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
-	/*if eip.SnatInboundTraffic {
-		//not support the feature by iptables currently, the iptables module need the new parameters 'to source' &'to dest'
-	}*/
-
-	/* firewall rule */
-	if (nicname == "" || err != nil) && eip.PublicMac != "" {
-		var nicname string
-		err = utils.Retry(func() error {
-			var e error
-			nicname, e = utils.GetNicNameByMac(eip.PublicMac)
-			if e != nil {
-				return e
-			} else if nicname == "" {
-				return fmt.Errorf("empty nic name found for mac[%s]", eip.PublicMac)
-			} else {
-				return nil
-			}
-		}, 5, 1)
-	}
-	utils.PanicOnError(err)
-
-	rule = utils.NewIptablesRule("",  "", eip.GuestIp, 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
-		utils.RETURN, utils.EipRuleComment + eip.VipIp)
-	utils.InsertFireWallRule(nicname, rule, utils.IN)
-
-	rule = utils.NewIptablesRule("",  eip.GuestIp, "", 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
-		utils.RETURN, utils.EipRuleComment + eip.VipIp)
-	utils.InsertFireWallRule(prinicname, rule, utils.IN)
-
-	return nil
-}
-
 func createEip(ctx *server.CommandContext) interface{} {
 	cmd := &setEipCmd{}
 	ctx.GetCommand(cmd)
 	eip := cmd.Eip
 
 	if utils.IsSkipVyosIptables() {
-		setEipByIptables(eip);
-		err := checkEipIpTableRules(eip, true);
-		if (err != nil) {
-			/* utils.PanicOnError(err) will response error message to ZStack, return value can not do it */
-			deleteEipByIptables(eip)
-			utils.PanicOnError(err)
-			return err;
-		}
+		eipMap[eip.VipIp] = eip
+		syncEipByIptables()
 		return nil
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
@@ -354,42 +309,14 @@ func createEip(ctx *server.CommandContext) interface{} {
 	}
 }
 
-func deleteEipByIptables(eip eipInfo)  {
-	/* nat rule */
-	utils.DeleteSNatRuleByComment(utils.EipRuleComment + eip.VipIp)
-	utils.DeleteDNatRuleByComment(utils.EipRuleComment + eip.VipIp)
-	utils.DeleteSNatRuleByComment(utils.EipRuleComment + eip.VipIp + "gw")
-
-	/* firewall rule */
-	nicname, err := utils.GetNicNameByMac(eip.PublicMac)
-	if (nicname == "" || err != nil) && eip.PublicMac != "" {
-		var nicname string
-		err = utils.Retry(func() error {
-			var e error
-			nicname, e = utils.GetNicNameByMac(eip.PublicMac)
-			if e != nil {
-				return e
-			} else if nicname == "" {
-				return fmt.Errorf("empty nic name found for mac[%s]", eip.PublicMac)
-			} else {
-				return nil
-			}
-		}, 5, 1)
-	}
-	utils.PanicOnError(err)
-
-	prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
-	utils.DeleteFirewallRuleByComment(nicname, utils.EipRuleComment + eip.VipIp)
-	utils.DeleteFirewallRuleByComment(prinicname, utils.EipRuleComment + eip.VipIp)
-}
-
 func removeEip(ctx *server.CommandContext) interface{} {
 	cmd := &removeEipCmd{}
 	ctx.GetCommand(cmd)
 	eip := cmd.Eip
 
 	if utils.IsSkipVyosIptables() {
-		deleteEipByIptables(eip)
+		delete(eipMap, eip.VipIp)
+		syncEipByIptables()
 	} else {
 		err := utils.Retry(func() error {
 			tree := server.NewParserFromShowConfiguration().Tree
@@ -405,29 +332,26 @@ func removeEip(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
-func syncEipByIptables(eips []eipInfo) error {
+func syncEipByIptables() error {
 	dnatRules := []utils.IptablesRule{}
 	snatRules := []utils.IptablesRule{}
 	filterRules := make(map[string][]utils.IptablesRule)
-	for _, eip := range eips {
+	for _, eip := range eipMap {
 		/* nat rule */
 		nicname, err := utils.GetNicNameByMac(eip.PublicMac)
-		rule := utils.NewEipIptablesRule(eip.GuestIp, eip.VipIp, utils.DNAT, utils.EipRuleComment + eip.VipIp, "")
+		rule := utils.NewEipNatRule("", eip.VipIp, utils.DNAT, utils.EipRuleComment + eip.VipIp, "",  eip.GuestIp, 0)
 		dnatRules = append(dnatRules, rule)
 
-		rule = utils.NewEipIptablesRule(eip.GuestIp, eip.VipIp, utils.SNAT, utils.EipRuleComment + eip.VipIp, nicname)
+		rule = utils.NewEipNatRule(eip.GuestIp, "", utils.SNAT, utils.EipRuleComment + eip.VipIp, nicname,  eip.VipIp, 0)
 		snatRules = append(snatRules, rule)
 
 		prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
 
-		//not support the feature by iptables currently, the iptables module need the new parameters 'to source' &'to dest'
-		/*
 		if eip.SnatInboundTraffic {
 			gwip, err := utils.GetIpByNicName(prinicname); utils.PanicOnError(err)
-			rule = utils.NewEipIptablesRule(eip.GuestIp, gwip, utils.SNAT, utils.EipRuleComment + eip.VipIp + "gw", prinicname)
+			rule = utils.NewEipNatRule("", eip.GuestIp, utils.SNAT, utils.EipRuleComment + eip.VipIp, prinicname, gwip, 0)
 			snatRules = append(snatRules, rule)
 		}
-		*/
 
 		/* firewall rule */
 		rule = utils.NewIptablesRule("", "", eip.GuestIp, 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
@@ -455,8 +379,12 @@ func syncEip(ctx *server.CommandContext) interface{} {
 	cmd := &syncEipCmd{}
 	ctx.GetCommand(cmd)
 
+	eipMap = make(map[string]eipInfo, EipInfoMaxSize)
 	if utils.IsSkipVyosIptables() {
-		syncEipByIptables(cmd.Eips)
+		for _, eip := range cmd.Eips {
+			eipMap[eip.VipIp] = eip
+		}
+		syncEipByIptables()
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
 
@@ -509,6 +437,7 @@ func syncEip(ctx *server.CommandContext) interface{} {
 }
 
 func EipEntryPoint() {
+	eipMap = make(map[string]eipInfo, EipInfoMaxSize)
 	server.RegisterAsyncCommandHandler(VR_CREATE_EIP, server.VyosLock(createEip))
 	server.RegisterAsyncCommandHandler(VR_REMOVE_EIP, server.VyosLock(removeEip))
 	server.RegisterAsyncCommandHandler(VR_SYNC_EIP, server.VyosLock(syncEip))

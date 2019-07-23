@@ -78,14 +78,16 @@ const (
 	SNATComment = "SNAT-rules-for-"
 	ManagementComment = "Management-rules"
 	OSPFComment = "OSPF-rules"
+	VRRPComment = "VRRP-rules"
 )
 
 var rulesPriority = map[string]int{
 "Default-rules-top": 	1000,
 "Management-rules": 	900,
+"VRRP-rules": 	        890,
 "DNS-rules":        	800,
 "DHCP-rules":        	700,
-	"OSPF-rules":   650,
+"OSPF-rules":           650,
 "IPSEC-rules-": 	600,
 "PF-rules-":    	500,
 "LB-rules-":            400,
@@ -110,14 +112,27 @@ func commentCompare(comment1, comment2 string) int {
 
 type IptablesRule struct {
 	chainName         string
+
+	/* match condition */
 	proto             string
 	src, dest         string
 	srcPort, destPort int
 	states            []string
-	action            string
 	comment           string
 	inNic, outNic     string
 	tcpflags          []string
+
+	/* action operation */
+	action            string
+	natTranslationIp          string
+	natTranslationPort   int
+}
+
+func NewNatIptablesRule(proto string, src, dest string, srcPort, destPort int,
+states []string, action string,  comment string, natTranslationIp string, natTranslationPort int) IptablesRule {
+	return IptablesRule{proto: proto, src: src, dest: dest, srcPort: srcPort,
+		destPort:destPort, states: states, action:action, comment:comment,
+		outNic: "", inNic: "", tcpflags:nil, natTranslationIp: natTranslationIp, natTranslationPort:natTranslationPort}
 }
 
 func NewIptablesRule(proto string, src, dest string, srcPort, destPort int,
@@ -127,10 +142,10 @@ func NewIptablesRule(proto string, src, dest string, srcPort, destPort int,
 		outNic: "", inNic: "", tcpflags:nil}
 }
 
-func NewEipIptablesRule(src, dest string, action string,  comment string, outNic string) IptablesRule {
+func NewEipNatRule(src, dest string, action string,  comment string, outNic string, natTranslationIp string, natTranslationPort int) IptablesRule {
 	return IptablesRule{proto: "", src: src, dest: dest, srcPort: 0,
 		destPort:0, states: nil, action:action, comment:comment,
-		outNic: outNic, inNic: "", tcpflags:nil}
+		outNic: outNic, inNic: "", tcpflags:nil, natTranslationIp: natTranslationIp, natTranslationPort:natTranslationPort}
 }
 
 func NewIpsecsIptablesRule(proto string, src, dest string, srcPort, destPort int,
@@ -147,19 +162,19 @@ func NewLoadBalancerIptablesRule(proto string, dest string, destPort int, action
 		outNic: "", inNic: "", tcpflags:tcpflags}
 }
 
-func NewSnatIptablesRule(src, dest, outNic, action, comment string) IptablesRule {
+func NewSnatIptablesRule(src, dest, outNic, action, comment string, natTranslationIp string, natTranslationPort int) IptablesRule {
 	return IptablesRule{proto: "", src: src, dest: dest, srcPort: 0,
 		destPort:0, states: nil, action:action, comment:comment,
-		outNic: outNic, inNic: "", tcpflags:nil}
+		outNic: outNic, inNic: "", tcpflags:nil, natTranslationIp: natTranslationIp, natTranslationPort:natTranslationPort}
 }
 
 func (iptableRule IptablesRule)string() []string  {
 	rules := []string{}
-	if iptableRule.src != "" && iptableRule.action != DNAT {
+	if iptableRule.src != "" {
 		rules = append(rules, "-s " + iptableRule.src)
 	}
 
-	if iptableRule.dest != "" && iptableRule.action != SNAT {
+	if iptableRule.dest != "" {
 		rules = append(rules, "-d " + iptableRule.dest)
 	}
 
@@ -169,7 +184,7 @@ func (iptableRule IptablesRule)string() []string  {
 
 	if iptableRule.proto != "" {
 		rules = append(rules, "-p " + iptableRule.proto)
-		if iptableRule.srcPort != 0 && iptableRule.action != DNAT {
+		if iptableRule.srcPort != 0 {
 			rules = append(rules, "-m " + iptableRule.proto)
 			rules = append(rules, fmt.Sprintf("--sport %d ", iptableRule.srcPort))
 		}
@@ -190,13 +205,13 @@ func (iptableRule IptablesRule)string() []string  {
 	case REJECT:
 		rules = append(rules, "-j REJECT --reject-with icmp-port-unreachable")
 	case DNAT:
-		if iptableRule.srcPort != 0 {
-			rules = append(rules, fmt.Sprintf("-j DNAT --to-destination %s:%d", iptableRule.src, iptableRule.srcPort))
+		if iptableRule.natTranslationPort != 0 {
+			rules = append(rules, fmt.Sprintf("-j DNAT --to-destination %s:%d", iptableRule.natTranslationIp, iptableRule.natTranslationPort))
 		} else {
-			rules = append(rules, fmt.Sprintf("-j DNAT --to-destination %s", iptableRule.src))
+			rules = append(rules, fmt.Sprintf("-j DNAT --to-destination %s", iptableRule.natTranslationIp))
 		}
 	case SNAT:
-		rules = append(rules, fmt.Sprintf("-j SNAT --to-source %s", iptableRule.dest))
+		rules = append(rules, fmt.Sprintf("-j SNAT --to-source %s", iptableRule.natTranslationIp))
 	default:
 		rules = append(rules, "-j " + iptableRule.action)
 	}

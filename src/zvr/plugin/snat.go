@@ -52,9 +52,9 @@ func getNicSNATRuleNumber(nicNo int)  (pubNicRuleNo int, priNicRuleNo int){
 }
 
 func setSnatRule(pubNic, priNic, priCidr, pubIp string)  {
-	rule := utils.NewSnatIptablesRule(priCidr, pubIp, pubNic, utils.SNAT, utils.SNATComment + priCidr)
+	rule := utils.NewSnatIptablesRule(priCidr, "", pubNic, utils.SNAT, utils.SNATComment + priCidr, pubIp, 0)
 	utils.InsertNatRule(rule, utils.POSTROUTING)
-	rule = utils.NewSnatIptablesRule(priCidr, pubIp, priNic, utils.SNAT, utils.SNATComment + priCidr)
+	rule = utils.NewSnatIptablesRule(priCidr, "", priNic, utils.SNAT, utils.SNATComment + priCidr, pubIp, 0)
 	utils.InsertNatRule(rule, utils.POSTROUTING)
 }
 
