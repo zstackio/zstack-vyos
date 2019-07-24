@@ -1038,8 +1038,8 @@ func (this *GBListener) getLbCounters(listenerUuid string) ([]*LbCounter, int) {
 		} else {
 			counter.status = 0
 		}
-		counter.bytesIn = stat.Stats.Rx
-		counter.bytesOut = stat.Stats.Tx
+                counter.bytesIn = stat.Stats.Tx //the direction of LB is different from backend direction
+                counter.bytesOut = stat.Stats.Rx
 		counter.sessionNumber = stat.Stats.Active_connections
 		counter.refusedSessionNumber = stat.Stats.Refused_connections
 		counter.totalSessionNumber = stat.Stats.Total_connections
