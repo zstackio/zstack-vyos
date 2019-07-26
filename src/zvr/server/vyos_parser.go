@@ -371,6 +371,37 @@ func (t *VyosConfigTree) has(config...string) bool {
 	return true
 }
 
+func (t *VyosConfigTree) CreatePolicyRouteRuleSet(ruleSetName string) {
+	t.SetfWithoutCheckExisting("policy route %s", ruleSetName)
+}
+
+func (t *VyosConfigTree) CreatePolicyRouteRule(ruleSetName string, number int, rules []string) {
+	ruleNode := fmt.Sprintf("policy route %s rule %v", ruleSetName, number)
+	if t.Get(ruleNode) != nil {
+		t.Delete(ruleNode)
+	}
+
+	for _, rule := range rules {
+		t.Setf("policy route %s rule %v %s", ruleSetName, number, rule)
+	}
+}
+
+func (t *VyosConfigTree) CreatePolicyRouteTable(number int) {
+	t.SetfWithoutCheckExisting("protocols static table %v", number)
+}
+
+func (t *VyosConfigTree) CreatePolicyRoute(tableNumber int, destinationCidr string, nextHopIp string, distance int) {
+	if distance != 0 {
+		t.Setf("protocols static table %v route %s next-hop %s distance %v", tableNumber, destinationCidr, nextHopIp, distance)
+	} else {
+		t.Setf("protocols static table %v route %s next-hop %s", tableNumber, destinationCidr, nextHopIp)
+	}
+}
+
+func (t *VyosConfigTree) AttachPolicyRuleSetToNic(nicName string, ruleSetName string) {
+	t.Setf("interfaces ethernet %s policy route %s", nicName, ruleSetName)
+}
+
 func (t *VyosConfigTree) Has(config string) bool {
 	return t.has(strings.Split(config, " ")...)
 }
