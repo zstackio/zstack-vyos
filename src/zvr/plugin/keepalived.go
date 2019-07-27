@@ -325,7 +325,7 @@ func getKeepAlivedStatus() KeepAlivedStatus {
 
 	pid = strings.Trim(pid, " \n\t")
 	bash = utils.Bash{
-		Command: fmt.Sprintf("sudo kill -USR1 %s && cp /tmp/keepalived.data %s && grep 'State' %s  | awk -F '=' '{print $2}'",
+		Command: fmt.Sprintf("timeout 1 sudo kill -USR1 %s && timeout 1 cp /tmp/keepalived.data %s && grep 'State' %s  | awk -F '=' '{print $2}'",
 			pid, KeepalivedStateFile, KeepalivedStateFile),
 		NoLog: true,
 	}
