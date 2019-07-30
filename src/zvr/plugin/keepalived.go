@@ -338,9 +338,12 @@ func getKeepAlivedStatus() KeepAlivedStatus {
 
 	if strings.Contains(o, "MASTER") {
 		return KeepAlivedStatus_Master
-	} else {
+	} else if strings.Contains(o, "BACKUP"){
 		return KeepAlivedStatus_Backup
+	} else {
+		return KeepAlivedStatus_Unknown
 	}
+
 }
 
 var keepAlivedStatus KeepAlivedStatus

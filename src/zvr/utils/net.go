@@ -68,6 +68,7 @@ func GetNetworkNumber(ip, netmask string) (string, error) {
 type Nic struct {
 	Name string
 	Mac string
+	Ip  string
 }
 
 func (nic Nic) String() string {
