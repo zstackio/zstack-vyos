@@ -172,7 +172,27 @@ type vyosNicVipPairs struct {
 }
 
 func generateNotityScripts()  {
-	keepalivedNofityConf := NewKeepalivedNotifyConf(haVipPairs.pairs)
+	/* move nic ip in the front of the array */
+	bootNics := utils.GetBootStrapNicInfo()
+	parisFront := []nicVipPair{}
+	parisEnd := []nicVipPair{}
+	for _, p := range haVipPairs.pairs {
+		if bootNic, ok := bootNics[p.NicName]; ok {
+			if p.Vip == bootNic.Ip {
+				parisFront = append(parisFront, p)
+			} else {
+				parisEnd = append(parisEnd, p)
+			}
+		} else {
+			parisEnd = append(parisEnd, p)
+		}
+	}
+
+	for _, p := range parisEnd {
+		parisFront = append(parisFront, p)
+	}
+
+	keepalivedNofityConf := NewKeepalivedNotifyConf(parisFront)
 	keepalivedNofityConf.CreateMasterScript()
 	keepalivedNofityConf.CreateBackupScript()
 }
