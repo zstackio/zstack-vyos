@@ -70,3 +70,33 @@ func GetVirtualRouterUuid()  string {
 
 	return ""
 }
+
+func GetBootStrapNicInfo() map[string]Nic {
+	bootstrapNics := make(map[string]Nic)
+	mgmtNic := bootstrapInfo["managementNic"].(map[string]interface{})
+	if mgmtNic != nil {
+		name, ok1 := mgmtNic["deviceName"].(string)
+		mac, ok2 := mgmtNic["mac"].(string)
+		ip, ok3 := mgmtNic["ip"].(string)
+		if ok1 && ok2 && ok3 {
+			mnic := Nic{Name: name, Mac: mac, Ip: ip}
+			bootstrapNics[mnic.Name] = mnic
+		}
+	}
+
+	otherNics := bootstrapInfo["additionalNics"].([]interface{})
+	if otherNics != nil {
+		for _, o := range otherNics {
+			onic := o.(map[string]interface{})
+			name, ok1 := onic["deviceName"].(string)
+			mac, ok2 := onic["mac"].(string)
+			ip, ok3 := onic["ip"].(string)
+			if ok1 && ok2 && ok3 {
+				additionalNic := Nic{Name: name, Mac: mac, Ip: ip}
+				bootstrapNics[additionalNic.Name] = additionalNic
+			}
+		}
+	}
+
+	return bootstrapNics
+}
