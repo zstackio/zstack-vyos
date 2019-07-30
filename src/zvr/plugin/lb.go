@@ -254,10 +254,6 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 }
 
 func (this *HaproxyListener) startListenerService() ( ret int, err error) {
-	/*if !IsMaster() {
-		return 0, nil
-	}*/
-
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -N %s -f %s -p %s -sf $(cat %s)",
 			this.maxConnect, this.confPath, this.pidPath, this.pidPath),
@@ -464,10 +460,6 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 }
 
 func (this *GBListener) startListenerService() ( ret int, err error) {
-	if !IsMaster() {
-		return 0, nil
-	}
-
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo /opt/vyatta/sbin/gobetween -c %s >/dev/null 2>&1&echo $! >%s",
 			this.confPath, this.pidPath),
@@ -650,7 +642,7 @@ func setLb(lb lbInfo) {
 	err = listener.createListenerServiceConfigure(lb); utils.PanicOnError(err)
 	newChecksum, err1 := getFileChecksum(makeLbConfFilePath(lb)); utils.PanicOnError(err1)
 	if update, err := listener.checkIfListenerServiceUpdate(checksum, newChecksum); err == nil && !update {
-		//log.Debugf("no need refresh the listener: %v\n", lb.ListenerUuid)
+		log.Debugf("no need refresh the listener: %v\n", lb.ListenerUuid)
 		return
 	}
 	utils.PanicOnError(err)
@@ -786,27 +778,6 @@ func createCertificate(ctx *server.CommandContext) interface{} {
 	err = ioutil.WriteFile(certificatePath, []byte(certificate.Certificate), 0755); utils.PanicOnError(err)
 
 	return nil
-}
-
-func generateLbHaScript()  {
-	cmds := []string{}
-	for _, listener := range LbListeners {
-		switch v := listener.(type) {
-		case *HaproxyListener:
-			cmds = append(cmds, fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -N %s -f %s -p %s -sf $(cat %s)",
-				v.maxConnect, v.confPath, v.pidPath, v.pidPath))
-			break
-		case *GBListener:
-			cmds = append(cmds, fmt.Sprintf("sudo /opt/vyatta/sbin/gobetween -c %s >/dev/null 2>&1&echo $! >%s",
-				v.confPath, v.pidPath))
-			break
-		default:
-			continue
-		}
-	}
-
-	content := []byte(strings.Join(cmds, "\n"))
-	err := ioutil.WriteFile(HaproxyHaScriptFile, content, 0755);utils.PanicOnError(err)
 }
 
 func init() {
