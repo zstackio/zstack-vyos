@@ -73,6 +73,8 @@ sudo ip link set up dev {{$name}} || true
 
 #restart ipsec process
 (sudo /opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl -op clear-vpn-ipsec-process) &
+#restart flow-accounting process
+(sudo /opt/vyatta/bin/sudo-users/vyatta-show-acct.pl --action 'restart' 2 > null) &
 
 #notify Mn node
 (sudo curl -H "Content-Type: application/json" -H "commandpath: /vpc/hastatus" -X POST -d '{"virtualRouterUuid": "{{.VrUuid}}", "haStatus":"Master"}' {{.CallBackUrl}}) &
