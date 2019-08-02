@@ -254,10 +254,6 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 }
 
 func (this *HaproxyListener) startListenerService() ( ret int, err error) {
-	/*if !IsMaster() {
-		return 0, nil
-	}*/
-
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -N %s -f %s -p %s -sf $(cat %s)",
 			this.maxConnect, this.confPath, this.pidPath, this.pidPath),
@@ -464,10 +460,6 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 }
 
 func (this *GBListener) startListenerService() ( ret int, err error) {
-	if !IsMaster() {
-		return 0, nil
-	}
-
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo /opt/vyatta/sbin/gobetween -c %s >/dev/null 2>&1&echo $! >%s",
 			this.confPath, this.pidPath),
@@ -650,7 +642,7 @@ func setLb(lb lbInfo) {
 	err = listener.createListenerServiceConfigure(lb); utils.PanicOnError(err)
 	newChecksum, err1 := getFileChecksum(makeLbConfFilePath(lb)); utils.PanicOnError(err1)
 	if update, err := listener.checkIfListenerServiceUpdate(checksum, newChecksum); err == nil && !update {
-		//log.Debugf("no need refresh the listener: %v\n", lb.ListenerUuid)
+		log.Debugf("no need refresh the listener: %v\n", lb.ListenerUuid)
 		return
 	}
 	utils.PanicOnError(err)
@@ -791,27 +783,6 @@ func createCertificate(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
-func generateLbHaScript()  {
-	cmds := []string{}
-	for _, listener := range LbListeners {
-		switch v := listener.(type) {
-		case *HaproxyListener:
-			cmds = append(cmds, fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -N %s -f %s -p %s -sf $(cat %s)",
-				v.maxConnect, v.confPath, v.pidPath, v.pidPath))
-			break
-		case *GBListener:
-			cmds = append(cmds, fmt.Sprintf("sudo /opt/vyatta/sbin/gobetween -c %s >/dev/null 2>&1&echo $! >%s",
-				v.confPath, v.pidPath))
-			break
-		default:
-			continue
-		}
-	}
-
-	content := []byte(strings.Join(cmds, "\n"))
-	err := ioutil.WriteFile(HaproxyHaScriptFile, content, 0755);utils.PanicOnError(err)
-}
-
 func init() {
 	os.Mkdir(LB_ROOT_DIR, os.ModePerm)
 	os.Mkdir(LB_CONF_DIR, os.ModePerm)
@@ -826,7 +797,10 @@ type loadBalancerCollector struct {
 	inByteEntry *prom.Desc
 	outByteEntry *prom.Desc
 	curSessionNumEntry *prom.Desc
+	refusedSessionNumEntry *prom.Desc
+	totalSessionNumEntry *prom.Desc
 	curSessionUsageEntry *prom.Desc
+	concurrentSessionUsageEntry *prom.Desc
 }
 
 const (
@@ -862,6 +836,21 @@ func NewLbPrometheusCollector() MetricCollector {
 			[]string{LB_LISTENER_UUID}, nil,
 		),
 
+		refusedSessionNumEntry: prom.NewDesc(
+			"zstack_lb_refused_session_num",
+			"Backend server refused session number",
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+		),
+		totalSessionNumEntry: prom.NewDesc(
+			"zstack_lb_total_session_num",
+			"Backend server total session number",
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+		),
+		concurrentSessionUsageEntry: prom.NewDesc(
+			"zstack_lb_concurrent_session_num",
+			"Backend server session number including active and waiting state session",
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+		),
 		//vipUUIds: make(map[string]string),
 	}
 }
@@ -872,6 +861,9 @@ func (c *loadBalancerCollector) Describe(ch chan<- *prom.Desc) error {
 	ch <- c.inByteEntry
 	ch <- c.outByteEntry
 	ch <- c.curSessionUsageEntry
+	ch <- c.refusedSessionNumEntry
+	ch <- c.totalSessionNumEntry
+	ch <- c.concurrentSessionUsageEntry
 	return nil
 }
 
@@ -917,6 +909,9 @@ func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
 			ch <- prom.MustNewConstMetric(c.inByteEntry, prom.GaugeValue, float64(cnt.bytesIn), cnt.listenerUuid, cnt.ip)
 			ch <- prom.MustNewConstMetric(c.outByteEntry, prom.GaugeValue, float64(cnt.bytesOut), cnt.listenerUuid, cnt.ip)
 			ch <- prom.MustNewConstMetric(c.curSessionNumEntry, prom.GaugeValue, float64(cnt.sessionNumber), cnt.listenerUuid, cnt.ip)
+			ch <- prom.MustNewConstMetric(c.refusedSessionNumEntry, prom.GaugeValue, float64(cnt.refusedSessionNumber), cnt.listenerUuid, cnt.ip)
+			ch <- prom.MustNewConstMetric(c.totalSessionNumEntry, prom.GaugeValue, float64(cnt.totalSessionNumber), cnt.listenerUuid, cnt.ip)
+			ch <- prom.MustNewConstMetric(c.concurrentSessionUsageEntry, prom.GaugeValue, float64(cnt.concurrentSessionNumber), cnt.listenerUuid, cnt.ip)
 		}
 
 		ch <- prom.MustNewConstMetric(c.curSessionUsageEntry, prom.GaugeValue, float64(sessionNum * 100 /maxSessionNum), listenerUuid)
@@ -932,6 +927,9 @@ type LbCounter struct {
 	bytesIn         uint64
 	bytesOut        uint64
 	sessionNumber   uint64
+	refusedSessionNumber   uint64
+	totalSessionNumber   uint64
+	concurrentSessionNumber uint64
 }
 
 func getIpFromLbStat(name string)  string {
@@ -977,6 +975,9 @@ func (this *HaproxyListener) getLbCounters(listenerUuid string) ([]*LbCounter, i
 		counter.bytesIn = stat.Bin
 		counter.bytesOut = stat.Bout
 		counter.sessionNumber = stat.Scur
+		counter.refusedSessionNumber = stat.Dreq
+		counter.concurrentSessionNumber = stat.Scur + stat.Qcur
+		counter.totalSessionNumber = stat.Stot
 		counters = append(counters, &counter)
 		num++
 	}
@@ -988,6 +989,8 @@ func (this *HaproxyListener) getLbCounters(listenerUuid string) ([]*LbCounter, i
 type GoBetweenServerBackendStat struct {
 	Live bool `json:"live"`
 	Active_connections uint64 `json:"active_connections"`
+	Total_connections uint64 `json:"total_connections"`
+	Refused_connections uint64 `json:"refused_connections"`
 	Rx uint64 `json:"rx"`
 	Tx uint64 `json:"tx"`
 }
@@ -998,6 +1001,7 @@ type GoBetweenServerBackend struct {
 }
 
 type GoBetweenServerStat struct {
+	Active_connections uint64 `json:"active_connections"`
 	Backends []GoBetweenServerBackend `json:"backends"`
 }
 
@@ -1044,9 +1048,12 @@ func (this *GBListener) getLbCounters(listenerUuid string) ([]*LbCounter, int) {
 		} else {
 			counter.status = 0
 		}
-		counter.bytesIn = stat.Stats.Rx
-		counter.bytesOut = stat.Stats.Tx
+                counter.bytesIn = stat.Stats.Tx //the direction of LB is different from backend direction
+                counter.bytesOut = stat.Stats.Rx
 		counter.sessionNumber = stat.Stats.Active_connections
+		counter.refusedSessionNumber = stat.Stats.Refused_connections
+		counter.totalSessionNumber = stat.Stats.Total_connections
+		counter.concurrentSessionNumber = stat.Stats.Active_connections
 		counters = append(counters, &counter)
 		num++
 	}
