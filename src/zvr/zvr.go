@@ -27,6 +27,7 @@ func loadPlugins()  {
 	plugin.PrometheusEntryPoint()
 	plugin.OspfEntryPoint()
 	plugin.VyosHaEntryPoint()
+	plugin.FirewallEntryPoint()
 }
 
 var options server.Options
