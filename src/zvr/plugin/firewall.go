@@ -378,6 +378,15 @@ func getFirewallConfig(ctx *server.CommandContext) interface{} {
 }
 
 func deleteOldRules(tree *server.VyosConfigTree) {
+	//detach ruleSet first
+	nics, _ := utils.GetAllNics()
+	for _, nic := range nics {
+		if iNode := tree.Getf("interfaces ethernet %s firewall out name", nic.Name); iNode != nil {
+			iNode.Delete()
+		}
+	}
+	tree.Apply(false)
+
 	rs := tree.Get("firewall name")
 	if ruleSetNodes := rs.Children(); ruleSetNodes != nil {
 		for _, ruleSetNode := range ruleSetNodes {
