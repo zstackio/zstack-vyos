@@ -28,6 +28,7 @@ func loadPlugins()  {
 	plugin.OspfEntryPoint()
 	plugin.VyosHaEntryPoint()
 	plugin.FlowMeterEntryPoint()
+	plugin.PolicyRouteEntryPoint()
 }
 
 var options server.Options
