@@ -50,7 +50,7 @@ type ruleInfo struct {
 }
 
 type ethRuleSetRef struct {
-	EthName string `json:"ethName"`
+	Mac string `json:"mac"`
 	RuleSetName string `json:"ruleSetName"`
 	Forward string `json:"forward"`
 }
@@ -74,7 +74,6 @@ type getConfigRsp struct {
 	RuleSets []ruleSetInfo `json:"ruleSets"`
 	Rules []ruleInfo `json:"rules"`
 	Refs []ethRuleSetRef `json:"refs"`
-	Interfaces []ethInfo `json:"interfaces"`
 }
 
 type applyUserRuleCmd struct {
@@ -227,7 +226,8 @@ func detachRuleSet(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 	ref := cmd.Ref
 	tree := server.NewParserFromShowConfiguration().Tree
-	tree.Deletef("interfaces ethernet %s firewall %s", ref.EthName, ref.Forward)
+	nic, err := utils.GetNicNameByMac(ref.Mac); utils.PanicOnError(err)
+	tree.Deletef("interfaces ethernet %s firewall %s", nic, ref.Forward)
 	tree.Apply(false)
 	return nil
 }
@@ -237,7 +237,8 @@ func attachRuleSet(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 	ref := cmd.Ref
 	tree := server.NewParserFromShowConfiguration().Tree
-	tree.AttachRuleSetOnInterface(ref.EthName, ref.Forward, ref.RuleSetName)
+	nic, err := utils.GetNicNameByMac(ref.Mac); utils.PanicOnError(err)
+	tree.AttachRuleSetOnInterface(nic, ref.Forward, ref.RuleSetName)
 	tree.Apply(false)
 	return nil
 }
@@ -324,7 +325,7 @@ func getFirewallConfig(ctx *server.CommandContext) interface{} {
 	rules := make([]ruleInfo, 0)
 	ruleSets := make([]ruleSetInfo, 0)
 	if ruleSetNodes := rs.Children(); ruleSetNodes == nil {
-		return getConfigRsp{Rules:nil, RuleSets:nil, Refs:nil, Interfaces:ethInfos}
+		return getConfigRsp{Rules:nil, RuleSets:nil, Refs:nil}
 	} else {
 		for _, ruleSetNode := range ruleSetNodes {
 			ruleSet := ruleSetInfo{}
@@ -366,15 +367,16 @@ func getFirewallConfig(ctx *server.CommandContext) interface{} {
 				continue
 			}
 			for _, ec := range eNode.Children() {
+				mac, err := utils.GetMacByNicName(e.Name); utils.PanicOnError(err)
 				refs = append(refs, ethRuleSetRef{
 					Forward:     ec.Name(),
 					RuleSetName: ec.GetChildrenValue("name"),
-					EthName:     e.Name,
+					Mac:     mac,
 				})
 			}
 		}
 	}
-	return getConfigRsp{Rules:rules, RuleSets:ruleSets, Refs:refs, Interfaces:ethInfos}
+	return getConfigRsp{Rules:rules, RuleSets:ruleSets, Refs:refs}
 }
 
 func deleteOldRules(tree *server.VyosConfigTree) {
@@ -436,7 +438,8 @@ func applyUserRules(ctx *server.CommandContext) interface{} {
 	}
 
 	for _, ref := range cmd.Refs {
-		tree.AttachRuleSetOnInterface(ref.EthName, ref.Forward, ref.RuleSetName)
+		nic, err := utils.GetNicNameByMac(ref.Mac); utils.PanicOnError(err)
+		tree.AttachRuleSetOnInterface(nic, ref.Forward, ref.RuleSetName)
 	}
 
 	for _, action := range cmd.DefaultRuleSetActions {
