@@ -24,7 +24,7 @@ const (
 	fwDeleteUserRulePath = "/fw/delete/firewall"
 	zstackRuleNumberFront = 1000
 	zstackRuleNumberEnd = 4000
-	USER_RULE_SET_PREFIX = "ZS-RS"
+	USER_RULE_SET_PREFIX = "ZS-FW-RS"
 )
 
 type ethInfo struct {
