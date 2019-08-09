@@ -367,6 +367,9 @@ func getFirewallConfig(ctx *server.CommandContext) interface{} {
 				continue
 			}
 			for _, ec := range eNode.Children() {
+				if ec.GetChildrenValue("name") == "" {
+					continue
+				}
 				mac, err := utils.GetMacByNicName(e.Name); utils.PanicOnError(err)
 				refs = append(refs, ethRuleSetRef{
 					Forward:     ec.Name(),
@@ -383,7 +386,7 @@ func deleteOldRules(tree *server.VyosConfigTree) {
 	//detach ruleSet first
 	nics, _ := utils.GetAllNics()
 	for _, nic := range nics {
-		if iNode := tree.Getf("interfaces ethernet %s firewall out name", nic.Name); iNode != nil {
+		if iNode := tree.Getf("interfaces ethernet %s firewall out", nic.Name); iNode != nil {
 			iNode.Delete()
 		}
 	}
