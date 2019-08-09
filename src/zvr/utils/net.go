@@ -121,6 +121,21 @@ func GetNicNameByMac(mac string) (string, error) {
 	return "", fmt.Errorf("cannot find any nic with the mac[%s]", mac)
 }
 
+func GetMacByNicName(nicName string) (string, error) {
+	nics, err := GetAllNics()
+	if err != nil {
+		return "", err
+	}
+
+	for _, nic := range nics {
+		if nic.Name == nicName {
+			return nic.Mac, nil
+		}
+	}
+
+	return "", fmt.Errorf("cannot find any mac with the nicName[%s]", nicName)
+}
+
 func GetNicNameByIp(ip string) (string, error) {
 	bash := Bash{
 		Command: fmt.Sprintf("ip addr | grep -w %s", ip),
