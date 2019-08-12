@@ -75,7 +75,7 @@ sudo ip link set up dev {{$name}} || true
 (sudo /opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl -op clear-vpn-ipsec-process) &
 
 #restart flow-accounting process
-(sudo flock -xn /tmp/netflow.lock /opt/vyatta/bin/sudo-users/vyatta-show-acct.pl --action 'restart' 2 > null && sudo rm -f /tmp/netflow.lock)&
+(sudo flock -xn /tmp/netflow.lock -c "/opt/vyatta/bin/sudo-users/vyatta-show-acct.pl --action 'restart' 2 > null; sudo rm -f /tmp/netflow.lock")&
 
 #notify Mn node
 (sudo curl -H "Content-Type: application/json" -H "commandpath: /vpc/hastatus" -X POST -d '{"virtualRouterUuid": "{{.VrUuid}}", "haStatus":"Master"}' {{.CallBackUrl}}) &
