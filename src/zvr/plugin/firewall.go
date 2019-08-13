@@ -176,7 +176,7 @@ func getIp(t *server.VyosConfigNode, forward string) string {
 	if ip := t.GetChildrenValue(fmt.Sprintf("%s address", forward)); ip != "" {
 		return ip
 	} else {
-		return t.GetChildrenValue(fmt.Sprintf("%s address group address-group",forward))
+		return t.GetChildrenValue(fmt.Sprintf("%s group address-group",forward))
 	}
 }
 
