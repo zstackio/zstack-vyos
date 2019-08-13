@@ -470,11 +470,11 @@ func InitNatRule()  {
 
 	/*flush raw table to clear NOTRACK rule at startup*/
 	cmd := Bash{
-		Command: "sudo iptables -t raw -D PREROUTING -j NOTRACK \n" +
-			"sudo iptables -t raw -D OUTPUT -j NOTRACK",
+		Command: "sudo iptables -t raw -C PREROUTING -j NOTRACK && sudo iptables -t raw -D PREROUTING -j NOTRACK;" +
+			"sudo iptables -t raw -C OUTPUT -j NOTRACK && sudo iptables -t raw -D OUTPUT -j NOTRACK",
 	}
 
-	cmd.Run(); cmd.PanicIfError()
+	cmd.Run();
 
 	ch := PREROUTING
 	if err := newChain(NatTable, "PREROUTING", ch.string(),  ""); err != nil {
