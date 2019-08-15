@@ -18,6 +18,8 @@ const (
 	KeepAlivedStatus_Backup
 )
 
+const PID_ERROR  = "-1"
+
 func (s KeepAlivedStatus) string() string {
 	switch s {
 	case KeepAlivedStatus_Unknown:
@@ -38,7 +40,6 @@ const (
 	KeepalivedSciptPath = "/home/vyos/zvr/keepalived/script/"
 	KeepalivedConfigFile = "/home/vyos/zvr/keepalived/conf/keepalived.conf"
 	KeepalivedBinaryFile = "/usr/sbin/keepalived"
-	KeepalivedBinaryName = "keepalived"
 	KeepalivedSciptNotifyMaster = "/home/vyos/zvr/keepalived/script/notifyMaster"
 	KeepalivedSciptNotifyBackup = "/home/vyos/zvr/keepalived/script/notifyBackup"
 	KeepalivedStateFile = "/home/vyos/zvr/keepalived/conf/state"
@@ -289,7 +290,8 @@ missingok
 }
 
 func checkKeepalivedRunning()  {
-	if pid, _ := utils.FindFirstPIDByPSExtern(true, KeepalivedBinaryName); pid < 0{
+	pid, err := getKeepalivedPid()
+	if err == nil && pid == PID_ERROR {
 		bash := utils.Bash{
 			Command: fmt.Sprintf("sudo %s -D -S 2 -f %s", KeepalivedBinaryFile, KeepalivedConfigFile),
 		}
@@ -314,22 +316,39 @@ func callStatusChangeScripts()  {
 	bash.RunWithReturn();
 }
 
-/* true master, false backup */
-func getKeepAlivedStatus() KeepAlivedStatus {
+func getKeepalivedPid() (string, error) {
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo cat /var/run/keepalived.pid | awk '{print $1}'"),
+		Command: fmt.Sprintf("sudo pidof /usr/sbin/keepalived"),
 		NoLog: true,
 	}
-	ret, pid, e, err := bash.RunWithReturn()
+	ret, o, e, err := bash.RunWithReturn()
 	if err != nil || ret != 0 {
 		log.Debugf("get keepalived pid failed %s", e)
+		return PID_ERROR, fmt.Errorf("get keepalived pid failed %s", e)
+	}
+
+	/* when keepalived is running, the output will be: 3657, 3656, 3655
+	   when keepalived not runing, the output will be empty */
+	o = strings.Trim(o, " \n\t")
+	if len(o) == 0 {
+		log.Debugf("keepalived is not running")
+		return PID_ERROR, nil
+	}
+
+	pids := strings.Split(o, " ")
+	return pids[len(pids)-1], nil
+}
+
+/* true master, false backup */
+func getKeepAlivedStatus() KeepAlivedStatus {
+	pid, err := getKeepalivedPid()
+	if err != nil || pid == PID_ERROR {
 		return KeepAlivedStatus_Unknown
 	}
 
-	pid = strings.Trim(pid, " \n\t")
-	bash = utils.Bash{
-		Command: fmt.Sprintf("timeout 1 sudo kill -USR1 %s && timeout 1 cp /tmp/keepalived.data %s && grep 'State' %s  | awk -F '=' '{print $2}'",
-			pid, KeepalivedStateFile, KeepalivedStateFile),
+	bash := utils.Bash{
+		Command: fmt.Sprintf("timeout 1 sudo kill -USR1 %s && grep 'State' /tmp/keepalived.data  | awk -F '=' '{print $2}'",
+			pid),
 		NoLog: true,
 	}
 
