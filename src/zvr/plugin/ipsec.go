@@ -322,7 +322,7 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 	for _, cidr := range info.PeerCidrs {
 		des = fmt.Sprintf("IPSEC-%s-%s", info.Uuid, cidr)
 		if r := tree.FindFirewallRuleByDescription(nicname, "in", des); r == nil {
-			tree.SetFirewallOnInterface(nicname, "in",
+			tree.SetZStackFirewallRuleOnInterface(nicname, "front","in",
 				"action accept",
 				"state established enable",
 				"state related enable",
