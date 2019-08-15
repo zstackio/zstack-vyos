@@ -299,6 +299,8 @@ func getFirewallConfig(ctx *server.CommandContext) interface{} {
 		panic(errors.New("can not use firewall if skipvyosiptables is true"))
 	}
 
+	tree := server.NewParserFromShowConfiguration().Tree
+
 	cmd := &getConfigCmd{}
 	ctx.GetCommand(cmd)
 	ethInfos := make([]ethInfo, 0)
@@ -320,7 +322,6 @@ func getFirewallConfig(ctx *server.CommandContext) interface{} {
 	}
 
 	//sync ruleSet and rules
-	tree := server.NewParserFromShowConfiguration().Tree
 	rs := tree.Get("firewall name")
 	rules := make([]ruleInfo, 0)
 	ruleSets := make([]ruleSetInfo, 0)
