@@ -1,13 +1,13 @@
 package main
 
 import (
-	"zvr/server"
-	"zvr/plugin"
-	"zvr/utils"
-	"fmt"
 	"flag"
-	"os"
+	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"os"
+	"zvr/plugin"
+	"zvr/server"
+	"zvr/utils"
 )
 
 func loadPlugins()  {
@@ -81,7 +81,6 @@ func configureZvrFirewall() {
 		"action accept",
 		fmt.Sprintf("description %s", des),
 	)
-
 	tree.Apply(false)
 }
 
