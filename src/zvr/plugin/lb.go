@@ -1088,7 +1088,7 @@ missingok
 	_, err = lb_log_rotatoe_file.Write([]byte(rotate_conf)); utils.PanicOnError(err)
 
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/haproxy.conf && sudo mv %s /etc/logrotate.d/haproxy && sudo /etc/init.d/rsyslog restart",
+		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/haproxy.conf; sudo mv %s /etc/logrotate.d/haproxy; sudo /etc/init.d/rsyslog restart",
 			lb_log_file.Name(), lb_log_rotatoe_file.Name()),
 	}
 	err = bash.Run();utils.PanicOnError(err)

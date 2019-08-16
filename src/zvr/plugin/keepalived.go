@@ -256,7 +256,7 @@ func (k *KeepalivedConf) RestartKeepalived() (error) {
             -S, --log-facility=[0-7]     Set syslog facility to LOG_LOCAL[0-7]
         */
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo pkill -9 keepalived || sudo %s -D -S 2 -f %s", KeepalivedBinaryFile, KeepalivedConfigFile),
+		Command: fmt.Sprintf("sudo pkill -9 keepalived; sudo %s -D -S 2 -f %s", KeepalivedBinaryFile, KeepalivedConfigFile),
 	}
 
 	bash.RunWithReturn(); bash.PanicIfError()
@@ -283,17 +283,17 @@ missingok
 	_, err = log_rotatoe_file.Write([]byte(rotate_conf)); utils.PanicOnError(err)
 
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/keepalived.conf && sudo mv %s /etc/logrotate.d/keepalived && sudo /etc/init.d/rsyslog restart",
+		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/keepalived.conf; sudo mv %s /etc/logrotate.d/keepalived; sudo /etc/init.d/rsyslog restart",
 			log_file.Name(), log_rotatoe_file.Name()),
 	}
 	err = bash.Run();utils.PanicOnError(err)
 }
 
 func checkKeepalivedRunning()  {
-	pid, err := getKeepalivedPid()
-	if err == nil && pid == PID_ERROR {
+	pid := getKeepalivedPid()
+	if pid == PID_ERROR {
 		bash := utils.Bash{
-			Command: fmt.Sprintf("sudo %s -D -S 2 -f %s", KeepalivedBinaryFile, KeepalivedConfigFile),
+			Command: fmt.Sprintf("sudo pkill -9 keepalived; sudo %s -D -S 2 -f %s", KeepalivedBinaryFile, KeepalivedConfigFile),
 		}
 
 		bash.RunWithReturn();
@@ -316,7 +316,7 @@ func callStatusChangeScripts()  {
 	bash.RunWithReturn();
 }
 
-func getKeepalivedPid() (string, error) {
+func getKeepalivedPid() (string) {
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo pidof /usr/sbin/keepalived"),
 		NoLog: true,
@@ -324,7 +324,7 @@ func getKeepalivedPid() (string, error) {
 	ret, o, e, err := bash.RunWithReturn()
 	if err != nil || ret != 0 {
 		log.Debugf("get keepalived pid failed %s", e)
-		return PID_ERROR, fmt.Errorf("get keepalived pid failed %s", e)
+		return PID_ERROR
 	}
 
 	/* when keepalived is running, the output will be: 3657, 3656, 3655
@@ -332,22 +332,22 @@ func getKeepalivedPid() (string, error) {
 	o = strings.Trim(o, " \n\t")
 	if len(o) == 0 {
 		log.Debugf("keepalived is not running")
-		return PID_ERROR, nil
+		return PID_ERROR
 	}
 
 	pids := strings.Split(o, " ")
-	return pids[len(pids)-1], nil
+	return pids[len(pids)-1]
 }
 
 /* true master, false backup */
 func getKeepAlivedStatus() KeepAlivedStatus {
-	pid, err := getKeepalivedPid()
-	if err != nil || pid == PID_ERROR {
+	pid := getKeepalivedPid()
+	if pid == PID_ERROR {
 		return KeepAlivedStatus_Unknown
 	}
 
 	bash := utils.Bash{
-		Command: fmt.Sprintf("timeout 1 sudo kill -USR1 %s && grep 'State' /tmp/keepalived.data  | awk -F '=' '{print $2}'",
+		Command: fmt.Sprintf("timeout 1 sudo kill -USR1 %s; grep 'State' /tmp/keepalived.data  | awk -F '=' '{print $2}'",
 			pid),
 		NoLog: true,
 	}
@@ -377,7 +377,7 @@ func init()  {
 	os.Mkdir(KeepalivedConfigPath, os.ModePerm)
 	os.Mkdir(KeepalivedSciptPath, os.ModePerm)
 	bash := utils.Bash{
-		Command: fmt.Sprintf("echo BACKUP > %s && echo ''> %s && echo ''> %s", KeepalivedStateFile, HaproxyHaScriptFile, KeepalivedConfigFile),
+		Command: fmt.Sprintf("echo BACKUP > %s; echo ''> %s; echo ''> %s", KeepalivedStateFile, HaproxyHaScriptFile, KeepalivedConfigFile),
 	}
 	err := bash.Run();utils.PanicOnError(err)
 	enableKeepalivedLog()
