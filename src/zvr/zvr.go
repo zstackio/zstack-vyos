@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"zvr/server"
 	"zvr/plugin"
 	"zvr/utils"
@@ -8,6 +9,10 @@ import (
 	"flag"
 	"os"
 	log "github.com/Sirupsen/logrus"
+)
+
+const (
+	zstackRuleNumberFront = 1000
 )
 
 func loadPlugins()  {
@@ -85,6 +90,99 @@ func configureZvrFirewall() {
 	tree.Apply(false)
 }
 
+func getIcmpRule(t *server.VyosConfigNode) int {
+	for _, cn := range t.Children() {
+		number, _ := strconv.Atoi(cn.Name())
+		if number > zstackRuleNumberFront {
+			continue
+		}
+
+		if cn.Get("action accept")!= nil && cn.Get("protocol icmp") != nil {
+			return number
+		}
+	}
+
+	return 0
+}
+
+func getStateRule(t *server.VyosConfigNode) (int, string) {
+	for _, cn := range t.Children() {
+		number, _ := strconv.Atoi(cn.Name())
+		if number > zstackRuleNumberFront {
+			continue
+		}
+
+		if cn.Get("action accept") != nil && cn.Get("state established enable") != nil && cn.Get("state related enable") != nil {
+			if cn.Get("description") != nil || cn.Get("source") != nil {
+				continue
+			}
+
+			if cn.Get("state invalid enable") != nil && cn.Get("state new enable") != nil {
+				return number, "private"
+			}
+
+			return number, "public"
+		}
+	}
+
+	return 0, ""
+}
+
+func moveNicInForwardFirewall() {
+	tree := server.NewParserFromShowConfiguration().Tree
+
+	//move zvrboot nic firewall config to 4000 behind
+	nics, _ := utils.GetAllNics()
+	changed := false
+	for _, nic := range nics {
+		eNode := tree.Getf("firewall name %s.in rule", nic.Name)
+		if eNode == nil {
+			continue
+		}
+
+		if ruleNumber, nicType := getStateRule(eNode); ruleNumber != 0 {
+			tree.Deletef("firewall name %s.in rule %v", nic.Name, ruleNumber)
+			if nicType == "Private" {
+				tree.SetZStackFirewallRuleOnInterface(nic.Name, "behind", "in",
+					"action accept",
+					"state established enable",
+					"state related enable",
+					"state invalid enable",
+					"state new enable",
+				)
+			} else {
+				tree.SetZStackFirewallRuleOnInterface(nic.Name, "behind", "in",
+					"action accept",
+					"state established enable",
+					"state related enable",
+				)
+			}
+			changed = true
+		}
+
+		if ruleNumber := getIcmpRule(eNode); ruleNumber != 0 {
+			tree.Deletef("firewall name %s.in rule %v", nic.Name, ruleNumber)
+			tree.SetZStackFirewallRuleOnInterface(nic.Name, "behind", "in",
+				"action accept",
+				"protocol icmp",
+			)
+			changed = true
+		}
+
+		if eNode.Get("9999") == nil {
+			tree.SetFirewallWithRuleNumber(nic.Name, "in", 9999,
+				"action accept",
+				"state new enable",
+			)
+			changed = true
+		}
+	}
+
+	if changed {
+		tree.Apply(false)
+	}
+}
+
 func main()  {
 
 	parseCommandOptions()
@@ -94,6 +192,7 @@ func main()  {
 	utils.InitNatRule()
 	loadPlugins()
 	server.VyosLockInterface(configureZvrFirewall)()
+	server.VyosLockInterface(moveNicInForwardFirewall)()
 
 	server.Start()
 }
