@@ -13,6 +13,7 @@ const (
 	VR_CONFIGURE_NIC = "/configurenic"
 	VR_CONFIGURE_NIC_FIREWALL_DEFAULT_ACTION_PATH = "/configurenicdefaultaction";
 	VR_REMOVE_NIC_PATH = "/removenic"
+	ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER = 9999
 )
 
 type nicInfo struct {
@@ -119,13 +120,17 @@ func configureNic(ctx *server.CommandContext) interface{} {
 					"action accept",
 					"state established enable",
 					"state related enable",
-					"state new enable",
 				)
 			}
 
 			tree.SetZStackFirewallRuleOnInterface(nicname, "behind","in",
 				"action accept",
 				"protocol icmp",
+			)
+
+			tree.SetFirewallWithRuleNumber(nicname, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
+				"action accept",
+				"state new enable",
 			)
 
 			// only allow ssh traffic on eth0, disable on others
