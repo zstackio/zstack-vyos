@@ -27,6 +27,8 @@ const (
 	USER_RULE_SET_PREFIX = "ZS-FW-RS"
 )
 
+var moveNicFirewallRetyCount = 0
+
 type ethInfo struct {
 	Name string `json:"name"`
 	Mac string `json:"mac"`
@@ -295,9 +297,12 @@ func changeRuleState(ctx *server.CommandContext) interface{} {
 }
 
 func getFirewallConfig(ctx *server.CommandContext) interface{} {
+
 	if utils.IsSkipVyosIptables() {
 		panic(errors.New("can not use firewall if skipvyosiptables is true"))
 	}
+
+	tree := server.NewParserFromShowConfiguration().Tree
 
 	cmd := &getConfigCmd{}
 	ctx.GetCommand(cmd)
@@ -320,7 +325,6 @@ func getFirewallConfig(ctx *server.CommandContext) interface{} {
 	}
 
 	//sync ruleSet and rules
-	tree := server.NewParserFromShowConfiguration().Tree
 	rs := tree.Get("firewall name")
 	rules := make([]ruleInfo, 0)
 	ruleSets := make([]ruleSetInfo, 0)
@@ -453,6 +457,118 @@ func applyUserRules(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
+func getIcmpRule(t *server.VyosConfigNode) int {
+	for _, cn := range t.Children() {
+		number, _ := strconv.Atoi(cn.Name())
+		if number > zstackRuleNumberFront {
+			continue
+		}
+
+		if cn.Get("action accept")!= nil && cn.Get("protocol icmp") != nil {
+			return number
+		}
+	}
+
+	return 0
+}
+
+func getStateRule(t *server.VyosConfigNode) (int, string) {
+	for _, cn := range t.Children() {
+		number, _ := strconv.Atoi(cn.Name())
+		if number > zstackRuleNumberFront {
+			continue
+		}
+
+		if cn.Get("action accept") != nil && cn.Get("state established enable") != nil && cn.Get("state related enable") != nil {
+			if cn.Get("description") != nil || cn.Get("source") != nil {
+				continue
+			}
+
+			if cn.Get("state invalid enable") != nil && cn.Get("state new enable") != nil {
+				return number, "Private"
+			}
+
+			return number, ""
+		}
+	}
+
+	return 0, ""
+}
+
+func moveNicFirewall() {
+	err := utils.Retry(func() error {
+		moveNicInForwardFirewall()
+		if moveNicFirewallRetyCount != 0 {
+			return fmt.Errorf("failed to move nic firewall")
+		} else {
+			return nil
+		}
+	}, 3, 1);utils.LogError(err)
+}
+
+func moveNicInForwardFirewall() {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Info("move nic firewall config failed, retry it...")
+			moveNicFirewallRetyCount ++
+		} else {
+			moveNicFirewallRetyCount = 0
+		}
+	}()
+	//move zvrboot nic firewall config to 4000 behind
+	tree := server.NewParserFromShowConfiguration().Tree
+	nics, _ := utils.GetAllNics()
+	deleteCommands := []string{}
+	for _, nic := range nics {
+		eNode := tree.Getf("firewall name %s.in rule", nic.Name)
+		if eNode == nil {
+			continue
+		}
+
+		if ruleNumber, nicType := getStateRule(eNode); ruleNumber != 0 {
+			deleteCommands = append(deleteCommands, fmt.Sprintf("firewall name %s.in rule %v", nic.Name, ruleNumber))
+			if nicType == "Private" {
+				tree.SetZStackFirewallRuleOnInterface(nic.Name, "behind", "in",
+					"action accept",
+					"state established enable",
+					"state related enable",
+					"state invalid enable",
+					"state new enable",
+				)
+			} else {
+				tree.SetZStackFirewallRuleOnInterface(nic.Name, "behind", "in",
+					"action accept",
+					"state established enable",
+					"state related enable",
+				)
+			}
+		}
+
+		if ruleNumber := getIcmpRule(eNode); ruleNumber != 0 {
+			deleteCommands = append(deleteCommands, fmt.Sprintf("firewall name %s.in rule %v", nic.Name, ruleNumber))
+			tree.SetZStackFirewallRuleOnInterface(nic.Name, "behind", "in",
+				"action accept",
+				"protocol icmp",
+			)
+		}
+
+		if eNode.Get("9999") == nil {
+			tree.SetFirewallWithRuleNumber(nic.Name, "in", 9999,
+				"action accept",
+				"state new enable",
+			)
+		}
+	}
+
+	if len(deleteCommands) != 0 {
+		for _, command := range deleteCommands {
+			tree.Delete(command)
+		}
+	}
+
+	tree.Apply(false)
+}
+
 func FirewallEntryPoint() {
 	server.RegisterAsyncCommandHandler(fwGetConfigPath, server.VyosLock(getFirewallConfig))
 	server.RegisterAsyncCommandHandler(fwDeleteUserRulePath, server.VyosLock(deleteUserRule))
@@ -465,4 +581,5 @@ func FirewallEntryPoint() {
 	server.RegisterAsyncCommandHandler(fwDetachRuleSetPath, server.VyosLock(detachRuleSet))
 	server.RegisterAsyncCommandHandler(fwApplyUserRulesPath, server.VyosLock(applyUserRules))
 	server.RegisterAsyncCommandHandler(fwUpdateRuleSetPath, server.VyosLock(updateRuleSet))
+	moveNicFirewall()
 }
