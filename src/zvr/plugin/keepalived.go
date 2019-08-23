@@ -145,6 +145,12 @@ func (k *KeepalivedNotify) CreateMasterScript () error {
 
 	err = ioutil.WriteFile(KeepalivedSciptNotifyMaster, buf.Bytes(), 0755); utils.PanicOnError(err)
 
+	/* add log */
+	bash := utils.Bash{
+		Command: fmt.Sprintf("cat %s", KeepalivedSciptNotifyMaster),
+	}
+	bash.Run()
+
 	return nil
 }
 
@@ -158,6 +164,12 @@ func (k *KeepalivedNotify) CreateBackupScript () error {
 	err = tmpl.Execute(&buf, k); utils.PanicOnError(err)
 
 	err = ioutil.WriteFile(KeepalivedSciptNotifyBackup, buf.Bytes(), 0755); utils.PanicOnError(err)
+
+	/* add log */
+	bash := utils.Bash{
+		Command: fmt.Sprintf("cat %s", KeepalivedSciptNotifyBackup),
+	}
+	bash.Run()
 
 	return nil
 }
@@ -306,11 +318,11 @@ func callStatusChangeScripts()  {
 	log.Debugf("!!! KeepAlived status change to %s", keepAlivedStatus.string())
 	if keepAlivedStatus == KeepAlivedStatus_Master {
 		bash = utils.Bash{
-			Command: fmt.Sprintf("%s MASTER", KeepalivedSciptNotifyMaster),
+			Command: fmt.Sprintf("cat %s; %s MASTER", KeepalivedSciptNotifyMaster, KeepalivedSciptNotifyMaster),
 		}
 	} else if keepAlivedStatus == KeepAlivedStatus_Backup {
 		bash = utils.Bash{
-			Command: fmt.Sprintf("%s BACKUP", KeepalivedSciptNotifyBackup),
+			Command: fmt.Sprintf("cat %s; %s BACKUP", KeepalivedSciptNotifyBackup, KeepalivedSciptNotifyBackup),
 		}
 	}
 	bash.RunWithReturn();
