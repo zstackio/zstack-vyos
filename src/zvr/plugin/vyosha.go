@@ -85,7 +85,8 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 	tree.Apply(false)
 
 	/* generate notify script first */
-	addHaNicVipPair(pairs)
+	haStatusCallbackUrl = cmd.CallbackUrl
+	addHaNicVipPair(pairs, false)
 
 	if cmd.PeerIp == "" {
 		cmd.PeerIp = cmd.LocalIp
@@ -99,8 +100,6 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 	} else {
 		log.Debugf("keepalived configure file unchanged")
 	}
-
-	haStatusCallbackUrl = cmd.CallbackUrl
 
 	return nil
 }
@@ -197,7 +196,7 @@ func generateNotityScripts()  {
 	keepalivedNofityConf.CreateBackupScript()
 }
 
-func addHaNicVipPair(pairs []nicVipPair)  {
+func addHaNicVipPair(pairs []nicVipPair, callscript bool)  {
 	count := 0
 	for _, p := range pairs {
 		found := false
@@ -215,6 +214,10 @@ func addHaNicVipPair(pairs []nicVipPair)  {
 	}
 
 	generateNotityScripts()
+
+	if callscript {
+		callStatusChangeScripts()
+	}
 }
 
 func removeHaNicVipPair(pairs []nicVipPair)  {
@@ -243,14 +246,12 @@ func mountTmpFolderAsTmpfs()  {
 	/* mount /tmp as tmpfs */
 	b := utils.Bash{
 		Command: "sudo mount | grep '/tmp'",
-		NoLog: true,
 	}
 	_, o, _, _ := b.RunWithReturn()
 	o = strings.Trim(o, " \n\t")
 	if o == "" {
 		b := utils.Bash{
-			Command: "sudo mount -t tmpfs -o size=10M tmpfs /tmp",
-			NoLog: true,
+			Command: "sudo mount -t tmpfs -o size=64M tmpfs /tmp",
 		}
 		b.Run()
 	}
@@ -283,8 +284,6 @@ func InitHaNicState()  {
 
 	b.Run()
 	b.PanicIfError()
-
-	callStatusChangeScripts()
 }
 
 var haVipPairs  vyosNicVipPairs
