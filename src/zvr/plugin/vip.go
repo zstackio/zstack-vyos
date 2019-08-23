@@ -631,8 +631,6 @@ type syncVipQosCmd struct {
 	Settings []vipQosSettings `json:"vipQosSettings"`
 }
 
-var vyosVips map[string][]string
-
 type vipQosSettingsArray []vipQosSettings
 func (a vipQosSettingsArray) Len() int           { return len(a) }
 func (a vipQosSettingsArray) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
@@ -686,7 +684,12 @@ func setVip(ctx *server.CommandContext) interface{} {
 
 		vyosVips = append(vyosVips, nicVipPair{NicName:nicname, Vip:vip.Ip, Prefix: cidr})
 	}
-	addHaNicVipPair(vyosVips)
+
+	if utils.IsHaEabled() && IsMaster() {
+		addHaNicVipPair(vyosVips, true)
+	} else {
+		addHaNicVipPair(vyosVips, false)
+	}
 
 	return nil
 }
@@ -839,7 +842,6 @@ func syncVipQos(ctx *server.CommandContext) interface{} {
 
 
 func init() {
-	vyosVips = make(map[string][]string)
 	RegisterPrometheusCollector(NewVipPrometheusCollector())
 }
 
