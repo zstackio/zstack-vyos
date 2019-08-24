@@ -6,6 +6,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"fmt"
 	"io/ioutil"
+	"time"
 )
 
 const (
@@ -26,15 +27,39 @@ type InitConfig struct {
 	Uuid string `json:"uuid"`
 }
 
+/*
+the current health of whole system
+*/
+type HealthStatus struct {
+	Healthy bool `json:"healthy"`
+	HealthDetail string `json:"healthDetail"`
+}
+
 type pingRsp struct {
 	Uuid string `json:"uuid"`
 	Version string `json:"version"`
 	HaStatus string `json:"haStatus"`
+	Healthy bool `json:"healthy"`
+	HealthDetail string `json:"healthDetail"`
 }
 
 var (
 	initConfig = &InitConfig{}
+	healthStatus = &HealthStatus{Healthy:true, HealthDetail:""}
 )
+
+func (status *HealthStatus) healthCheck() {
+	bash := utils.Bash{
+		Command: "sudo mount|grep -w ro",
+	}
+	if ret, output, _, err := bash.RunWithReturn(); err == nil && ret == 0 {
+		status.Healthy = false
+		status.HealthDetail = fmt.Sprintf("RO file system: %s", output)
+	} else if !status.Healthy{
+		status.Healthy = true
+		status.HealthDetail = ""
+	}
+}
 
 func initHandler(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(initConfig)
@@ -43,14 +68,18 @@ func initHandler(ctx *server.CommandContext) interface{} {
 }
 
 func pingHandler(ctx *server.CommandContext) interface{} {
+
 	addRouteIfCallbackIpChanged()
+	var haStatus string
 	if !utils.IsHaEabled() {
-		return pingRsp{Uuid: initConfig.Uuid, Version: string(VERSION), HaStatus: utils.NOHA }
+		haStatus = utils.NOHA
 	} else if IsMaster() {
-		return pingRsp{Uuid: initConfig.Uuid, Version: string(VERSION), HaStatus: utils.HAMASTER }
+		haStatus = utils.HAMASTER
 	} else {
-		return pingRsp{Uuid: initConfig.Uuid, Version: string(VERSION), HaStatus: utils.HABACKUP }
+		haStatus = utils.HABACKUP
 	}
+	return pingRsp{Uuid: initConfig.Uuid, Version: string(VERSION), HaStatus: haStatus,
+		Healthy:healthStatus.Healthy, HealthDetail:healthStatus.HealthDetail }
 }
 
 func echoHandler(ctx *server.CommandContext) interface{} {
@@ -99,4 +128,11 @@ func init ()  {
 	if err == nil {
 		VERSION = string(ver)
 	}
+
+	go func() {
+		for {
+			healthStatus.healthCheck()
+			time.Sleep(time.Duration(60 * time.Second))
+		}
+	} ()
 }
