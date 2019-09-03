@@ -30,6 +30,7 @@ func loadPlugins()  {
 	plugin.FlowMeterEntryPoint()
 	plugin.PolicyRouteEntryPoint()
 	plugin.FirewallEntryPoint()
+	plugin.PimdEntryPoint()
 }
 
 var options server.Options

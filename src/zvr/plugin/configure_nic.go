@@ -28,6 +28,20 @@ type nicInfo struct {
 	FirewallDefaultAction string `json:"firewallDefaultAction"`
 }
 
+type addNicCallback interface {
+	AddNic(nic string) error
+}
+
+var addNicCallbacks []addNicCallback
+
+func init() {
+	addNicCallbacks = make([]addNicCallback, 0)
+}
+
+func RegisterAddNicCallback(cb addNicCallback)  {
+	addNicCallbacks = append(addNicCallbacks, cb)
+}
+
 type configureNicCmd struct {
 	Nics []nicInfo `json:"nics"`
 }
@@ -165,6 +179,7 @@ func configureNic(ctx *server.CommandContext) interface{} {
 	}
 
 	tree.Apply(false)
+
 	if (IsMaster()) {
 		checkNicIsUp(nicname, true)
 	} else {
@@ -182,20 +197,16 @@ func configureNic(ctx *server.CommandContext) interface{} {
 	}
 
 	generateNotityScripts()
-	/*
-	vyosNics := []nicVipPair{}
 	for _, nic := range cmd.Nics {
-		if nic.SecondaryIps == nil {
+		nicname, err := utils.GetNicNameByMac(nic.Mac)
+		if err != nil {
 			continue
 		}
 
-		nicname, _ = utils.GetNicNameByMac(nic.Mac)
-		cidr, err := utils.NetmaskToCIDR(nic.Netmask); utils.PanicOnError(err)
-		for _, sip := range nic.SecondaryIps {
-			vyosNics = append(vyosNics, nicVipPair{NicName:nicname, Vip:sip, Prefix: cidr})
+		for _, cb := range addNicCallbacks {
+			cb.AddNic(nicname)
 		}
 	}
-	addHaNicVipPair(vyosNics)*/
 
 	return nil
 }
@@ -253,20 +264,6 @@ func removeNic(ctx *server.CommandContext) interface{} {
 	tree.Apply(false)
 
 	generateNotityScripts()
-	/*
-	vyosNics := []nicVipPair{}
-	for _, nic := range cmd.Nics {
-		if nic.SecondaryIps == nil {
-			continue
-		}
-
-		nicname, _ := utils.GetNicNameByMac(nic.Mac)
-		cidr, err := utils.NetmaskToCIDR(nic.Netmask); utils.PanicOnError(err)
-		for _, sip := range nic.SecondaryIps {
-			vyosNics = append(vyosNics, nicVipPair{NicName:nicname, Vip:sip, Prefix:cidr})
-		}
-	}
-	removeHaNicVipPair(vyosNics)*/
 
 	return nil
 }
