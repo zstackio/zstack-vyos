@@ -76,7 +76,7 @@ cat >> $tmpdir/setup.sh <<'EOF'
 PATH=/bin:/usr/bin
 line=$(wc -l $0 | awk '{print $1}')
 line=$((line - 12))
-tmpdir=$(mktemp -d)
+tmpdir=/home/vyos/zvr/target
 rm -rf $tmpdir
 mkdir -p $tmpdir
 tail -n $line $0 | tar x -C $tmpdir
