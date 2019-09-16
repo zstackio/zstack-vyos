@@ -361,6 +361,13 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 	}
 }
 
+func openNatTraversal(tree *server.VyosConfigTree) {
+	natT := tree.Get("vpn ipsec nat-traversal")
+	if natT == nil {
+		tree.Setf("vpn ipsec nat-traversal enable")
+	}
+}
+
 func createIPsecConnection(ctx *server.CommandContext) interface{} {
 	cmd := &createIPsecCmd{}
 	ctx.GetCommand(cmd)
@@ -370,6 +377,8 @@ func createIPsecConnection(ctx *server.CommandContext) interface{} {
 	for _, info := range cmd.Infos {
 		createIPsec(tree, info)
 	}
+
+	openNatTraversal(tree)
 	tree.Apply(false)
 
 	for _, info := range cmd.Infos {
@@ -398,6 +407,10 @@ func syncIPsecConnection(ctx *server.CommandContext) interface{} {
 		ipsecMap[info.Uuid] = info
 		deleteIPsec(tree, info)
 		createIPsec(tree, info)
+	}
+
+	if len(cmd.Infos) > 0 {
+		openNatTraversal(tree)
 	}
 	tree.Apply(false)
 
@@ -450,7 +463,7 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 		if r := tree.FindSnatRuleDescriptionRegex(des, utils.StringRegCompareFn); r != nil {
 			r.Delete()
 		} else {
-			break;
+			break
 		}
 	}
 
