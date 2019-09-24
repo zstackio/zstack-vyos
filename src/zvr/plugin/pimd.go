@@ -84,7 +84,7 @@ func updatePimdConf(cmd *enablePimdCmd)  error {
 #rp-candidate  $YOUR_RP_CANDIDATE_IP time 30 priority 20
 #    group-prefix 224.0.0.0 masklen 4
 
-# Static rendez-vous point
+# Static rendezvous point
 {{range .Rps}}
 rp-address {{.RpAddress}} {{.GroupAddress}}
 {{ end }}`
