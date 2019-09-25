@@ -73,6 +73,9 @@ func configureZvrFirewall() {
 	des := "management-port-rule"
 	if r := tree.FindFirewallRuleByDescription("eth0", "local", des); r != nil {
 		r.Delete()
+		/* if error happened, make sure zvr can work properly,
+		 firewall for 7272 need to be delete and added back */
+		tree.Apply(false)
 	}
 
 	tree.SetFirewallOnInterface("eth0", "local",
