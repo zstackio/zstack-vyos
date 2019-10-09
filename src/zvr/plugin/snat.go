@@ -52,9 +52,9 @@ func getNicSNATRuleNumber(nicNo int)  (pubNicRuleNo int, priNicRuleNo int){
 }
 
 func setSnatRule(pubNic, priNic, priCidr, pubIp string)  {
-	rule := utils.NewSnatIptablesRule(priCidr, "", pubNic, utils.SNAT, utils.SNATComment + priCidr, pubIp, 0)
+	rule := utils.NewSnatIptablesRule(priCidr, "! -d 224.0.0.0/8", pubNic, utils.SNAT, utils.SNATComment + priCidr, pubIp, 0)
 	utils.InsertNatRule(rule, utils.POSTROUTING)
-	rule = utils.NewSnatIptablesRule(priCidr, "", priNic, utils.SNAT, utils.SNATComment + priCidr, pubIp, 0)
+	rule = utils.NewSnatIptablesRule(priCidr, "! -d 224.0.0.0/8", priNic, utils.SNAT, utils.SNATComment + priCidr, pubIp, 0)
 	utils.InsertNatRule(rule, utils.POSTROUTING)
 }
 
@@ -189,12 +189,14 @@ func applySnatRules(Snats []snatInfo, state bool) {
 			tree.SetSnatWithRuleNumber(pubNicRuleNo,
 				fmt.Sprintf("outbound-interface %s", outNic),
 				fmt.Sprintf("source address %s", address),
+				"destination address !224.0.0.0/8",
 				fmt.Sprintf("translation address %s", s.PublicIp),
 			)
 
 			tree.SetSnatWithRuleNumber(priNicRuleNo,
 				fmt.Sprintf("outbound-interface %s", inNic),
 				fmt.Sprintf("source address %v", address),
+				"destination address !224.0.0.0/8",
 				fmt.Sprintf("translation address %s", s.PublicIp),
 			)
 		}

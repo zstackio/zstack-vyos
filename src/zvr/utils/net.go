@@ -90,6 +90,10 @@ func GetAllNics() (map[string]Nic, error) {
 			continue
 		}
 
+		if f.Name() == "gre0" || f.Name() == "pimreg" {
+			continue
+		}
+
 		macfile := filepath.Join(ROOT, f.Name(), "address")
 		mac, err := ioutil.ReadFile(macfile)
 		if err != nil {
