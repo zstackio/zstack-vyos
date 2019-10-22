@@ -525,7 +525,8 @@ func moveNicInForwardFirewall() {
 			continue
 		}
 
-		if ruleNumber, nicType := getStateRule(eNode); ruleNumber != 0 {
+		ruleNumber, nicType := getStateRule(eNode)
+		if ruleNumber != 0 {
 			deleteCommands = append(deleteCommands, fmt.Sprintf("firewall name %s.in rule %v", nic.Name, ruleNumber))
 			if nicType == "Private" {
 				tree.SetZStackFirewallRuleOnInterface(nic.Name, "behind", "in",
@@ -552,11 +553,15 @@ func moveNicInForwardFirewall() {
 			)
 		}
 
-		if eNode.Get("9999") == nil {
+		if eNode.Get("9999") == nil && nicType == "Private"{
 			tree.SetFirewallWithRuleNumber(nic.Name, "in", 9999,
 				"action accept",
 				"state new enable",
 			)
+		}
+
+		if eNode.Get("9999") != nil && nicType != "Private"{
+			deleteCommands = append(deleteCommands, fmt.Sprintf("firewall name %s.in rule 9999", nic.Name))
 		}
 	}
 

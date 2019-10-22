@@ -129,6 +129,11 @@ func configureNic(ctx *server.CommandContext) interface{} {
 					"state invalid enable",
 					"state new enable",
 				)
+
+				tree.SetFirewallWithRuleNumber(nicname, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
+					"action accept",
+					"state new enable",
+				)
 			} else {
 				tree.SetZStackFirewallRuleOnInterface(nicname, "behind","in",
 					"action accept",
@@ -140,11 +145,6 @@ func configureNic(ctx *server.CommandContext) interface{} {
 			tree.SetZStackFirewallRuleOnInterface(nicname, "behind","in",
 				"action accept",
 				"protocol icmp",
-			)
-
-			tree.SetFirewallWithRuleNumber(nicname, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
-				"action accept",
-				"state new enable",
 			)
 
 			// only allow ssh traffic on eth0, disable on others
