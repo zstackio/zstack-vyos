@@ -59,13 +59,13 @@ func syncPortForwardingRules() error {
 			ruleSpec := utils.NewIptablesRule(protocol, fmt.Sprintf("!%s", r.AllowedCidr), r.PrivateIp + "/32", 0, r.VipPortStart,
 				[]string{utils.NEW}, utils.REJECT, fmt.Sprintf("%s%s-%d", utils.PortFordingRuleComment, r.VipIp, r.VipPortStart))
 			filterRules[pubNicName] = append(filterRules[pubNicName], ruleSpec)
-		} else {
-			ruleSpec := utils.NewIptablesRule(protocol, "", r.PrivateIp + "/32", 0, r.VipPortStart,
-				[]string{utils.NEW}, utils.RETURN, fmt.Sprintf("%s%s-%d", utils.PortFordingRuleComment, r.VipIp, r.VipPortStart))
-			filterRules[pubNicName] = append(filterRules[pubNicName], ruleSpec)
 		}
 
-		ruleSpec := utils.NewNatIptablesRule(protocol, "" , r.VipIp + "/32", 0, r.VipPortStart,
+		ruleSpec := utils.NewIptablesRule(protocol, "", r.PrivateIp + "/32", 0, r.VipPortStart,
+			[]string{utils.NEW}, utils.RETURN, fmt.Sprintf("%s%s-%d", utils.PortFordingRuleComment, r.VipIp, r.VipPortStart))
+		filterRules[pubNicName] = append(filterRules[pubNicName], ruleSpec)
+
+		ruleSpec = utils.NewNatIptablesRule(protocol, "" , r.VipIp + "/32", 0, r.VipPortStart,
 			nil, utils.DNAT, fmt.Sprintf("%s%s-%d", utils.PortFordingRuleComment, r.VipIp, r.VipPortStart), r.PrivateIp, r.PrivatePortStart)
 		dnatRules = append(dnatRules, ruleSpec)
 	}
@@ -109,13 +109,15 @@ func syncDnatHandler(ctx *server.CommandContext) interface{} {
 			}
 		}
 
-		// TODO(WeiW): use all public nics rather than eth0
-		for {
-			if r := tree.FindFirewallRuleByDescriptionRegex(
-				"eth0", "in", dnatRegex, utils.StringRegCompareFn); r != nil {
-				r.Delete()
-			} else {
-				break
+		if (len(cmd.Rules) > 1) {
+			pubNicName, err := utils.GetNicNameByMac(cmd.Rules[0].PublicMac); utils.PanicOnError(err)
+			for {
+				if r := tree.FindFirewallRuleByDescriptionRegex(
+					pubNicName, "in", dnatRegex, utils.StringRegCompareFn); r != nil {
+					r.Delete()
+				} else {
+					break
+				}
 			}
 		}
 
@@ -142,6 +144,10 @@ func getRule(tree *server.VyosConfigTree, description string) *server.VyosConfig
 
 func makeDnatDescription(r dnatInfo) string {
 	return fmt.Sprintf("PF-%v-%v-%v-%v-%v-%v-%v", r.VipIp, r.VipPortStart, r.VipPortEnd, r.PrivateMac, r.PrivatePortStart, r.PrivatePortEnd, r.ProtocolType)
+}
+
+func makeAllowCidrRejectDescription(r dnatInfo) string {
+	return fmt.Sprintf("PF-reject-%v-%v-%v-%v-%v-%v-%v", r.VipIp, r.VipPortStart, r.VipPortEnd, r.PrivateMac, r.PrivatePortStart, r.PrivatePortEnd, r.ProtocolType)
 }
 
 func makeOrphanDnatDescription(r dnatInfo) string {
@@ -184,11 +190,29 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 			fmt.Sprintf("translation port %v", dport),
 		)
 
-		if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", des); fr == nil {
+		reject := makeAllowCidrRejectDescription(r)
+		if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", reject); fr == nil {
 			if r.AllowedCidr != "" && r.AllowedCidr != "0.0.0.0/0" {
 				tree.SetZStackFirewallRuleOnInterface(pubNicName, "behind","in",
 					"action reject",
 					fmt.Sprintf("source address !%v", r.AllowedCidr),
+					fmt.Sprintf("description %v", reject),
+					// NOTE: the destination is private IP
+					// because the destination address is changed by the dnat rule
+					fmt.Sprintf("destination address %v", r.PrivateIp),
+					fmt.Sprintf("destination port %v", dport),
+					fmt.Sprintf("protocol %s", strings.ToLower(r.ProtocolType)),
+					"state new enable",
+				)
+			}
+		}
+
+		des = makeDnatDescription(r)
+		if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", des); fr == nil {
+			if r.AllowedCidr != "" && r.AllowedCidr != "0.0.0.0/0" {
+				tree.SetZStackFirewallRuleOnInterface(pubNicName, "behind","in",
+					"action accept",
+					fmt.Sprintf("source address %v", r.AllowedCidr),
 					fmt.Sprintf("description %v", des),
 					// NOTE: the destination is private IP
 					// because the destination address is changed by the dnat rule
@@ -254,6 +278,11 @@ func removeDnatHandler(ctx *server.CommandContext) interface{} {
 			}
 
 			pubNicName, err := utils.GetNicNameByMac(r.PublicMac); utils.PanicOnError(err)
+			if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", des); fr != nil {
+				fr.Delete()
+			}
+
+			des = makeAllowCidrRejectDescription(r)
 			if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", des); fr != nil {
 				fr.Delete()
 			}
