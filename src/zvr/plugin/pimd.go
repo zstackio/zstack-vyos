@@ -115,7 +115,7 @@ func (pimd *pimdAddNic) AddNic(nic string)  error {
 		tree := server.NewParserFromShowConfiguration().Tree
 		des := makePimdFirewallRuleDescription(nic, "pimd")
 		if r := tree.FindFirewallRuleByDescription(nic, "local", des); r == nil {
-			tree.SetFirewallOnInterface(nic, "local",
+			tree.SetZStackFirewallRuleOnInterface(nic, "front", "local",
 				fmt.Sprintf("description %v", des),
 				"protocol pim",
 				"action accept",
@@ -124,7 +124,7 @@ func (pimd *pimdAddNic) AddNic(nic string)  error {
 
 		des = makePimdFirewallRuleDescription(nic, "igmp")
 		if r := tree.FindFirewallRuleByDescription(nic, "local", des); r == nil {
-			tree.SetFirewallOnInterface(nic, "local",
+			tree.SetZStackFirewallRuleOnInterface(nic, "front", "local",
 				fmt.Sprintf("description %v", des),
 				"protocol igmp",
 				"action accept",
@@ -132,6 +132,20 @@ func (pimd *pimdAddNic) AddNic(nic string)  error {
 		}
 
 		tree.AttachFirewallToInterface(nic, "local")
+
+		des = makePimdFirewallRuleDescription("multiast", nic)
+		if r := tree.FindFirewallRuleByDescription(nic, "in", des); r == nil {
+			tree.SetZStackFirewallRuleOnInterface(nic, "front", "in",
+				fmt.Sprintf("description %v", des),
+				"destination address 224.0.0.0/4",
+				"state new enable",
+				"state established enable",
+				"state related enable",
+				"action accept",
+			)
+		}
+		tree.AttachFirewallToInterface(nic, "in")
+
 		tree.Apply(false)
 	}
 
@@ -179,7 +193,7 @@ func enablePimdHandler(ctx *server.CommandContext) interface{} {
 		for _, nic := range nics {
 			des := makePimdFirewallRuleDescription(nic.Name, "pimd")
 			if r := tree.FindFirewallRuleByDescription(nic.Name, "local", des); r == nil {
-				tree.SetFirewallOnInterface(nic.Name, "local",
+				tree.SetZStackFirewallRuleOnInterface(nic.Name, "front", "local",
 					fmt.Sprintf("description %v", des),
 					"protocol pim",
 					"action accept",
@@ -188,7 +202,7 @@ func enablePimdHandler(ctx *server.CommandContext) interface{} {
 
 			des = makePimdFirewallRuleDescription(nic.Name, "igmp")
 			if r := tree.FindFirewallRuleByDescription(nic.Name, "local", des); r == nil {
-				tree.SetFirewallOnInterface(nic.Name, "local",
+				tree.SetZStackFirewallRuleOnInterface(nic.Name, "front", "local",
 					fmt.Sprintf("description %v", des),
 					"protocol igmp",
 					"action accept",
@@ -196,6 +210,19 @@ func enablePimdHandler(ctx *server.CommandContext) interface{} {
 			}
 
 			tree.AttachFirewallToInterface(nic.Name, "local")
+
+			des = makePimdFirewallRuleDescription("multiast", nic.Name)
+			if r := tree.FindFirewallRuleByDescription(nic.Name, "in", des); r == nil {
+				tree.SetZStackFirewallRuleOnInterface(nic.Name, "front", "in",
+					fmt.Sprintf("description %v", des),
+					"destination address 224.0.0.0/4",
+					"state new enable",
+					"state established enable",
+					"state related enable",
+					"action accept",
+				)
+			}
+			tree.AttachFirewallToInterface(nic.Name, "in")
 		}
 		tree.Apply(false)
 	}
@@ -234,6 +261,11 @@ func disablePimdHandler(ctx *server.CommandContext) interface{} {
 
 			des = makePimdFirewallRuleDescription(nic.Name, "igmp")
 			if r := tree.FindFirewallRuleByDescription(nic.Name, "local", des); r != nil {
+				r.Delete()
+			}
+
+			des = makePimdFirewallRuleDescription("multiast", nic.Name)
+			if r := tree.FindFirewallRuleByDescription(nic.Name, "in", des); r != nil {
 				r.Delete()
 			}
 		}
