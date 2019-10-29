@@ -129,16 +129,16 @@ func configureNic(ctx *server.CommandContext) interface{} {
 					"state invalid enable",
 					"state new enable",
 				)
-
-				tree.SetFirewallWithRuleNumber(nicname, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
-					"action accept",
-					"state new enable",
-				)
 			} else {
 				tree.SetZStackFirewallRuleOnInterface(nicname, "behind","in",
 					"action accept",
 					"state established enable",
 					"state related enable",
+				)
+
+				tree.SetFirewallWithRuleNumber(nicname, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
+					"action accept",
+					"state new enable",
 				)
 			}
 
