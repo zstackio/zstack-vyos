@@ -373,16 +373,16 @@ func configureVyos() {
 					"state invalid enable",
 					"state new enable",
 				)
-
-				tree.SetFirewallWithRuleNumber(nic.name, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
-					"action accept",
-					"state new enable",
-				)
 			} else {
 				tree.SetZStackFirewallRuleOnInterface(nic.name, "behind","in",
 					"action accept",
 					"state established enable",
 					"state related enable",
+				)
+
+				tree.SetFirewallWithRuleNumber(nic.name, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
+					"action accept",
+					"state new enable",
 				)
 			}
 
