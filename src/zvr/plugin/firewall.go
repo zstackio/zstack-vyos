@@ -34,6 +34,11 @@ type ethInfo struct {
 	Mac string `json:"mac"`
 }
 
+type nicTypeInfo struct {
+	Mac string `json:"mac"`
+	NicType string `json:"nicType"`
+}
+
 type ruleInfo struct {
 	RuleSetName string `json:"ruleSetName"`
 	Action string `json:"action"`
@@ -69,7 +74,11 @@ type defaultRuleSetAction struct {
 }
 
 type getConfigCmd struct {
-	Macs []string `json:"macs"`
+	NicTypeInfos []nicTypeInfo `json:"nicInfos"`
+}
+
+type deleteFirewallCmd struct {
+	NicTypeInfos []nicTypeInfo `json:"nicInfos"`
 }
 
 type getConfigRsp struct {
@@ -83,6 +92,7 @@ type applyUserRuleCmd struct {
 	Rules []ruleInfo `json:"rules"`
 	Refs []ethRuleSetRef `json:"refs"`
 	DefaultRuleSetActions []defaultRuleSetAction `json:"defaultRuleSetActions"`
+	NicTypeInfos []nicTypeInfo `json:"nicInfos"`
 }
 
 type createRuleCmd struct {
@@ -303,18 +313,17 @@ func getFirewallConfig(ctx *server.CommandContext) interface{} {
 	}
 
 	tree := server.NewParserFromShowConfiguration().Tree
-
 	cmd := &getConfigCmd{}
 	ctx.GetCommand(cmd)
 	ethInfos := make([]ethInfo, 0)
-
+	remove9999RuleOnPubNic(cmd.NicTypeInfos)
 	//sync interfaces
-	for _, mac := range cmd.Macs {
+	for _, nicInfo := range cmd.NicTypeInfos {
 		err := utils.Retry(func() error {
-			nicname, e := utils.GetNicNameByMac(mac)
+			nicname, e := utils.GetNicNameByMac(nicInfo.Mac)
 			ethInfos = append(ethInfos, ethInfo{
 				Name: nicname,
-				Mac: mac,
+				Mac: nicInfo.Mac,
 			})
 			if e != nil {
 				return e
@@ -426,7 +435,10 @@ func updateRuleSet(ctx *server.CommandContext) interface{} {
 
 func deleteUserRule(ctx *server.CommandContext) interface{} {
 	tree := server.NewParserFromShowConfiguration().Tree
+	cmd := &getConfigCmd{}
+	ctx.GetCommand(cmd)
 	deleteOldRules(tree)
+	add9999RuleOnPubNic(cmd.NicTypeInfos)
 	return nil
 }
 
@@ -454,6 +466,7 @@ func applyUserRules(ctx *server.CommandContext) interface{} {
 	}
 
 	tree.Apply(false)
+	remove9999RuleOnPubNic(cmd.NicTypeInfos)
 	return nil
 }
 
@@ -473,6 +486,7 @@ func getIcmpRule(t *server.VyosConfigNode) int {
 }
 
 func getStateRule(t *server.VyosConfigNode) (int, string) {
+	nicType := ""
 	for _, cn := range t.Children() {
 		number, _ := strconv.Atoi(cn.Name())
 		if number > zstackRuleNumberFront {
@@ -485,17 +499,18 @@ func getStateRule(t *server.VyosConfigNode) (int, string) {
 			}
 
 			if cn.Get("state invalid enable") != nil && cn.Get("state new enable") != nil {
-				return number, "Private"
+				nicType = "Private"
+				return number, nicType
 			}
 
-			return number, ""
+			return number, nicType
 		}
 	}
 
-	return 0, ""
+	return 0, nicType
 }
 
-func moveNicFirewall() {
+func moveLowPriorityRulesToTheBack () {
 	err := utils.Retry(func() error {
 		moveNicInForwardFirewall()
 		if moveNicFirewallRetyCount != 0 {
@@ -552,17 +567,6 @@ func moveNicInForwardFirewall() {
 				"protocol icmp",
 			)
 		}
-
-		if eNode.Get("9999") == nil && nicType == "Private"{
-			tree.SetFirewallWithRuleNumber(nic.Name, "in", 9999,
-				"action accept",
-				"state new enable",
-			)
-		}
-
-		if eNode.Get("9999") != nil && nicType != "Private"{
-			deleteCommands = append(deleteCommands, fmt.Sprintf("firewall name %s.in rule 9999", nic.Name))
-		}
 	}
 
 	if len(deleteCommands) != 0 {
@@ -571,6 +575,47 @@ func moveNicInForwardFirewall() {
 		}
 	}
 
+	tree.Apply(false)
+}
+
+func remove9999RuleOnPubNic(nicInfos []nicTypeInfo) {
+	tree := server.NewParserFromShowConfiguration().Tree
+	for _, nicInfo := range nicInfos {
+		if nicInfo.NicType == "Private" {
+			continue
+		}
+		nicName, err := utils.GetNicNameByMac(nicInfo.Mac); utils.PanicOnError(err)
+		eNode := tree.Getf("firewall name %s.in rule", nicName)
+		if eNode == nil {
+			continue
+		}
+
+		if eNode.Get("9999") != nil {
+			tree.Delete(fmt.Sprintf("firewall name %s.in rule 9999", nicName))
+		}
+	}
+	tree.Apply(false)
+}
+
+func add9999RuleOnPubNic(nicInfos []nicTypeInfo) {
+	tree := server.NewParserFromShowConfiguration().Tree
+	for _, nicInfo := range nicInfos {
+		if nicInfo.NicType == "Private" {
+			continue
+		}
+		nicName, err := utils.GetNicNameByMac(nicInfo.Mac); utils.PanicOnError(err)
+		eNode := tree.Getf("firewall name %s.in rule", nicName)
+		if eNode == nil {
+			continue
+		}
+
+		if eNode.Get("9999") == nil {
+			tree.SetFirewallWithRuleNumber(nicName, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
+				"action accept",
+				"state new enable",
+			)
+		}
+	}
 	tree.Apply(false)
 }
 
@@ -586,5 +631,5 @@ func FirewallEntryPoint() {
 	server.RegisterAsyncCommandHandler(fwDetachRuleSetPath, server.VyosLock(detachRuleSet))
 	server.RegisterAsyncCommandHandler(fwApplyUserRulesPath, server.VyosLock(applyUserRules))
 	server.RegisterAsyncCommandHandler(fwUpdateRuleSetPath, server.VyosLock(updateRuleSet))
-	moveNicFirewall()
+	moveLowPriorityRulesToTheBack()
 }
