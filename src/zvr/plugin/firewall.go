@@ -311,12 +311,11 @@ func getFirewallConfig(ctx *server.CommandContext) interface{} {
 	if utils.IsSkipVyosIptables() {
 		panic(errors.New("can not use firewall if skipvyosiptables is true"))
 	}
-
-	tree := server.NewParserFromShowConfiguration().Tree
 	cmd := &getConfigCmd{}
 	ctx.GetCommand(cmd)
 	ethInfos := make([]ethInfo, 0)
-	remove9999RuleOnPubNic(cmd.NicTypeInfos)
+	denyNewStateTrafficOnPubNic(cmd.NicTypeInfos)
+	tree := server.NewParserFromShowConfiguration().Tree
 	//sync interfaces
 	for _, nicInfo := range cmd.NicTypeInfos {
 		err := utils.Retry(func() error {
@@ -438,7 +437,7 @@ func deleteUserRule(ctx *server.CommandContext) interface{} {
 	cmd := &getConfigCmd{}
 	ctx.GetCommand(cmd)
 	deleteOldRules(tree)
-	add9999RuleOnPubNic(cmd.NicTypeInfos)
+	allowNewStateTrafficOnPubNic(cmd.NicTypeInfos)
 	return nil
 }
 
@@ -466,7 +465,7 @@ func applyUserRules(ctx *server.CommandContext) interface{} {
 	}
 
 	tree.Apply(false)
-	remove9999RuleOnPubNic(cmd.NicTypeInfos)
+	denyNewStateTrafficOnPubNic(cmd.NicTypeInfos)
 	return nil
 }
 
@@ -578,7 +577,7 @@ func moveNicInForwardFirewall() {
 	tree.Apply(false)
 }
 
-func remove9999RuleOnPubNic(nicInfos []nicTypeInfo) {
+func denyNewStateTrafficOnPubNic(nicInfos []nicTypeInfo) {
 	tree := server.NewParserFromShowConfiguration().Tree
 	for _, nicInfo := range nicInfos {
 		if nicInfo.NicType == "Private" {
@@ -597,7 +596,7 @@ func remove9999RuleOnPubNic(nicInfos []nicTypeInfo) {
 	tree.Apply(false)
 }
 
-func add9999RuleOnPubNic(nicInfos []nicTypeInfo) {
+func allowNewStateTrafficOnPubNic(nicInfos []nicTypeInfo) {
 	tree := server.NewParserFromShowConfiguration().Tree
 	for _, nicInfo := range nicInfos {
 		if nicInfo.NicType == "Private" {
