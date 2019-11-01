@@ -118,6 +118,7 @@ type IptablesRule struct {
 	/* match condition */
 	proto             string
 	src, dest         string
+	excludeSrc, excludeDest bool
 	srcPort, destPort int
 	states            []string
 	comment           string
@@ -164,8 +165,8 @@ func NewLoadBalancerIptablesRule(proto string, dest string, destPort int, action
 		outNic: "", inNic: "", tcpflags:tcpflags}
 }
 
-func NewSnatIptablesRule(src, dest, outNic, action, comment string, natTranslationIp string, natTranslationPort int) IptablesRule {
-	return IptablesRule{proto: "", src: src, dest: dest, srcPort: 0,
+func NewSnatIptablesRule(excludeSrc, excludeDest bool, src, dest, outNic, action, comment string, natTranslationIp string, natTranslationPort int) IptablesRule {
+	return IptablesRule{proto: "", src: src, dest: dest, excludeSrc: excludeSrc, excludeDest: excludeDest, srcPort: 0,
 		destPort:0, states: nil, action:action, comment:comment,
 		outNic: outNic, inNic: "", tcpflags:nil, natTranslationIp: natTranslationIp, natTranslationPort:natTranslationPort}
 }
@@ -173,11 +174,19 @@ func NewSnatIptablesRule(src, dest, outNic, action, comment string, natTranslati
 func (iptableRule IptablesRule)string() []string  {
 	rules := []string{}
 	if iptableRule.src != "" {
-		rules = append(rules, "-s " + iptableRule.src)
+		if iptableRule.excludeSrc {
+			rules = append(rules, "! -s " + iptableRule.src)
+		} else {
+			rules = append(rules, "-s " + iptableRule.src)
+		}
 	}
 
 	if iptableRule.dest != "" {
-		rules = append(rules, "-d " + iptableRule.dest)
+		if iptableRule.excludeDest {
+			rules = append(rules, "! -d " + iptableRule.dest)
+		} else {
+			rules = append(rules, "-d " + iptableRule.dest)
+		}
 	}
 
 	if iptableRule.outNic != "" {
