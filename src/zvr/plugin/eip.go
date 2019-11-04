@@ -21,6 +21,7 @@ type eipInfo struct {
 	GuestIp string `json:"guestIp"`
 	PublicMac string `json:"publicMac"`
 	SnatInboundTraffic bool `json:"snatInboundTraffic"`
+	NeedCleanGuestIp bool `json:"needCleanGuestIp"`
 }
 
 var eipMap map[string]eipInfo
@@ -290,8 +291,10 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 		r.Delete()
 	}
 
-	if r := tree.FindGroupByName(eip.GuestIp, eipAddressGroup, "address"); r != nil {
-		r.Delete()
+	if eip.NeedCleanGuestIp {
+		if r := tree.FindGroupByName(eip.GuestIp, eipAddressGroup, "address"); r != nil {
+			r.Delete()
+		}
 	}
 }
 
