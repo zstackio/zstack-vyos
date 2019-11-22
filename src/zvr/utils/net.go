@@ -336,3 +336,17 @@ func CleanConnTrackConnection(ip string, proto string, port int) error  {
 
 	return nil
 }
+
+func GetUpperIp(cidr net.IPNet) net.IP {
+	ip := cidr.IP
+	mask := cidr.Mask
+	n := len(ip)
+	if n != len(mask) {
+		return nil
+	}
+	out := make(net.IP, n)
+	for i := 0; i < n; i++ {
+		out[i] = ip[i] | ^mask[i]
+	}
+	return out
+}

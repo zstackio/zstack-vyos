@@ -460,6 +460,12 @@ func (t *VyosConfigTree) SetGroup(groupType, name, value string) {
 	t.SetGroupValuef("firewall group %s-group %s %s %s", groupType, name, groupType, value)
 }
 
+func (t *VyosConfigTree) SetGroups(groupType string, name string, values []string) {
+	for _, value := range values {
+		t.SetGroup(groupType, name, value)
+	}
+}
+
 func (t *VyosConfigTree) SetFirewallDefaultAction(ethname, direction, action string) {
 	utils.Assertf(action == "drop" || action == "reject" || action == "accept", "action must be drop or reject or accept, but %s got", action)
 	t.Setf("firewall name %s.%s default-action %v", ethname, direction, action)
