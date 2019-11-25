@@ -321,6 +321,42 @@ func (this *HaproxyListener) rollbackPreActionListenerServiceStart() ( err error
 	return nil
 }
 
+func configureInternalFirewallRule(tree *server.VyosConfigTree, des string, rules ...string) (err error) {
+	/*support to access lb vip from all the private nics */
+	err = nil
+	priNics := utils.GetPrivteInterface()
+	for _, priNic := range priNics {
+		if utils.IsSkipVyosIptables() {
+			//removeDnsFirewallRules(priNic)
+		} else {
+			if r := tree.FindFirewallRuleByDescription(priNic, "local", des); r == nil {
+				tree.SetFirewallOnInterface(priNic, "local", rules...)
+			}
+		}
+	}
+	return
+}
+
+func cleanInternalFirewallRule(tree *server.VyosConfigTree, des string) (err error) {
+	/*support to access lb vip from all the private nics */
+	err = nil
+	priNics := utils.GetPrivteInterface()
+	for _, priNic := range priNics {
+		if utils.IsSkipVyosIptables() {
+			//removeDnsFirewallRules(priNic)
+		} else {
+			if r := tree.FindFirewallRuleByDescription(priNic, "local", des); r != nil {
+				r.Delete()
+			}
+		}
+	}
+	return
+}
+
+
+/*
+setlb:
+*/
 func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 	if utils.IsSkipVyosIptables() {
 		return nil
@@ -339,6 +375,14 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 		)
 
 	}
+
+	configureInternalFirewallRule(tree, this.firewallDes, fmt.Sprintf("description %v", this.firewallDes),
+		fmt.Sprintf("destination address %v", this.lb.Vip),
+		fmt.Sprintf("destination port %v", this.lb.LoadBalancerPort),
+		fmt.Sprintf("protocol tcp"),
+		"action accept",
+	)
+
 	dropRuleDes := fmt.Sprintf("lb-%v-%s-drop", this.lb.LbUuid, this.lb.ListenerUuid)
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", dropRuleDes); r != nil {
 		r.Delete()
@@ -372,6 +416,7 @@ func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error
 		if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r != nil {
 			r.Delete()
 		}
+		cleanInternalFirewallRule(tree, this.firewallDes)
 		tree.Apply(false)
 	}
 
@@ -544,6 +589,14 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 			"action accept",
 		)
 
+		configureInternalFirewallRule(tree, this.firewallDes,
+			fmt.Sprintf("description %v", this.firewallDes),
+			fmt.Sprintf("destination address %v", this.lb.Vip),
+			fmt.Sprintf("destination port %v", this.lb.LoadBalancerPort),
+			fmt.Sprintf("protocol udp"),
+			"action accept",
+		)
+
 		tree.AttachFirewallToInterface(nicname, "local")
 		tree.Apply(false)
 	}
@@ -585,6 +638,7 @@ func (this *GBListener) postActionListenerServiceStop() (ret int, err error) {
 			r.Delete()
 			r = tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes)
 		}
+		cleanInternalFirewallRule(tree, this.firewallDes)
 		tree.Apply(false)
 	}
 
