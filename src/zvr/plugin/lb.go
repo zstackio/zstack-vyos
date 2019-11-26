@@ -324,14 +324,13 @@ func (this *HaproxyListener) rollbackPreActionListenerServiceStart() ( err error
 func configureInternalFirewallRule(tree *server.VyosConfigTree, des string, rules ...string) (err error) {
 	/*support to access lb vip from all the private nics */
 	err = nil
+	if utils.IsSkipVyosIptables() {
+		return
+	}
 	priNics := utils.GetPrivteInterface()
 	for _, priNic := range priNics {
-		if utils.IsSkipVyosIptables() {
-			//removeDnsFirewallRules(priNic)
-		} else {
-			if r := tree.FindFirewallRuleByDescription(priNic, "local", des); r == nil {
-				tree.SetFirewallOnInterface(priNic, "local", rules...)
-			}
+		if r := tree.FindFirewallRuleByDescription(priNic, "local", des); r == nil {
+			tree.SetFirewallOnInterface(priNic, "local", rules...)
 		}
 	}
 	return
@@ -340,14 +339,13 @@ func configureInternalFirewallRule(tree *server.VyosConfigTree, des string, rule
 func cleanInternalFirewallRule(tree *server.VyosConfigTree, des string) (err error) {
 	/*support to access lb vip from all the private nics */
 	err = nil
+	if utils.IsSkipVyosIptables() {
+		return
+	}
 	priNics := utils.GetPrivteInterface()
 	for _, priNic := range priNics {
-		if utils.IsSkipVyosIptables() {
-			//removeDnsFirewallRules(priNic)
-		} else {
-			if r := tree.FindFirewallRuleByDescription(priNic, "local", des); r != nil {
-				r.Delete()
-			}
+		if r := tree.FindFirewallRuleByDescription(priNic, "local", des); r != nil {
+			r.Delete()
 		}
 	}
 	return
@@ -533,16 +531,20 @@ func getFileChecksum(file string) (checksum string, err error) {
 }
 
 func (this *GBListener) checkIfListenerServiceUpdate(origChecksum string, currChecksum string) ( bool, error) {
-	pid, _:= utils.FindFirstPIDByPS( this.confPath)
-	if pid > 0 {
-		log.Debugf("lb %s pid: %v orig: %v curr: %v", this.confPath, pid, origChecksum, currChecksum)
-		if strings.EqualFold(origChecksum, currChecksum) == false {
-			err := utils.KillProcess(pid); utils.PanicOnError(err)
-			return true, err
+	var err error = nil
+	for {
+		if pid, _:= utils.FindFirstPIDByPS( this.confPath); pid > 0 {
+			if strings.EqualFold(origChecksum, currChecksum) {
+				return false, err
+			}
+			log.Debugf("lb %s pid: %v orig: %v curr: %v", this.confPath, pid, origChecksum, currChecksum)
+			err = utils.KillProcess(pid); utils.PanicOnError(err)
+		} else {
+			break
 		}
-		return false, nil
 	}
-	return true, nil
+
+	return true, err
 }
 
 func (this *GBListener) preActionListenerServiceStart() ( err error) {
@@ -773,6 +775,7 @@ func refreshLbIpTables()  {
 	/* reinstall all lb firewalls */
 	if utils.IsSkipVyosIptables() {
 		filterRules := make(map[string][]utils.IptablesRule)
+		priNics := utils.GetPrivteInterface()
 		for _, listener := range LbListeners {
 			var nicname string
 			var rules []utils.IptablesRule
@@ -788,6 +791,11 @@ func refreshLbIpTables()  {
 			}
 
 			filterRules[nicname] = append(filterRules[nicname], rules...)
+			for _, priNic := range priNics {
+				if priNic != nicname {
+					filterRules[priNic] = append(filterRules[priNic], rules...)
+				}
+			}
 		}
 
 		err := utils.SyncFirewallRule(filterRules, utils.LbRuleComment, utils.LOCAL); utils.PanicOnError(err)
