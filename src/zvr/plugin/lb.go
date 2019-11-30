@@ -488,16 +488,20 @@ func getFileChecksum(file string) (checksum string, err error) {
 }
 
 func (this *GBListener) checkIfListenerServiceUpdate(origChecksum string, currChecksum string) ( bool, error) {
-	pid, _:= utils.FindFirstPIDByPS( this.confPath)
-	if pid > 0 {
-		log.Debugf("lb %s pid: %v orig: %v curr: %v", this.confPath, pid, origChecksum, currChecksum)
-		if strings.EqualFold(origChecksum, currChecksum) == false {
-			err := utils.KillProcess(pid); utils.PanicOnError(err)
-			return true, err
-		}
-		return false, nil
-	}
-	return true, nil
+        var err error = nil
+        for {
+                if pid, _:= utils.FindFirstPIDByPS( this.confPath); pid > 0 {
+                        if strings.EqualFold(origChecksum, currChecksum) {
+                                return false, err
+                        }
+                        log.Debugf("lb %s pid: %v orig: %v curr: %v", this.confPath, pid, origChecksum, currChecksum)
+                        err = utils.KillProcess(pid); utils.PanicOnError(err)
+                } else {
+                        break
+                }
+        }
+
+        return true, err
 }
 
 func (this *GBListener) preActionListenerServiceStart() ( err error) {
