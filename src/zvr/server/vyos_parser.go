@@ -435,8 +435,12 @@ func (t *VyosConfigTree) FindFirewallRuleByDescription(ethname, direction, des s
 	return t.FindFirewallRuleByDescriptionRegex(ethname, direction, des, utils.StringCompareFn)
 }
 
-func (t *VyosConfigTree) FindGroupByName(guestIp, name, groupType string) *VyosConfigNode {
+func (t *VyosConfigTree) FindGroupByNameValue(guestIp, name, groupType string) *VyosConfigNode {
 	return t.Getf("firewall group %s-group %s %s %s", groupType, name, groupType, guestIp)
+}
+
+func (t *VyosConfigTree) FindGroupByName(name, groupType string) *VyosConfigNode {
+	return t.Getf("firewall group %s-group %s", groupType, name)
 }
 
 func (t *VyosConfigTree) FindFirewallRuleByDescriptionRegex(ethname, direction, des string, fn utils.CompareStringFunc) *VyosConfigNode {
@@ -455,12 +459,17 @@ func (t *VyosConfigTree) FindFirewallRuleByDescriptionRegex(ethname, direction, 
 	return nil
 }
 
+/*without check if exist*/
 func (t *VyosConfigTree) SetGroup(groupType, name, value string) {
 	utils.Assertf(groupType == "address" || groupType == "network" || groupType == "port", "groupType must be address or network or port,but %s got", groupType)
 	t.SetGroupValuef("firewall group %s-group %s %s %s", groupType, name, groupType, value)
 }
 
-func (t *VyosConfigTree) SetGroups(groupType string, name string, values []string) {
+/*check if exist*/
+func (t *VyosConfigTree) SetGroupsCheckExisting(groupType string, name string, values []string) {
+	if r := t.FindGroupByName(name, groupType); r != nil {
+		r.Delete()
+	}
 	for _, value := range values {
 		t.SetGroup(groupType, name, value)
 	}

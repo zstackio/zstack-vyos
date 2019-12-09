@@ -292,7 +292,7 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 	}
 
 	if eip.NeedCleanGuestIp {
-		if r := tree.FindGroupByName(eip.GuestIp, eipAddressGroup, "address"); r != nil {
+		if r := tree.FindGroupByNameValue(eip.GuestIp, eipAddressGroup, "address"); r != nil {
 			r.Delete()
 		}
 	}

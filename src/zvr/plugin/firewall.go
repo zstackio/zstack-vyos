@@ -197,14 +197,14 @@ func (r *ruleInfo) toRules() []string {
 	}
 	if r.DestIp != "" {
 		if strings.Contains(r.DestIp, IP_SPLIT) {
-			rules = append(rules, fmt.Sprintf("destination group address-group %s", r.makeGroupName("dest")))
+			rules = append(rules, fmt.Sprintf("destination group address-group %s", r.makeGroupName(FIREWALL_RULE_DEST_GROUP_SUFFIX)))
 		} else {
 			rules = append(rules, fmt.Sprintf("destination address %s", r.DestIp))
 		}
 	}
 	if r.SourceIp != "" {
 		if strings.Contains(r.SourceIp, IP_SPLIT) {
-			rules = append(rules, fmt.Sprintf("source group address-group %s", r.makeGroupName("source")))
+			rules = append(rules, fmt.Sprintf("source group address-group %s", r.makeGroupName(FIREWALL_RULE_SOURCE_GROUP_SUFFIX)))
 		} else {
 			rules = append(rules, fmt.Sprintf("source address %s",r.SourceIp))
 		}
@@ -316,6 +316,12 @@ func deleteRule(ctx *server.CommandContext) interface{} {
 	rule := cmd.Rule
 	tree := server.NewParserFromShowConfiguration().Tree
 	tree.Deletef("firewall name %s rule %v", rule.RuleSetName, rule.RuleNumber)
+	if r := tree.FindGroupByName(rule.makeGroupName(FIREWALL_RULE_SOURCE_GROUP_SUFFIX), "address"); r != nil {
+		r.Delete()
+	}
+	if r := tree.FindGroupByName(rule.makeGroupName(FIREWALL_RULE_DEST_GROUP_SUFFIX), "address"); r != nil {
+		r.Delete()
+	}
 	tree.Apply(false)
 	return nil
 }
@@ -329,11 +335,11 @@ func createRule(ctx *server.CommandContext) interface{} {
 	log.Debug(rule.toRules())
 	if rule.SourceIp != "" && strings.ContainsAny(rule.SourceIp, IP_SPLIT) {
 		log.Debug(rule.toGroups(FIREWALL_RULE_SOURCE_GROUP_SUFFIX))
-		tree.SetGroups("address", rule.makeGroupName(FIREWALL_RULE_SOURCE_GROUP_SUFFIX), rule.toGroups(FIREWALL_RULE_SOURCE_GROUP_SUFFIX))
+		tree.SetGroupsCheckExisting("address", rule.makeGroupName(FIREWALL_RULE_SOURCE_GROUP_SUFFIX), rule.toGroups(FIREWALL_RULE_SOURCE_GROUP_SUFFIX))
 	}
 	if rule.DestIp != "" && strings.ContainsAny(rule.DestIp, IP_SPLIT) {
 		log.Debug(rule.toGroups(FIREWALL_RULE_DEST_GROUP_SUFFIX))
-		tree.SetGroups("address", rule.makeGroupName(FIREWALL_RULE_DEST_GROUP_SUFFIX), rule.toGroups(FIREWALL_RULE_DEST_GROUP_SUFFIX))
+		tree.SetGroupsCheckExisting("address", rule.makeGroupName(FIREWALL_RULE_DEST_GROUP_SUFFIX), rule.toGroups(FIREWALL_RULE_DEST_GROUP_SUFFIX))
 	}
 
 	tree.CreateUserFirewallRuleWithNumber(rule.RuleSetName, rule.RuleNumber, rule.toRules())
@@ -459,6 +465,12 @@ func deleteOldRules(tree *server.VyosConfigTree) {
 			if r := ruleSetNode.Get("rule"); r != nil {
 				for _, rc := range r.Children() {
 					if !isDefaultRule(rc.Name()) {
+						if g := tree.FindGroupByName(fmt.Sprintf("%s-%s-%s", ruleSetNode.Name(), rc.Name(), FIREWALL_RULE_SOURCE_GROUP_SUFFIX), "address"); g != nil {
+							g.Delete()
+						}
+						if g := tree.FindGroupByName(fmt.Sprintf("%s-%s-%s", ruleSetNode.Name(), rc.Name(), FIREWALL_RULE_DEST_GROUP_SUFFIX), "address"); g != nil {
+							g.Delete()
+						}
 						tree.Deletef("firewall name %s rule %s", ruleSetNode.Name(), rc.Name())
 					}
 				}
@@ -497,6 +509,14 @@ func applyUserRules(ctx *server.CommandContext) interface{} {
 	}
 
 	for _, rule := range cmd.Rules {
+		if rule.SourceIp != "" && strings.ContainsAny(rule.SourceIp, IP_SPLIT) {
+			log.Debug(rule.toGroups(FIREWALL_RULE_SOURCE_GROUP_SUFFIX))
+			tree.SetGroupsCheckExisting("address", rule.makeGroupName(FIREWALL_RULE_SOURCE_GROUP_SUFFIX), rule.toGroups(FIREWALL_RULE_SOURCE_GROUP_SUFFIX))
+		}
+		if rule.DestIp != "" && strings.ContainsAny(rule.DestIp, IP_SPLIT) {
+			log.Debug(rule.toGroups(FIREWALL_RULE_DEST_GROUP_SUFFIX))
+			tree.SetGroupsCheckExisting("address", rule.makeGroupName(FIREWALL_RULE_DEST_GROUP_SUFFIX), rule.toGroups(FIREWALL_RULE_DEST_GROUP_SUFFIX))
+		}
 		tree.CreateUserFirewallRuleWithNumber(rule.RuleSetName, rule.RuleNumber, rule.toRules())
 	}
 
