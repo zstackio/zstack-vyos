@@ -314,7 +314,6 @@ func getFirewallConfig(ctx *server.CommandContext) interface{} {
 	cmd := &getConfigCmd{}
 	ctx.GetCommand(cmd)
 	ethInfos := make([]ethInfo, 0)
-	denyNewStateTrafficOnPubNic(cmd.NicTypeInfos)
 	tree := server.NewParserFromShowConfiguration().Tree
 	//sync interfaces
 	for _, nicInfo := range cmd.NicTypeInfos {
@@ -465,7 +464,6 @@ func applyUserRules(ctx *server.CommandContext) interface{} {
 	}
 
 	tree.Apply(false)
-	denyNewStateTrafficOnPubNic(cmd.NicTypeInfos)
 	return nil
 }
 
@@ -566,6 +564,15 @@ func moveNicInForwardFirewall() {
 				"protocol icmp",
 			)
 		}
+
+		if nicType != "Private" {
+			if eNode.Get("9999") == nil {
+				tree.SetFirewallWithRuleNumber(nic.Name, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
+					"action accept",
+					"state new enable",
+				)
+			}
+		}
 	}
 
 	if len(deleteCommands) != 0 {
@@ -577,42 +584,23 @@ func moveNicInForwardFirewall() {
 	tree.Apply(false)
 }
 
-func denyNewStateTrafficOnPubNic(nicInfos []nicTypeInfo) {
-	tree := server.NewParserFromShowConfiguration().Tree
-	for _, nicInfo := range nicInfos {
-		if nicInfo.NicType == "Private" {
-			continue
-		}
-		nicName, err := utils.GetNicNameByMac(nicInfo.Mac); utils.PanicOnError(err)
-		eNode := tree.Getf("firewall name %s.in rule", nicName)
-		if eNode == nil {
-			continue
-		}
-
-		if eNode.Get("9999") != nil {
-			tree.Delete(fmt.Sprintf("firewall name %s.in rule 9999", nicName))
-		}
-	}
-	tree.Apply(false)
-}
-
 func allowNewStateTrafficOnPubNic(nicInfos []nicTypeInfo) {
 	tree := server.NewParserFromShowConfiguration().Tree
 	for _, nicInfo := range nicInfos {
-		if nicInfo.NicType == "Private" {
-			continue
-		}
 		nicName, err := utils.GetNicNameByMac(nicInfo.Mac); utils.PanicOnError(err)
 		eNode := tree.Getf("firewall name %s.in rule", nicName)
 		if eNode == nil {
 			continue
 		}
-
 		if eNode.Get("9999") == nil {
 			tree.SetFirewallWithRuleNumber(nicName, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
 				"action accept",
 				"state new enable",
 			)
+		} else {
+			if eNode.Get("9999 disable") != nil {
+				tree.Deletef("firewall name %v.in rule %v disable", nicName, 9999)
+			}
 		}
 	}
 	tree.Apply(false)
