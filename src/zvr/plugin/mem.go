@@ -123,7 +123,7 @@ func (c *memCollector) Update(ch chan <- prom.Metric ) error  {
 	//      + kb_inactive_file + kb_active_file - MIN((kb_inactive_file + kb_active_file) / 2, watermark_low)
 	//      + kb_slab_reclaimable - MIN(kb_slab_reclaimable / 2, watermark_low);
 	memInfo := getVPCMemInfo()
-	if memInfo != nil {
+	if memInfo == nil {
 		return nil
 	}
 	kb_mem_available := memInfo.kb_Memfree - memInfo.watermark_low +
