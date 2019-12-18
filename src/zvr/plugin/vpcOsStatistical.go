@@ -47,7 +47,7 @@ func (c *vpcOsCollector) Update(ch chan<- prom.Metric) error {
 			memInfo.kb_InactiveFile + memInfo.kb_ActiveFile + min((memInfo.kb_ActiveFile+memInfo.kb_InactiveFile)/2, memInfo.watermark_low) +
 			memInfo.kb_SlabReclaimable + min((memInfo.kb_SlabReclaimable/2), memInfo.watermark_low)
 
-		ch <- prom.MustNewConstMetric(c.vpcMemoryUsage, prom.GaugeValue, float64((memInfo.kb_Memtotal-kb_mem_available)*1024), "used")
+		ch <- prom.MustNewConstMetric(c.vpcMemoryUsage, prom.GaugeValue, float64(memInfo.kb_MemUsed*1024), "used")
 		ch <- prom.MustNewConstMetric(c.vpcMemoryUsage, prom.GaugeValue, float64((memInfo.kb_Memfree)*1024), "free")
 		ch <- prom.MustNewConstMetric(c.vpcMemoryUsage, prom.GaugeValue, float64((memInfo.kb_Buffer)*1024), "buffered")
 		ch <- prom.MustNewConstMetric(c.vpcMemoryUsage, prom.GaugeValue, float64((memInfo.kb_Cached)*1024), "cached")
@@ -115,6 +115,8 @@ type memInfo struct {
 	kb_InactiveFile    uint64
 	kb_ActiveFile      uint64
 	kb_SlabReclaimable uint64
+	kb_SlabTotal       uint64
+	kb_MemUsed       uint64
 }
 
 func getWaterMark_Low() uint64 {
@@ -170,8 +172,12 @@ func getVPCMemInfo() *memInfo {
 			memInfos.kb_Cached, _ = strconv.ParseUint(strings.Trim(strs[1], " "), 10, 64)
 		} else if strs[0] == "SReclaimable" {
 			memInfos.kb_SlabReclaimable, _ = strconv.ParseUint(strings.Trim(strs[1], " "), 10, 64)
+		} else if strs[0] == "Slab:" {
+			memInfos.kb_SlabTotal, _ = strconv.ParseUint(strings.Trim(strs[1], " "), 10, 64)
 		}
 	}
+
+	memInfos.kb_MemUsed = memInfos.kb_Memtotal - (memInfos.kb_Memfree + memInfos.kb_Buffer + memInfos.kb_Cached + memInfos.kb_SlabTotal)
 
 	return &memInfos
 }
