@@ -239,6 +239,11 @@ func getVPCCpuInfo() []*cpuInfo {
 
 		usage.total = usage.user + usage.nice + usage.system + usage.idle + usage.iowait + usage.irq + usage.softirq
 
+		if usage.total == 0 {
+			log.Debugf("getDiskCpuInfo line %s, items: %+v", line, items)
+			continue
+		}
+
 		usage.user = 100 * (usage.user / usage.total)
 		usage.nice = 100 * (usage.nice / usage.total)
 		usage.system = 100 * (usage.system / usage.total)
@@ -284,30 +289,45 @@ func getDiskCpuInfo() []*diskInfo {
 	reg := regexp.MustCompile(`\s+`)
 
 	var diskInfos []*diskInfo
-	lines := strings.Split(stdout, "\n")
+	lines := strings.Split(strings.Trim(stdout, "\n"), "\n")
 	for _, line := range lines {
 		var usage diskInfo
 		items := reg.Split(strings.TrimSpace(line), -1)
+		if len(items) < 5 {
+			continue
+		}
+
 		for i, item := range items {
 			switch i {
 			case 1:
-				usage.total, _ = strconv.ParseFloat(strings.Trim(item, " "), 64)
+				if num, err := strconv.ParseFloat(strings.Trim(item, " "), 64); err == nil {
+					usage.total = num
+				}
 			case 2:
-				usage.used, _ = strconv.ParseFloat(strings.Trim(item, " "), 64)
+				if num, err := strconv.ParseFloat(strings.Trim(item, " "), 64); err == nil {
+					usage.used = num
+				}
 			case 3:
-				usage.available, _ = strconv.ParseFloat(strings.Trim(item, " "), 64)
+				if num, err := strconv.ParseFloat(strings.Trim(item, " "), 64); err == nil {
+					usage.available = num
+				}
 			}
+		}
+
+		if usage.total == 0 {
+			log.Debugf("getDiskCpuInfo line %s, items: %+v", line, items)
+			continue
 		}
 
 		usage.free = usage.total - usage.used
 		usage.usedPercent = 100 * (usage.used / usage.total)
 		usage.freePercent = 100 * (usage.free / usage.total)
 
-		usage.device = items[0]
+		disks := strings.Split(strings.Trim(items[0], "/"), "/")
+		usage.device = disks[1]
 		usage.fstype = "ext4"
 		usage.mountpoint = "/"
 		diskInfos = append(diskInfos, &usage)
-
 	}
 
 	return diskInfos
