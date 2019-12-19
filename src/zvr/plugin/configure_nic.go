@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"strings"
-	//log "github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -77,6 +77,44 @@ func addSecondaryIpFirewall(nicname, ip string,  tree *server.VyosConfigTree)  {
 		tree.AttachFirewallToInterface(nicname, "local")
 	}
 
+}
+
+func configureLBFirewallRule(tree *server.VyosConfigTree, dev string) (err error) {
+	/*get all the rules created by lb from an private nic first;
+	config these rules on dev second*/
+
+	err = nil
+	des := "LB-*-*"
+	var sourceNic string
+
+	priNics := utils.GetPrivteInterface()
+	for _, priNic := range priNics {
+		if priNic != dev && tree.FindFirewallRuleByDescriptionRegex(priNic, "local", des, utils.StringRegCompareFn) != nil {
+			sourceNic = priNic
+			break;
+		}
+	}
+
+	log.Debug(sourceNic)
+
+	if utils.IsSkipVyosIptables() {
+		//removeDnsFirewallRules(priNic)
+	} else {
+		if rs := tree.FindFirewallRulesByDescriptionRegex(sourceNic, "local", des, utils.StringRegCompareFn); rs != nil {
+			for _, r := range rs {
+				prefix := r.String()
+				rule := make([]string, 0)
+				for _, d := range r.FullString() {
+					rule = append(rule, strings.Replace(d, prefix, "", -1))
+				}
+				log.Debug(rule)
+				log.Debug(r.String())
+				tree.SetFirewallOnInterface(dev, "local", rule...)
+			}
+		}
+	}
+
+	return
 }
 
 func configureNic(ctx *server.CommandContext) interface{} {
@@ -175,6 +213,11 @@ func configureNic(ctx *server.CommandContext) interface{} {
 			b := utils.NewBash()
 			b.Command = fmt.Sprintf("ip link set dev %s alias '%s'", nicname, makeAlias(nic))
 			b.Run()
+		}
+
+		if nic.Category == "Private" {
+			log.Debug("start configure LB firewall rule")
+			configureLBFirewallRule(tree, nicname)
 		}
 	}
 

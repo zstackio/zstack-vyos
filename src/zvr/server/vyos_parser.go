@@ -459,6 +459,23 @@ func (t *VyosConfigTree) FindFirewallRuleByDescriptionRegex(ethname, direction, 
 	return nil
 }
 
+func (t *VyosConfigTree) FindFirewallRulesByDescriptionRegex(ethname, direction, des string, fn utils.CompareStringFunc) []*VyosConfigNode {
+	rs := t.Getf("firewall name %v.%v rule", ethname, direction)
+
+	if rs == nil {
+		return nil
+	}
+
+	results := make([]*VyosConfigNode, 0)
+	for _, r := range rs.children {
+		if d := r.Get("description"); d != nil && fn(des, d.Value()) == true {
+			results = append(results, r)
+		}
+	}
+
+	return results
+}
+
 /*without check if exist*/
 func (t *VyosConfigTree) SetGroup(groupType, name, value string) {
 	utils.Assertf(groupType == "address" || groupType == "network" || groupType == "port", "groupType must be address or network or port,but %s got", groupType)
