@@ -7,11 +7,14 @@ import (
         log "github.com/Sirupsen/logrus"
         "github.com/pkg/errors"
         "strings"
+        "io/ioutil"
 )
 
 const (
         FLOW_METER_REFRESH = "/flowmeter/refresh"
         FLOW_METER_GET_COUNTER = "/flowmeter/count"
+
+        VYOSHA_FLOW_SCRIPT = "/home/vyos/zvr/keepalived/script/flow.sh"
 )
 
 type FlowType string
@@ -111,6 +114,13 @@ func configFlowMeter(config flowMeterInfo) (error) {
         if rs := tree.Getf("system flow-accounting"); rs != nil || deleted {
                 tree.Apply(false)
         }
+
+        if rs := tree.Getf("system flow-accounting"); rs != nil {
+                writeFlowHaScript(true)
+        } else {
+                writeFlowHaScript(false)
+        }
+
         return nil
 }
 
@@ -200,6 +210,21 @@ func makeEnv() interface{} {
                 err := utils.AppendIptalbesRuleSet(ruleset,"raw"); utils.PanicOnError(err)
         }
         return nil
+}
+
+func writeFlowHaScript(enable bool)  {
+        if !utils.IsHaEabled() {
+                return
+        }
+
+        var conent string
+        if enable {
+                conent = "sudo flock -xn /tmp/netflow.lock -c \"/opt/vyatta/bin/sudo-users/vyatta-show-acct.pl --action 'restart' 2 > null; sudo rm -f /tmp/netflow.lock\""
+        } else {
+                conent = "echo 'no flow configured'"
+        }
+
+        err := ioutil.WriteFile(VYOSHA_FLOW_SCRIPT, []byte(conent), 0755); utils.PanicOnError(err)
 }
 
 func init() {
