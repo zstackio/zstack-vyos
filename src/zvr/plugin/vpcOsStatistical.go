@@ -311,6 +311,12 @@ func getDiskCpuInfo() []*diskInfo {
 				if num, err := strconv.ParseFloat(strings.Trim(item, " "), 64); err == nil {
 					usage.available = num
 				}
+			case 4:
+				num := strings.Trim(item, " ")
+				num = strings.Replace(num, "%", "", 1)
+				if num, err := strconv.ParseFloat(num, 64); err == nil {
+					usage.usedPercent = num
+				}
 			}
 		}
 
@@ -320,8 +326,7 @@ func getDiskCpuInfo() []*diskInfo {
 		}
 
 		usage.free = usage.total - usage.used
-		usage.usedPercent = 100 * (usage.used / usage.total)
-		usage.freePercent = 100 * (usage.free / usage.total)
+		usage.freePercent = 100 - usage.usedPercent
 
 		disks := strings.Split(strings.Trim(items[0], "/"), "/")
 		usage.device = disks[1]
