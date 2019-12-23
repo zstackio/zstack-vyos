@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 	log "github.com/Sirupsen/logrus"
+	"io/ioutil"
 )
 
 const(
@@ -16,6 +17,8 @@ const(
 	UPDATE_IPSEC_CONNECTION = "/vyos/updateipsecconnection"
 
 	IPSecInfoMaxSize = 256
+
+	VYOSHA_IPSEC_SCRIPT = "/home/vyos/zvr/keepalived/script/ipsec.sh"
 )
 
 type ipsecInfo struct {
@@ -391,6 +394,8 @@ func createIPsecConnection(ctx *server.CommandContext) interface{} {
 
 	go restartVpnAfterConfig()
 
+	writeIpsecHaScript(true)
+
 	return nil
 }
 
@@ -420,6 +425,12 @@ func syncIPsecConnection(ctx *server.CommandContext) interface{} {
 
 	go restartVpnAfterConfig()
 
+	if len(ipsecMap) > 0 {
+		writeIpsecHaScript(true)
+	} else {
+		writeIpsecHaScript(false)
+	}
+
 	return nil
 }
 
@@ -439,6 +450,12 @@ func deleteIPsecConnection(ctx *server.CommandContext) interface{} {
 	}
 	if utils.IsSkipVyosIptables() {
 		syncIpSecRulesByIptables()
+	}
+
+	if len(ipsecMap) > 0 {
+		writeIpsecHaScript(true)
+	} else {
+		writeIpsecHaScript(false)
 	}
 
 	return nil
@@ -528,6 +545,21 @@ func updateIPsecConnection(ctx *server.CommandContext) interface{} {
 	}
 
 	return nil
+}
+
+func writeIpsecHaScript(enable bool)  {
+	if !utils.IsHaEabled() {
+		return
+	}
+
+	var conent string
+	if enable {
+		conent = "sudo /opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl -op clear-vpn-ipsec-process"
+	} else {
+		conent = "echo 'no ipsec configured'"
+	}
+
+	err := ioutil.WriteFile(VYOSHA_IPSEC_SCRIPT, []byte(conent), 0755); utils.PanicOnError(err)
 }
 
 func IPsecEntryPoint() {

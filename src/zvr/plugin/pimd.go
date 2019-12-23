@@ -20,6 +20,8 @@ const (
 	PIMD_BINARY_PATH = "/opt/vyatta/sbin/pimd"
 	PIMD_CONF_DIR = "/home/vyos/zvr/pimd/"
 	PIMD_CONF_PATH = "/home/vyos/zvr/pimd/pimd.conf"
+
+	VYOSHA_PIMD_SCRIPT = "/home/vyos/zvr/keepalived/script/pimd.sh"
 )
 
 type rendezvousPointInfo struct {
@@ -233,6 +235,8 @@ func enablePimdHandler(ctx *server.CommandContext) interface{} {
 
 	pimdEnable = true
 
+	writePimdHaScript(true)
+
 	return nil
 }
 
@@ -275,6 +279,8 @@ func disablePimdHandler(ctx *server.CommandContext) interface{} {
 	stopPimd()
 
 	pimdEnable = false
+
+	writePimdHaScript(false)
 
 	return nil
 }
@@ -351,6 +357,21 @@ func getMrouteHandler(ctx *server.CommandContext) interface{} {
 	}
 
 	return getMrouteRsp{Routes:routes}
+}
+
+func writePimdHaScript(enable bool)  {
+	if !utils.IsHaEabled() {
+		return
+	}
+
+	var conent string
+	if enable {
+		conent = "sudo /opt/vyatta/sbin/pimd -l"
+	} else {
+		conent = "echo 'no pimd configured'"
+	}
+
+	err := ioutil.WriteFile(VYOSHA_PIMD_SCRIPT, []byte(conent), 0755); utils.PanicOnError(err)
 }
 
 func PimdEntryPoint() {
