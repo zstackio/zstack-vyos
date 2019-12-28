@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	log "github.com/Sirupsen/logrus"
+	"os/exec"
 )
 
 type KeepAlivedStatus int
@@ -39,6 +40,7 @@ const (
 	KeepalivedConfigPath = "/home/vyos/zvr/keepalived/conf/"
 	KeepalivedSciptPath = "/home/vyos/zvr/keepalived/script/"
 	KeepalivedConfigFile = "/home/vyos/zvr/keepalived/conf/keepalived.conf"
+	KeepalivedPidFile = "/var/run/keepalived.pid"
 	KeepalivedBinaryFile = "/usr/sbin/keepalived"
 	KeepalivedSciptNotifyMaster = "/home/vyos/zvr/keepalived/script/notifyMaster"
 	KeepalivedSciptNotifyBackup = "/home/vyos/zvr/keepalived/script/notifyBackup"
@@ -73,13 +75,13 @@ sudo ip link set up dev {{$name}} || true
 {{ end }}
 
 #restart ipsec process
-(sudo /opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl -op clear-vpn-ipsec-process) &
+(/bin/bash /home/vyos/zvr/keepalived/script/ipsec.sh) &
 
 #restart flow-accounting process
-(sudo flock -xn /tmp/netflow.lock -c "/opt/vyatta/bin/sudo-users/vyatta-show-acct.pl --action 'restart' 2 > null; sudo rm -f /tmp/netflow.lock")&
+(/bin/bash /home/vyos/zvr/keepalived/script/flow.sh) &
 
 #reload pimd config
-(sudo /opt/vyatta/sbin/pimd -l) &
+(/bin/bash /home/vyos/zvr/keepalived/script/pimd.sh) &
 
 #notify Mn node
 (sudo curl -H "Content-Type: application/json" -H "commandpath: /vpc/hastatus" -X POST -d '{"virtualRouterUuid": "{{.VrUuid}}", "haStatus":"Master"}' {{.CallBackUrl}}) &
@@ -332,25 +334,21 @@ func callStatusChangeScripts()  {
 }
 
 func getKeepalivedPid() (string) {
-	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo pidof /usr/sbin/keepalived"),
-		NoLog: true,
-	}
-	ret, o, e, err := bash.RunWithReturn()
-	if err != nil || ret != 0 {
-		log.Debugf("get keepalived pid failed %s", e)
+	stdout, err := exec.Command("pidof", "-x", KeepalivedBinaryFile).Output()
+	if err != nil {
+		log.Debugf("get keepalived pid failed %v", err)
 		return PID_ERROR
 	}
 
 	/* when keepalived is running, the output will be: 3657, 3656, 3655
 	   when keepalived not runing, the output will be empty */
-	o = strings.Trim(o, " \n\t")
-	if len(o) == 0 {
+	out := strings.TrimSpace(string(stdout))
+	if out == "" {
 		log.Debugf("keepalived is not running")
 		return PID_ERROR
 	}
 
-	pids := strings.Split(o, " ")
+	pids := strings.Fields(out)
 	return pids[len(pids)-1]
 }
 

@@ -685,10 +685,8 @@ func setVip(ctx *server.CommandContext) interface{} {
 		vyosVips = append(vyosVips, nicVipPair{NicName:nicname, Vip:vip.Ip, Prefix: cidr})
 	}
 
-	if utils.IsHaEabled() && IsMaster() {
-		addHaNicVipPair(vyosVips, true)
-	} else {
-		addHaNicVipPair(vyosVips, false)
+	if utils.IsHaEabled(){
+		addHaNicVipPair(vyosVips, IsMaster())
 	}
 
 	return nil
