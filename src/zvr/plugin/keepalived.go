@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 	log "github.com/Sirupsen/logrus"
-	"strconv"
+	"os/exec"
 )
 
 type KeepAlivedStatus int
@@ -334,18 +334,22 @@ func callStatusChangeScripts()  {
 }
 
 func getKeepalivedPid() (string) {
-	content, err := ioutil.ReadFile(KeepalivedPidFile)
+	stdout, err := exec.Command("pidof", "-x", KeepalivedBinaryFile).Output()
 	if err != nil {
+		log.Debugf("get keepalived pid failed %v", err)
 		return PID_ERROR
 	}
 
-	pidStr := string(content)
-	pid, err := strconv.ParseUint(strings.Trim(pidStr, " \n"), 10, 64)
-	if err != nil {
+	/* when keepalived is running, the output will be: 3657, 3656, 3655
+	   when keepalived not runing, the output will be empty */
+	out := strings.TrimSpace(string(stdout))
+	if out == "" {
+		log.Debugf("keepalived is not running")
 		return PID_ERROR
 	}
 
-	return fmt.Sprintf("%d", pid)
+	pids := strings.Fields(out)
+	return pids[len(pids)-1]
 }
 
 /* true master, false backup */
