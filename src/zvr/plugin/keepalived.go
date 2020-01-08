@@ -44,8 +44,6 @@ const (
 	KeepalivedBinaryFile = "/usr/sbin/keepalived"
 	KeepalivedSciptNotifyMaster = "/home/vyos/zvr/keepalived/script/notifyMaster"
 	KeepalivedSciptNotifyBackup = "/home/vyos/zvr/keepalived/script/notifyBackup"
-	KeepalivedStateFile = "/home/vyos/zvr/keepalived/conf/state"
-	HaproxyHaScriptFile = "/home/vyos/zvr/keepalived/script/haproxy.sh"
 )
 
 type KeepalivedNotify struct {
@@ -85,6 +83,9 @@ sudo ip link set up dev {{$name}} || true
 
 #notify Mn node
 (sudo curl -H "Content-Type: application/json" -H "commandpath: /vpc/hastatus" -X POST -d '{"virtualRouterUuid": "{{.VrUuid}}", "haStatus":"Master"}' {{.CallBackUrl}}) &
+
+#this is for debug
+ip add
 `
 
 const tKeepalivedNotifyBackup = `#!/bin/sh
@@ -97,6 +98,8 @@ sudo ip link set down dev {{$name}} || true
 {{ end }}
 #notify Mn node
 (sudo curl -H "Content-Type: application/json" -H "commandpath: /vpc/hastatus" -X POST -d '{"virtualRouterUuid": "{{.VrUuid}}", "haStatus":"Backup"}' {{.CallBackUrl}}) &
+#this is for debug
+ip add
 `
 
 func NewKeepalivedNotifyConf(vyosHaVips []nicVipPair) *KeepalivedNotify {
@@ -131,8 +134,6 @@ func NewKeepalivedNotifyConf(vyosHaVips []nicVipPair) *KeepalivedNotify {
 
 	knc := &KeepalivedNotify{
 		VyosHaVipPairs: vyosHaVips,
-		KeepalivedStateFile: KeepalivedStateFile,
-		HaproxyHaScriptFile: HaproxyHaScriptFile,
 		NicNames: nicNames,
 		NicIps: nicIps,
 		VrUuid: utils.GetVirtualRouterUuid(),
@@ -389,10 +390,6 @@ func init()  {
 	os.Mkdir(KeepalivedRootPath, os.ModePerm)
 	os.Mkdir(KeepalivedConfigPath, os.ModePerm)
 	os.Mkdir(KeepalivedSciptPath, os.ModePerm)
-	bash := utils.Bash{
-		Command: fmt.Sprintf("echo BACKUP > %s; echo ''> %s; echo ''> %s", KeepalivedStateFile, HaproxyHaScriptFile, KeepalivedConfigFile),
-	}
-	err := bash.Run();utils.PanicOnError(err)
 	enableKeepalivedLog()
 	keepAlivedStatus = KeepAlivedStatus_Backup
 }

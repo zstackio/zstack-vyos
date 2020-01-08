@@ -689,6 +689,12 @@ func setVip(ctx *server.CommandContext) interface{} {
 		addHaNicVipPair(vyosVips, IsMaster())
 	}
 
+	/* this is for debug, will be deleted */
+	bash := utils.Bash{
+		Command: fmt.Sprintf("ip add"),
+	}
+	bash.Run()
+
 	return nil
 }
 
@@ -745,6 +751,12 @@ func removeVip(ctx *server.CommandContext) interface{} {
 		vyosVips = append(vyosVips, nicVipPair{NicName:nicname, Vip:vip.Ip, Prefix:cidr})
 	}
 	removeHaNicVipPair(vyosVips)
+
+	/* this is for debug, will be deleted */
+	bash := utils.Bash{
+		Command: fmt.Sprintf("ip add"),
+	}
+	bash.Run()
 
 	return nil
 }

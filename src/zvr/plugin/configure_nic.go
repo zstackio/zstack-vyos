@@ -251,6 +251,12 @@ func configureNic(ctx *server.CommandContext) interface{} {
 		}
 	}
 
+	/* this is for debug, will be deleted */
+	bash := utils.Bash{
+		Command: fmt.Sprintf("ip add"),
+	}
+	bash.Run()
+
 	return nil
 }
 
@@ -307,6 +313,12 @@ func removeNic(ctx *server.CommandContext) interface{} {
 	tree.Apply(false)
 
 	generateNotityScripts()
+
+	/* this is for debug, will be deleted */
+	bash := utils.Bash{
+		Command: fmt.Sprintf("ip add"),
+	}
+	bash.Run()
 
 	return nil
 }
