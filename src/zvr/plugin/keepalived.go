@@ -390,6 +390,9 @@ func init()  {
 	os.Mkdir(KeepalivedRootPath, os.ModePerm)
 	os.Mkdir(KeepalivedConfigPath, os.ModePerm)
 	os.Mkdir(KeepalivedSciptPath, os.ModePerm)
+	os.Remove(KeepalivedSciptNotifyMaster)
+	os.Remove(KeepalivedSciptNotifyBackup)
+
 	enableKeepalivedLog()
 	keepAlivedStatus = KeepAlivedStatus_Backup
 }
