@@ -179,6 +179,12 @@ func GetIpFromUrl(url string) (string, error) {
 	return ip, nil
 }
 
+func CheckIpDuplicate(nicname, ip string) bool {
+	b := Bash{Command: fmt.Sprintf("sudo arping -q -D -w 1.5 -c 1 -I %s %s > /dev/null", nicname, ip) }
+	err := b.Run()
+	return (err != nil)
+}
+
 func CheckZStackRouteExists(ip string) bool {
 	bash := Bash{
 		Command: fmt.Sprintf("ip r list %s/32 proto zstack", ip),
