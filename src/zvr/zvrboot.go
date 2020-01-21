@@ -19,6 +19,7 @@ const (
 	TMP_LOCATION_FOR_ESX = "/tmp/bootstrap-info.json"
 	// use this rule number to set a rule which confirm route entry work issue ZSTAC-6170
 	ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER = 9999
+	NETWORK_HEALTH_STATUS_PATH = "/home/vyos/zvr/.duplicate"
 )
 
 type nic struct {
@@ -132,6 +133,21 @@ func resetVyos()  {
 	current for workaround ,just */
 	// reload default configuration
 	//server.RunVyosScriptAsUserVyos("load /opt/vyatta/etc/config.boot.default\nsave")
+}
+
+func checkIpDuplicate () {
+	// duplicate ip check
+	dupinfo := ""
+	for _, nic := range nics {
+		if utils.CheckIpDuplicate(nic.name, nic.ip) {
+			dupinfo = fmt.Sprintf("%s duplicate ip %s in nic %s\n", dupinfo, nic.ip, nic.name)
+		}
+	}
+	if !strings.EqualFold(dupinfo, "") {
+		log.Error(dupinfo)
+		err := utils.MkdirForFile(NETWORK_HEALTH_STATUS_PATH, 0755); utils.PanicOnError(err)
+		err = ioutil.WriteFile(NETWORK_HEALTH_STATUS_PATH,  []byte(dupinfo), 0755); utils.PanicOnError(err)
+	}
 }
 
 func configureVyos() {
@@ -425,6 +441,8 @@ func configureVyos() {
 
 	tree.Apply(true)
 
+	checkIpDuplicate()
+
 	arping := func(nicname, ip, gateway string) {
 		b := utils.Bash{Command: fmt.Sprintf("sudo arping -q -A -w 1.5 -c 1 -I %s %s > /dev/null", nicname, ip) }
 		b.Run()
@@ -442,7 +460,7 @@ func configureVyos() {
 	} else {
 		mgmtNodeIpStr := mgmtNodeIp.(string)
 		if (utils.CheckMgmtCidrContainsIp(mgmtNodeIpStr, mgmtNic) == false) {
-			err := utils.SetZStackRoute(mgmtNodeIpStr, "eth0", mgmtNic["gateway"].(string));
+			err := utils.SetZStackRoute(mgmtNodeIpStr, "eth0", mgmtNic["gateway"].(string))
 			utils.PanicOnError(err)
 		} else if utils.GetNicForRoute(mgmtNodeIpStr) != "eth0" {
 			err := utils.SetZStackRoute(mgmtNodeIpStr, "eth0", ""); utils.PanicOnError(err)
@@ -477,6 +495,10 @@ func startZvr()  {
 	}
 	b.Run()
 	b.PanicIfError()
+}
+
+func init() {
+	os.Remove(NETWORK_HEALTH_STATUS_PATH)
 }
 
 func main() {
