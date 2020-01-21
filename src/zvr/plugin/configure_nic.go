@@ -225,6 +225,11 @@ func configureNic(ctx *server.CommandContext) interface{} {
 
 	if (IsMaster()) {
 		checkNicIsUp(nicname, true)
+		for _, nic := range cmd.Nics {
+			if utils.CheckIpDuplicate(nicname, nic.Ip) == true {
+				utils.PanicOnError(errors.Errorf("duplicate ip %s in nic %s", nic.Ip, nicname))
+			}
+		}
 	} else {
 		cmds := []string{}
 		for _, nic := range cmd.Nics {

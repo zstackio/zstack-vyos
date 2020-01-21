@@ -6,7 +6,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"fmt"
 	"io/ioutil"
-	"time"
 )
 
 const (
@@ -16,6 +15,7 @@ const (
 	/* please follow following rule to change the version:
 	  http://confluence.zstack.io/pages/viewpage.action?pageId=34014178 */
 	VERSION_FILE_PATH = "/home/vyos/zvr/version"
+	NETWORK_HEALTH_STATUS_PATH = "/home/vyos/zvr/.duplicate"
 )
 
 var (
@@ -25,14 +25,6 @@ var (
 type InitConfig struct {
 	RestartDnsmasqAfterNumberOfSIGUSER1 int `json:"restartDnsmasqAfterNumberOfSIGUSER1"`
 	Uuid string `json:"uuid"`
-}
-
-/*
-the current health of whole system
-*/
-type HealthStatus struct {
-	Healthy bool `json:"healthy"`
-	HealthDetail string `json:"healthDetail"`
 }
 
 type pingRsp struct {
@@ -45,20 +37,31 @@ type pingRsp struct {
 
 var (
 	initConfig = &InitConfig{}
-	healthStatus = &HealthStatus{Healthy:true, HealthDetail:""}
 )
+type networkHealthCheck struct {}
+type fsHealthCheck struct {}
 
-func (status *HealthStatus) healthCheck() {
+func (check *networkHealthCheck)healthCheck() (status HealthStatus) {
+	status = HealthStatus{Healthy:true, HealthDetail:""}
+	if e, _ := utils.PathExists(NETWORK_HEALTH_STATUS_PATH); e {
+		f, _ := ioutil.ReadFile(NETWORK_HEALTH_STATUS_PATH)
+		status.Healthy = false
+                status.HealthDetail = string(f)
+	}
+
+	return status
+}
+
+func (check *fsHealthCheck)healthCheck() (status HealthStatus) {
 	bash := utils.Bash{
 		Command: "sudo mount|grep -w ro",
 	}
+	status = HealthStatus{Healthy:true, HealthDetail:""}
 	if ret, output, _, err := bash.RunWithReturn(); err == nil && ret == 0 {
 		status.Healthy = false
 		status.HealthDetail = fmt.Sprintf("RO file system: %s", output)
-	} else if !status.Healthy{
-		status.Healthy = true
-		status.HealthDetail = ""
 	}
+	return status
 }
 
 func initHandler(ctx *server.CommandContext) interface{} {
@@ -128,11 +131,6 @@ func init ()  {
 	if err == nil {
 		VERSION = string(ver)
 	}
-
-	go func() {
-		for {
-			healthStatus.healthCheck()
-			time.Sleep(time.Duration(60 * time.Second))
-		}
-	} ()
+	RegisterHealthCheckCallback(&fsHealthCheck{})
+	RegisterHealthCheckCallback(&networkHealthCheck{})
 }
