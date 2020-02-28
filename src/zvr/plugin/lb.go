@@ -163,6 +163,8 @@ func getListener(lb lbInfo) Listener {
 func parseListenerPrameter(lb lbInfo) (map[string]interface{}, error) {
 	sort.Stable(sort.StringSlice(lb.NicIps))
 	m := structs.Map(lb)
+	weight := make(map[string]string)
+
 	for _, param := range lb.Parameters {
 		kv := strings.SplitN(param, "::", 2)
 		k := kv[0]
@@ -176,12 +178,31 @@ func parseListenerPrameter(lb lbInfo) (map[string]interface{}, error) {
 			} else {
 				m["CheckPort"] = cport
 			}
+			m["HealthCheckProtocol"] = mp[0]
+		} else if k == "balancerWeight" {
+			mp := strings.Split(v, "::")
+			weight[mp[0]] = mp[1]
+		} else if k == "healthCheckParameter" {
+			mp := strings.Split(v, ":")
+			m["HttpChkMethod"] = mp[0]
+			m["HttpChkUri"] = mp[1]
+			if mp[2] != "http_2xx" {
+				code := map[string]string{"http_2xx":"2","http_3xx":"3","http_4xx":"4","http_5xx":"5",}
+				expect := "^["
+				for _, o := range strings.Split(mp[2], ",") {
+					expect = expect + code[o]
+				}
+				m["HttpChkExpect"] = expect + "]"
+			} else {
+				m["HttpChkExpect"] = mp[2]
+			}
 		} else {
 			m[strings.Title(k)] = v
 		}
 	}
 	m["CertificatePath"] = makeCertificatePath(lb.CertificateUuid)
 	m["SocketPath"] = makeLbSocketPath(lb)
+	m["Weight"] = weight
 	return m, nil
 }
 
@@ -225,14 +246,26 @@ timeout client {{.ConnectionIdleTimeout}}s
 timeout server {{.ConnectionIdleTimeout}}s
 timeout connect 60s
 balance {{.BalancerAlgorithm}}
-{{if eq .Mode "https"}}
+{{- if eq .Mode "https"}}
 bind {{.Vip}}:{{.LoadBalancerPort}} ssl crt {{.CertificatePath}}
-{{else}}
+{{- else}}
 bind {{.Vip}}:{{.LoadBalancerPort}}
 {{end}}
-{{ range $index, $ip := .NicIps }}
+{{- if eq .HealthCheckProtocol "http" }}
+option httpchk {{$.HttpChkMethod}} {{$.HttpChkUri}}
+{{- if ne .HttpChkExpect "http_2xx" }}
+http-check expect rstatus {{$.HttpChkExpect}}
+{{- end }}
+{{- end }}
+{{- if eq .BalancerAlgorithm "static-rr" }}
+{{- range $ip, $weight := $.Weight }}
+server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} weight {{$weight}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
+{{- end }}
+{{else}}
+{{- range $index, $ip := $.NicIps }}
 server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
-{{ end }}`
+{{- end }}
+{{- end }}`
 
 	var buf bytes.Buffer
 	var m map[string]interface{}
@@ -241,7 +274,9 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 	m, err = parseListenerPrameter(lb);utils.PanicOnError(err)
 	this.maxConnect = m["MaxConnection"].(string)
 	this.maxSession, _ = strconv.Atoi(this.maxConnect)
-
+	if( m["BalancerAlgorithm"] == "weightroundrobin") {
+		m["BalancerAlgorithm"] = "static-rr"
+	}
 	m["ulimit"] = getListenerMaxCocurrenceSocket(this.maxConnect)
 
 	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
@@ -437,6 +472,14 @@ func (this *HaproxyListener) getIptablesRule()([]utils.IptablesRule, string) {
 		utils.RETURN, utils.LbRuleComment + this.lb.ListenerUuid, nil)}, nicname
 }
 
+func (this *GBListener) adaptListenerParameter(m map[string]interface{}) (map[string]interface{}, error) {
+	if strings.EqualFold(m["BalancerAlgorithm"].(string), "weightroundrobin") {
+		m["BalancerAlgorithm"] = "weight"
+	} else if strings.EqualFold(m["BalancerAlgorithm"].(string), "source") {
+		m["BalancerAlgorithm"] = "iphash1"
+	}
+	return m, nil
+}
 
 func (this *GBListener) createListenerServiceConfigure(lb lbInfo)  (err error) {
 		conf := `[api]
@@ -450,11 +493,7 @@ output = "/var/log/gobetween.log"
 [servers.{{.ListenerUuid}}]
 bind = "{{.Vip}}:{{.LoadBalancerPort}}"
 protocol = "{{.Mode}}"
-{{if eq .BalancerAlgorithm "source"}}
-balance = "iphash1"
-{{else}}
 balance = "{{.BalancerAlgorithm}}"
-{{end}}
 max_connections = {{.MaxConnection}}
 client_idle_timeout = "{{.ConnectionIdleTimeout}}s"
 backend_idle_timeout = "{{.ConnectionIdleTimeout}}s"
@@ -463,14 +502,19 @@ backend_connection_timeout = "60s"
 max_requests  = 0     # (optional) if > 0 accepts no more requests than max_requests and closes session (since 0.5.0)
 max_responses = 0    # (required) if > 0 accepts no more responses that max_responses from backend and closes session (will be optional since 0.5.0)
 
-
     [servers.{{.ListenerUuid}}.discovery]
     kind = "static"
     failpolicy = "keeplast"
     static_list = [
-	{{ range $index, $ip := .NicIps }}
+    {{- if eq $.BalancerAlgorithm "weight" }}
+	{{- range $ip, $weight := $.Weight }}
+      "{{$ip}}:{{$.CheckPort}} weight={{$weight}}",
+	{{- end }}
+    {{- else }}
+	{{- range $index, $ip := $.NicIps }}
       "{{$ip}}:{{$.CheckPort}}",
-    {{ end }}
+        {{- end }}
+    {{- end }}
     ]
 
     [servers.{{.ListenerUuid}}.healthcheck]
@@ -489,8 +533,8 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 
 	tmpl, err := template.New("conf").Parse(conf); utils.PanicOnError(err)
 	m, err = parseListenerPrameter(lb);utils.PanicOnError(err)
+	m, err = this.adaptListenerParameter(m);utils.PanicOnError(err)
 	m["ApiPort"] = this.apiPort
-	//m["ulimit"] = getListenerMaxCocurrenceSocket(m["MaxConnection"].(string))
 	this.maxConnect = m["MaxConnection"].(string)
 	this.maxSession, _ = strconv.Atoi(this.maxConnect)
 
@@ -502,13 +546,14 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 	return err
 }
 
-func (this *GBListener) startListenerService() ( ret int, err error) {
+func (this *GBListener) startListenerService() (  int,  error) {
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo /opt/vyatta/sbin/gobetween -c %s >/dev/null 2>&1&echo $! >%s",
 			this.confPath, this.pidPath),
 	}
 
-	ret, _, _, err = bash.RunWithReturn(); bash.PanicIfError()
+	ret, out, _, err := bash.RunWithReturn(); bash.PanicIfError()
+	log.Debugf("%d %s",ret, out)
 	return ret, err
 }
 
