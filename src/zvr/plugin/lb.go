@@ -274,7 +274,7 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 	m, err = parseListenerPrameter(lb);utils.PanicOnError(err)
 	this.maxConnect = m["MaxConnection"].(string)
 	this.maxSession, _ = strconv.Atoi(this.maxConnect)
-	if( m["BalancerAlgorithm"] == "weightroundrobin") {
+	if strings.EqualFold(m["BalancerAlgorithm"].(string), "weightroundrobin") {
 		m["BalancerAlgorithm"] = "static-rr"
 	}
 	m["ulimit"] = getListenerMaxCocurrenceSocket(this.maxConnect)
