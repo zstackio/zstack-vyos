@@ -26,6 +26,7 @@ type nicInfo struct {
 	PhysicalInterface string `json:"physicalInterface"`
 	Vni int `json:"vni"`
 	FirewallDefaultAction string `json:"firewallDefaultAction"`
+	Mtu int `json:"mtu"`
 }
 
 type addNicCallback interface {
@@ -139,6 +140,9 @@ func configureNic(ctx *server.CommandContext) interface{} {
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s duplex auto", nicname)
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s smp_affinity auto", nicname)
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s speed auto", nicname)
+		if nic.Mtu != 0 {
+			tree.SetfWithoutCheckExisting("interfaces ethernet %s mtu %d", nicname, nic.Mtu)
+		}
 
 		if utils.IsSkipVyosIptables() {
 			if nic.Category == "Private" {
