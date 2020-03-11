@@ -33,6 +33,7 @@ type nic struct {
 	l2type string
 	l2PhysicalInterface string
 	vni int
+	mtu int
 }
 
 var bootstrapInfo map[string]interface{} = make(map[string]interface{})
@@ -171,6 +172,10 @@ func configureVyos() {
 	eth0.ip, ok = mgmtNic["ip"].(string); utils.PanicIfError(ok, errors.New("cannot find 'ip' field for the management nic"))
 	eth0.isDefaultRoute = mgmtNic["isDefaultRoute"].(bool)
 	eth0.gateway = mgmtNic["gateway"].(string)
+	if mtuFloat, ok := mgmtNic["mtu"].(float64); ok {
+		eth0.mtu = int(mtuFloat)
+	}
+
 	if mgmtNic["l2type"] != nil {
 		eth0.l2type = mgmtNic["l2type"].(string)
 		eth0.category = mgmtNic["category"].(string)
@@ -194,6 +199,9 @@ func configureVyos() {
 			n.ip, ok = onic["ip"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'ip' field for the nic[name:%s]", n.name))
 			n.gateway = onic["gateway"].(string)
 			n.isDefaultRoute = onic["isDefaultRoute"].(bool)
+			if mtuFloat, ok := mgmtNic["mtu"].(float64); ok {
+				n.mtu = int(mtuFloat)
+			}
 			if onic["l2type"] != nil {
 				n.l2type = onic["l2type"].(string)
 				n.category = onic["category"].(string)
@@ -323,6 +331,10 @@ func configureVyos() {
 		tree.Setf("interfaces ethernet %s duplex auto", nic.name)
 		tree.Setf("interfaces ethernet %s smp_affinity auto", nic.name)
 		tree.Setf("interfaces ethernet %s speed auto", nic.name)
+		if nic.mtu != 0 {
+			tree.Setf("interfaces ethernet %s mtu %d", nic.name,nic.mtu)
+		}
+
 		if nic.isDefaultRoute {
 			tree.Setf("system gateway-address %v", nic.gateway)
 		}
