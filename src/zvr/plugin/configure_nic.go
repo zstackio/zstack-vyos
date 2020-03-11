@@ -33,14 +33,24 @@ type addNicCallback interface {
 	AddNic(nic string) error
 }
 
+type removeNicCallback interface {
+	RemoveNic(nic string) error
+}
+
 var addNicCallbacks []addNicCallback
+var removeNicCallbacks []removeNicCallback
 
 func init() {
 	addNicCallbacks = make([]addNicCallback, 0)
+	removeNicCallbacks = make([]removeNicCallback, 0)
 }
 
 func RegisterAddNicCallback(cb addNicCallback)  {
 	addNicCallbacks = append(addNicCallbacks, cb)
+}
+
+func RegisterRemoveNicCallback(cb removeNicCallback)  {
+	removeNicCallbacks = append(removeNicCallbacks, cb)
 }
 
 type configureNicCmd struct {
@@ -324,6 +334,13 @@ func removeNic(ctx *server.CommandContext) interface{} {
 	tree.Apply(false)
 
 	generateNotityScripts()
+
+	for _, nic := range cmd.Nics {
+		nicName, _:= utils.GetNicNameByMac(nic.Mac)
+		for _, cb := range removeNicCallbacks {
+			cb.RemoveNic(nicName)
+		}
+	}
 
 	/* this is for debug, will be deleted */
 	bash := utils.Bash{
