@@ -850,8 +850,20 @@ func syncVipQos(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
+type vipQosRemoveNic struct {}
+func (vipQos *vipQosRemoveNic) RemoveNic(nicName string) error {
+	bash := utils.Bash{
+		Command:fmt.Sprintf("sudo tc qdisc del dev %s root;", nicName),
+	}
+	bash.Run()
+
+	delete(totalQosRules, nicName)
+	return nil
+}
+
 
 func init() {
+    RegisterRemoveNicCallback(&vipQosRemoveNic{})
 	RegisterPrometheusCollector(NewVipPrometheusCollector())
 }
 
