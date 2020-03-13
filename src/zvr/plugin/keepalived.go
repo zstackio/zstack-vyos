@@ -81,6 +81,9 @@ sudo ip link set up dev {{$name}} || true
 #reload pimd config
 (/bin/bash /home/vyos/zvr/keepalived/script/pimd.sh) &
 
+#add policy route
+(/bin/bash /home/vyos/zvr/keepalived/script/policyRoutes.sh) &
+
 #notify Mn node
 (sudo curl -H "Content-Type: application/json" -H "commandpath: /vpc/hastatus" -X POST -d '{"virtualRouterUuid": "{{.VrUuid}}", "haStatus":"Master"}' {{.CallBackUrl}}) &
 
