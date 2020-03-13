@@ -20,6 +20,7 @@ const (
 	IPTABLES_MANGLE_DELETE   = "sudo iptables -t mangle "
 	POLICY_ROUTE_TABLE_CHAIN = "zs-rt-"
 	POLICY_ROUTE_RULE_CHAIN  = "zs-rule-"
+	VYOSHA_POLICY_ROUTE_SCRIPT = "/home/vyos/zvr/keepalived/script/policyRoutes.sh"
 )
 
 var DEFAULT_ROUTE_TABLE []string
@@ -325,12 +326,16 @@ func createPolicyRouteTableEntry(routes []policyRouteInfo) error {
 	bash := utils.Bash {
 		Command: routeTablesCmd,
 	}
-	ret, _, _, err := bash.RunWithReturn()
-	if err != nil {
-		return err
-	}
-	if ret != 0 {
-		return fmt.Errorf("add policy route entry command: %s, ret: %d", routeTablesCmd, ret)
+
+	writePolicyRouteHaScript(routeTablesCmd)
+	if IsMaster() {
+		ret, _, _, err := bash.RunWithReturn()
+		if err != nil {
+			return err
+		}
+		if ret != 0 {
+			return fmt.Errorf("add policy route entry command: %s, ret: %d", routeTablesCmd, ret)
+		}
 	}
 
 	return nil
@@ -497,6 +502,14 @@ func init ()  {
 	    "# local",
 	    "#",
 	    "#1	inr.ruhep"}
+}
+
+func writePolicyRouteHaScript(routes string)  {
+	if !utils.IsHaEabled() {
+		return
+	}
+
+	err := ioutil.WriteFile(VYOSHA_POLICY_ROUTE_SCRIPT, []byte(routes), 0755); utils.PanicOnError(err)
 }
 
 func initSystemMangleTable()  {
