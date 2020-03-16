@@ -13,6 +13,7 @@ const (
 	VR_CONFIGURE_NIC = "/configurenic"
 	VR_CONFIGURE_NIC_FIREWALL_DEFAULT_ACTION_PATH = "/configurenicdefaultaction";
 	VR_REMOVE_NIC_PATH = "/removenic"
+	VR_CHANGE_DEFAULT_NIC_PATH = "/changeDefaultNic"
 	ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER = 9999
 )
 
@@ -26,24 +27,40 @@ type nicInfo struct {
 	PhysicalInterface string `json:"physicalInterface"`
 	Vni int `json:"vni"`
 	FirewallDefaultAction string `json:"firewallDefaultAction"`
+	Mtu int `json:"mtu"`
 }
 
 type addNicCallback interface {
 	AddNic(nic string) error
 }
 
+type removeNicCallback interface {
+	RemoveNic(nic string) error
+}
+
 var addNicCallbacks []addNicCallback
+var removeNicCallbacks []removeNicCallback
 
 func init() {
 	addNicCallbacks = make([]addNicCallback, 0)
+	removeNicCallbacks = make([]removeNicCallback, 0)
 }
 
 func RegisterAddNicCallback(cb addNicCallback)  {
 	addNicCallbacks = append(addNicCallbacks, cb)
 }
 
+func RegisterRemoveNicCallback(cb removeNicCallback)  {
+	removeNicCallbacks = append(removeNicCallbacks, cb)
+}
+
 type configureNicCmd struct {
 	Nics []nicInfo `json:"nics"`
+}
+
+type ChangeDefaultNicCmd struct {
+	NewNic nicInfo `json:"newNic"`
+	Snats []snatInfo `json:"snats"`
 }
 
 func makeNicFirewallDescription(nicname, ip string) string {
@@ -139,6 +156,9 @@ func configureNic(ctx *server.CommandContext) interface{} {
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s duplex auto", nicname)
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s smp_affinity auto", nicname)
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s speed auto", nicname)
+		if nic.Mtu != 0 {
+			tree.SetfWithoutCheckExisting("interfaces ethernet %s mtu %d", nicname, nic.Mtu)
+		}
 
 		if utils.IsSkipVyosIptables() {
 			if nic.Category == "Private" {
@@ -225,6 +245,11 @@ func configureNic(ctx *server.CommandContext) interface{} {
 
 	if (IsMaster()) {
 		checkNicIsUp(nicname, true)
+		for _, nic := range cmd.Nics {
+			if utils.CheckIpDuplicate(nicname, nic.Ip) == true {
+				utils.PanicOnError(errors.Errorf("duplicate ip %s in nic %s", nic.Ip, nicname))
+			}
+		}
 	} else {
 		cmds := []string{}
 		for _, nic := range cmd.Nics {
@@ -314,6 +339,13 @@ func removeNic(ctx *server.CommandContext) interface{} {
 
 	generateNotityScripts()
 
+	for _, nic := range cmd.Nics {
+		nicName, _:= utils.GetNicNameByMac(nic.Mac)
+		for _, cb := range removeNicCallbacks {
+			cb.RemoveNic(nicName)
+		}
+	}
+
 	/* this is for debug, will be deleted */
 	bash := utils.Bash{
 		Command: fmt.Sprintf("ip add"),
@@ -357,6 +389,68 @@ func configureNicFirewallDefaultAction(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
+func changeDefaultNic(ctx *server.CommandContext) interface{} {
+	cmd := &ChangeDefaultNicCmd{}
+	ctx.GetCommand(cmd)
+
+	tree := server.NewParserFromShowConfiguration().Tree
+	/* change default gateway */
+	tree.Setf("system gateway-address %s", cmd.NewNic.Gateway)
+
+	if utils.IsSkipVyosIptables() {
+		/* delete all snat rules */
+		utils.DeleteSNatRuleByComment(utils.SNATComment)
+
+		for _, s := range cmd.Snats {
+			outNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
+			inNic, err := utils.GetNicNameByMac(s.PrivateNicMac); utils.PanicOnError(err)
+			address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
+
+			setSnatRule(outNic, inNic, address, s.PublicIp)
+		}
+	} else {
+		for _, s := range cmd.Snats {
+			outNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
+			inNic, err := utils.GetNicNameByMac(s.PrivateNicMac); utils.PanicOnError(err)
+			nicNumber, err := utils.GetNicNumber(inNic); utils.PanicOnError(err)
+			address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
+
+			pubNicRuleNo, priNicRuleNo := getNicSNATRuleNumber(nicNumber)
+			if rs := tree.Getf("nat source rule %v", pubNicRuleNo); rs != nil {
+				rs.Delete()
+			}
+
+			if rs := tree.Getf("nat source rule %v", priNicRuleNo); rs != nil {
+				rs.Delete()
+			}
+
+			tree.SetSnatWithRuleNumber(pubNicRuleNo,
+				fmt.Sprintf("outbound-interface %s", outNic),
+				fmt.Sprintf("source address %s", address),
+				"destination address !224.0.0.0/8",
+				fmt.Sprintf("translation address %s", s.PublicIp),
+			)
+
+			tree.SetSnatWithRuleNumber(priNicRuleNo,
+				fmt.Sprintf("outbound-interface %s", inNic),
+				fmt.Sprintf("source address %v", address),
+				"destination address !224.0.0.0/8",
+				fmt.Sprintf("translation address %s", s.PublicIp),
+			)
+		}
+	}
+
+	tree.Apply(false)
+
+	// clear contrack records
+	bash := utils.Bash{
+		Command: "sudo conntrack -D",
+	}
+	err := bash.Run()
+
+	return err
+}
+
 func makeAlias(nic nicInfo) string {
 	result := ""
 	if nic.L2Type != "" {
@@ -376,4 +470,5 @@ func ConfigureNicEntryPoint()  {
 	server.RegisterAsyncCommandHandler(VR_CONFIGURE_NIC, server.VyosLock(configureNic))
 	server.RegisterAsyncCommandHandler(VR_REMOVE_NIC_PATH, server.VyosLock(removeNic))
 	server.RegisterAsyncCommandHandler(VR_CONFIGURE_NIC_FIREWALL_DEFAULT_ACTION_PATH, server.VyosLock(configureNicFirewallDefaultAction))
+	server.RegisterAsyncCommandHandler(VR_CHANGE_DEFAULT_NIC_PATH, server.VyosLock(changeDefaultNic))
 }

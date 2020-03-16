@@ -389,6 +389,14 @@ func (rules *interfaceQosRules) InterfaceQosRuleInit(direct direction) interface
 		tree.Setf("interfaces ethernet %s redirect %s", rules.name, rules.ifbName)
 		tree.Apply(false)
 		name = rules.ifbName
+		
+		if mtu := tree.Getf("interfaces ethernet %s mtu", rules.name); mtu != nil {
+		    bash := utils.Bash{
+		        Command: fmt.Sprintf("ip link set mtu %s dev %s", mtu.Value(), rules.ifbName),
+		    }
+		    bash.Run()
+		}  
+				  
 	} else {
 		name = rules.name
 	}
@@ -850,8 +858,20 @@ func syncVipQos(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
+type vipQosRemoveNic struct {}
+func (vipQos *vipQosRemoveNic) RemoveNic(nicName string) error {
+	bash := utils.Bash{
+		Command:fmt.Sprintf("sudo tc qdisc del dev %s root;", nicName),
+	}
+	bash.Run()
+
+	delete(totalQosRules, nicName)
+	return nil
+}
+
 
 func init() {
+	RegisterRemoveNicCallback(&vipQosRemoveNic{})
 	RegisterPrometheusCollector(NewVipPrometheusCollector())
 }
 

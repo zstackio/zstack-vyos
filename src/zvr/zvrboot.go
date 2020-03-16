@@ -19,6 +19,7 @@ const (
 	TMP_LOCATION_FOR_ESX = "/tmp/bootstrap-info.json"
 	// use this rule number to set a rule which confirm route entry work issue ZSTAC-6170
 	ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER = 9999
+	NETWORK_HEALTH_STATUS_PATH = "/home/vyos/zvr/.duplicate"
 )
 
 type nic struct {
@@ -32,6 +33,7 @@ type nic struct {
 	l2type string
 	l2PhysicalInterface string
 	vni int
+	mtu int
 }
 
 var bootstrapInfo map[string]interface{} = make(map[string]interface{})
@@ -134,6 +136,21 @@ func resetVyos()  {
 	//server.RunVyosScriptAsUserVyos("load /opt/vyatta/etc/config.boot.default\nsave")
 }
 
+func checkIpDuplicate () {
+	// duplicate ip check
+	dupinfo := ""
+	for _, nic := range nics {
+		if utils.CheckIpDuplicate(nic.name, nic.ip) {
+			dupinfo = fmt.Sprintf("%s duplicate ip %s in nic %s\n", dupinfo, nic.ip, nic.name)
+		}
+	}
+	if !strings.EqualFold(dupinfo, "") {
+		log.Error(dupinfo)
+		err := utils.MkdirForFile(NETWORK_HEALTH_STATUS_PATH, 0755); utils.PanicOnError(err)
+		err = ioutil.WriteFile(NETWORK_HEALTH_STATUS_PATH,  []byte(dupinfo), 0755); utils.PanicOnError(err)
+	}
+}
+
 func configureVyos() {
 	resetVyos()
 	var defaultNic, defaultGW string = "", ""
@@ -155,6 +172,10 @@ func configureVyos() {
 	eth0.ip, ok = mgmtNic["ip"].(string); utils.PanicIfError(ok, errors.New("cannot find 'ip' field for the management nic"))
 	eth0.isDefaultRoute = mgmtNic["isDefaultRoute"].(bool)
 	eth0.gateway = mgmtNic["gateway"].(string)
+	if mtuFloat, ok := mgmtNic["mtu"].(float64); ok {
+		eth0.mtu = int(mtuFloat)
+	}
+
 	if mgmtNic["l2type"] != nil {
 		eth0.l2type = mgmtNic["l2type"].(string)
 		eth0.category = mgmtNic["category"].(string)
@@ -178,6 +199,9 @@ func configureVyos() {
 			n.ip, ok = onic["ip"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'ip' field for the nic[name:%s]", n.name))
 			n.gateway = onic["gateway"].(string)
 			n.isDefaultRoute = onic["isDefaultRoute"].(bool)
+			if mtuFloat, ok := mgmtNic["mtu"].(float64); ok {
+				n.mtu = int(mtuFloat)
+			}
 			if onic["l2type"] != nil {
 				n.l2type = onic["l2type"].(string)
 				n.category = onic["category"].(string)
@@ -307,6 +331,10 @@ func configureVyos() {
 		tree.Setf("interfaces ethernet %s duplex auto", nic.name)
 		tree.Setf("interfaces ethernet %s smp_affinity auto", nic.name)
 		tree.Setf("interfaces ethernet %s speed auto", nic.name)
+		if nic.mtu != 0 {
+			tree.Setf("interfaces ethernet %s mtu %d", nic.name,nic.mtu)
+		}
+
 		if nic.isDefaultRoute {
 			tree.Setf("system gateway-address %v", nic.gateway)
 		}
@@ -425,6 +453,8 @@ func configureVyos() {
 
 	tree.Apply(true)
 
+	checkIpDuplicate()
+
 	arping := func(nicname, ip, gateway string) {
 		b := utils.Bash{Command: fmt.Sprintf("sudo arping -q -A -w 1.5 -c 1 -I %s %s > /dev/null", nicname, ip) }
 		b.Run()
@@ -442,7 +472,7 @@ func configureVyos() {
 	} else {
 		mgmtNodeIpStr := mgmtNodeIp.(string)
 		if (utils.CheckMgmtCidrContainsIp(mgmtNodeIpStr, mgmtNic) == false) {
-			err := utils.SetZStackRoute(mgmtNodeIpStr, "eth0", mgmtNic["gateway"].(string));
+			err := utils.SetZStackRoute(mgmtNodeIpStr, "eth0", mgmtNic["gateway"].(string))
 			utils.PanicOnError(err)
 		} else if utils.GetNicForRoute(mgmtNodeIpStr) != "eth0" {
 			err := utils.SetZStackRoute(mgmtNodeIpStr, "eth0", ""); utils.PanicOnError(err)
@@ -477,6 +507,10 @@ func startZvr()  {
 	}
 	b.Run()
 	b.PanicIfError()
+}
+
+func init() {
+	os.Remove(NETWORK_HEALTH_STATUS_PATH)
 }
 
 func main() {
