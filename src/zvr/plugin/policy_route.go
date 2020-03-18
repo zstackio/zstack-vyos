@@ -289,9 +289,7 @@ func deletePolicyRoutes()  {
 func createPolicyRouteTables(tableIds []int) error {
 	routeTablesCmds := []string{}
 	for _, rt := range tableIds {
-		routeTablesCmds = append(routeTablesCmds, fmt.Sprintf("sudo iptables -t mangle -N %s", getPolicyRouteTableName(rt)))
-		routeTablesCmds = append(routeTablesCmds, fmt.Sprintf(IPTABLES_MANGLE + " -A %s -m mark --mark 0 -j MARK --set-mark %d", getPolicyRouteTableName(rt), rt))
-		routeTablesCmds = append(routeTablesCmds, fmt.Sprintf(IPTABLES_MANGLE + " -A %s -j ACCEPT", getPolicyRouteTableName(rt)))
+		routeTablesCmds = append(routeTablesCmds, fmt.Sprintf("sudo ip route flush table %d", rt))
 		routeTablesCmds = append(routeTablesCmds, fmt.Sprintf("ip rule add fwmark %d table %d", rt, rt))
 	}
 	routeTablesCmd := strings.Join(routeTablesCmds, ";")
