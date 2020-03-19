@@ -15,12 +15,14 @@ import (
 	"regexp"
 	prom "github.com/prometheus/client_golang/prometheus"
 	haproxy "github.com/bcicen/go-haproxy"
+	cidrman "github.com/EvilSuperstars/go-cidrman"
 	"sort"
 	log "github.com/Sirupsen/logrus"
 	"net/http"
 	"time"
 	"encoding/json"
 	"errors"
+	"crypto/md5"
 )
 
 const (
@@ -83,6 +85,7 @@ type HaproxyListener struct {
 	firewallDes string
 	maxConnect string
 	maxSession int   //same to maxConnect
+	aclPath string
 }
 
 // the listener implemented with gobetween
@@ -94,6 +97,7 @@ type GBListener struct {
 	apiPort string // restapi binding port range from 50000-60000
 	maxConnect string
 	maxSession int   //same to maxConnect
+	aclPath string
 }
 
 func getGBApiPort(confPath string, pidPath string) (port string) {
@@ -142,6 +146,7 @@ func getListener(lb lbInfo) Listener {
 	pidPath := makeLbPidFilePath(lb)
 	confPath := makeLbConfFilePath(lb)
 	sockPath := makeLbSocketPath(lb)
+	aclPath := makeLbAclConfFilePath(lb)
 	des := makeLbFirewallRuleDescription(lb)
 
 	switch lb.Mode {
@@ -151,13 +156,29 @@ func getListener(lb lbInfo) Listener {
 			log.Errorf("there is no free port for rest api for listener: %v \n", lb.ListenerUuid)
 			return nil
 		}
-		return &GBListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, apiPort:port}
+		return &GBListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, apiPort:port, aclPath:aclPath}
 	case "tcp", "https", "http":
-		return &HaproxyListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, sockPath:sockPath}
+		return &HaproxyListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, sockPath:sockPath, aclPath:aclPath}
 	default:
 		utils.PanicOnError(fmt.Errorf("No such listener %v", lb.Mode))
 	}
 	return nil
+}
+
+/*transform ip range into a series of cidr networks*/
+func ipRange2Cidrs(ipEntry []string) []string {
+	entry := make([]string, 0)
+	for _, e := range ipEntry {
+		if strings.Contains(e, "-") {
+			ips := strings.Split(e, "-")
+			o, err := cidrman.IPRangeToCIDRs(ips[0], ips[1]); utils.PanicOnError(err)
+			entry = append(entry, o...)
+		} else {
+			entry = append(entry, e)
+		}
+	}
+
+	return entry
 }
 
 func parseListenerPrameter(lb lbInfo) (map[string]interface{}, error) {
@@ -226,7 +247,6 @@ group users
 daemon
 stats socket {{.SocketPath}} user vyos
 ulimit-n {{.ulimit}}
-
 defaults
 log global
 option tcplog
@@ -245,6 +265,16 @@ option forwardfor
 timeout client {{.ConnectionIdleTimeout}}s
 timeout server {{.ConnectionIdleTimeout}}s
 timeout connect 60s
+{{- if eq .AccessControlStatus "enable" }}
+#acl status: {{.AccessControlStatus}} ip entty md5: {{.AclEntryMd5}}
+acl {{.ListenerUuid}} src -f {{.AclConfPath}}
+{{- if eq .AclType "black" }}
+tcp-request connection reject if {{.ListenerUuid}}
+{{- else }}
+tcp-request connection reject unless {{.ListenerUuid}}
+{{- end }}
+{{- end }}
+
 balance {{.BalancerAlgorithm}}
 {{- if eq .Mode "https"}}
 bind {{.Vip}}:{{.LoadBalancerPort}} ssl crt {{.CertificatePath}}
@@ -267,7 +297,7 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 {{- end }}
 {{- end }}`
 
-	var buf bytes.Buffer
+	var buf, acl_buf bytes.Buffer
 	var m map[string]interface{}
 
 	tmpl, err := template.New("conf").Parse(conf); utils.PanicOnError(err)
@@ -279,8 +309,30 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 	}
 	m["ulimit"] = getListenerMaxCocurrenceSocket(this.maxConnect)
 
-	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
+	if _, exist := m["AccessControlStatus"]; !exist {
+		m["AccessControlStatus"] = "disable"
+	}
 
+	if _, exist := m["AclType"]; !exist {
+		m["AclType"] = "black"
+	}
+
+	if _, exist := m["AclEntry"]; !exist {
+		m["AclEntry"] = ""
+	}
+	if strings.EqualFold(m["AclEntry"].(string), "") {
+		m["AccessControlStatus"] = "disable"
+	} else {
+		m["AclConfPath"] = this.aclPath
+		m["AclEntryMd5"] =  md5.Sum([]byte(m["AclEntry"].(string)))
+	}
+	log.Debugf("lb aclstatus:%v type: %v entry: %v ", m["AccessControlStatus"].(string), m["AclType"], m["AclEntry"])
+
+	err = utils.MkdirForFile(this.aclPath, 0755); utils.PanicOnError(err)
+	acl_buf.WriteString(strings.Join(ipRange2Cidrs(strings.Split(m["AclEntry"].(string), ",")),"\n"))
+	err = ioutil.WriteFile(this.aclPath, acl_buf.Bytes(), 0755); utils.PanicOnError(err)
+
+	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
 	err = utils.MkdirForFile(this.pidPath, 0755); utils.PanicOnError(err)
 	err = utils.MkdirForFile(this.confPath, 0755); utils.PanicOnError(err)
 	err = ioutil.WriteFile(this.confPath, buf.Bytes(), 0755); utils.PanicOnError(err)
@@ -386,7 +438,6 @@ func cleanInternalFirewallRule(tree *server.VyosConfigTree, des string) (err err
 	return
 }
 
-
 /*
 setlb:
 */
@@ -396,6 +447,7 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 	}
 
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
+
 	tree := server.NewParserFromShowConfiguration().Tree
 
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r == nil {
@@ -406,15 +458,13 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 			fmt.Sprintf("protocol tcp"),
 			"action accept",
 		)
-
+		configureInternalFirewallRule(tree, this.firewallDes, fmt.Sprintf("description %v", this.firewallDes),
+			fmt.Sprintf("destination address %v", this.lb.Vip),
+			fmt.Sprintf("destination port %v", this.lb.LoadBalancerPort),
+			fmt.Sprintf("protocol tcp"),
+			"action accept",
+		)
 	}
-
-	configureInternalFirewallRule(tree, this.firewallDes, fmt.Sprintf("description %v", this.firewallDes),
-		fmt.Sprintf("destination address %v", this.lb.Vip),
-		fmt.Sprintf("destination port %v", this.lb.LoadBalancerPort),
-		fmt.Sprintf("protocol tcp"),
-		"action accept",
-	)
 
 	dropRuleDes := fmt.Sprintf("lb-%v-%s-drop", this.lb.LbUuid, this.lb.ListenerUuid)
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", dropRuleDes); r != nil {
@@ -463,6 +513,10 @@ func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error
 		err = os.Remove(this.sockPath); utils.LogError(err)
 	}
 
+	if e, _ := utils.PathExists(this.aclPath); e {
+		err = os.Remove(this.aclPath); utils.LogError(err)
+	}
+
 	return 0, err
 }
 
@@ -501,7 +555,25 @@ backend_connection_timeout = "60s"
 [servers.{{.ListenerUuid}}.udp] # (optional)
 max_requests  = 0     # (optional) if > 0 accepts no more requests than max_requests and closes session (since 0.5.0)
 max_responses = 0    # (required) if > 0 accepts no more responses that max_responses from backend and closes session (will be optional since 0.5.0)
-
+{{if eq .AccessControlStatus "enable"}}
+    [servers.{{.ListenerUuid}}.access]
+    {{- if eq .AclType "black" }}
+    default = "allow"
+    {{- else }}
+    default = "deny"
+    {{- end }}
+    rules = [
+    {{- if eq .AclType "black" }}
+    {{- range $entry := $.AclEntry }}
+        "deny {{$entry}}",
+    {{- end }}
+    {{- else }}
+    {{- range $entry := $.AclEntry }}
+        "allow {{$entry}}",
+    {{- end }}
+    {{- end }}
+    ]
+{{end}}
     [servers.{{.ListenerUuid}}.discovery]
     kind = "static"
     failpolicy = "keeplast"
@@ -535,8 +607,27 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 	m, err = parseListenerPrameter(lb);utils.PanicOnError(err)
 	m, err = this.adaptListenerParameter(m);utils.PanicOnError(err)
 	m["ApiPort"] = this.apiPort
+	if _, exist := m["AccessControlStatus"]; !exist {
+		m["AccessControlStatus"] = "disable"
+	}
+
+	if _, exist := m["AclType"]; !exist {
+		m["AclType"] = "black"
+	}
+
+	if _, exist := m["AclEntry"]; !exist {
+		m["AclEntry"] = ""
+	}
+
+	if strings.EqualFold(m["AclEntry"].(string), "") {
+		m["AccessControlStatus"] = "disable"
+	} else {
+		m["AclEntry"] = ipRange2Cidrs(strings.Split(m["AclEntry"].(string), ","))
+	}
+
 	this.maxConnect = m["MaxConnection"].(string)
 	this.maxSession, _ = strconv.Atoi(this.maxConnect)
+	log.Debugf("lb aclstatus:%v type: %v entry: %v ", m["AccessControlStatus"].(string), m["AclType"], m["AclEntry"])
 
 	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
 	err = utils.MkdirForFile(this.pidPath, 0755); utils.PanicOnError(err)
@@ -617,7 +708,6 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
-
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r == nil {
 		/*for lb statistics with restful api*/
 		tree.SetFirewallOnInterface(nicname, "local",
@@ -647,7 +737,6 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 		tree.AttachFirewallToInterface(nicname, "local")
 		tree.Apply(false)
 	}
-
 	return nil
 }
 
@@ -699,6 +788,9 @@ func (this *GBListener) postActionListenerServiceStop() (ret int, err error) {
 	return 0, err
 }
 
+func makeLbAclConfFilePath(lb lbInfo) string {
+	return filepath.Join(LB_ROOT_DIR, "conf", fmt.Sprintf("listener-%v-acl.cfg", lb.ListenerUuid))
+}
 
 func makeLbPidFilePath(lb lbInfo) string {
 	return filepath.Join(LB_ROOT_DIR, "pid", fmt.Sprintf("lb-%s-listener-%s.pid", lb.LbUuid, lb.ListenerUuid))
