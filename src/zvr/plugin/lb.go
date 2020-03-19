@@ -21,6 +21,7 @@ import (
 	"time"
 	"encoding/json"
 	"errors"
+	"net"
 )
 
 const (
@@ -386,7 +387,78 @@ func cleanInternalFirewallRule(tree *server.VyosConfigTree, des string) (err err
 	return
 }
 
+func getAclInfor(lb lbInfo) (status, aclType, ipEntry string) {
+	var m map[string]interface{}
+	var err error
+	m, err = parseListenerPrameter(lb);utils.PanicOnError(err)
+	if _, exist := m["accessControlStatus"]; exist {
+		status = m["accessControlStatus"].(string)
+		aclType = m["aclType"].(string)
+		ipEntry = m["aclEntry"].(string)
+	} else {
+		status = "disable"
+		ipEntry = ""
+		aclType = ""
+	}
+	return status, aclType, ipEntry
+}
+func makeAclGroup(tree *server.VyosConfigTree, ipstr, groupName string) {
+	groups := make([]string, 0)
+	ips := strings.Split(ipstr, IP_SPLIT)
+	for _, ip := range(ips)  {
+		if _, cidr, err := net.ParseCIDR(ip); err == nil {
+			mini := cidr.IP
+			max := utils.GetUpperIp(*cidr)
+			groups = append(groups, fmt.Sprintf("%s-%s", mini.String(), max.String()))
+		} else {
+			groups = append(groups, fmt.Sprintf("%s", ip))
+		}
+	}
+	tree.SetGroupsCheckExisting("address", groupName, groups)
+}
 
+func configureAcl(tree *server.VyosConfigTree, nicname , aclType , source, dest, protocol, port, des string) (error) {
+	if utils.IsSkipVyosIptables() {
+		return nil
+	}
+
+	rules := make([]string, 0)
+
+	rules = append(rules, fmt.Sprintf("protocol %v", protocol))
+	rules = append(rules, fmt.Sprintf("destination address %s", dest))
+	rules = append(rules, fmt.Sprintf("description %v-acl", des))
+	rules = append(rules, fmt.Sprintf("destination port %v", port))
+	if strings.Contains(source, IP_SPLIT) {
+		groupName := fmt.Sprintf("%s-group", des)
+		makeAclGroup(tree, source, groupName)
+		rules = append(rules, fmt.Sprintf("source group address-group %s", groupName))
+	} else {
+		rules = append(rules, fmt.Sprintf("source address %s", source))
+	}
+
+	if aclType == "black" {
+		rules = append(rules, "action reject")
+		tree.SetFirewallOnInterface(nicname, "local", rules...)
+		tree.SetFirewallOnInterface(nicname, "local",
+			fmt.Sprintf("description %v", des),
+			fmt.Sprintf("destination address %v", dest),
+			fmt.Sprintf("destination port %v", port),
+			fmt.Sprintf("protocol %v", protocol),
+			"action accept",
+		)
+	} else {
+		rules = append(rules, "action accept")
+		tree.SetFirewallOnInterface(nicname, "local", rules...)
+		tree.SetFirewallOnInterface(nicname, "local",
+			fmt.Sprintf("description %v", des),
+			fmt.Sprintf("destination address %v", dest),
+			fmt.Sprintf("destination port %v", port),
+			fmt.Sprintf("protocol %v", protocol),
+			"action reject",
+		)
+	}
+	return nil
+}
 /*
 setlb:
 */
@@ -396,9 +468,21 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 	}
 
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
+
 	tree := server.NewParserFromShowConfiguration().Tree
 
-	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r == nil {
+	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r != nil {
+		r.Delete()
+	}
+
+	if r := tree.FindFirewallRuleByDescription(nicname, "local", fmt.Sprintf("description %v-acl", this.firewallDes)); r != nil {
+		r.Delete()
+	}
+
+	status, aclType, entry := getAclInfor(this.lb)
+	if strings.EqualFold(status, "enable") && !strings.EqualFold(entry, "") {
+		err = configureAcl(tree, nicname, aclType, entry, this.lb.Vip, strconv.Itoa(this.lb.LoadBalancerPort), "tcp", this.firewallDes); utils.PanicOnError(err)
+	} else {
 		tree.SetFirewallOnInterface(nicname, "local",
 			fmt.Sprintf("description %v", this.firewallDes),
 			fmt.Sprintf("destination address %v", this.lb.Vip),
@@ -406,7 +490,6 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 			fmt.Sprintf("protocol tcp"),
 			"action accept",
 		)
-
 	}
 
 	configureInternalFirewallRule(tree, this.firewallDes, fmt.Sprintf("description %v", this.firewallDes),
@@ -618,7 +701,18 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
 
-	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r == nil {
+	if r := tree.FindFirewallRuleByDescription(nicname, "local", fmt.Sprintf("description %v-acl", this.firewallDes)); r != nil {
+		r.Delete()
+	}
+
+	status, aclType, entry := getAclInfor(this.lb)
+	if strings.EqualFold(status, "enable") && !strings.EqualFold(entry, "") {
+		if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r != nil {
+			r.Delete()
+		}
+
+		err = configureAcl(tree, nicname, aclType, entry, this.lb.Vip, strconv.Itoa(this.lb.LoadBalancerPort), "udp", this.firewallDes); utils.PanicOnError(err)
+	} else if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r == nil {
 		/*for lb statistics with restful api*/
 		tree.SetFirewallOnInterface(nicname, "local",
 			fmt.Sprintf("description %v", this.firewallDes),
@@ -643,11 +737,10 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 			fmt.Sprintf("protocol udp"),
 			"action accept",
 		)
-
-		tree.AttachFirewallToInterface(nicname, "local")
-		tree.Apply(false)
 	}
 
+	tree.AttachFirewallToInterface(nicname, "local")
+	tree.Apply(false)
 	return nil
 }
 
