@@ -227,7 +227,11 @@ group users
 daemon
 stats socket {{.SocketPath}} user vyos
 ulimit-n {{.ulimit}}
-
+{{if eq .AccessControlStatus "enable"}}
+#acl status: {{.AccessControlStatus}} ip entty: {{.AclEntry}}
+{{}}
+#acl status: {{.AccessControlStatus}}
+{{end}}
 defaults
 log global
 option tcplog
@@ -391,10 +395,10 @@ func getAclInfor(lb lbInfo) (status, aclType, ipEntry string) {
 	var m map[string]interface{}
 	var err error
 	m, err = parseListenerPrameter(lb);utils.PanicOnError(err)
-	if _, exist := m["accessControlStatus"]; exist {
-		status = m["accessControlStatus"].(string)
-		aclType = m["aclType"].(string)
-		ipEntry = m["aclEntry"].(string)
+	if s, exist := m["AccessControlStatus"]; exist {
+		status = s.(string)
+		aclType = m["AclType"].(string)
+		ipEntry = m["AclEntry"].(string)
 	} else {
 		status = "disable"
 		ipEntry = ""
@@ -480,6 +484,7 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 	}
 
 	status, aclType, entry := getAclInfor(this.lb)
+        log.Debugf("acl status:%v type:%v entry:%v",status, aclType, entry)
 	if strings.EqualFold(status, "enable") && !strings.EqualFold(entry, "") {
 		err = configureAcl(tree, nicname, aclType, entry, this.lb.Vip, strconv.Itoa(this.lb.LoadBalancerPort), "tcp", this.firewallDes); utils.PanicOnError(err)
 	} else {
@@ -584,7 +589,11 @@ backend_connection_timeout = "60s"
 [servers.{{.ListenerUuid}}.udp] # (optional)
 max_requests  = 0     # (optional) if > 0 accepts no more requests than max_requests and closes session (since 0.5.0)
 max_responses = 0    # (required) if > 0 accepts no more responses that max_responses from backend and closes session (will be optional since 0.5.0)
-
+{{if eq .AccessControlStatus "enable"}}
+#acl status: {{.AccessControlStatus}} ip entty: {{.AclEntry}}
+{{}}
+#acl status: {{.AccessControlStatus}}
+{{end}}
     [servers.{{.ListenerUuid}}.discovery]
     kind = "static"
     failpolicy = "keeplast"
