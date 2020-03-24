@@ -181,7 +181,7 @@ func configureVyos() {
 			n.ip, ok = onic["ip"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'ip' field for the nic[name:%s]", n.name))
 			n.gateway = onic["gateway"].(string)
 			n.isDefaultRoute = onic["isDefaultRoute"].(bool)
-			mtuFloat := mgmtNic["mtu"].(float64)
+			mtuFloat := onic["mtu"].(float64)
 			n.mtu = int(mtuFloat)
 			if onic["l2type"] != nil {
 				n.l2type = onic["l2type"].(string)
