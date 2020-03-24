@@ -84,6 +84,9 @@ type HaproxyListener struct {
 	firewallDes string
 	maxConnect string
 	maxSession int   //same to maxConnect
+	accessControlStatus string
+	aclType string
+	aclEntry string
 }
 
 // the listener implemented with gobetween
@@ -95,6 +98,9 @@ type GBListener struct {
 	apiPort string // restapi binding port range from 50000-60000
 	maxConnect string
 	maxSession int   //same to maxConnect
+	accessControlStatus string
+	aclType string
+	aclEntry string
 }
 
 func getGBApiPort(confPath string, pidPath string) (port string) {
@@ -229,7 +235,7 @@ stats socket {{.SocketPath}} user vyos
 ulimit-n {{.ulimit}}
 {{if eq .AccessControlStatus "enable"}}
 #acl status: {{.AccessControlStatus}} ip entty: {{.AclEntry}}
-{{}}
+{{else}}
 #acl status: {{.AccessControlStatus}}
 {{end}}
 defaults
@@ -283,6 +289,23 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 		m["BalancerAlgorithm"] = "static-rr"
 	}
 	m["ulimit"] = getListenerMaxCocurrenceSocket(this.maxConnect)
+
+	if _, exist := m["AccessControlStatus"]; !exist {
+		m["AccessControlStatus"] = "disable"
+	}
+
+	if _, exist := m["AclType"]; !exist {
+		m["AclType"] = "black"
+	}
+
+	if _, exist := m["AclEntry"]; !exist {
+		m["AclEntry"] = ""
+	}
+	log.Debugf("lb aclstatus:%v type: %v entry: %v ", m["AccessControlStatus"].(string), m["AclType"], m["AclEntry"])
+
+	this.accessControlStatus = m["AccessControlStatus"].(string)
+	this.aclType = m["AclType"].(string)
+	this.aclEntry = m["AclEntry"].(string)
 
 	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
 
@@ -391,21 +414,6 @@ func cleanInternalFirewallRule(tree *server.VyosConfigTree, des string) (err err
 	return
 }
 
-func getAclInfor(lb lbInfo) (status, aclType, ipEntry string) {
-	var m map[string]interface{}
-	var err error
-	m, err = parseListenerPrameter(lb);utils.PanicOnError(err)
-	if s, exist := m["AccessControlStatus"]; exist {
-		status = s.(string)
-		aclType = m["AclType"].(string)
-		ipEntry = m["AclEntry"].(string)
-	} else {
-		status = "disable"
-		ipEntry = ""
-		aclType = ""
-	}
-	return status, aclType, ipEntry
-}
 func makeAclGroup(tree *server.VyosConfigTree, ipstr, groupName string) {
 	groups := make([]string, 0)
 	ips := strings.Split(ipstr, IP_SPLIT)
@@ -421,7 +429,7 @@ func makeAclGroup(tree *server.VyosConfigTree, ipstr, groupName string) {
 	tree.SetGroupsCheckExisting("address", groupName, groups)
 }
 
-func configureAcl(tree *server.VyosConfigTree, nicname , aclType , source, dest, protocol, port, des string) (error) {
+func configureAcl(tree *server.VyosConfigTree, nicname , aclType , source, dest, port, protocol, des string) (error) {
 	if utils.IsSkipVyosIptables() {
 		return nil
 	}
@@ -433,7 +441,7 @@ func configureAcl(tree *server.VyosConfigTree, nicname , aclType , source, dest,
 	rules = append(rules, fmt.Sprintf("description %v-acl", des))
 	rules = append(rules, fmt.Sprintf("destination port %v", port))
 	if strings.Contains(source, IP_SPLIT) {
-		groupName := fmt.Sprintf("%s-group", des)
+		groupName := fmt.Sprintf("%s-%s-group", dest, port)
 		makeAclGroup(tree, source, groupName)
 		rules = append(rules, fmt.Sprintf("source group address-group %s", groupName))
 	} else {
@@ -483,7 +491,7 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 		r.Delete()
 	}
 
-	status, aclType, entry := getAclInfor(this.lb)
+	status, aclType, entry := this.accessControlStatus, this.aclType, this.aclEntry
         log.Debugf("acl status:%v type:%v entry:%v",status, aclType, entry)
 	if strings.EqualFold(status, "enable") && !strings.EqualFold(entry, "") {
 		err = configureAcl(tree, nicname, aclType, entry, this.lb.Vip, strconv.Itoa(this.lb.LoadBalancerPort), "tcp", this.firewallDes); utils.PanicOnError(err)
@@ -591,7 +599,7 @@ max_requests  = 0     # (optional) if > 0 accepts no more requests than max_requ
 max_responses = 0    # (required) if > 0 accepts no more responses that max_responses from backend and closes session (will be optional since 0.5.0)
 {{if eq .AccessControlStatus "enable"}}
 #acl status: {{.AccessControlStatus}} ip entty: {{.AclEntry}}
-{{}}
+{{else}}
 #acl status: {{.AccessControlStatus}}
 {{end}}
     [servers.{{.ListenerUuid}}.discovery]
@@ -627,6 +635,21 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 	m, err = parseListenerPrameter(lb);utils.PanicOnError(err)
 	m, err = this.adaptListenerParameter(m);utils.PanicOnError(err)
 	m["ApiPort"] = this.apiPort
+	if _, exist := m["AccessControlStatus"]; !exist {
+		m["AccessControlStatus"] = "disable"
+	}
+
+	if _, exist := m["AclType"]; !exist {
+		m["AclType"] = "black"
+	}
+
+	if _, exist := m["AclEntry"]; !exist {
+		m["AclEntry"] = ""
+	}
+
+	this.accessControlStatus = m["AccessControlStatus"].(string)
+	this.aclType = m["AclType"].(string)
+	this.aclEntry = m["AclEntry"].(string)
 	this.maxConnect = m["MaxConnection"].(string)
 	this.maxSession, _ = strconv.Atoi(this.maxConnect)
 
@@ -714,7 +737,7 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 		r.Delete()
 	}
 
-	status, aclType, entry := getAclInfor(this.lb)
+	status, aclType, entry := this.accessControlStatus, this.aclType, this.aclEntry
 	if strings.EqualFold(status, "enable") && !strings.EqualFold(entry, "") {
 		if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r != nil {
 			r.Delete()
