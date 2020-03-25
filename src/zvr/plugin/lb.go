@@ -487,7 +487,7 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 		r.Delete()
 	}
 
-	if r := tree.FindFirewallRuleByDescription(nicname, "local", fmt.Sprintf("description %v-acl", this.firewallDes)); r != nil {
+	if r := tree.FindFirewallRuleByDescription(nicname, "local", fmt.Sprintf("%v-acl", this.firewallDes)); r != nil {
 		r.Delete()
 	}
 
@@ -733,7 +733,7 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
 
-	if r := tree.FindFirewallRuleByDescription(nicname, "local", fmt.Sprintf("description %v-acl", this.firewallDes)); r != nil {
+	if r := tree.FindFirewallRuleByDescription(nicname, "local", fmt.Sprintf("%v-acl", this.firewallDes)); r != nil {
 		r.Delete()
 	}
 
