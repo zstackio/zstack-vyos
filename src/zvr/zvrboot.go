@@ -312,8 +312,10 @@ func configureVyos() {
 		tree.Setf("interfaces ethernet %s duplex auto", nic.name)
 		tree.Setf("interfaces ethernet %s smp_affinity auto", nic.name)
 		tree.Setf("interfaces ethernet %s speed auto", nic.name)
-		if nic.mtu != 0{
-			tree.Setf("interfaces ethernet %s mtu %d", nic.name,nic.mtu)
+		if nic.mtu != 0 {
+			b := utils.NewBash()
+			b.Command = fmt.Sprintf("ip link set mtu %d dev '%s'", nic.mtu, nic.name)
+			b.Run()
 		}
 		if nic.isDefaultRoute {
 			tree.Setf("system gateway-address %v", nic.gateway)
