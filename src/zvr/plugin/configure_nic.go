@@ -141,7 +141,9 @@ func configureNic(ctx *server.CommandContext) interface{} {
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s smp_affinity auto", nicname)
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s speed auto", nicname)
 		if nic.Mtu != 0 {
-			tree.SetfWithoutCheckExisting("interfaces ethernet %s mtu %d", nicname, nic.Mtu)
+			b := utils.NewBash()
+			b.Command = fmt.Sprintf("ip link set mtu %d dev '%s'", nic.Mtu, nicname)
+			b.Run()
 		}
 
 		if utils.IsSkipVyosIptables() {
