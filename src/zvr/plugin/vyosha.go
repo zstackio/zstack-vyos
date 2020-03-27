@@ -294,6 +294,8 @@ func init() {
 func VyosHaEntryPoint() {
 	server.RegisterAsyncCommandHandler(SET_VYOSHA_PATH, server.VyosLock(setVyosHaHandler))
 	if utils.IsHaEabled() {
+		/* set as unknown, then getKeepAlivedStatusTask will get master or backup, then will the right script  */
+		keepAlivedStatus = KeepAlivedStatus_Unknown
 		go getKeepAlivedStatusTask()
 		go keepAlivedCheckTask()
 	}
