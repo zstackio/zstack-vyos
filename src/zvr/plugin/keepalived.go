@@ -36,14 +36,14 @@ func (s KeepAlivedStatus) string() string {
 }
 
 const (
-	KeepalivedRootPath = "/home/vyos/zvr/keepalived/"
-	KeepalivedConfigPath = "/home/vyos/zvr/keepalived/conf/"
-	KeepalivedSciptPath = "/home/vyos/zvr/keepalived/script/"
-	KeepalivedConfigFile = "/home/vyos/zvr/keepalived/conf/keepalived.conf"
-	KeepalivedPidFile = "/var/run/keepalived.pid"
-	KeepalivedBinaryFile = "/usr/sbin/keepalived"
-	KeepalivedSciptNotifyMaster = "/home/vyos/zvr/keepalived/script/notifyMaster"
-	KeepalivedSciptNotifyBackup = "/home/vyos/zvr/keepalived/script/notifyBackup"
+	KeepalivedRootPath           = "/home/vyos/zvr/keepalived/"
+	KeepalivedConfigPath         = "/home/vyos/zvr/keepalived/conf/"
+	KeepalivedSciptPath          = "/home/vyos/zvr/keepalived/script/"
+	KeepalivedConfigFile         = "/home/vyos/zvr/keepalived/conf/keepalived.conf"
+	KeepalivedPidFile            = "/var/run/keepalived.pid"
+	KeepalivedBinaryFile         = "/usr/sbin/keepalived"
+	KeepalivedScriptNotifyMaster = "/home/vyos/zvr/keepalived/script/notifyMaster"
+	KeepalivedScriptNotifyBackup = "/home/vyos/zvr/keepalived/script/notifyBackup"
 )
 
 type KeepalivedNotify struct {
@@ -152,11 +152,11 @@ func (k *KeepalivedNotify) CreateMasterScript () error {
 	var buf bytes.Buffer
 	err = tmpl.Execute(&buf, k); utils.PanicOnError(err)
 
-	err = ioutil.WriteFile(KeepalivedSciptNotifyMaster, buf.Bytes(), 0755); utils.PanicOnError(err)
+	err = ioutil.WriteFile(KeepalivedScriptNotifyMaster, buf.Bytes(), 0755); utils.PanicOnError(err)
 
 	/* add log */
 	bash := utils.Bash{
-		Command: fmt.Sprintf("cat %s", KeepalivedSciptNotifyMaster),
+		Command: fmt.Sprintf("cat %s", KeepalivedScriptNotifyMaster),
 	}
 	bash.Run()
 
@@ -172,11 +172,11 @@ func (k *KeepalivedNotify) CreateBackupScript () error {
 	var buf bytes.Buffer
 	err = tmpl.Execute(&buf, k); utils.PanicOnError(err)
 
-	err = ioutil.WriteFile(KeepalivedSciptNotifyBackup, buf.Bytes(), 0755); utils.PanicOnError(err)
+	err = ioutil.WriteFile(KeepalivedScriptNotifyBackup, buf.Bytes(), 0755); utils.PanicOnError(err)
 
 	/* add log */
 	bash := utils.Bash{
-		Command: fmt.Sprintf("cat %s", KeepalivedSciptNotifyBackup),
+		Command: fmt.Sprintf("cat %s", KeepalivedScriptNotifyBackup),
 	}
 	bash.Run()
 
@@ -197,12 +197,12 @@ type KeepalivedConf struct {
 func NewKeepalivedConf(hearbeatNic, LocalIp, PeerIp string, MonitorIps []string, Interval int) *KeepalivedConf {
 	kc := &KeepalivedConf{
 		HeartBeatNic: hearbeatNic,
-		Interval:  Interval,
+		Interval:     Interval,
 		MonitorIps:   MonitorIps,
-		LocalIp:   LocalIp,
-		PeerIp: PeerIp,
-		MasterScript: KeepalivedSciptNotifyMaster,
-		BackupScript: KeepalivedSciptNotifyBackup,
+		LocalIp:      LocalIp,
+		PeerIp:       PeerIp,
+		MasterScript: KeepalivedScriptNotifyMaster,
+		BackupScript: KeepalivedScriptNotifyBackup,
 	}
 
 	return kc
@@ -217,7 +217,7 @@ global_defs {
 
 vrrp_script monitor_zvr {
        script "/bin/ps aux | /bin/grep '/opt/vyatta/sbin/zvr' | /bin/grep -v grep > /dev/null"        # cheaper than pidof
-       interval 1                      # check every 2 seconds
+       interval 2                      # check every 2 seconds
        fall 2                          # require 2 failures for KO
        rise 2                          # require 2 successes for OK
 }
@@ -225,7 +225,7 @@ vrrp_script monitor_zvr {
 {{ range .MonitorIps }}
 vrrp_script monitor_{{.}} {
 	script "/bin/ping {{.}} -w 1 -c 1 > /dev/null"
-	interval 1
+	interval 2
 	weight -2
 	fall 3
 	rise 3
@@ -327,11 +327,11 @@ func callStatusChangeScripts()  {
 	log.Debugf("!!! KeepAlived status change to %s", keepAlivedStatus.string())
 	if keepAlivedStatus == KeepAlivedStatus_Master {
 		bash = utils.Bash{
-			Command: fmt.Sprintf("cat %s; %s MASTER", KeepalivedSciptNotifyMaster, KeepalivedSciptNotifyMaster),
+			Command: fmt.Sprintf("cat %s; %s MASTER", KeepalivedScriptNotifyMaster, KeepalivedScriptNotifyMaster),
 		}
 	} else if keepAlivedStatus == KeepAlivedStatus_Backup {
 		bash = utils.Bash{
-			Command: fmt.Sprintf("cat %s; %s BACKUP", KeepalivedSciptNotifyBackup, KeepalivedSciptNotifyBackup),
+			Command: fmt.Sprintf("cat %s; %s BACKUP", KeepalivedScriptNotifyBackup, KeepalivedScriptNotifyBackup),
 		}
 	}
 	bash.RunWithReturn();
@@ -393,9 +393,8 @@ func init()  {
 	os.Mkdir(KeepalivedRootPath, os.ModePerm)
 	os.Mkdir(KeepalivedConfigPath, os.ModePerm)
 	os.Mkdir(KeepalivedSciptPath, os.ModePerm)
-	os.Remove(KeepalivedSciptNotifyMaster)
-	os.Remove(KeepalivedSciptNotifyBackup)
+	os.Remove(KeepalivedScriptNotifyMaster)
+	os.Remove(KeepalivedScriptNotifyBackup)
 
 	enableKeepalivedLog()
-	keepAlivedStatus = KeepAlivedStatus_Backup
 }
