@@ -1194,9 +1194,22 @@ missingok
 }`
 	_, err = lb_log_rotatoe_file.Write([]byte(rotate_conf)); utils.PanicOnError(err)
 
+	/* add log rotate for /var/log/auth.log */
+	auth_rotatoe_file, err := ioutil.TempFile(LB_CONF_DIR, "auth"); utils.PanicOnError(err)
+	auth_rotate_conf := `/var/log/auth.log {
+size 10240k
+rotate 20
+compress
+copytruncate
+notifempty
+missingok
+}
+}`
+	_, err = auth_rotatoe_file.Write([]byte(auth_rotate_conf)); utils.PanicOnError(err)
+
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/haproxy.conf; sudo mv %s /etc/logrotate.d/haproxy; sudo /etc/init.d/rsyslog restart",
-			lb_log_file.Name(), lb_log_rotatoe_file.Name()),
+		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/haproxy.conf; sudo mv %s /etc/logrotate.d/haproxy; sudo mv %s /etc/logrotate.d/auth; sudo /etc/init.d/rsyslog restart",
+			lb_log_file.Name(), lb_log_rotatoe_file.Name(), auth_rotatoe_file.Name()),
 	}
 	err = bash.Run();utils.PanicOnError(err)
 
