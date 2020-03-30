@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"crypto/md5"
 )
 
 const (
@@ -84,9 +85,7 @@ type HaproxyListener struct {
 	firewallDes string
 	maxConnect string
 	maxSession int   //same to maxConnect
-	accessControlStatus string
-	aclType string
-	aclEntry string
+	aclPath string
 }
 
 // the listener implemented with gobetween
@@ -98,9 +97,7 @@ type GBListener struct {
 	apiPort string // restapi binding port range from 50000-60000
 	maxConnect string
 	maxSession int   //same to maxConnect
-	accessControlStatus string
-	aclType string
-	aclEntry string
+	aclPath string
 }
 
 func getGBApiPort(confPath string, pidPath string) (port string) {
@@ -149,6 +146,7 @@ func getListener(lb lbInfo) Listener {
 	pidPath := makeLbPidFilePath(lb)
 	confPath := makeLbConfFilePath(lb)
 	sockPath := makeLbSocketPath(lb)
+	aclPath := makeLbAclConfFilePath(lb)
 	des := makeLbFirewallRuleDescription(lb)
 
 	switch lb.Mode {
@@ -158,9 +156,9 @@ func getListener(lb lbInfo) Listener {
 			log.Errorf("there is no free port for rest api for listener: %v \n", lb.ListenerUuid)
 			return nil
 		}
-		return &GBListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, apiPort:port}
+		return &GBListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, apiPort:port, aclPath:aclPath}
 	case "tcp", "https", "http":
-		return &HaproxyListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, sockPath:sockPath}
+		return &HaproxyListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, sockPath:sockPath, aclPath:aclPath}
 	default:
 		utils.PanicOnError(fmt.Errorf("No such listener %v", lb.Mode))
 	}
@@ -233,11 +231,6 @@ group users
 daemon
 stats socket {{.SocketPath}} user vyos
 ulimit-n {{.ulimit}}
-{{if eq .AccessControlStatus "enable"}}
-#acl status: {{.AccessControlStatus}} ip entty: {{.AclEntry}}
-{{else}}
-#acl status: {{.AccessControlStatus}}
-{{end}}
 defaults
 log global
 option tcplog
@@ -256,6 +249,16 @@ option forwardfor
 timeout client {{.ConnectionIdleTimeout}}s
 timeout server {{.ConnectionIdleTimeout}}s
 timeout connect 60s
+{{- if eq .AccessControlStatus "enable" }}
+#acl status: {{.AccessControlStatus}} ip entty md5: {{.AclEntryMd5}}
+acl {{.ListenerUuid}} src -f {{.AclConfPath}}
+{{- if eq .AclType "black" }}
+tcp-request connection reject if {{.ListenerUuid}}
+{{- else }}
+tcp-request connection reject unless {{.ListenerUuid}}
+{{- end }}
+{{- end }}
+
 balance {{.BalancerAlgorithm}}
 {{- if eq .Mode "https"}}
 bind {{.Vip}}:{{.LoadBalancerPort}} ssl crt {{.CertificatePath}}
@@ -278,7 +281,7 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 {{- end }}
 {{- end }}`
 
-	var buf bytes.Buffer
+	var buf, acl_buf bytes.Buffer
 	var m map[string]interface{}
 
 	tmpl, err := template.New("conf").Parse(conf); utils.PanicOnError(err)
@@ -301,14 +304,19 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 	if _, exist := m["AclEntry"]; !exist {
 		m["AclEntry"] = ""
 	}
+	if strings.EqualFold(m["AclEntry"].(string), "") {
+		m["AccessControlStatus"] = "disable"
+	} else {
+		m["AclConfPath"] = this.aclPath
+		m["AclEntryMd5"] =  md5.Sum([]byte(m["AclEntry"].(string)))
+	}
 	log.Debugf("lb aclstatus:%v type: %v entry: %v ", m["AccessControlStatus"].(string), m["AclType"], m["AclEntry"])
 
-	this.accessControlStatus = m["AccessControlStatus"].(string)
-	this.aclType = m["AclType"].(string)
-	this.aclEntry = m["AclEntry"].(string)
+	err = utils.MkdirForFile(this.aclPath, 0755); utils.PanicOnError(err)
+	acl_buf.WriteString(strings.Replace(m["AclEntry"].(string), ",", "\n", -1))
+	err = ioutil.WriteFile(this.aclPath, acl_buf.Bytes(), 0755); utils.PanicOnError(err)
 
 	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
-
 	err = utils.MkdirForFile(this.pidPath, 0755); utils.PanicOnError(err)
 	err = utils.MkdirForFile(this.confPath, 0755); utils.PanicOnError(err)
 	err = ioutil.WriteFile(this.confPath, buf.Bytes(), 0755); utils.PanicOnError(err)
@@ -483,34 +491,14 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 
 	tree := server.NewParserFromShowConfiguration().Tree
 
-	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r != nil {
-		r.Delete()
-	}
-
-	if r := tree.FindFirewallRuleByDescription(nicname, "local", fmt.Sprintf("%v-acl", this.firewallDes)); r != nil {
-		r.Delete()
-	}
-
-	status, aclType, entry := this.accessControlStatus, this.aclType, this.aclEntry
-        log.Debugf("acl status:%v type:%v entry:%v",status, aclType, entry)
-	if strings.EqualFold(status, "enable") && !strings.EqualFold(entry, "") {
-		err = configureAcl(tree, nicname, aclType, entry, this.lb.Vip, strconv.Itoa(this.lb.LoadBalancerPort), "tcp", this.firewallDes); utils.PanicOnError(err)
-	} else {
-		tree.SetFirewallOnInterface(nicname, "local",
-			fmt.Sprintf("description %v", this.firewallDes),
+	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r == nil {
+		configureInternalFirewallRule(tree, this.firewallDes, fmt.Sprintf("description %v", this.firewallDes),
 			fmt.Sprintf("destination address %v", this.lb.Vip),
 			fmt.Sprintf("destination port %v", this.lb.LoadBalancerPort),
 			fmt.Sprintf("protocol tcp"),
 			"action accept",
 		)
 	}
-
-	configureInternalFirewallRule(tree, this.firewallDes, fmt.Sprintf("description %v", this.firewallDes),
-		fmt.Sprintf("destination address %v", this.lb.Vip),
-		fmt.Sprintf("destination port %v", this.lb.LoadBalancerPort),
-		fmt.Sprintf("protocol tcp"),
-		"action accept",
-	)
 
 	dropRuleDes := fmt.Sprintf("lb-%v-%s-drop", this.lb.LbUuid, this.lb.ListenerUuid)
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", dropRuleDes); r != nil {
@@ -559,6 +547,10 @@ func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error
 		err = os.Remove(this.sockPath); utils.LogError(err)
 	}
 
+	if e, _ := utils.PathExists(this.aclPath); e {
+		err = os.Remove(this.sockPath); utils.LogError(err)
+	}
+
 	return 0, err
 }
 
@@ -598,9 +590,23 @@ backend_connection_timeout = "60s"
 max_requests  = 0     # (optional) if > 0 accepts no more requests than max_requests and closes session (since 0.5.0)
 max_responses = 0    # (required) if > 0 accepts no more responses that max_responses from backend and closes session (will be optional since 0.5.0)
 {{if eq .AccessControlStatus "enable"}}
-#acl status: {{.AccessControlStatus}} ip entty: {{.AclEntry}}
-{{else}}
-#acl status: {{.AccessControlStatus}}
+    [servers.{{.ListenerUuid}}.access]
+    {{- if eq .AclType "black" }}
+    default = "allow"
+    {{- else }}
+    default = "deny"
+    {{- end }}
+    rules = [
+    {{- if eq .AclType "black" }}
+    {{- range $entry := $.AclEntry }}
+        "deny {{$entry}}",
+    {{- end }}
+    {{- else }}
+    {{- range $entry := $.AclEntry }}
+        "allow {{$entry}}",
+    {{- end }}
+    {{- end }}
+    ]
 {{end}}
     [servers.{{.ListenerUuid}}.discovery]
     kind = "static"
@@ -647,11 +653,14 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 		m["AclEntry"] = ""
 	}
 
-	this.accessControlStatus = m["AccessControlStatus"].(string)
-	this.aclType = m["AclType"].(string)
-	this.aclEntry = m["AclEntry"].(string)
+	if strings.EqualFold(m["AclEntry"].(string), "") {
+		m["AccessControlStatus"] = "disable"
+	}
+
+	m["AclEntry"] = strings.Split(m["AclEntry"].(string), ",")
 	this.maxConnect = m["MaxConnection"].(string)
 	this.maxSession, _ = strconv.Atoi(this.maxConnect)
+	log.Debugf("lb aclstatus:%v type: %v entry: %v ", m["AccessControlStatus"].(string), m["AclType"], m["AclEntry"])
 
 	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
 	err = utils.MkdirForFile(this.pidPath, 0755); utils.PanicOnError(err)
@@ -732,19 +741,7 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
-
-	if r := tree.FindFirewallRuleByDescription(nicname, "local", fmt.Sprintf("%v-acl", this.firewallDes)); r != nil {
-		r.Delete()
-	}
-
-	status, aclType, entry := this.accessControlStatus, this.aclType, this.aclEntry
-	if strings.EqualFold(status, "enable") && !strings.EqualFold(entry, "") {
-		if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r != nil {
-			r.Delete()
-		}
-
-		err = configureAcl(tree, nicname, aclType, entry, this.lb.Vip, strconv.Itoa(this.lb.LoadBalancerPort), "udp", this.firewallDes); utils.PanicOnError(err)
-	} else if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r == nil {
+	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r == nil {
 		/*for lb statistics with restful api*/
 		tree.SetFirewallOnInterface(nicname, "local",
 			fmt.Sprintf("description %v", this.firewallDes),
@@ -769,10 +766,10 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 			fmt.Sprintf("protocol udp"),
 			"action accept",
 		)
-	}
 
-	tree.AttachFirewallToInterface(nicname, "local")
-	tree.Apply(false)
+		tree.AttachFirewallToInterface(nicname, "local")
+		tree.Apply(false)
+	}
 	return nil
 }
 
@@ -824,6 +821,9 @@ func (this *GBListener) postActionListenerServiceStop() (ret int, err error) {
 	return 0, err
 }
 
+func makeLbAclConfFilePath(lb lbInfo) string {
+	return filepath.Join(LB_ROOT_DIR, "conf", fmt.Sprintf("listener-%v-acl.cfg", lb.ListenerUuid))
+}
 
 func makeLbPidFilePath(lb lbInfo) string {
 	return filepath.Join(LB_ROOT_DIR, "pid", fmt.Sprintf("lb-%s-listener-%s.pid", lb.LbUuid, lb.ListenerUuid))
