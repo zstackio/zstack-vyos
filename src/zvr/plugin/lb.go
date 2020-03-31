@@ -21,7 +21,6 @@ import (
 	"time"
 	"encoding/json"
 	"errors"
-	"net"
 	"crypto/md5"
 )
 
@@ -422,63 +421,6 @@ func cleanInternalFirewallRule(tree *server.VyosConfigTree, des string) (err err
 	return
 }
 
-func makeAclGroup(tree *server.VyosConfigTree, ipstr, groupName string) {
-	groups := make([]string, 0)
-	ips := strings.Split(ipstr, IP_SPLIT)
-	for _, ip := range(ips)  {
-		if _, cidr, err := net.ParseCIDR(ip); err == nil {
-			mini := cidr.IP
-			max := utils.GetUpperIp(*cidr)
-			groups = append(groups, fmt.Sprintf("%s-%s", mini.String(), max.String()))
-		} else {
-			groups = append(groups, fmt.Sprintf("%s", ip))
-		}
-	}
-	tree.SetGroupsCheckExisting("address", groupName, groups)
-}
-
-func configureAcl(tree *server.VyosConfigTree, nicname , aclType , source, dest, port, protocol, des string) (error) {
-	if utils.IsSkipVyosIptables() {
-		return nil
-	}
-
-	rules := make([]string, 0)
-
-	rules = append(rules, fmt.Sprintf("protocol %v", protocol))
-	rules = append(rules, fmt.Sprintf("destination address %s", dest))
-	rules = append(rules, fmt.Sprintf("description %v-acl", des))
-	rules = append(rules, fmt.Sprintf("destination port %v", port))
-	if strings.Contains(source, IP_SPLIT) {
-		groupName := fmt.Sprintf("%s-%s-group", dest, port)
-		makeAclGroup(tree, source, groupName)
-		rules = append(rules, fmt.Sprintf("source group address-group %s", groupName))
-	} else {
-		rules = append(rules, fmt.Sprintf("source address %s", source))
-	}
-
-	if aclType == "black" {
-		rules = append(rules, "action reject")
-		tree.SetFirewallOnInterface(nicname, "local", rules...)
-		tree.SetFirewallOnInterface(nicname, "local",
-			fmt.Sprintf("description %v", des),
-			fmt.Sprintf("destination address %v", dest),
-			fmt.Sprintf("destination port %v", port),
-			fmt.Sprintf("protocol %v", protocol),
-			"action accept",
-		)
-	} else {
-		rules = append(rules, "action accept")
-		tree.SetFirewallOnInterface(nicname, "local", rules...)
-		tree.SetFirewallOnInterface(nicname, "local",
-			fmt.Sprintf("description %v", des),
-			fmt.Sprintf("destination address %v", dest),
-			fmt.Sprintf("destination port %v", port),
-			fmt.Sprintf("protocol %v", protocol),
-			"action reject",
-		)
-	}
-	return nil
-}
 /*
 setlb:
 */
@@ -492,6 +434,13 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 	tree := server.NewParserFromShowConfiguration().Tree
 
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r == nil {
+		tree.SetFirewallOnInterface(nicname, "local",
+			fmt.Sprintf("description %v", this.firewallDes),
+			fmt.Sprintf("destination address %v", this.lb.Vip),
+			fmt.Sprintf("destination port %v", this.lb.LoadBalancerPort),
+			fmt.Sprintf("protocol tcp"),
+			"action accept",
+		)
 		configureInternalFirewallRule(tree, this.firewallDes, fmt.Sprintf("description %v", this.firewallDes),
 			fmt.Sprintf("destination address %v", this.lb.Vip),
 			fmt.Sprintf("destination port %v", this.lb.LoadBalancerPort),
@@ -548,7 +497,7 @@ func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error
 	}
 
 	if e, _ := utils.PathExists(this.aclPath); e {
-		err = os.Remove(this.sockPath); utils.LogError(err)
+		err = os.Remove(this.aclPath); utils.LogError(err)
 	}
 
 	return 0, err
