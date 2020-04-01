@@ -15,6 +15,7 @@ import (
 	"regexp"
 	prom "github.com/prometheus/client_golang/prometheus"
 	haproxy "github.com/bcicen/go-haproxy"
+	cidrman "github.com/EvilSuperstars/go-cidrman"
 	"sort"
 	log "github.com/Sirupsen/logrus"
 	"net/http"
@@ -162,6 +163,22 @@ func getListener(lb lbInfo) Listener {
 		utils.PanicOnError(fmt.Errorf("No such listener %v", lb.Mode))
 	}
 	return nil
+}
+
+/*transform ip range into a series of cidr networks*/
+func ipRange2Cidrs(ipEntry []string) []string {
+	entry := make([]string, 0)
+	for _, e := range ipEntry {
+		if strings.Contains(e, "-") {
+			ips := strings.Split(e, "-")
+			o, err := cidrman.IPRangeToCIDRs(ips[0], ips[1]); utils.PanicOnError(err)
+			entry = append(entry, o...)
+		} else {
+			entry = append(entry, e)
+		}
+	}
+
+	return entry
 }
 
 func parseListenerPrameter(lb lbInfo) (map[string]interface{}, error) {
@@ -312,7 +329,7 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 	log.Debugf("lb aclstatus:%v type: %v entry: %v ", m["AccessControlStatus"].(string), m["AclType"], m["AclEntry"])
 
 	err = utils.MkdirForFile(this.aclPath, 0755); utils.PanicOnError(err)
-	acl_buf.WriteString(strings.Replace(m["AclEntry"].(string), ",", "\n", -1))
+	acl_buf.WriteString(strings.Join(ipRange2Cidrs(strings.Split(m["AclEntry"].(string), ",")),"\n"))
 	err = ioutil.WriteFile(this.aclPath, acl_buf.Bytes(), 0755); utils.PanicOnError(err)
 
 	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
@@ -604,9 +621,10 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 
 	if strings.EqualFold(m["AclEntry"].(string), "") {
 		m["AccessControlStatus"] = "disable"
+	} else {
+		m["AclEntry"] = ipRange2Cidrs(strings.Split(m["AclEntry"].(string), ","))
 	}
 
-	m["AclEntry"] = strings.Split(m["AclEntry"].(string), ",")
 	this.maxConnect = m["MaxConnection"].(string)
 	this.maxSession, _ = strconv.Atoi(this.maxConnect)
 	log.Debugf("lb aclstatus:%v type: %v entry: %v ", m["AccessControlStatus"].(string), m["AclType"], m["AclEntry"])
