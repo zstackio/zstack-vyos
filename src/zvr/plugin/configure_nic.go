@@ -11,7 +11,7 @@ import (
 
 const (
 	VR_CONFIGURE_NIC = "/configurenic"
-	VR_CONFIGURE_NIC_FIREWALL_DEFAULT_ACTION_PATH = "/configurenicdefaultaction";
+	VR_CONFIGURE_NIC_FIREWALL_DEFAULT_ACTION_PATH = "/configurenicdefaultaction"
 	VR_REMOVE_NIC_PATH = "/removenic"
 	VR_CHANGE_DEFAULT_NIC_PATH = "/changeDefaultNic"
 	ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER = 9999
