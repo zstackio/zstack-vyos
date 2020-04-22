@@ -48,6 +48,7 @@ const (
 
 type KeepalivedNotify struct {
 	VyosHaVipPairs []nicVipPair
+	MgmtVipPairs []nicVipPair
 	Vip            []string
 	KeepalivedStateFile string
 	HaproxyHaScriptFile string
@@ -59,9 +60,10 @@ type KeepalivedNotify struct {
 
 const tKeepalivedNotifyMaster = `#!/bin/sh
 # This file is auto-generated, DO NOT EDIT! DO NOT EDIT!! DO NOT EDIT!!!
-{{ range .VyosHaVipPairs }}
+{{ range .MgmtVipPairs }}
 sudo ip add add {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 {{ end }}
+
 {{ range $index, $name := .NicNames }}
 sudo ip link set up dev {{$name}} || true
 {{ end }}
@@ -90,9 +92,10 @@ ip add
 
 const tKeepalivedNotifyBackup = `#!/bin/sh
 # This file is auto-generated, DO NOT EDIT! DO NOT EDIT!! DO NOT EDIT!!!
-{{ range .VyosHaVipPairs }}
+{{ range .MgmtVipPairs }}
 sudo ip add del {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 {{ end }}
+
 {{ range $index, $name := .NicNames }}
 sudo ip link set down dev {{$name}} || true
 {{ end }}
@@ -102,7 +105,7 @@ sudo ip link set down dev {{$name}} || true
 ip add
 `
 
-func NewKeepalivedNotifyConf(vyosHaVips []nicVipPair) *KeepalivedNotify {
+func NewKeepalivedNotifyConf(vyosHaVips, mgmtVips []nicVipPair) *KeepalivedNotify {
 	nicIps := []nicVipPair{}
 	nicNames := []string{}
 	nics, _ := utils.GetAllNics()
@@ -134,6 +137,7 @@ func NewKeepalivedNotifyConf(vyosHaVips []nicVipPair) *KeepalivedNotify {
 
 	knc := &KeepalivedNotify{
 		VyosHaVipPairs: vyosHaVips,
+		MgmtVipPairs: mgmtVips,
 		NicNames: nicNames,
 		NicIps: nicIps,
 		VrUuid: utils.GetVirtualRouterUuid(),
