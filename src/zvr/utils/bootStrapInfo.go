@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	log "github.com/Sirupsen/logrus"
 	"encoding/json"
+	"net"
 )
 
 const (
@@ -99,4 +100,18 @@ func GetBootStrapNicInfo() map[string]Nic {
 	}
 
 	return bootstrapNics
+}
+
+func IsInManagementCidr(vipStr string) bool {
+	mgmtNic := bootstrapInfo["managementNic"].(map[string]interface{})
+	ipStr, _ := mgmtNic["ip"].(string)
+	netmaskStr, _ := mgmtNic["netmask"].(string)
+
+	ip := net.ParseIP(ipStr)
+	netmask := net.IPMask(net.ParseIP(netmaskStr).To4())
+
+	cidr := net.IPNet{IP:ip, Mask:netmask}
+
+	vip := net.ParseIP(vipStr)
+	return cidr.Contains(vip)
 }
