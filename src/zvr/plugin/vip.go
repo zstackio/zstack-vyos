@@ -654,7 +654,10 @@ func setVip(ctx *server.CommandContext) interface{} {
 		cidr, err := utils.NetmaskToCIDR(vip.Netmask); utils.PanicOnError(err)
 		addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
 
-		if IsMaster() {
+		/* in following 2 cases, will add vip to interface:
+		   1. vip is not in management nic
+		   2. current node is master vpc */
+		if !utils.IsInManagementCidr(vip.Ip) || IsMaster() {
 			if n := tree.Getf("interfaces ethernet %s address %v", nicname, addr); n == nil {
 				tree.SetfWithoutCheckExisting("interfaces ethernet %s address %v", nicname, addr)
 			}
