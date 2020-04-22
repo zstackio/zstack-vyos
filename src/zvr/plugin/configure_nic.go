@@ -239,7 +239,7 @@ func configureNic(ctx *server.CommandContext) interface{} {
 
 	tree.Apply(false)
 
-	if (IsMaster()) {
+	if IsMaster() {
 		checkNicIsUp(nicname, true)
 		for _, nic := range cmd.Nics {
 			if utils.CheckIpDuplicate(nicname, nic.Ip) == true {

@@ -171,27 +171,15 @@ type vyosNicVipPairs struct {
 }
 
 func generateNotityScripts()  {
-	/* move nic ip in the front of the array */
-	bootNics := utils.GetBootStrapNicInfo()
-	parisFront := []nicVipPair{}
-	parisEnd := []nicVipPair{}
+	/* only vip on management nic will be added in master script and will be deleted in backup script */
+	mgmtVip := []nicVipPair{}
 	for _, p := range haVipPairs.pairs {
-		if bootNic, ok := bootNics[p.NicName]; ok {
-			if p.Vip == bootNic.Ip {
-				parisFront = append(parisFront, p)
-			} else {
-				parisEnd = append(parisEnd, p)
-			}
-		} else {
-			parisEnd = append(parisEnd, p)
+		if utils.IsInManagementCidr(p.Vip) {
+			mgmtVip = append(mgmtVip, p)
 		}
 	}
 
-	for _, p := range parisEnd {
-		parisFront = append(parisFront, p)
-	}
-
-	keepalivedNofityConf := NewKeepalivedNotifyConf(parisFront)
+	keepalivedNofityConf := NewKeepalivedNotifyConf(haVipPairs.pairs, mgmtVip)
 	keepalivedNofityConf.CreateMasterScript()
 	keepalivedNofityConf.CreateBackupScript()
 }
