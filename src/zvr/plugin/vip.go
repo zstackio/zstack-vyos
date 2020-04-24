@@ -619,6 +619,7 @@ type vipQosSettings struct {
 }
 
 type setVipCmd struct {
+	Rebuild bool `json:"rebuild"`
 	Vips []vipInfo `json:"vips"`
 }
 
@@ -649,6 +650,20 @@ func setVip(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 
 	tree := server.NewParserFromShowConfiguration().Tree
+
+	/* to fix jira http://jira.zstack.io/browse/ZSTAC-24095, it's possible that the vips has been configured before,
+	 * we need to delete it first */
+	if cmd.Rebuild {
+		for _, vip := range cmd.Vips {
+			nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
+			cidr, err := utils.NetmaskToCIDR(vip.Netmask)
+			utils.PanicOnError(err)
+			addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
+			tree.Deletef("interfaces ethernet %s address %v", nicname, addr)
+		}
+		tree.Apply(false)
+	}
+
 	for _, vip := range cmd.Vips {
 		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac); utils.PanicOnError(err)
 		cidr, err := utils.NetmaskToCIDR(vip.Netmask); utils.PanicOnError(err)
