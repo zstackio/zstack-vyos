@@ -1158,7 +1158,6 @@ compress
 copytruncate
 notifempty
 missingok
-}
 }`
 	_, err = auth_rotatoe_file.Write([]byte(auth_rotate_conf)); utils.PanicOnError(err)
 
