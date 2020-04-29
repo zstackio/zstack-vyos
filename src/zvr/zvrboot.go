@@ -141,7 +141,7 @@ func checkIpDuplicate () {
 	dupinfo := ""
 	for _, nic := range nics {
 		if utils.CheckIpDuplicate(nic.name, nic.ip) {
-			dupinfo = fmt.Sprintf("%s duplicate ip %s in nic %s\n", dupinfo, nic.ip, nic.name)
+			dupinfo = fmt.Sprintf("%s duplicate ip %s in nic %s\n", dupinfo, nic.ip, nic.mac)
 		}
 	}
 	if !strings.EqualFold(dupinfo, "") {
@@ -455,7 +455,9 @@ func configureVyos() {
 
 	tree.Apply(true)
 
-	checkIpDuplicate()
+	if strings.EqualFold(haStatus,"NOHA") {
+		checkIpDuplicate()
+	}
 
 	arping := func(nicname, ip, gateway string) {
 		b := utils.Bash{Command: fmt.Sprintf("sudo arping -q -A -w 1.5 -c 1 -I %s %s > /dev/null", nicname, ip) }

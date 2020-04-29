@@ -5,6 +5,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"encoding/json"
 	"net"
+	"strings"
 )
 
 const (
@@ -56,7 +57,7 @@ func InitBootStrapInfo() {
 
 func IsHaEabled() bool {
 	if _, ok := bootstrapInfo["haStatus"]; ok {
-		if bootstrapInfo["haStatus"].(string) != NOHA {
+		if !strings.EqualFold(bootstrapInfo["haStatus"].(string), NOHA) {
 			return true
 		}
 	}
