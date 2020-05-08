@@ -25,6 +25,7 @@ var (
 type InitConfig struct {
 	RestartDnsmasqAfterNumberOfSIGUSER1 int `json:"restartDnsmasqAfterNumberOfSIGUSER1"`
 	Uuid string `json:"uuid"`
+	MnPeerIp string `json:"mnPeerIp"`
 }
 
 type pingRsp struct {
@@ -67,6 +68,10 @@ func (check *fsHealthCheck)healthCheck() (status HealthStatus) {
 func initHandler(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(initConfig)
 	addRouteIfCallbackIpChanged()
+	if initConfig.MnPeerIp != "" {
+		utils.RemoveZStackRoute(initConfig.MnPeerIp)
+		addStaticRouteOnMgmtNic(initConfig.MnPeerIp)
+	}
 	return nil
 }
 
@@ -99,6 +104,19 @@ func GetInitConfig() *InitConfig {
 	return initConfig
 }
 
+func addStaticRouteOnMgmtNic(ip string)  {
+	mgmtNic := utils.GetMgmtInfoFromBootInfo()
+	if (mgmtNic == nil || utils.CheckMgmtCidrContainsIp(ip, mgmtNic) == false) {
+		err := utils.SetZStackRoute(ip, "eth0", mgmtNic["gateway"].(string)); utils.PanicOnError(err)
+	} else if mgmtNic == nil {
+		log.Debugf("can not get mgmt nic info, skip to configure route")
+	} else if utils.GetNicForRoute(ip) != "eth0" {
+		err := utils.SetZStackRoute(ip, "eth0", ""); utils.PanicOnError(err)
+	} else {
+		log.Debugf("the cidr of vr mgmt contains callback ip, skip to configure route")
+	}
+}
+
 func addRouteIfCallbackIpChanged() {
 	if server.CURRENT_CALLBACK_IP != server.CALLBACK_IP {
 		if server.CURRENT_CALLBACK_IP == "" {
@@ -112,16 +130,7 @@ func addRouteIfCallbackIpChanged() {
 			utils.PanicOnError(err)
 		}
 
-		mgmtNic := utils.GetMgmtInfoFromBootInfo()
-		if (mgmtNic == nil || utils.CheckMgmtCidrContainsIp(server.CALLBACK_IP, mgmtNic) == false) {
-			err := utils.SetZStackRoute(server.CALLBACK_IP, "eth0", mgmtNic["gateway"].(string)); utils.PanicOnError(err)
-		} else if mgmtNic == nil {
-			log.Debugf("can not get mgmt nic info, skip to configure route")
-		} else if utils.GetNicForRoute(server.CALLBACK_IP) != "eth0" {
-			err := utils.SetZStackRoute(server.CALLBACK_IP, "eth0", ""); utils.PanicOnError(err)
-		} else {
-			log.Debugf("the cidr of vr mgmt contains callback ip, skip to configure route")
-		}
+		addStaticRouteOnMgmtNic(server.CALLBACK_IP)
 		server.CURRENT_CALLBACK_IP = server.CALLBACK_IP
 	}
 }
