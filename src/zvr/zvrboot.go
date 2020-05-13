@@ -468,6 +468,20 @@ func configureVyos() {
 			log.Debugf("the cidr of vr mgmt contains callback ip, skip to configure route")
 		}
 	}
+
+	mgmtPeerNodeIp := bootstrapInfo["managementPeerNodeIp"]
+	if mgmtPeerNodeIp != nil {
+		mgmtPeerNodeIpStr := mgmtNodeIp.(string)
+		if (utils.CheckMgmtCidrContainsIp(mgmtPeerNodeIpStr, mgmtNic) == false) {
+			err := utils.SetZStackRoute(mgmtPeerNodeIpStr, "eth0", mgmtNic["gateway"].(string))
+			utils.PanicOnError(err)
+		} else if utils.GetNicForRoute(mgmtPeerNodeIpStr) != "eth0" {
+			err := utils.SetZStackRoute(mgmtPeerNodeIpStr, "eth0", ""); utils.PanicOnError(err)
+		} else {
+			log.Debugf("the cidr of vr mgmt contains peer node ip, skip to configure route")
+		}
+	}
+
 	/* this is workaround for zstac*/
 	log.Debugf("the vr public network %s at %s", defaultGW, defaultNic)
 	if defaultGW != "" {
