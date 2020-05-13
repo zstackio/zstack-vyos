@@ -50,6 +50,7 @@ type dhcpServer struct {
 	Subnet    string     `json:"subnet"`
 	Netmask   string     `json:"netmask"`
 	Gateway   string     `json:"gateway"`
+	DnsServer string     `json:"dnsServer"`
 	DnsDomain string     `json:"dnsDomain"`
 	Mtu       int        `json:"mtu"`
 	DhcpInfos []dhcpInfo `json:"dhcpInfos"`
@@ -166,14 +167,14 @@ func addDhcpHandler(ctx *server.CommandContext) interface{} {
 
 func stopAllDhcpServers() {
 	b := &utils.Bash{
-		Command: fmt.Sprintf("sudo pkill -9 dhcpd3"),
+		Command: fmt.Sprintf("sudo pkill -9 dhcpd3; rm -rf %s/*", DHCPD_PATH),
 	}
 	b.Run()
 }
 
-func stopDhcpServer(pidFile string) {
+func stopDhcpServer(pidFile, confFile, leaseFile  string) {
 	b := &utils.Bash{
-		Command: fmt.Sprintf("sudo kill -9 $(cat %s)", pidFile),
+		Command: fmt.Sprintf("sudo kill -9 $(cat %s); echo \"\" > %s; echo \"\" > %s", pidFile, confFile, leaseFile),
 	}
 	b.Run()
 }
@@ -209,8 +210,8 @@ func startDhcpServerCmd(ctx *server.CommandContext) interface{} {
 	server := cmd.DhcpServers[0]
 	nicname, err := utils.GetNicNameByMac(server.NicMac)
 	utils.PanicOnError(err)
-	pidFile, _, _, _ := getDhcpServerPath(nicname)
-	stopDhcpServer(pidFile)
+	pidFile, confFile, leaseFile, _ := getDhcpServerPath(nicname)
+	stopDhcpServer(pidFile, confFile, leaseFile)
 	startDhcpServer(server)
 
 	changeDhcpHosts()
@@ -225,8 +226,8 @@ func stopDhcpServerCmd(ctx *server.CommandContext) interface{} {
 	server := cmd.DhcpServers[0]
 	nicname, err := utils.GetNicNameByMac(server.NicMac)
 	utils.PanicOnError(err)
-	pidFile, _, _, _ := getDhcpServerPath(nicname)
-	stopDhcpServer(pidFile)
+	pidFile, confFile, leaseFile, _ := getDhcpServerPath(nicname)
+	stopDhcpServer(pidFile, confFile, leaseFile)
 
 	for key, entry := range dhcpdEntries {
 		if entry.VrNicMac == server.NicMac {
@@ -281,7 +282,7 @@ shared-network {{.SubnetName}} {
         use-host-decl-names on;
 
         group full {
-            option domain-name-servers {{.Gateway}};
+            option domain-name-servers {{.DnsServer}};
             option routers {{.Gateway}};
             {{ if ne .DnsDomain "" }}
             option domain-name {{.DnsDomain}};
@@ -314,6 +315,10 @@ func setDhcpFirewallRules(nicName string) error {
 	utils.InsertFireWallRule(nicName, rule, utils.LOCAL)
 	rule = utils.NewIptablesRule(utils.UDP, "", "", 0, 68, nil, utils.RETURN, utils.DnsRuleComment)
 	utils.InsertFireWallRule(nicName, rule, utils.LOCAL)
+	rule = utils.NewIptablesRule(utils.UDP, "", "", 0, 53, nil, utils.RETURN, utils.DnsRuleComment)
+	utils.InsertFireWallRule(nicName, rule, utils.LOCAL)
+	rule = utils.NewIptablesRule(utils.TCP, "", "", 0, 53, nil, utils.RETURN, utils.DnsRuleComment)
+	utils.InsertFireWallRule(nicName, rule, utils.LOCAL)
 	return nil
 }
 
@@ -338,9 +343,9 @@ func startDhcpServer(dhcp dhcpServer) {
 	dhcpServer["NetMask"] = dhcp.Netmask
 	dhcpServer["Mtu"] = dhcp.Mtu
 	dhcpServer["Gateway"] = dhcp.Gateway
+	dhcpServer["DnsServer"] = dhcp.DnsServer
 	dhcpServer["MaxLeaseTime"] = MAX_LEASE_TIME
 	dhcpServer["DnsDomain"] = dhcp.DnsDomain
-	dhcpServer["DnsServers"] = dhcp.Gateway
 
 	/* nics which are default nic of the vm, will get ip/gateway/dns domain */
 	var fullEntries []map[string]interface{}
@@ -376,10 +381,12 @@ func startDhcpServer(dhcp dhcpServer) {
 	}
 	err = b.Run()
 
+	tree := server.NewParserFromShowConfiguration().Tree
+	tree.SetfWithoutCheckExisting("service dns forwarding listen-on %s", nicname)
+
 	if utils.IsSkipVyosIptables() {
 		setDhcpFirewallRules(nicname)
 	} else {
-		tree := server.NewParserFromShowConfiguration().Tree
 		des := makeDhcpFirewallRuleDescription(nicname)
 		if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
 			tree.SetFirewallOnInterface(nicname, "local",
@@ -388,11 +395,21 @@ func startDhcpServer(dhcp dhcpServer) {
 				"protocol udp",
 				"action accept",
 			)
-
-			tree.AttachFirewallToInterface(nicname, "local")
 		}
-		tree.Apply(false)
+		des = makeDnsFirewallRuleDescription(nicname)
+		if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
+			/* dhcp will set vpc as dns forwarder */
+			tree.SetFirewallOnInterface(nicname, "local",
+				fmt.Sprintf("description %v", des),
+				"destination port 53",
+				"protocol tcp_udp",
+				"action accept",
+			)
+		}
+
+		tree.AttachFirewallToInterface(nicname, "local")
 	}
+	tree.Apply(false)
 
 	for _, entry := range dhcp.DhcpInfos {
 		dhcpdEntries[entry.Mac] = entry
