@@ -131,17 +131,17 @@ func addDhcpHandler(ctx *server.CommandContext) interface{} {
 		if entry.IsDefaultL3Network {
 			b = &utils.Bash{
 				Command: fmt.Sprintf(`omshell << EOF
-			server localhost
-			port %d
-			connect
-			new host
-			set name = "%s"
-			set hardware-address = %s
-			set hardware-type = 1
-			set ip-address = %s
-			set group = "%s"
-			create
-			EOF`, omApiPort, entry.Hostname, entry.Mac, entry.Ip, group)}
+server localhost
+port %d
+connect
+new host
+set name = "%s"
+set hardware-address = %s
+set hardware-type = 1
+set ip-address = %s
+set group = "%s"
+create
+EOF`, omApiPort, entry.Hostname, entry.Mac, entry.Ip, group)}
 		} else {
 			b = &utils.Bash{
 				Command: fmt.Sprintf(`omshell << EOF
@@ -284,13 +284,11 @@ shared-network {{.SubnetName}} {
         group full {
             option domain-name-servers {{.DnsServer}};
             option routers {{.Gateway}};
-            {{ if ne .DnsDomain "" }}
-            option domain-name {{.DnsDomain}};
-            {{ end }}
+            {{ if ne .DnsDomain "" }}option domain-name "{{.DnsDomain}}";{{ end }}
 
 			{{ range .FullEntries }}
             host {{.HostName}} {
-                option host-name {{.HostName}};
+                option host-name "{{.HostName}}";
                 fixed-address {{.Ip}};
                 hardware ethernet {{.Mac}};
             }
