@@ -116,3 +116,20 @@ func IsInManagementCidr(vipStr string) bool {
 	vip := net.ParseIP(vipStr)
 	return cidr.Contains(vip)
 }
+
+func GetMnNodeIps() map[string]string {
+	mnNodeIps := make(map[string]string)
+	mnNodeIp := bootstrapInfo["managementNodeIp"]
+	if mnNodeIp != nil {
+		mnNodeIpStr := mnNodeIp.(string)
+		mnNodeIps[mnNodeIpStr] = mnNodeIpStr
+	}
+
+	mnPeerNodeIp := bootstrapInfo["managementPeerNodeIp"]
+	if mnPeerNodeIp != nil {
+		mnPeerNodeStr := mnPeerNodeIp.(string)
+		mnNodeIps[mnPeerNodeStr] = mnPeerNodeStr
+	}
+
+	return mnNodeIps
+}
