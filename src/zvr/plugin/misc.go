@@ -38,7 +38,9 @@ type pingRsp struct {
 
 var (
 	initConfig = &InitConfig{}
+	mnNodeIps map[string]string
 )
+
 type networkHealthCheck struct {}
 type fsHealthCheck struct {}
 
@@ -71,6 +73,7 @@ func initHandler(ctx *server.CommandContext) interface{} {
 	if initConfig.MnPeerIp != "" {
 		utils.RemoveZStackRoute(initConfig.MnPeerIp)
 		addStaticRouteOnMgmtNic(initConfig.MnPeerIp)
+		mnNodeIps[initConfig.MnPeerIp] = initConfig.MnPeerIp
 	}
 	return nil
 }
@@ -106,7 +109,7 @@ func GetInitConfig() *InitConfig {
 
 func addStaticRouteOnMgmtNic(ip string)  {
 	mgmtNic := utils.GetMgmtInfoFromBootInfo()
-	if (mgmtNic == nil || utils.CheckMgmtCidrContainsIp(ip, mgmtNic) == false) {
+	if mgmtNic == nil || utils.CheckMgmtCidrContainsIp(ip, mgmtNic) == false {
 		err := utils.SetZStackRoute(ip, "eth0", mgmtNic["gateway"].(string)); utils.PanicOnError(err)
 	} else if mgmtNic == nil {
 		log.Debugf("can not get mgmt nic info, skip to configure route")
@@ -126,13 +129,20 @@ func addRouteIfCallbackIpChanged() {
 		}
 		// NOTE(WeiW): Since our mgmt nic is always eth0
 		if server.CURRENT_CALLBACK_IP != "" {
-			err := utils.RemoveZStackRoute(server.CURRENT_CALLBACK_IP);
-			utils.PanicOnError(err)
+			/* if current callback is not a mn node ip, or mn peer node ip, delete the static route */
+			if _, ok := mnNodeIps[server.CURRENT_CALLBACK_IP]; !ok {
+				err := utils.RemoveZStackRoute(server.CURRENT_CALLBACK_IP)
+				utils.PanicOnError(err)
+			}
 		}
 
 		addStaticRouteOnMgmtNic(server.CALLBACK_IP)
 		server.CURRENT_CALLBACK_IP = server.CALLBACK_IP
 	}
+}
+
+func InitMisc()  {
+	mnNodeIps = utils.GetMnNodeIps()
 }
 
 func init ()  {

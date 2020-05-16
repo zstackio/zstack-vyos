@@ -459,7 +459,7 @@ func configureVyos() {
 		log.Debugf("can not get management node ip from bootstrap info, skip to config route")
 	} else {
 		mgmtNodeIpStr := mgmtNodeIp.(string)
-		if (utils.CheckMgmtCidrContainsIp(mgmtNodeIpStr, mgmtNic) == false) {
+		if utils.CheckMgmtCidrContainsIp(mgmtNodeIpStr, mgmtNic) == false {
 			err := utils.SetZStackRoute(mgmtNodeIpStr, "eth0", mgmtNic["gateway"].(string))
 			utils.PanicOnError(err)
 		} else if utils.GetNicForRoute(mgmtNodeIpStr) != "eth0" {
@@ -471,8 +471,8 @@ func configureVyos() {
 
 	mgmtPeerNodeIp := bootstrapInfo["managementPeerNodeIp"]
 	if mgmtPeerNodeIp != nil {
-		mgmtPeerNodeIpStr := mgmtNodeIp.(string)
-		if (utils.CheckMgmtCidrContainsIp(mgmtPeerNodeIpStr, mgmtNic) == false) {
+		mgmtPeerNodeIpStr := mgmtPeerNodeIp.(string)
+		if utils.CheckMgmtCidrContainsIp(mgmtPeerNodeIpStr, mgmtNic) == false {
 			err := utils.SetZStackRoute(mgmtPeerNodeIpStr, "eth0", mgmtNic["gateway"].(string))
 			utils.PanicOnError(err)
 		} else if utils.GetNicForRoute(mgmtPeerNodeIpStr) != "eth0" {
