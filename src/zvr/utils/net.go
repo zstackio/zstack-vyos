@@ -356,3 +356,21 @@ func GetUpperIp(cidr net.IPNet) net.IP {
 	}
 	return out
 }
+
+/* this only for ipv4 */
+func GetBroadcastIpFromNetwork(ip, netmask string) string {
+	var brAddress []string
+	ips := strings.Split(ip, ".")
+	masks := strings.Split(netmask, ".")
+
+    for i := 0; i < 4; i ++ {
+    	ipByte, err := strconv.Atoi(ips[i]);PanicOnError(err)
+    	maskByte, err := strconv.Atoi(masks[i]);PanicOnError(err)
+		ipByte = ipByte & maskByte
+    	maskByte = maskByte ^ 0xFF
+
+		brAddress = append(brAddress, fmt.Sprintf("%d", (byte)(ipByte ^ maskByte)))
+	}
+
+	return strings.Join(brAddress, ".")
+}

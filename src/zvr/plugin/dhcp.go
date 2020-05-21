@@ -277,8 +277,10 @@ shared-network {{.SubnetName}} {
     subnet {{.Subnet}} netmask {{.NetMask}} {
         default-lease-time {{.MaxLeaseTime}};
         max-lease-time {{.MaxLeaseTime}};
+        server-identifier {{.Gateway}};
         option subnet-mask {{.NetMask}};
         option interface-mtu {{.Mtu}};
+        option broadcast-address {{.BroadCastAddress}};
         use-host-decl-names on;
 
         group full {
@@ -298,7 +300,6 @@ shared-network {{.SubnetName}} {
         group partial {
             {{ range .PartEntries }}
             host {{.HostName}} {
-                option host-name {{.HostName}};
                 fixed-address {{.Ip}};
                 hardware ethernet {{.Mac}};
             }
@@ -339,6 +340,7 @@ func startDhcpServer(dhcp dhcpServer) {
 	dhcpServer["SubnetName"] = makeLanName(nicname)
 	dhcpServer["Subnet"] = subnet[0]
 	dhcpServer["NetMask"] = dhcp.Netmask
+	dhcpServer["BroadCastAddress"] = utils.GetBroadcastIpFromNetwork(dhcp.Gateway, dhcp.Netmask)
 	dhcpServer["Mtu"] = dhcp.Mtu
 	dhcpServer["Gateway"] = dhcp.Gateway
 	dhcpServer["DnsServer"] = dhcp.DnsServer
