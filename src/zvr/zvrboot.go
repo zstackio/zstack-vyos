@@ -453,6 +453,10 @@ func configureVyos() {
 		tree.Setf("system login user vyos authentication plaintext-password %v", password)
 	}
 
+	/* create a cronjob to check sshd */
+	tree.Set("system task-scheduler task ssh interval 1")
+	tree.Set(fmt.Sprintf("system task-scheduler task ssh executable path '%s'", utils.Cronjob_file_ssh))
+
 	tree.Apply(true)
 
 	if strings.EqualFold(haStatus,"NOHA") {

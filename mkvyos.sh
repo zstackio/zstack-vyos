@@ -70,6 +70,7 @@ GOBETWEEN=$tmpdir/gobetween
 KEEPALIVED=$tmpdir/keepalived
 HEALTHCHECK=$tmpdir/healthcheck.sh
 PIMD=$tmpdir/pimd
+SSHD=$tmpdir/sshd.sh
 SBIN_DIR=/opt/vyatta/sbin
 VERSION=`date +%Y%m%d`
 ZVR_VERSION=$tmpdir/version
@@ -89,6 +90,8 @@ mkdir-p /home/vyos/zvr/keepalived/script
 upload $PIMD $SBIN_DIR/pimd
 upload $ZVR_VERSION /home/vyos/zvr/version
 upload $HEALTHCHECK /usr/share/healthcheck.sh
+mkdir-p /home/vyos/zvr/ssh
+upload $SSHD /home/vyos/zvr/ssh/sshd.sh
 upload -<<END /opt/vyatta/etc/config/scripts/vyatta-postconfig-bootup.script
 #!/bin/bash
 chmod +x $SBIN_DIR/zvrboot
@@ -99,6 +102,7 @@ chmod +x $SBIN_DIR/gobetween
 chmod +x /usr/sbin/keepalived
 chmod +x $SBIN_DIR/pimd
 chmod +x /usr/share/healthcheck.sh
+chmod +x /home/vyos/zvr/ssh/sshd.sh
 mkdir -p /home/vyos/zvr/keepalived/script/
 chown vyos:users /home/vyos/zvr
 chown vyos:users $SBIN_DIR/zvr
@@ -106,6 +110,7 @@ chown vyos:users $SBIN_DIR/haproxy
 chown vyos:users $SBIN_DIR/gobetween
 chown vyos:users $SBIN_DIR/pimd
 chown vyos:users /usr/share/healthcheck.sh
+chown vyos:users /home/vyos/zvr/ssh/sshd.sh
 $SBIN_DIR/zvrboot >/home/vyos/zvr/zvrboot.log 2>&1 < /dev/null &
 exit 0
 END
