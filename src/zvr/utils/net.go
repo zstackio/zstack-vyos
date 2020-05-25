@@ -374,3 +374,37 @@ func GetBroadcastIpFromNetwork(ip, netmask string) string {
 
 	return strings.Join(brAddress, ".")
 }
+
+func GetNexthop(dst string) (string, error) {
+	/* $ ip r get 10.86.4.0/23
+	10.86.4.0 via 192.168.100.1 dev eth1  src 192.168.100.129
+	    cache
+	*/
+	bash := Bash{
+		Command: fmt.Sprintf("ip r get %s | grep via | awk '{print $3}'", dst),
+	}
+	ret, o, e, err := bash.RunWithReturn()
+	if err != nil{
+		return "", err
+	}
+	if ret != 0 {
+		return "", fmt.Errorf("get nexthop for %s failed, ret = %d, error:%s", dst, ret, e)
+	}
+
+	return strings.TrimSpace(o), nil
+}
+
+func AddRoute(dst, nexthop string) error {
+	bash := Bash{
+		Command: fmt.Sprintf("ip route del %s; ip route add %s via %s", dst, dst, nexthop),
+	}
+	ret, _, e, err := bash.RunWithReturn()
+	if err != nil{
+		return err
+	}
+	if ret != 0 {
+		return fmt.Errorf("add route %s nexthop %s failed, ret = %d, error:%s", dst, nexthop, ret, e)
+	}
+
+	return nil
+}

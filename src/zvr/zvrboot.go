@@ -470,31 +470,12 @@ func configureVyos() {
 		arping(nic.name, nic.ip, nic.gateway)
 	}
 
-	mgmtNodeIp := bootstrapInfo["managementNodeIp"]
-	if mgmtNodeIp == nil {
-		log.Debugf("can not get management node ip from bootstrap info, skip to config route")
-	} else {
-		mgmtNodeIpStr := mgmtNodeIp.(string)
-		if utils.CheckMgmtCidrContainsIp(mgmtNodeIpStr, mgmtNic) == false {
-			err := utils.SetZStackRoute(mgmtNodeIpStr, "eth0", mgmtNic["gateway"].(string))
-			utils.PanicOnError(err)
-		} else if utils.GetNicForRoute(mgmtNodeIpStr) != "eth0" {
-			err := utils.SetZStackRoute(mgmtNodeIpStr, "eth0", ""); utils.PanicOnError(err)
-		} else {
-			log.Debugf("the cidr of vr mgmt contains callback ip, skip to configure route")
-		}
-	}
-
-	mgmtPeerNodeIp := bootstrapInfo["managementPeerNodeIp"]
-	if mgmtPeerNodeIp != nil {
-		mgmtPeerNodeIpStr := mgmtPeerNodeIp.(string)
-		if utils.CheckMgmtCidrContainsIp(mgmtPeerNodeIpStr, mgmtNic) == false {
-			err := utils.SetZStackRoute(mgmtPeerNodeIpStr, "eth0", mgmtNic["gateway"].(string))
-			utils.PanicOnError(err)
-		} else if utils.GetNicForRoute(mgmtPeerNodeIpStr) != "eth0" {
-			err := utils.SetZStackRoute(mgmtPeerNodeIpStr, "eth0", ""); utils.PanicOnError(err)
-		} else {
-			log.Debugf("the cidr of vr mgmt contains peer node ip, skip to configure route")
+	mgmtNodeCidr := bootstrapInfo["managementNodeCidr"]
+	if mgmtNodeCidr != nil {
+		mgmtNodeCidrStr := mgmtNodeCidr.(string)
+		nexthop, _ := utils.GetNexthop(mgmtNodeCidrStr)
+		if nexthop != mgmtNic["gateway"].(string) {
+			utils.AddRoute(mgmtNodeCidrStr, mgmtNic["gateway"].(string))
 		}
 	}
 
