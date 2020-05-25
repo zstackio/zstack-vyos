@@ -75,6 +75,14 @@ func initHandler(ctx *server.CommandContext) interface{} {
 			utils.AddRoute(initConfig.MgtCidr, mgmtNic["gateway"].(string))
 		}
 	}
+
+	tree := server.NewParserFromShowConfiguration().Tree
+	if tree.Get("system task-scheduler task ssh") == nil {
+		tree.Set("system task-scheduler task ssh interval 1")
+		tree.Set(fmt.Sprintf("system task-scheduler task ssh executable path '%s'", utils.Cronjob_file_ssh))
+	}
+	tree.Apply(false)
+
 	return nil
 }
 
