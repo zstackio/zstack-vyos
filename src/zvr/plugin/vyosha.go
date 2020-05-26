@@ -30,7 +30,11 @@ type macVipPair struct {
 	Category     string  	`json:"category"`
 }
 
-var haStatusCallbackUrl = ""
+var (
+	haStatusCallbackUrl = ""
+	getKeepAlivedStatusStart = false
+	keepAlivedCheckStart = false
+)
 
 func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 	cmd := &setVyosHaCmd{}
@@ -101,6 +105,14 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 		log.Debugf("keepalived configure file unchanged")
 	}
 
+	if !getKeepAlivedStatusStart {
+		go getKeepAlivedStatusTask()
+	}
+
+	if !keepAlivedCheckStart {
+		go keepAlivedCheckTask()
+	}
+
 	return nil
 }
 
@@ -126,7 +138,9 @@ func postHaStatusToManageNode(status KeepAlivedStatus) {
 func getKeepAlivedStatusTask()  {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
+	defer func() {getKeepAlivedStatusStart = false; log.Errorf("!!!!!!!!!keepalived status check task exited")}()
 
+	getKeepAlivedStatusStart = true
 	for  {
 		select {
 		case <-ticker.C:
@@ -149,7 +163,9 @@ func getKeepAlivedStatusTask()  {
 func keepAlivedCheckTask()  {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
+	defer func() {keepAlivedCheckStart = false; log.Errorf("!!!!!!!!!keepalived process check task exited")}()
 
+	keepAlivedCheckStart = true
 	for  {
 		select {
 		case <-ticker.C:
@@ -284,7 +300,5 @@ func VyosHaEntryPoint() {
 	if utils.IsHaEabled() {
 		/* set as unknown, then getKeepAlivedStatusTask will get master or backup, then will the right script  */
 		keepAlivedStatus = KeepAlivedStatus_Unknown
-		go getKeepAlivedStatusTask()
-		go keepAlivedCheckTask()
 	}
 }
