@@ -71,7 +71,7 @@ func initHandler(ctx *server.CommandContext) interface{} {
 	if initConfig.MgtCidr != "" {
 		mgmtNic:= utils.GetMgmtInfoFromBootInfo()
 		nexthop, _ := utils.GetNexthop(initConfig.MgtCidr)
-		if nexthop != mgmtNic["gateway"].(string) {
+		if nexthop != "" && nexthop != mgmtNic["gateway"].(string) {
 			utils.AddRoute(initConfig.MgtCidr, mgmtNic["gateway"].(string))
 		}
 	}

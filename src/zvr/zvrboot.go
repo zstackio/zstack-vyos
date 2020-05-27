@@ -458,7 +458,7 @@ func configureVyos() {
 	if mgmtNodeCidr != nil {
 		mgmtNodeCidrStr := mgmtNodeCidr.(string)
 		nexthop, _ := utils.GetNexthop(mgmtNodeCidrStr)
-		if nexthop != mgmtNic["gateway"].(string) {
+		if nexthop != "" && nexthop != mgmtNic["gateway"].(string) {
 			utils.AddRoute(mgmtNodeCidrStr, mgmtNic["gateway"].(string))
 		}
 	}
