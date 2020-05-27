@@ -379,6 +379,9 @@ func GetNexthop(dst string) (string, error) {
 	/* $ ip r get 10.86.4.0/23
 	10.86.4.0 via 192.168.100.1 dev eth1  src 192.168.100.129
 	    cache
+	$ ip r get 192.168.250.0/24
+	broadcast 192.168.250.0 dev eth0  src 192.168.250.14
+	    cache <local,brd>
 	*/
 	bash := Bash{
 		Command: fmt.Sprintf("ip r get %s | grep via | awk '{print $3}'", dst),
@@ -396,7 +399,7 @@ func GetNexthop(dst string) (string, error) {
 
 func AddRoute(dst, nexthop string) error {
 	bash := Bash{
-		Command: fmt.Sprintf("ip route del %s; ip route add %s via %s", dst, dst, nexthop),
+		Command: fmt.Sprintf("ip route add %s via %s", dst, nexthop),
 	}
 	ret, _, e, err := bash.RunWithReturn()
 	if err != nil{
