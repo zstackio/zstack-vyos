@@ -86,6 +86,9 @@ sudo ip link set up dev {{$name}} || true
 #add policy route
 (/bin/bash /home/vyos/zvr/keepalived/script/policyRoutes.sh) &
 
+#start dhcp server
+(/bin/bash /home/vyos/zvr/keepalived/script/dhcpd.sh) &
+
 #notify Mn node
 (sudo curl -H "Content-Type: application/json" -H "commandpath: /vpc/hastatus" -X POST -d '{"virtualRouterUuid": "{{.VrUuid}}", "haStatus":"Master"}' {{.CallBackUrl}}) &
 
