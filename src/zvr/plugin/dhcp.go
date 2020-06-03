@@ -129,7 +129,7 @@ func writeDhcpScriptFile() {
 	err := ioutil.WriteFile(HOST_HOST_FILE_TEMP, []byte(hostConents), 0755)
 	utils.PanicOnError(err)
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo mv %s %s; sudo service dnsmasq restart", HOST_HOST_FILE_TEMP, HOST_HOST_FILE),
+		Command: fmt.Sprintf("sudo mv %s %s; sudo pkill -1 dnsmasq", HOST_HOST_FILE_TEMP, HOST_HOST_FILE),
 	}
 	_, _, _, err = bash.RunWithReturn()
 	utils.PanicOnError(err)
@@ -178,6 +178,11 @@ func addDhcpHandler(ctx *server.CommandContext) interface{} {
 		}
 
 		/* add a entry by OMAPI */
+		hostName := entry.Hostname
+		if hostName == "" {
+			hostName = strings.Replace(entry.Ip, ".", "-", -1)
+		}
+		
 		var b *utils.Bash
 		if entry.IsDefaultL3Network {
 			b = &utils.Bash{
@@ -192,7 +197,8 @@ set hardware-type = 1
 set ip-address = %s
 set group = "%s"
 create
-EOF`, omApiPort, entry.Hostname, entry.Mac, entry.Ip, group)}
+EOF`, omApiPort, hostName, entry.Mac, entry.Ip, group),
+			NoLog: true}
 		} else {
 			b = &utils.Bash{
 				Command: fmt.Sprintf(`omshell << EOF
@@ -206,7 +212,8 @@ set hardware-type = 1
 set ip-address = %s
 set group = "%s"
 create
-EOF`, omApiPort, entry.Hostname, entry.Mac, entry.Ip, group)}
+EOF`, omApiPort, hostName, entry.Mac, entry.Ip, group),
+				NoLog: true}
 		}
 		err = b.Run()
 	}
@@ -310,7 +317,8 @@ new host
 set hardware-address = %s
 open
 remove
-EOF`, omApiPort, entry.Mac)}
+EOF`, omApiPort, entry.Mac),
+			NoLog: true}
 		err = b.Run()
 
 		delete(dhcpdEntries, entry.Mac)
@@ -408,7 +416,11 @@ func getDhcpConfigFile(dhcp dhcpServer, confFile string, nicname string)  {
 
 	for _, info := range dhcp.DhcpInfos {
 		entry := map[string]interface{}{}
-		entry["HostName"] = info.Hostname
+		if info.Hostname != "" {
+			entry["HostName"] = info.Hostname
+		} else {
+			entry["HostName"] = strings.Replace(info.Ip, ".", "-", -1)
+		}
 		entry["Ip"] = info.Ip
 		entry["Mac"] = info.Mac
 		if info.IsDefaultL3Network {
