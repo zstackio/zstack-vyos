@@ -72,10 +72,20 @@ type dhcpServerCmd struct {
 	DhcpServers []dhcpServer `json:"dhcpServers"`
 }
 
-/* all dhcp entries, key is hostName */
-var dhcpdEntries map[string]dhcpInfo
+type DhcpServerStruct struct {
+	NicMac    string
+	Subnet    string
+	Netmask   string
+	Gateway   string
+	DnsServer string
+	DnsDomain string
+	Mtu       int
+	/* dhcp entry info, key is nic.mac */
+	DhcpInfos map[string]dhcpInfo
+}
+
 /* all dhcp server, key is vrNicMac */
-var DhcpServerEntries map[string]*dhcpServer
+var DhcpServerEntries map[string]*DhcpServerStruct
 var DEFAULT_HOSTS []string
 
 func getDhcpServerPath(nicName string) (pid, conf, lease, tempConf string) {
@@ -122,9 +132,12 @@ type dhcpServerFiles struct {
 
 func writeDhcpScriptFile() {
 	hosts := DEFAULT_HOSTS
-	for _, entry := range dhcpdEntries {
-		hosts = append(hosts, fmt.Sprintf("%s %s", entry.Ip, entry.Hostname))
+	for _, dhcpServer := range DhcpServerEntries {
+		for _, entry := range dhcpServer.DhcpInfos {
+			hosts = append(hosts, fmt.Sprintf("%s %s", entry.Ip, entry.Hostname))
+		}
 	}
+
 	hostConents := strings.Join(hosts, "\n")
 	err := ioutil.WriteFile(HOST_HOST_FILE_TEMP, []byte(hostConents), 0755)
 	utils.PanicOnError(err)
@@ -170,9 +183,9 @@ func addDhcpHandler(ctx *server.CommandContext) interface{} {
 		if !entry.IsDefaultL3Network {
 			group = GROUP_PARTIAL
 		}
-		dhcpdEntries[entry.Mac] = entry
+
 		if _, ok := DhcpServerEntries[entry.VrNicMac]; ok {
-			DhcpServerEntries[entry.VrNicMac].DhcpInfos = append(DhcpServerEntries[entry.VrNicMac].DhcpInfos, entry)
+			DhcpServerEntries[entry.VrNicMac].DhcpInfos[entry.Mac] =entry
 		} else {
 			log.Debug("can not save dhcp entry to buffer")
 		}
@@ -182,8 +195,36 @@ func addDhcpHandler(ctx *server.CommandContext) interface{} {
 		if hostName == "" {
 			hostName = strings.Replace(entry.Ip, ".", "-", -1)
 		}
-		
-		var b *utils.Bash
+
+		/* for some reason, MN node may send 2 entries with same ip but different macs
+		so delete old entry if existed */
+		b := &utils.Bash{
+			Command: fmt.Sprintf(`omshell << EOF
+server localhost
+port %d
+connect
+new host
+set hardware-address = %s
+open
+remove
+EOF`, omApiPort, entry.Mac),
+			NoLog: true}
+		err = b.Run()
+
+		b = &utils.Bash{
+			Command: fmt.Sprintf(`omshell << EOF
+server localhost
+port %d
+connect
+new host
+set ip-address = %s
+open
+remove
+EOF`, omApiPort, entry.Ip),
+			NoLog: true}
+		err = b.Run()
+
+		/* add a entry by OMAPI */
 		if entry.IsDefaultL3Network {
 			b = &utils.Bash{
 				Command: fmt.Sprintf(`omshell << EOF
@@ -249,7 +290,7 @@ func refreshDhcpServer(ctx *server.CommandContext) interface{} {
 	}
 
 	/* empty the dhcp entries */
-	dhcpdEntries = make(map[string]dhcpInfo)
+	DhcpServerEntries = make(map[string]*DhcpServerStruct)
 	/* start dhcp servers */
 	for _, server := range cmd.DhcpServers {
 		startDhcpServer(server)
@@ -287,11 +328,6 @@ func stopDhcpServerCmd(ctx *server.CommandContext) interface{} {
 	pidFile, confFile, leaseFile, _ := getDhcpServerPath(nicname)
 	stopDhcpServer(pidFile, confFile, leaseFile)
 
-	for key, entry := range dhcpdEntries {
-		if entry.VrNicMac == server.NicMac {
-			delete(dhcpdEntries, key)
-		}
-	}
 	delete(DhcpServerEntries, server.NicMac)
 
 	writeDhcpScriptFile()
@@ -321,16 +357,9 @@ EOF`, omApiPort, entry.Mac),
 			NoLog: true}
 		err = b.Run()
 
-		delete(dhcpdEntries, entry.Mac)
 		/* remove info from buffered dhcp server info */
 		if _, ok := DhcpServerEntries[entry.VrNicMac]; ok {
-			var infos []dhcpInfo
-			for _, info := range DhcpServerEntries[entry.VrNicMac].DhcpInfos {
-				if info.Mac != entry.Mac {
-					infos = append(infos, info)
-				}
-			}
-			DhcpServerEntries[entry.VrNicMac].DhcpInfos = infos
+			delete(DhcpServerEntries[entry.VrNicMac].DhcpInfos, entry.Mac)
 		}
 	}
 
@@ -395,7 +424,7 @@ func makeDhcpFirewallRuleDescription(nicname string) string {
 	return fmt.Sprintf("DHCP-for-%s", nicname)
 }
 
-func getDhcpConfigFile(dhcp dhcpServer, confFile string, nicname string)  {
+func getDhcpConfigFile(dhcp DhcpServerStruct, confFile string, nicname string)  {
 	subnet := strings.Split(dhcp.Subnet, "/")
 	dhcpServer := map[string]interface{}{}
 	dhcpServer["OMAPIPort"] = getNicOmApiPort(nicname)
@@ -450,7 +479,12 @@ func startDhcpServer(dhcp dhcpServer) {
 	os.Truncate(leaseFile, 0)
 	os.Remove(pidFile)
 
-	getDhcpConfigFile(dhcp, conFile, nicname)
+	dhcpStruct := DhcpServerStruct{dhcp.NicMac,dhcp.Subnet, dhcp.Netmask,  dhcp.Gateway,
+		dhcp.DnsServer, dhcp.DnsDomain, dhcp.Mtu, map[string]dhcpInfo{}}
+	for _, info := range dhcp.DhcpInfos {
+		dhcpStruct.DhcpInfos[info.Mac] = info
+	}
+	getDhcpConfigFile(dhcpStruct, conFile, nicname)
 
 	/* start dhcp server for nic */
 	b := &utils.Bash{
@@ -488,12 +522,8 @@ func startDhcpServer(dhcp dhcpServer) {
 	}
 	tree.Apply(false)
 
-	for _, entry := range dhcp.DhcpInfos {
-		dhcpdEntries[entry.Mac] = entry
-	}
-
 	delete(DhcpServerEntries, dhcp.NicMac)
-	DhcpServerEntries[dhcp.NicMac] = &dhcp
+	DhcpServerEntries[dhcp.NicMac] = &dhcpStruct
 }
 
 func enableDhcpLog() {
@@ -537,8 +567,7 @@ func init() {
 		"ff02::2 ip6-allrouters",
 		"ff02::3 ip6-allhosts",
 		"127.0.1.1	  vyos	 #vyatta entry"}
-	dhcpdEntries = make(map[string]dhcpInfo)
-	DhcpServerEntries = make(map[string]*dhcpServer)
+	DhcpServerEntries = make(map[string]*DhcpServerStruct)
 	enableDhcpLog()
 }
 
