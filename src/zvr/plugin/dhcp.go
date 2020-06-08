@@ -376,7 +376,7 @@ shared-network {{.SubnetName}} {
     subnet {{.Subnet}} netmask {{.NetMask}} {
         default-lease-time {{.MaxLeaseTime}};
         max-lease-time {{.MaxLeaseTime}};
-        server-identifier {{.Gateway}};
+        server-identifier {{.DnsServer}};
         option subnet-mask {{.NetMask}};
         option interface-mtu {{.Mtu}};
         option broadcast-address {{.BroadCastAddress}};
