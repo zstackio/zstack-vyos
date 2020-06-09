@@ -9,6 +9,8 @@ var (
         //fn, regFn CompareStringFunc
         StringCompareFn = CompareString
         StringRegCompareFn = CompareRegString
+
+        Cronjob_file_ssh = "/home/vyos/zvr/ssh/sshd.sh"
 )
 
 func CompareString(src, target string)  bool {

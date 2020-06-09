@@ -356,3 +356,58 @@ func GetUpperIp(cidr net.IPNet) net.IP {
 	}
 	return out
 }
+
+/* this only for ipv4 */
+func GetBroadcastIpFromNetwork(ip, netmask string) string {
+	var brAddress []string
+	ips := strings.Split(ip, ".")
+	masks := strings.Split(netmask, ".")
+
+    for i := 0; i < 4; i ++ {
+    	ipByte, err := strconv.Atoi(ips[i]);PanicOnError(err)
+    	maskByte, err := strconv.Atoi(masks[i]);PanicOnError(err)
+		ipByte = ipByte & maskByte
+    	maskByte = maskByte ^ 0xFF
+
+		brAddress = append(brAddress, fmt.Sprintf("%d", (byte)(ipByte ^ maskByte)))
+	}
+
+	return strings.Join(brAddress, ".")
+}
+
+func GetNexthop(dst string) (string, error) {
+	/* $ ip r get 10.86.4.0/23
+	10.86.4.0 via 192.168.100.1 dev eth1  src 192.168.100.129
+	    cache
+	$ ip r get 192.168.250.0/24
+	broadcast 192.168.250.0 dev eth0  src 192.168.250.14
+	    cache <local,brd>
+	*/
+	bash := Bash{
+		Command: fmt.Sprintf("ip r get %s | grep via | awk '{print $3}'", dst),
+	}
+	ret, o, e, err := bash.RunWithReturn()
+	if err != nil{
+		return "", err
+	}
+	if ret != 0 {
+		return "", fmt.Errorf("get nexthop for %s failed, ret = %d, error:%s", dst, ret, e)
+	}
+
+	return strings.TrimSpace(o), nil
+}
+
+func AddRoute(dst, nexthop string) error {
+	bash := Bash{
+		Command: fmt.Sprintf("ip route add %s via %s", dst, nexthop),
+	}
+	ret, _, e, err := bash.RunWithReturn()
+	if err != nil{
+		return err
+	}
+	if ret != 0 {
+		return fmt.Errorf("add route %s nexthop %s failed, ret = %d, error:%s", dst, nexthop, ret, e)
+	}
+
+	return nil
+}

@@ -25,7 +25,7 @@ var (
 type InitConfig struct {
 	RestartDnsmasqAfterNumberOfSIGUSER1 int `json:"restartDnsmasqAfterNumberOfSIGUSER1"`
 	Uuid string `json:"uuid"`
-	MnPeerIp string `json:"mnPeerIp"`
+	MgtCidr string `json:"mgtCidr"`
 }
 
 type pingRsp struct {
@@ -38,9 +38,7 @@ type pingRsp struct {
 
 var (
 	initConfig = &InitConfig{}
-	mnNodeIps map[string]string
 )
-
 type networkHealthCheck struct {}
 type fsHealthCheck struct {}
 
@@ -70,11 +68,21 @@ func (check *fsHealthCheck)healthCheck() (status HealthStatus) {
 func initHandler(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(initConfig)
 	addRouteIfCallbackIpChanged()
-	if initConfig.MnPeerIp != "" {
-		utils.RemoveZStackRoute(initConfig.MnPeerIp)
-		addStaticRouteOnMgmtNic(initConfig.MnPeerIp)
-		mnNodeIps[initConfig.MnPeerIp] = initConfig.MnPeerIp
+	if initConfig.MgtCidr != "" {
+		mgmtNic:= utils.GetMgmtInfoFromBootInfo()
+		nexthop, _ := utils.GetNexthop(initConfig.MgtCidr)
+		if nexthop != "" && nexthop != mgmtNic["gateway"].(string) {
+			utils.AddRoute(initConfig.MgtCidr, mgmtNic["gateway"].(string))
+		}
 	}
+
+	tree := server.NewParserFromShowConfiguration().Tree
+	if tree.Get("system task-scheduler task ssh") == nil {
+		tree.Set("system task-scheduler task ssh interval 1")
+		tree.Set(fmt.Sprintf("system task-scheduler task ssh executable path '%s'", utils.Cronjob_file_ssh))
+	}
+	tree.Apply(false)
+
 	return nil
 }
 
@@ -107,19 +115,6 @@ func GetInitConfig() *InitConfig {
 	return initConfig
 }
 
-func addStaticRouteOnMgmtNic(ip string)  {
-	mgmtNic := utils.GetMgmtInfoFromBootInfo()
-	if mgmtNic == nil || utils.CheckMgmtCidrContainsIp(ip, mgmtNic) == false {
-		err := utils.SetZStackRoute(ip, "eth0", mgmtNic["gateway"].(string)); utils.PanicOnError(err)
-	} else if mgmtNic == nil {
-		log.Debugf("can not get mgmt nic info, skip to configure route")
-	} else if utils.GetNicForRoute(ip) != "eth0" {
-		err := utils.SetZStackRoute(ip, "eth0", ""); utils.PanicOnError(err)
-	} else {
-		log.Debugf("the cidr of vr mgmt contains callback ip, skip to configure route")
-	}
-}
-
 func addRouteIfCallbackIpChanged() {
 	if server.CURRENT_CALLBACK_IP != server.CALLBACK_IP {
 		if server.CURRENT_CALLBACK_IP == "" {
@@ -129,20 +124,22 @@ func addRouteIfCallbackIpChanged() {
 		}
 		// NOTE(WeiW): Since our mgmt nic is always eth0
 		if server.CURRENT_CALLBACK_IP != "" {
-			/* if current callback is not a mn node ip, or mn peer node ip, delete the static route */
-			if _, ok := mnNodeIps[server.CURRENT_CALLBACK_IP]; !ok {
-				err := utils.RemoveZStackRoute(server.CURRENT_CALLBACK_IP)
-				utils.PanicOnError(err)
-			}
+			err := utils.RemoveZStackRoute(server.CURRENT_CALLBACK_IP);
+			utils.PanicOnError(err)
 		}
 
-		addStaticRouteOnMgmtNic(server.CALLBACK_IP)
+		mgmtNic := utils.GetMgmtInfoFromBootInfo()
+		if (mgmtNic == nil || utils.CheckMgmtCidrContainsIp(server.CALLBACK_IP, mgmtNic) == false) {
+			err := utils.SetZStackRoute(server.CALLBACK_IP, "eth0", mgmtNic["gateway"].(string)); utils.PanicOnError(err)
+		} else if mgmtNic == nil {
+			log.Debugf("can not get mgmt nic info, skip to configure route")
+		} else if utils.GetNicForRoute(server.CALLBACK_IP) != "eth0" {
+			err := utils.SetZStackRoute(server.CALLBACK_IP, "eth0", ""); utils.PanicOnError(err)
+		} else {
+			log.Debugf("the cidr of vr mgmt contains callback ip, skip to configure route")
+		}
 		server.CURRENT_CALLBACK_IP = server.CALLBACK_IP
 	}
-}
-
-func InitMisc()  {
-	mnNodeIps = utils.GetMnNodeIps()
 }
 
 func init ()  {
