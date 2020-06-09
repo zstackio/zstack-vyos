@@ -131,7 +131,7 @@ type dhcpServerFiles struct {
 }
 
 func writeDhcpScriptFile() {
-	hosts := DEFAULT_HOSTS
+	/*hosts := DEFAULT_HOSTS
 	for _, dhcpServer := range DhcpServerEntries {
 		for _, entry := range dhcpServer.DhcpInfos {
 			hosts = append(hosts, fmt.Sprintf("%s %s", entry.Ip, entry.Hostname))
@@ -145,7 +145,7 @@ func writeDhcpScriptFile() {
 		Command: fmt.Sprintf("sudo mv %s %s; sudo pkill -1 dnsmasq", HOST_HOST_FILE_TEMP, HOST_HOST_FILE),
 	}
 	_, _, _, err = bash.RunWithReturn()
-	utils.PanicOnError(err)
+	utils.PanicOnError(err)*/
 
 	var fileList []dhcpServerFiles
 	if utils.IsHaEabled() {
