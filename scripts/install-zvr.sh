@@ -51,4 +51,12 @@ fi
 chown vyos:users $TARGET_PIMD
 chmod +x $TARGET_PIMD
 
+TARGET_SSHD=/home/vyos/zvr/ssh/sshd.sh
+if [[ ! -f $TARGET_SSHD || $(diff sshd.sh $TARGET_SSHD) ]]; then
+    yes | mkdir -p /home/vyos/zvr/ssh/
+    yes | cp -f sshd.sh $TARGET_SSHD
+fi
+chown vyos:users $TARGET_SSHD
+chmod +x $TARGET_SSHD
+
 exit 0
