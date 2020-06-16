@@ -3,6 +3,7 @@ package plugin
 import (
 	"bytes"
 	"fmt"
+	log "github.com/Sirupsen/logrus"
 	"html/template"
 	"io/ioutil"
 	"os"
@@ -10,7 +11,6 @@ import (
 	"strings"
 	"zvr/server"
 	"zvr/utils"
-	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -184,12 +184,6 @@ func addDhcpHandler(ctx *server.CommandContext) interface{} {
 			group = GROUP_PARTIAL
 		}
 
-		if _, ok := DhcpServerEntries[entry.VrNicMac]; ok {
-			DhcpServerEntries[entry.VrNicMac].DhcpInfos[entry.Mac] =entry
-		} else {
-			log.Debug("can not save dhcp entry to buffer")
-		}
-
 		/* add a entry by OMAPI */
 		hostName := entry.Hostname
 		if hostName == "" {
@@ -257,9 +251,21 @@ EOF`, omApiPort, hostName, entry.Mac, entry.Ip, group),
 				NoLog: true}
 		}
 		err = b.Run()
+
+		if _, ok := DhcpServerEntries[entry.VrNicMac]; ok {
+			/* delete the entry which has same ip but different mac  */
+			for _, e := range DhcpServerEntries[entry.VrNicMac].DhcpInfos {
+				if e.Ip == entry.Ip {
+					log.Errorf("[vyos dhcp] found 2 entries with same ip, old: %+v, new: %+v", e, entry)
+					delete(DhcpServerEntries[entry.VrNicMac].DhcpInfos, e.Mac)
+				}
+			}
+			DhcpServerEntries[entry.VrNicMac].DhcpInfos[entry.Mac] = entry
+		} else {
+			log.Debug("can not save dhcp entry to buffer")
+		}
 	}
 
-	/* update /etc/hosts for dnsmasq */
 	writeDhcpScriptFile()
 	return nil
 }
