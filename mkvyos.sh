@@ -71,6 +71,7 @@ KEEPALIVED=$tmpdir/keepalived
 HEALTHCHECK=$tmpdir/healthcheck.sh
 PIMD=$tmpdir/pimd
 SSHD=$tmpdir/sshd.sh
+ZSN=$tmpdir/zsn-crontab.sh
 SBIN_DIR=/opt/vyatta/sbin
 VERSION=`date +%Y%m%d`
 ZVR_VERSION=$tmpdir/version
@@ -92,6 +93,7 @@ upload $ZVR_VERSION /home/vyos/zvr/version
 upload $HEALTHCHECK /usr/share/healthcheck.sh
 mkdir-p /home/vyos/zvr/ssh
 upload $SSHD /home/vyos/zvr/ssh/sshd.sh
+upload $ZSN /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 upload -<<END /opt/vyatta/etc/config/scripts/vyatta-postconfig-bootup.script
 #!/bin/bash
 chmod +x $SBIN_DIR/zvrboot
@@ -103,6 +105,7 @@ chmod +x /usr/sbin/keepalived
 chmod +x $SBIN_DIR/pimd
 chmod +x /usr/share/healthcheck.sh
 chmod +x /home/vyos/zvr/ssh/sshd.sh
+chmod +x /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 mkdir -p /home/vyos/zvr/keepalived/script/
 chown vyos:users /home/vyos/zvr
 chown vyos:users $SBIN_DIR/zvr
@@ -111,6 +114,7 @@ chown vyos:users $SBIN_DIR/gobetween
 chown vyos:users $SBIN_DIR/pimd
 chown vyos:users /usr/share/healthcheck.sh
 chown vyos:users /home/vyos/zvr/ssh/sshd.sh
+chown vyos:users /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 $SBIN_DIR/zvrboot >/home/vyos/zvr/zvrboot.log 2>&1 < /dev/null &
 exit 0
 END

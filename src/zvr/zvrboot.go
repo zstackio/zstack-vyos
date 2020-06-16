@@ -457,6 +457,10 @@ func configureVyos() {
 	tree.Set("system task-scheduler task ssh interval 1")
 	tree.Set(fmt.Sprintf("system task-scheduler task ssh executable path '%s'", utils.Cronjob_file_ssh))
 
+	/* create a cronjob to check zsn */
+	tree.Set("system task-scheduler task zsn interval 1")
+	tree.Set(fmt.Sprintf("system task-scheduler task zsn executable path '%s'", utils.Cronjob_file_zsn))
+
 	tree.Apply(true)
 
 	if strings.EqualFold(haStatus,"NOHA") {
