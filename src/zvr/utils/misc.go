@@ -11,6 +11,7 @@ var (
         StringRegCompareFn = CompareRegString
 
         Cronjob_file_ssh = "/home/vyos/zvr/ssh/sshd.sh"
+        Cronjob_file_zsn = "/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh"
 )
 
 func CompareString(src, target string)  bool {

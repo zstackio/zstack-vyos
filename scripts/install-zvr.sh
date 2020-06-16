@@ -59,4 +59,11 @@ fi
 chown vyos:users $TARGET_SSHD
 chmod +x $TARGET_SSHD
 
+TARGET_ZSN=/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
+if [[ ! -f $TARGET_ZSN || $(diff zsn-crontab.sh $TARGET_ZSN) ]]; then
+    yes | cp -f zsn-crontab.sh $TARGET_ZSN
+fi
+chown vyos:users $TARGET_ZSN
+chmod +x $TARGET_ZSN
+
 exit 0

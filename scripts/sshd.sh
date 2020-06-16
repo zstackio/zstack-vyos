@@ -1,3 +1,3 @@
 #!/bin/bash
 
-sudo service git ssh status || sudo service ssh restart
+sudo service ssh status || sudo service ssh restart
