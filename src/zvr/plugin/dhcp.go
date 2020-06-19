@@ -190,10 +190,15 @@ func addDhcpHandler(ctx *server.CommandContext) interface{} {
 			hostName = strings.Replace(entry.Ip, ".", "-", -1)
 		}
 
-		/* for some reason, MN node may send 2 entries with same ip but different macs
-		so delete old entry if existed */
-		b := &utils.Bash{
-			Command: fmt.Sprintf(`omshell << EOF
+		if _, ok := DhcpServerEntries[entry.VrNicMac]; ok {
+			/* delete the entry which has same ip but different mac  */
+			for _, e := range DhcpServerEntries[entry.VrNicMac].DhcpInfos {
+				/* for some reason, MN node may send 2 entries with same ip but different macs
+				so delete old entry if existed */
+				if e.Ip == entry.Ip {
+					log.Errorf("[vyos dhcp] found 2 entries with same ip, old: %+v, new: %+v", e, entry)
+					b := &utils.Bash{
+						Command: fmt.Sprintf(`omshell << EOF
 server localhost
 port %d
 connect
@@ -201,26 +206,23 @@ new host
 set hardware-address = %s
 open
 remove
-EOF`, omApiPort, entry.Mac),
-			NoLog: true}
-		err = b.Run()
-
-		b = &utils.Bash{
-			Command: fmt.Sprintf(`omshell << EOF
-server localhost
-port %d
-connect
-new host
-set ip-address = %s
-open
-remove
-EOF`, omApiPort, entry.Ip),
-			NoLog: true}
-		err = b.Run()
+EOF`, omApiPort, e.Mac),
+						NoLog: true}
+					if err = b.Run(); err != nil {
+						log.Errorf("[vyos dhcp] delete old entry [mac: %s] failed, %s", e.Mac, err)
+					}
+					delete(DhcpServerEntries[entry.VrNicMac].DhcpInfos, e.Mac)
+				}
+			}
+			DhcpServerEntries[entry.VrNicMac].DhcpInfos[entry.Mac] = entry
+		} else {
+			log.Errorf("[vyos dhcp] can not save dhcp entry[%+v] to buffer", entry)
+			continue
+		}
 
 		/* add a entry by OMAPI */
 		if entry.IsDefaultL3Network {
-			b = &utils.Bash{
+			b := &utils.Bash{
 				Command: fmt.Sprintf(`omshell << EOF
 server localhost
 port %d
@@ -234,8 +236,11 @@ set group = "%s"
 create
 EOF`, omApiPort, hostName, entry.Mac, entry.Ip, group),
 			NoLog: true}
+			if err = b.Run(); err != nil {
+				log.Errorf("[vyos dhcp] add new entry [mac: %+v] failed, %s", entry, err)
+			}
 		} else {
-			b = &utils.Bash{
+			b := &utils.Bash{
 				Command: fmt.Sprintf(`omshell << EOF
 server localhost
 port %d
@@ -249,20 +254,9 @@ set group = "%s"
 create
 EOF`, omApiPort, hostName, entry.Mac, entry.Ip, group),
 				NoLog: true}
-		}
-		err = b.Run()
-
-		if _, ok := DhcpServerEntries[entry.VrNicMac]; ok {
-			/* delete the entry which has same ip but different mac  */
-			for _, e := range DhcpServerEntries[entry.VrNicMac].DhcpInfos {
-				if e.Ip == entry.Ip {
-					log.Errorf("[vyos dhcp] found 2 entries with same ip, old: %+v, new: %+v", e, entry)
-					delete(DhcpServerEntries[entry.VrNicMac].DhcpInfos, e.Mac)
-				}
+			if err = b.Run(); err != nil {
+				log.Errorf("[vyos dhcp] add new entry [mac: %+v] failed, %s", entry, err)
 			}
-			DhcpServerEntries[entry.VrNicMac].DhcpInfos[entry.Mac] = entry
-		} else {
-			log.Debug("can not save dhcp entry to buffer")
 		}
 	}
 
@@ -554,9 +548,23 @@ missingok
 	_, err = dhcp_log_rotatoe_file.Write([]byte(rotate_conf))
 	utils.PanicOnError(err)
 
+	zvr_log_rotatoe_file, err := ioutil.TempFile(DHCPD_PATH, "zvrRotation")
+	utils.PanicOnError(err)
+	zvr_rotate_conf := `/home/vyos/zvr/zvr.log {
+size 10240k
+rotate 40
+compress
+copytruncate
+notifempty
+missingok
+}`
+	_, err = zvr_log_rotatoe_file.Write([]byte(zvr_rotate_conf))
+	utils.PanicOnError(err)
+
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/dhcp.conf; sudo mv %s /etc/logrotate.d/dhcp; sudo /etc/init.d/rsyslog restart",
-			dhcp_log_file.Name(), dhcp_log_rotatoe_file.Name()),
+		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/dhcp.conf; sudo mv %s /etc/logrotate.d/dhcp; sudo mv %s /etc/logrotate.d/dhcp;" +
+			"sudo /etc/init.d/rsyslog restart",
+			dhcp_log_file.Name(), dhcp_log_rotatoe_file.Name(), zvr_log_rotatoe_file.Name()),
 	}
 	err = bash.Run()
 	utils.PanicOnError(err)
