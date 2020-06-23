@@ -1161,9 +1161,22 @@ missingok
 }`
 	_, err = auth_rotatoe_file.Write([]byte(auth_rotate_conf)); utils.PanicOnError(err)
 
+	zvr_log_rotatoe_file, err := ioutil.TempFile(LB_CONF_DIR, "zvrRotation")
+	utils.PanicOnError(err)
+	zvr_rotate_conf := `/home/vyos/zvr/zvr.log {
+size 10240k
+rotate 40
+compress
+copytruncate
+notifempty
+missingok
+}`
+	_, err = zvr_log_rotatoe_file.Write([]byte(zvr_rotate_conf))
+	utils.PanicOnError(err)
+
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/haproxy.conf; sudo mv %s /etc/logrotate.d/haproxy; sudo mv %s /etc/logrotate.d/auth; sudo /etc/init.d/rsyslog restart",
-			lb_log_file.Name(), lb_log_rotatoe_file.Name(), auth_rotatoe_file.Name()),
+		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/haproxy.conf; sudo mv %s /etc/logrotate.d/haproxy; sudo mv %s /etc/logrotate.d/auth; sudo mv %s /etc/logrotate.d/zvr; sudo /etc/init.d/rsyslog restart",
+			lb_log_file.Name(), lb_log_rotatoe_file.Name(), auth_rotatoe_file.Name(), zvr_log_rotatoe_file.Name()),
 	}
 	err = bash.Run();utils.PanicOnError(err)
 
