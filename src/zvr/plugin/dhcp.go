@@ -562,7 +562,7 @@ missingok
 	utils.PanicOnError(err)
 
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/dhcp.conf; sudo mv %s /etc/logrotate.d/dhcp; sudo mv %s /etc/logrotate.d/dhcp;" +
+		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/dhcp.conf; sudo mv %s /etc/logrotate.d/dhcp; sudo mv %s /etc/logrotate.d/zvr;" +
 			"sudo /etc/init.d/rsyslog restart",
 			dhcp_log_file.Name(), dhcp_log_rotatoe_file.Name(), zvr_log_rotatoe_file.Name()),
 	}
