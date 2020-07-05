@@ -146,12 +146,16 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd) {
 	tree.Apply(false)
 }*/
 
-func getPolicyRouteSetName(rulesetName string) string  {
+func getPolicyRouteSetChainName(rulesetName string) string  {
 	return fmt.Sprintf("%s%s", POLICY_ROUTE_RULE_CHAIN, rulesetName)
 }
 
-func getPolicyRouteTableName(tableId int) string  {
+func getPolicyRouteTableChainName(tableId int) string  {
 	return fmt.Sprintf("%s%d", POLICY_ROUTE_TABLE_CHAIN, tableId)
+}
+
+func getPolicyRouteTableChainNameByString(tableId string) string  {
+	return fmt.Sprintf("%s%s", POLICY_ROUTE_TABLE_CHAIN, tableId)
 }
 
 func syncPolicyRoute(ctx *server.CommandContext) interface{} {
@@ -289,8 +293,12 @@ func deletePolicyRoutes()  {
 func createPolicyRouteTables(tableIds []int) error {
 	routeTablesCmds := []string{}
 	for _, rt := range tableIds {
+		chainName := getPolicyRouteTableChainName(rt)
 		routeTablesCmds = append(routeTablesCmds, fmt.Sprintf("sudo ip route flush table %d", rt))
 		routeTablesCmds = append(routeTablesCmds, fmt.Sprintf("ip rule add fwmark %d table %d", rt, rt))
+		routeTablesCmds = append(routeTablesCmds, fmt.Sprintf("sudo iptables -t mangle -N %s", chainName))
+		routeTablesCmds = append(routeTablesCmds, fmt.Sprintf(IPTABLES_MANGLE + " -A %s -m mark --mark 0 -j MARK --set-mark %d", chainName, rt))
+		routeTablesCmds = append(routeTablesCmds, fmt.Sprintf(IPTABLES_MANGLE + " -A %s -j CONNMARK --set-mark %d", chainName, rt))
 	}
 	routeTablesCmd := strings.Join(routeTablesCmds, ";")
 	bash := utils.Bash {
@@ -344,7 +352,7 @@ func createPolicyRouteRuleSet(RuleSets []policyRuleSetInfo) (error, map[string]b
 	chainCmds := []string{}
 	for _, rs := range RuleSets {
 		rsMap[rs.RuleSetName] = rs.System
-		psName := getPolicyRouteSetName(rs.RuleSetName)
+		psName := getPolicyRouteSetChainName(rs.RuleSetName)
 		chainCmds = append(chainCmds, fmt.Sprintf("sudo iptables -t mangle -N %s", psName))
 	}
 	chainCmd := strings.Join(chainCmds, ";")
@@ -367,15 +375,15 @@ func createPolicyRouteL3Ref(l3Refs []policyRuleSetNicRef, rsMap map[string]bool)
 	var nicCmds []string
 	for _, ref := range l3Refs {
 		nicname, err := utils.GetNicNameByMac(ref.Mac);utils.PanicOnError(err)
-		psName := getPolicyRouteSetName(ref.RuleSetName)
-		nicCmds = append(nicCmds, fmt.Sprintf(IPTABLES_MANGLE + " -A PREROUTING -i %s -j %s", nicname, psName))
+		ruleChainName := getPolicyRouteSetChainName(ref.RuleSetName)
+		nicCmds = append(nicCmds, fmt.Sprintf(IPTABLES_MANGLE + " -A PREROUTING -i %s -j %s", nicname, ruleChainName))
 
 		/* system rule set, add  */
 		if rsMap[ref.RuleSetName] {
 			/* rule set name like this: ZS-PR-RS-181, last number is table id */
 			items := strings.Split(ref.RuleSetName, "-")
-			nicCmds = append(nicCmds, fmt.Sprintf(IPTABLES_MANGLE + " -A %s -m mark --mark 0 -j MARK --set-mark %s", psName, items[len(items) -1]))
-			nicCmds = append(nicCmds, fmt.Sprintf(IPTABLES_MANGLE + " -A %s -j CONNMARK --set-mark %s", psName, items[len(items) -1]))
+			routeTableChainName := getPolicyRouteTableChainNameByString(items[len(items) -1])
+			nicCmds = append(nicCmds, fmt.Sprintf(IPTABLES_MANGLE + " -A %s -j %s", ruleChainName, routeTableChainName))
 		}
 	}
 	nicCmd := strings.Join(nicCmds, ";")
@@ -408,7 +416,7 @@ func createPolicyRouteRules(rules []policyRuleInfo, rsMap map[string]bool) error
 			continue
 		}
 
-		cmd := IPTABLES_MANGLE + " -A " + getPolicyRouteSetName(rule.RuleSetName)
+		cmd := IPTABLES_MANGLE + " -A " + getPolicyRouteSetChainName(rule.RuleSetName)
 		if rule.SourceIp != "" {
 			cmd += " -s " + rule.SourceIp
 		}
@@ -428,7 +436,7 @@ func createPolicyRouteRules(rules []policyRuleInfo, rsMap map[string]bool) error
 			cmd += " --dport " + rule.DestPort
 		}
 		if rule.TableNumber != 0 {
-			cmd += " -j " + getPolicyRouteTableName(rule.TableNumber)
+			cmd += " -j " + getPolicyRouteTableChainName(rule.TableNumber)
 		}
 		/* rule.RuleNumber */
 		ruleCmds = append(ruleCmds, cmd)
@@ -521,7 +529,7 @@ func initSystemMangleTable()  {
 	}
 	_, _, _, err := bash.RunWithReturn()
 	if err != nil {
-		log.Debugf("!!!init iptables mangle table failed because %s!!!", err)
+		log.Errorf("init iptables mangle table failed because %s", err)
 		return
 	}
 }
