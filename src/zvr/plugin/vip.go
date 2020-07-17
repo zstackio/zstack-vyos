@@ -654,32 +654,60 @@ func setVip(ctx *server.CommandContext) interface{} {
 	/* to fix jira http://jira.zstack.io/browse/ZSTAC-24095, it's possible that the vips has been configured before,
 	 * we need to delete it first */
 	if cmd.Rebuild {
+		var cmds []string
 		for _, vip := range cmd.Vips {
 			nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
 			cidr, err := utils.NetmaskToCIDR(vip.Netmask)
 			utils.PanicOnError(err)
 			addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
 			tree.Deletef("interfaces ethernet %s address %v", nicname, addr)
+			cmd := fmt.Sprintf("ip address del %s dev %s", addr, nicname)
+			cmds = append(cmds, cmd)
 		}
 		tree.Apply(false)
+
+		if len(cmds) > 0 {
+			bash := utils.Bash{
+				Command: strings.Join(cmds, ";"),
+			}
+			bash.Run()
+		}
 	}
 
 	for _, vip := range cmd.Vips {
 		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac); utils.PanicOnError(err)
 		cidr, err := utils.NetmaskToCIDR(vip.Netmask); utils.PanicOnError(err)
 		addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
-
-		/* in following 2 cases, will add vip to interface:
-		   1. vip is not in management nic
-		   2. current node is master vpc */
-		if !utils.IsInManagementCidr(vip.Ip) || IsMaster() {
-			if n := tree.Getf("interfaces ethernet %s address %v", nicname, addr); n == nil {
-				tree.SetfWithoutCheckExisting("interfaces ethernet %s address %v", nicname, addr)
-			}
+		if n := tree.Getf("interfaces ethernet %s address %v", nicname, addr); n == nil {
+			tree.SetfWithoutCheckExisting("interfaces ethernet %s address %v", nicname, addr)
 		}
 	}
 
 	tree.Apply(false)
+
+	/* delete ip address from backup router */
+	if utils.IsHaEabled() && !IsMaster() {
+		var cmds []string
+		for _, vip := range cmd.Vips {
+			if !utils.IsInManagementCidr(vip.Ip) {
+				continue
+			}
+			nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
+			utils.PanicOnError(err)
+			cidr, err := utils.NetmaskToCIDR(vip.Netmask)
+			utils.PanicOnError(err)
+			addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
+			cmd := fmt.Sprintf("ip address del %s dev %s", addr, nicname)
+			cmds = append(cmds, cmd)
+		}
+
+		if len(cmds) > 0 {
+			bash := utils.Bash{
+				Command: strings.Join(cmds, ";"),
+			}
+			bash.Run()
+		}
+	}
 
 	/* ad default qos for vip traffic counter */
 	for _, vip := range cmd.Vips {
