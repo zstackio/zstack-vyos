@@ -53,7 +53,7 @@ chmod +x $TARGET_PIMD
 
 TARGET_SSHD=/home/vyos/zvr/ssh/sshd.sh
 if [[ ! -f $TARGET_SSHD || $(diff sshd.sh $TARGET_SSHD) ]]; then
-    yes | mkdir -p /home/vyos/zvr/ssh/
+    yes | mkdir -p `dirname $TARGET_SSHD`
     yes | cp -f sshd.sh $TARGET_SSHD
 fi
 chown vyos:users $TARGET_SSHD
@@ -61,6 +61,7 @@ chmod +x $TARGET_SSHD
 
 TARGET_ZSN=/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 if [[ ! -f $TARGET_ZSN || $(diff zsn-crontab.sh $TARGET_ZSN) ]]; then
+    yes | mkdir -p `dirname $TARGET_ZSN`
     yes | cp -f zsn-crontab.sh $TARGET_ZSN
 fi
 chown vyos:users $TARGET_ZSN
