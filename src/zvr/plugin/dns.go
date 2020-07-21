@@ -4,6 +4,7 @@ import (
 	"zvr/server"
 	"zvr/utils"
 	"fmt"
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -30,6 +31,8 @@ type setVpcDnsCmd struct {
 	NicMac []string `json:"nicMac"`
 }
 
+var dnsServers map[string]string
+var nicNames map[string]string
 
 func makeDnsFirewallRuleDescription(nicname string) string {
 	return fmt.Sprintf("DNS-for-%s", nicname)
@@ -64,17 +67,17 @@ func setDnsHandler(ctx *server.CommandContext) interface{} {
 		dnsByMac[info.NicMac] = dns
 	}
 
-	/* delete previous config */
-	tree.Deletef("service dns forwarding")
+	dnsServers = map[string]string{}
+	nicNames = map[string]string{}
 
 	/* dns is ordered in management node, should not be changed in vyos */
 	for _, info := range cmd.Dns {
-		tree.SetfWithoutCheckExisting("service dns forwarding name-server %s", info.DnsAddress)
+		dnsServers[info.DnsAddress] = info.DnsAddress
 	}
 
 	for mac, _ := range dnsByMac {
 		eth, err := utils.GetNicNameByMac(mac); utils.PanicOnError(err)
-		tree.SetfWithoutCheckExisting("service dns forwarding listen-on %s", eth)
+		nicNames[eth] = eth
 
 		if utils.IsSkipVyosIptables() {
 			setDnsFirewallRules(eth)
@@ -95,20 +98,23 @@ func setDnsHandler(ctx *server.CommandContext) interface{} {
 
 	tree.Apply(false)
 
+	dnsConf := NewDnsmasq(nicNames, dnsServers)
+	dnsConf.RestartDnsmasq()
+
 	return nil
 }
 
 func removeDnsHandler(ctx *server.CommandContext) interface{} {
-	tree := server.NewParserFromShowConfiguration().Tree
-
 	cmd := &removeDnsCmd{}
 	ctx.GetCommand(cmd)
 
 	for _, info := range cmd.Dns {
-		tree.Deletef("service dns forwarding name-server %s", info.DnsAddress)
+		delete(dnsServers, info.DnsAddress)
 	}
 
-	tree.Apply(false)
+	dnsConf := NewDnsmasq(nicNames, dnsServers)
+	dnsConf.RestartDnsmasq()
+
 	return nil
 }
 
@@ -119,7 +125,8 @@ func setVpcDnsHandler(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 
 	/* remove old dns  */
-	tree.Deletef("service dns")
+	dnsServers = map[string]string{}
+	nicNames = map[string]string{}
 	priNics := utils.GetPrivteInterface()
 	for _, priNic := range priNics {
 		if utils.IsSkipVyosIptables() {
@@ -132,25 +139,15 @@ func setVpcDnsHandler(ctx *server.CommandContext) interface{} {
 		}
 	}
 
-	if (len(cmd.Dns) == 0 || len(cmd.NicMac) == 0) {
-		tree.Apply(false)
-		return nil
-	}
-
 	/* add new configure */
 	var nics []string
 	for _, mac := range cmd.NicMac{
 		eth, err := utils.GetNicNameByMac(mac); utils.PanicOnError(err)
 		nics = append(nics, eth)
 	}
-	if (len(nics) == 0) {
-		tree.Apply(false)
-		return nil
-	}
 
 	for _, nic := range nics {
-		tree.SetfWithoutCheckExisting("service dns forwarding listen-on %s", nic)
-
+		nicNames[nic] = nic
 		if utils.IsSkipVyosIptables() {
 			setDnsFirewallRules(nic)
 		} else {
@@ -169,11 +166,31 @@ func setVpcDnsHandler(ctx *server.CommandContext) interface{} {
 	}
 
 	for _, dns := range cmd.Dns {
-		tree.SetfWithoutCheckExisting("service dns forwarding name-server %s", dns)
+		dnsServers[dns] = dns
 	}
 
 	tree.Apply(false)
+
+	dnsConf := NewDnsmasq(nicNames, dnsServers)
+	dnsConf.RestartDnsmasq()
+
 	return nil
+}
+
+func addDnsNic(nicName string)  {
+	if _, ok := nicNames[nicName]; !ok {
+		log.Debugf("add new dns nic [%s]", nicName)
+		nicNames[nicName] = nicName
+		dnsConf := NewDnsmasq(nicNames, dnsServers)
+		dnsConf.RestartDnsmasq()
+	} else {
+		log.Debugf("dns nic [%s] already added", nicName)
+	}
+}
+
+func init()  {
+	dnsServers = map[string]string{}
+	nicNames = map[string]string{}
 }
 
 func DnsEntryPoint() {

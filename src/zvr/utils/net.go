@@ -411,3 +411,45 @@ func AddRoute(dst, nexthop string) error {
 
 	return nil
 }
+
+func DelIp6DefaultRoute() error {
+	bash := Bash{
+		Command: fmt.Sprintf("ip -6 r | grep default | awk '{print $3}'"),
+	}
+	ret, oldGw6, _, err := bash.RunWithReturn()
+	if err != nil || ret != 0 {
+		return nil
+	}
+
+	bash = Bash{
+		Command: fmt.Sprintf(fmt.Sprintf("ip -6 route del default via %s", oldGw6)),
+	}
+	_, _, _, err = bash.RunWithReturn()
+
+	return err
+}
+
+func AddIp6DefaultRoute(gw6, dev string)  {
+	/* default ip6 route
+	# ip -6 r | grep default
+	default via caca::1 dev eth1  metric 1024 */
+
+	oldGw6 := ""
+	bash := Bash{
+		Command: fmt.Sprintf("ip -6 r | grep default | awk '{print $3}'"),
+	}
+	ret, o, _, err := bash.RunWithReturn()
+	if err == nil && ret == 0{
+		oldGw6 = o
+	}
+
+	var cmds []string
+	if oldGw6 != "" {
+		cmds = append(cmds, fmt.Sprintf("ip -6 route del default via %s", oldGw6))
+	}
+	cmds = append(cmds, fmt.Sprintf("ip -6 route add default via %s dev %s", gw6, dev))
+	bash = Bash{
+		Command: strings.Join(cmds, ";"),
+	}
+	_, _, _, err = bash.RunWithReturn(); PanicOnError(err)
+}

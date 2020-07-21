@@ -15,19 +15,25 @@ const (
 	VR_REMOVE_NIC_PATH = "/removenic"
 	VR_CHANGE_DEFAULT_NIC_PATH = "/changeDefaultNic"
 	ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER = 9999
+	RA_MAX_INTERVAL = 60
+	RA_MIN_INTERVAL = 15
 )
 
 type nicInfo struct {
-	Ip string `json:"ip"`
-	Netmask string `json:"netmask"`
-	Gateway string `json:"gateway"`
-	Mac string `json:"Mac"`
-	Category string `json:"category"`
-	L2Type string `json:"l2type"`
-	PhysicalInterface string `json:"physicalInterface"`
-	Vni int `json:"vni"`
+	Ip                    string `json:"ip"`
+	Netmask               string `json:"netmask"`
+	Gateway               string `json:"gateway"`
+	Mac                   string `json:"Mac"`
+	Category              string `json:"category"`
+	L2Type                string `json:"l2type"`
+	PhysicalInterface     string `json:"physicalInterface"`
+	Vni                   int    `json:"vni"`
 	FirewallDefaultAction string `json:"firewallDefaultAction"`
-	Mtu int `json:"mtu"`
+	Mtu                   int    `json:"mtu"`
+	Ip6                   string `json:"Ip6"`
+	PrefixLength          int    `json:"PrefixLength"`
+	Gateway6              string `json:"Gateway6"`
+	AddressMode           string `json:"AddressMode"`
 }
 
 type addNicCallback interface {
@@ -108,7 +114,7 @@ func configureLBFirewallRule(tree *server.VyosConfigTree, dev string) (err error
 	for _, priNic := range priNics {
 		if priNic != dev && tree.FindFirewallRuleByDescriptionRegex(priNic, "local", des, utils.StringRegCompareFn) != nil {
 			sourceNic = priNic
-			break;
+			break
 		}
 	}
 
@@ -150,9 +156,16 @@ func configureNic(ctx *server.CommandContext) interface{} {
 				return nil
 			}
 		}, 5, 1); utils.PanicOnError(err)
-		cidr, err := utils.NetmaskToCIDR(nic.Netmask); utils.PanicOnError(err)
-		addr := fmt.Sprintf("%v/%v", nic.Ip, cidr)
-		tree.SetfWithoutCheckExisting("interfaces ethernet %s address %v", nicname, addr)
+		if nic.Ip != "" {
+			cidr, err := utils.NetmaskToCIDR(nic.Netmask);
+			utils.PanicOnError(err)
+			addr := fmt.Sprintf("%v/%v", nic.Ip, cidr)
+			tree.Setf("interfaces ethernet %s address %v", nicname, addr)
+		}
+		if nic.Ip6 != "" && nic.AddressMode != "SLAAC" {
+			tree.SetfWithoutCheckExisting("interfaces ethernet %s address %s", nicname, fmt.Sprintf("%s/%d", nic.Ip6, nic.PrefixLength))
+		}
+
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s duplex auto", nicname)
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s smp_affinity auto", nicname)
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s speed auto", nicname)
@@ -160,6 +173,27 @@ func configureNic(ctx *server.CommandContext) interface{} {
 			b := utils.NewBash()
 			b.Command = fmt.Sprintf("ip link set mtu %d dev '%s'", nic.Mtu, nicname)
 			b.Run()
+		}
+
+		if nic.Ip6 != "" && nic.Category == "Private"{
+			switch nic.AddressMode {
+			case "Stateful-DHCP":
+				tree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag true", nicname)
+				tree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag true", nicname)
+				tree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag false", nicname, nic.Ip6, nic.PrefixLength)
+			case "Stateless-DHCP":
+				tree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag false", nicname)
+				tree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag true", nicname)
+				tree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag true", nicname, nic.Ip6, nic.PrefixLength)
+			case "SLAAC":
+				tree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag false", nicname)
+				tree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag false", nicname)
+				tree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag true", nicname, nic.Ip6, nic.PrefixLength)
+			}
+			tree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d on-link-flag true", nicname, nic.Ip6, nic.PrefixLength)
+			tree.Setf("interfaces ethernet %s ipv6 router-advert max-interval %d", nicname, RA_MAX_INTERVAL)
+			tree.Setf("interfaces ethernet %s ipv6 router-advert min-interval %d", nicname, RA_MIN_INTERVAL)
+			tree.Setf("interfaces ethernet %s ipv6 router-advert send-advert true", nicname)
 		}
 
 		if utils.IsSkipVyosIptables() {
@@ -263,13 +297,18 @@ func configureNic(ctx *server.CommandContext) interface{} {
 
 	generateNotityScripts()
 	for _, nic := range cmd.Nics {
+		/* TODO: add ipv6 dad */
+		if nic.Ip == "" {
+			continue
+		}
+
 		nicname, err := utils.GetNicNameByMac(nic.Mac)
 		if err != nil {
 			continue
 		}
 
 		if (!utils.IsHaEabled()) {
-			if utils.CheckIpDuplicate(nicname, nic.Ip) == true {
+			if nic.Ip != "" && utils.CheckIpDuplicate(nicname, nic.Ip) == true {
 				utils.PanicOnError(errors.Errorf("duplicate ip %s in nic %s", nic.Ip, nic.Mac))
 			}
 		}
@@ -398,7 +437,15 @@ func changeDefaultNic(ctx *server.CommandContext) interface{} {
 
 	tree := server.NewParserFromShowConfiguration().Tree
 	/* change default gateway */
-	tree.Setf("system gateway-address %s", cmd.NewNic.Gateway)
+	tree.Deletef("system gateway-address")
+	if cmd.NewNic.Gateway != "" {
+		tree.Setf("system gateway-address %s", cmd.NewNic.Gateway)
+	}
+	utils.DelIp6DefaultRoute()
+	if cmd.NewNic.Gateway6 != "" {
+		pubNic, err := utils.GetNicNameByMac(cmd.NewNic.Mac); utils.PanicOnError(err)
+		utils.AddIp6DefaultRoute(cmd.NewNic.Gateway6, pubNic)
+	}
 
 	if utils.IsSkipVyosIptables() {
 		/* delete all snat rules */
