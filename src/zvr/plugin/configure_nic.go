@@ -227,7 +227,7 @@ func configureNic(ctx *server.CommandContext) interface{} {
 
 		if nic.L2Type != "" {
 			b := utils.NewBash()
-			b.Command = fmt.Sprintf("ip link set dev %s alias '%s'", nicname, makeAlias(nic))
+			b.Command = fmt.Sprintf("sudo ip link set dev %s alias '%s'", nicname, makeAlias(nic))
 			b.Run()
 		}
 
@@ -250,7 +250,7 @@ func configureNic(ctx *server.CommandContext) interface{} {
 		cmds := []string{}
 		for _, nic := range cmd.Nics {
 			nicname, _ = utils.GetNicNameByMac(nic.Mac)
-			cmds = append(cmds, fmt.Sprintf("ip link set dev %v down", nicname))
+			cmds = append(cmds, fmt.Sprintf("sudo ip link set dev %v down", nicname))
 		}
 		b := utils.Bash{
 			Command: strings.Join(cmds, "\n"),
@@ -286,7 +286,7 @@ func checkNicIsUp(nicname string, panicIfDown bool) error {
 	var retryInterval uint = 1
 
 	bash := utils.Bash{
-		Command:fmt.Sprintf("ip link show dev %s up", nicname),
+		Command:fmt.Sprintf("sudo ip link show dev %s up", nicname),
 	}
 	err := utils.Retry(func() error {
 		_, o, _, _ := bash.RunWithReturn()
