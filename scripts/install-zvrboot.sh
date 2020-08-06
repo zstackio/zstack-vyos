@@ -9,12 +9,17 @@ err_exit() {
 tar xzf data.tar.gz
 err_exit "unable to untar data.tar.gz"
 set -u
+
+ARCH=`uname -m`
+LABLE=''
+[ x"$ARCH" != x"x86_64" ] && LABLE="_$ARCH"
+
 TARGET_BIN=/sbin/zvrboot
-cp -f zvrboot $TARGET_BIN
+cp -f zvrboot${LABLE} $TARGET_BIN
 chmod +x $TARGET_BIN
 
 VYATTA_BIN=/opt/vyatta/sbin/
-cp -f zvrboot $VYATTA_BIN
+cp -f zvrboot${LABLE} $VYATTA_BIN
 chmod +x $VYATTA_BIN
 
 mkdir -p /home/vyos/zvr
