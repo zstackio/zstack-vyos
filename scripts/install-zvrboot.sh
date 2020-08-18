@@ -18,7 +18,7 @@ TARGET_BIN=/sbin/zvrboot
 cp -f zvrboot${LABLE} $TARGET_BIN
 chmod +x $TARGET_BIN
 
-VYATTA_BIN=/opt/vyatta/sbin/
+VYATTA_BIN=/opt/vyatta/sbin/zvrboot
 cp -f zvrboot${LABLE} $VYATTA_BIN
 chmod +x $VYATTA_BIN
 
