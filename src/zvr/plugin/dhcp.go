@@ -130,23 +130,15 @@ type dhcpServerFiles struct {
 	TempConf  string
 }
 
+func getHostNameFromIp(ip string) string {
+	return strings.Replace(ip, ".", "-", -1)
+}
+
+func getHostNameFromIpMac(ip, mac string) string {
+	return fmt.Sprintf("%s-%s", strings.Replace(ip, ".", "-", -1), strings.Replace(mac, ":", "", -1))
+}
+
 func writeDhcpScriptFile() {
-	/*hosts := DEFAULT_HOSTS
-	for _, dhcpServer := range DhcpServerEntries {
-		for _, entry := range dhcpServer.DhcpInfos {
-			hosts = append(hosts, fmt.Sprintf("%s %s", entry.Ip, entry.Hostname))
-		}
-	}
-
-	hostConents := strings.Join(hosts, "\n")
-	err := ioutil.WriteFile(HOST_HOST_FILE_TEMP, []byte(hostConents), 0755)
-	utils.PanicOnError(err)
-	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo mv %s %s; sudo pkill -1 dnsmasq", HOST_HOST_FILE_TEMP, HOST_HOST_FILE),
-	}
-	_, _, _, err = bash.RunWithReturn()
-	utils.PanicOnError(err)*/
-
 	var fileList []dhcpServerFiles
 	if utils.IsHaEabled() {
 		/* generate a temp configure file for ha */
@@ -188,6 +180,7 @@ func addDhcpHandler(ctx *server.CommandContext) interface{} {
 		hostName := entry.Hostname
 		if hostName == "" {
 			hostName = strings.Replace(entry.Ip, ".", "-", -1)
+			entry.Hostname = hostName
 		}
 
 		if _, ok := DhcpServerEntries[entry.VrNicMac]; ok {
@@ -212,6 +205,11 @@ EOF`, omApiPort, e.Mac),
 						log.Errorf("[vyos dhcp] delete old entry [mac: %s] failed, %s", e.Mac, err)
 					}
 					delete(DhcpServerEntries[entry.VrNicMac].DhcpInfos, e.Mac)
+				}
+				/* duplicated hostname */
+				if e.Hostname == hostName {
+					hostName = getHostNameFromIpMac(entry.Ip, entry.Mac)
+					entry.Hostname = hostName
 				}
 			}
 			DhcpServerEntries[entry.VrNicMac].DhcpInfos[entry.Mac] = entry
@@ -445,11 +443,7 @@ func getDhcpConfigFile(dhcp DhcpServerStruct, confFile string, nicname string)  
 
 	for _, info := range dhcp.DhcpInfos {
 		entry := map[string]interface{}{}
-		if info.Hostname != "" {
-			entry["HostName"] = info.Hostname
-		} else {
-			entry["HostName"] = strings.Replace(info.Ip, ".", "-", -1)
-		}
+		entry["HostName"] = info.Hostname
 		entry["Ip"] = info.Ip
 		entry["Mac"] = info.Mac
 		if info.IsDefaultL3Network {
@@ -479,9 +473,23 @@ func startDhcpServer(dhcp dhcpServer) {
 	os.Truncate(leaseFile, 0)
 	os.Remove(pidFile)
 
+	hostNameMap := make(map[string]string)
+
 	dhcpStruct := DhcpServerStruct{dhcp.NicMac,dhcp.Subnet, dhcp.Netmask,  dhcp.Gateway,
 		dhcp.DnsServer, dhcp.DnsDomain, dhcp.Mtu, map[string]dhcpInfo{}}
 	for _, info := range dhcp.DhcpInfos {
+		/* if there is duplicated hostname */
+		hostName := info.Hostname
+		if hostName == "" {
+			hostName = getHostNameFromIp(info.Ip)
+			info.Hostname = hostName
+		}
+		if _, ok := hostNameMap[hostName]; ok {
+			info.Hostname = getHostNameFromIpMac(info.Ip, info.Mac)
+			hostNameMap[info.Hostname] = info.Hostname
+		} else {
+			hostNameMap[hostName] = hostName
+		}
 		dhcpStruct.DhcpInfos[info.Mac] = info
 	}
 	getDhcpConfigFile(dhcpStruct, conFile, nicname)
