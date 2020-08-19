@@ -27,6 +27,7 @@ import (
 
 const (
 	REFRESH_LB_PATH = "/lb/refresh"
+	REFRESH_LB_LOG_LEVEL_PATH = "/lb/log/level"
 	DELETE_LB_PATH = "/lb/delete"
 	CREATE_CERTIFICATE_PATH = "/certificate/create"
 
@@ -540,7 +541,7 @@ func (this *GBListener) createListenerServiceConfigure(lb lbInfo)  (err error) {
 enabled = true  # true | false
 bind = ":{{.ApiPort}}"  # bind host:port
 [logging]
-level = "debug"   # "debug" | "info" | "warn" | "error"
+level = "info"   # "debug" | "info" | "warn" | "error"
 #output = "/var/log/gobetween_{{.ListenerUuid}}.log" # "stdout" | "stderr" | "/path/to/gobetween.log"
 output = "/var/log/gobetween.log"
 
@@ -886,6 +887,41 @@ func removeUnusedCertificate()  {
 			err := os.Remove(file); utils.LogError(err)
 		}
 	}
+}
+
+type lbLogLevelConf struct {
+	level string `json:"level"`
+}
+
+/**
+emerg - 0
+alert - 1
+err - 3
+warn - 4
+notice - 5
+info - 6 (default)
+debug - 7
+*/
+func refreshLogLevel(ctx *server.CommandContext) interface{} {
+	cmd := &lbLogLevelConf{}
+	ctx.GetCommand(cmd)
+
+	lb_log_file, err := ioutil.TempFile(LB_CONF_DIR, "rsyslog")
+	utils.PanicOnError(err)
+	conf := fmt.Sprintf(`$ModLoad imudp
+$UDPServerRun 514
+local1.%s     /var/log/haproxy.log`, strings.ToLower(cmd.level))
+	_, err = lb_log_file.Write([]byte(conf))
+	utils.PanicOnError(err)
+
+	bash := utils.Bash{
+		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/haproxy.conf; sudo /etc/init.d/rsyslog restart",
+			lb_log_file.Name()),
+	}
+	err = bash.Run()
+	utils.PanicOnError(err)
+
+	return nil
 }
 
 func refreshLb(ctx *server.CommandContext) interface{} {
@@ -1264,12 +1300,13 @@ func enableLbLog() {
 	lb_log_file, err := ioutil.TempFile(LB_CONF_DIR, "rsyslog"); utils.PanicOnError(err)
 	conf := `$ModLoad imudp
 $UDPServerRun 514
-local1.debug     /var/log/haproxy.log`
+local1.info     /var/log/haproxy.log`
 	_, err = lb_log_file.Write([]byte(conf)); utils.PanicOnError(err)
 
 	lb_log_rotatoe_file, err := ioutil.TempFile(LB_CONF_DIR, "rotation"); utils.PanicOnError(err)
 	rotate_conf := `/var/log/haproxy.log {
 size 10240k
+daily
 rotate 20
 compress
 copytruncate
@@ -1278,6 +1315,7 @@ missingok
 }
 /var/log/gobetween*.log {
 size 10240k
+daily
 rotate 20
 compress
 copytruncate
@@ -1290,6 +1328,7 @@ missingok
 	auth_rotatoe_file, err := ioutil.TempFile(LB_CONF_DIR, "auth"); utils.PanicOnError(err)
 	auth_rotate_conf := `/var/log/auth.log {
 size 10240k
+daily
 rotate 20
 compress
 copytruncate
@@ -1308,6 +1347,7 @@ missingok
 
 func LbEntryPoint() {
 	server.RegisterAsyncCommandHandler(REFRESH_LB_PATH, server.VyosLock(refreshLb))
+	server.RegisterAsyncCommandHandler(REFRESH_LB_LOG_LEVEL_PATH, server.VyosLock(refreshLogLevel))
 	server.RegisterAsyncCommandHandler(DELETE_LB_PATH, server.VyosLock(deleteLb))
 	server.RegisterAsyncCommandHandler(CREATE_CERTIFICATE_PATH, server.VyosLock(createCertificate))
 }
