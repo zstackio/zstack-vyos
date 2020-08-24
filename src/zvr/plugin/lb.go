@@ -1168,18 +1168,18 @@ local1.info     /var/log/haproxy.log`
 
 	lb_log_rotatoe_file, err := ioutil.TempFile(LB_CONF_DIR, "rotation"); utils.PanicOnError(err)
 	rotate_conf := `/var/log/haproxy.log {
-size 10240k
+size 102400k
 daily
-rotate 20
+rotate 10
 compress
 copytruncate
 notifempty
 missingok
 }
 /var/log/gobetween*.log {
-size 10240k
+size 102400k
 daily
-rotate 20
+rotate 10
 compress
 copytruncate
 notifempty
@@ -1190,9 +1190,9 @@ missingok
 	/* add log rotate for /var/log/auth.log */
 	auth_rotatoe_file, err := ioutil.TempFile(LB_CONF_DIR, "auth"); utils.PanicOnError(err)
 	auth_rotate_conf := `/var/log/auth.log {
-size 10240k
+size 102400k
 daily
-rotate 20
+rotate 10
 compress
 copytruncate
 notifempty
