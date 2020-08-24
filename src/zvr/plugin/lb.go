@@ -209,7 +209,6 @@ ulimit-n {{.ulimit}}
 
 defaults
 log global
-option tcplog
 option dontlognull
 option http-server-close
 
