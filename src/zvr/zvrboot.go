@@ -34,6 +34,10 @@ type nic struct {
 	l2PhysicalInterface string
 	vni int
 	mtu int
+	ip6  string
+	prefixLength int
+	gateway6 string
+	addressMode string
 }
 
 var bootstrapInfo map[string]interface{} = make(map[string]interface{})
@@ -140,7 +144,7 @@ func checkIpDuplicate () {
 	// duplicate ip check
 	dupinfo := ""
 	for _, nic := range nics {
-		if utils.CheckIpDuplicate(nic.name, nic.ip) {
+		if nic.ip != "" && utils.CheckIpDuplicate(nic.name, nic.ip) {
 			dupinfo = fmt.Sprintf("%s duplicate ip %s in nic %s\n", dupinfo, nic.ip, nic.mac)
 		}
 	}
@@ -154,6 +158,7 @@ func checkIpDuplicate () {
 func configureVyos() {
 	resetVyos()
 	var defaultNic, defaultGW string = "", ""
+	defaultGW6 := ""
 
 	mgmtNic := bootstrapInfo["managementNic"].(map[string]interface{})
 	if mgmtNic == nil {
@@ -168,10 +173,23 @@ func configureVyos() {
 	eth0 := &nic{name: "eth0" }
 	var ok bool
 	eth0.mac, ok = mgmtNic["mac"].(string); utils.PanicIfError(ok, errors.New("cannot find 'mac' field for the management nic"))
-	eth0.netmask, ok = mgmtNic["netmask"].(string); utils.PanicIfError(ok, errors.New("cannot find 'netmask' field for the management nic"))
-	eth0.ip, ok = mgmtNic["ip"].(string); utils.PanicIfError(ok, errors.New("cannot find 'ip' field for the management nic"))
+	eth0.ip, ok = mgmtNic["ip"].(string)
+	ip, ok := mgmtNic["ip"].(string)
+	ip6, ok6 := mgmtNic["ip6"].(string); utils.PanicIfError(ok || ok6, fmt.Errorf("cannot find 'ip' field for the nic[name:%s]", eth0.name))
+	if ip != "" {
+		eth0.ip = ip
+		eth0.netmask, ok = mgmtNic["netmask"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'netmask' field for the nic[name:%s]", eth0.name))
+		eth0.gateway = mgmtNic["gateway"].(string)
+	}
+	if ip6 != "" {
+		eth0.ip6 = ip6
+		prefixLength, ok := mgmtNic["prefixLength"].(float64); utils.PanicIfError(ok, fmt.Errorf("cannot find 'prefixLength' field for the nic[name:%s]", eth0.name))
+		eth0.prefixLength = int(prefixLength)
+		eth0.gateway6 = mgmtNic["gateway6"].(string)
+		eth0.addressMode, ok = mgmtNic["addressMode"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'addressMode' field for the nic[name:%s]", eth0.name))
+	}
 	eth0.isDefaultRoute = mgmtNic["isDefaultRoute"].(bool)
-	eth0.gateway = mgmtNic["gateway"].(string)
+
 	if mtuFloat, ok := mgmtNic["mtu"].(float64); ok {
 		eth0.mtu = int(mtuFloat)
 	}
@@ -195,9 +213,21 @@ func configureVyos() {
 			n := &nic{}
 			n.name, ok = onic["deviceName"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'deviceName' field for the nic"))
 			n.mac, ok = onic["mac"].(string); utils.PanicIfError(ok, errors.New("cannot find 'mac' field for the nic"))
-			n.netmask, ok = onic["netmask"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'netmask' field for the nic[name:%s]", n.name))
-			n.ip, ok = onic["ip"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'ip' field for the nic[name:%s]", n.name))
-			n.gateway = onic["gateway"].(string)
+			ip, ok := onic["ip"].(string)
+			ip6, ok6 := onic["ip6"].(string); utils.PanicIfError(ok || ok6, fmt.Errorf("cannot find 'ip' field for the nic[name:%s]", n.name))
+			if ip != "" {
+				n.ip = ip
+				n.netmask, ok = onic["netmask"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'netmask' field for the nic[name:%s]", n.name))
+				n.gateway = onic["gateway"].(string)
+			}
+			if ip6 != "" {
+				n.ip6 = ip6
+				prefixLength, ok := onic["prefixLength"].(float64); utils.PanicIfError(ok, fmt.Errorf("cannot find 'prefixLength' field for the nic[name:%s]", n.name))
+				n.prefixLength = int(prefixLength)
+				n.gateway6 = onic["gateway6"].(string)
+				n.addressMode, ok = onic["addressMode"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'addressMode' field for the nic[name:%s]", n.name))
+			}
+
 			n.isDefaultRoute = onic["isDefaultRoute"].(bool)
 			if mtuFloat, ok := onic["mtu"].(float64); ok {
 				n.mtu = int(mtuFloat)
@@ -227,10 +257,19 @@ func configureVyos() {
 	// check integrity of nics
 	for _, nic := range nics {
 		utils.Assertf(nic.name != "", "name cannot be empty[mac:%s]", nic.mac)
-		utils.Assertf(nic.ip != "", "ip cannot be empty[nicname: %s]", nic.name)
-		utils.Assertf(nic.gateway != "", "gateway cannot be empty[nicname:%s]", nic.name)
-		utils.Assertf(nic.netmask != "", "netmask cannot be empty[nicname:%s]", nic.name)
 		utils.Assertf(nic.mac != "", "mac cannot be empty[nicname:%s]", nic.name)
+		utils.Assertf(nic.ip != "" || nic.ip6 != "", "ip cannot be empty[nicname: %s]", nic.name)
+		/* for dual stack nic, nic.ip and nic.ip6 can not not empty at same time  */
+		if nic.ip != "" {
+			utils.Assertf(nic.netmask != "", "netmask cannot be empty[nicname:%s]", nic.name)
+			utils.Assertf(nic.gateway != "", "gateway cannot be empty[nicname:%s]", nic.name)
+		}
+
+		if nic.ip6 != ""{
+			utils.Assertf(nic.prefixLength != 0, "ipv6 prefix length cannot be empty[nicname:%s]", nic.name)
+			utils.Assertf(nic.addressMode != "", "ipv6 address mode cannot be empty[nicname:%s]", nic.name)
+			utils.Assertf(nic.gateway6 != "", "ipv6 gateway cannot be empty[nicname:%s]", nic.name)
+		}
 
 		nicname, err := utils.GetNicNameByMac(nic.mac); utils.PanicOnError(err)
 		if nicname != nic.name {
@@ -274,7 +313,7 @@ func configureVyos() {
 		b.PanicIfError()
 	}
 
-	log.Debugf("haStatus %+v, nics %+v", haStatus, nics)
+	log.Debugf("haStatus %+v", haStatus)
 	cmds := []string{}
 	if haStatus != "NoHa" {
 		for _, nic := range nics {
@@ -325,9 +364,15 @@ func configureVyos() {
 	}
 
 	setNic := func(nic *nic) {
-		cidr, err := utils.NetmaskToCIDR(nic.netmask); utils.PanicOnError(err)
-		//tree.Setf("interfaces ethernet %s hw-id %s", nic.name, nic.mac)
-		tree.Setf("interfaces ethernet %s address %s", nic.name, fmt.Sprintf("%v/%v", nic.ip, cidr))
+		if nic.ip != "" {
+			cidr, err := utils.NetmaskToCIDR(nic.netmask)
+			utils.PanicOnError(err)
+			//tree.Setf("interfaces ethernet %s hw-id %s", nic.name, nic.mac)
+			tree.Setf("interfaces ethernet %s address %s", nic.name, fmt.Sprintf("%v/%v", nic.ip, cidr))
+		}
+		if nic.ip6 != "" && nic.addressMode != "SLAAC" {
+			tree.SetfWithoutCheckExisting("interfaces ethernet %s address %s", nic.name, fmt.Sprintf("%s/%d", nic.ip6, nic.prefixLength))
+		}
 		tree.Setf("interfaces ethernet %s duplex auto", nic.name)
 		tree.Setf("interfaces ethernet %s smp_affinity auto", nic.name)
 		tree.Setf("interfaces ethernet %s speed auto", nic.name)
@@ -345,6 +390,27 @@ func configureVyos() {
 			b := utils.NewBash()
 			b.Command = fmt.Sprintf("ip link set dev %s alias '%s'", nic.name, makeAlias(nic))
 			b.Run()
+		}
+
+		if nic.ip6 != "" && nic.category == "Private" {
+			switch nic.addressMode {
+			case "Stateful-DHCP":
+				tree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag true", nic.name)
+				tree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag true", nic.name)
+				tree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag false", nic.name, nic.ip6, nic.prefixLength)
+			case "Stateless-DHCP":
+				tree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag false", nic.name)
+				tree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag true", nic.name)
+				tree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag true", nic.name, nic.ip6, nic.prefixLength)
+			case "SLAAC":
+				tree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag false", nic.name)
+				tree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag false", nic.name)
+				tree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag true", nic.name, nic.ip6, nic.prefixLength)
+			}
+			tree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d on-link-flag true", nic.name, nic.ip6, nic.prefixLength)
+			tree.Setf("interfaces ethernet %s ipv6 router-advert max-interval 60", nic.name)
+			tree.Setf("interfaces ethernet %s ipv6 router-advert min-interval 15", nic.name)
+			tree.Setf("interfaces ethernet %s ipv6 router-advert send-advert true", nic.name)
 		}
 	}
 
@@ -381,6 +447,7 @@ func configureVyos() {
 			if nic.isDefaultRoute {
 				defaultGW = nic.gateway
 				defaultNic = nic.name
+				defaultGW6 = nic.gateway6
 			}
 			tree.SetFirewallOnInterface(nic.name, "local",
 				"action accept",
@@ -488,7 +555,7 @@ func configureVyos() {
 	}
 
 	/* this is workaround for zstac*/
-	log.Debugf("the vr public network %s at %s", defaultGW, defaultNic)
+	log.Debugf("the vr gateway: %s, ipv6 gateway: %s at %s", defaultGW, defaultGW6, defaultNic)
 	if defaultGW != "" {
 		//check default gw in route and it's workaround for ZSTAC-15742, the manage and public are in same cidr with different ranges
 		bash := utils.Bash{
@@ -505,6 +572,10 @@ func configureVyos() {
 			b.Run()
 			b.PanicIfError()
 		}
+	}
+
+	if defaultGW6 != "" {
+		utils.AddIp6DefaultRoute(defaultGW6, defaultNic)
 	}
 }
 

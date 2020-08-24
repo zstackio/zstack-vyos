@@ -501,7 +501,6 @@ func startDhcpServer(dhcp dhcpServer) {
 	err = b.Run()
 
 	tree := server.NewParserFromShowConfiguration().Tree
-	tree.SetfWithoutCheckExisting("service dns forwarding listen-on %s", nicname)
 
 	if utils.IsSkipVyosIptables() {
 		setDhcpFirewallRules(nicname)
@@ -532,6 +531,8 @@ func startDhcpServer(dhcp dhcpServer) {
 
 	delete(DhcpServerEntries, dhcp.NicMac)
 	DhcpServerEntries[dhcp.NicMac] = &dhcpStruct
+
+	addDnsNic(nicname)
 }
 
 func enableDhcpLog() {
