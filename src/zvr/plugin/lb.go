@@ -889,7 +889,7 @@ func removeUnusedCertificate()  {
 }
 
 type lbLogLevelConf struct {
-	level string `json:"level"`
+	Level string `json:"level"`
 }
 
 /**
@@ -909,7 +909,7 @@ func refreshLogLevel(ctx *server.CommandContext) interface{} {
 	utils.PanicOnError(err)
 	conf := fmt.Sprintf(`$ModLoad imudp
 $UDPServerRun 514
-local1.%s     /var/log/haproxy.log`, strings.ToLower(cmd.level))
+local1.%s     /var/log/haproxy.log`, strings.ToLower(cmd.Level))
 	_, err = lb_log_file.Write([]byte(conf))
 	utils.PanicOnError(err)
 
