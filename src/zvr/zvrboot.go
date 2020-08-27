@@ -85,8 +85,9 @@ func parseEsxBootInfo() {
 			log.Debugf("bootstrap info not ready, waiting ...")
 			return false
 		}
-
+		
 		content, err := ioutil.ReadFile(TMP_LOCATION_FOR_ESX); utils.PanicOnError(err)
+		log.Debugf("recieved bootstrap info:\nsize:%d\n%s", len(content), string(content))
 		if err = json.Unmarshal(content, &bootstrapInfo); err != nil {
 			panic(errors.Wrap(err, fmt.Sprintf("unable to JSON parse:\n %s", string(content))))
 		}
@@ -94,7 +95,6 @@ func parseEsxBootInfo() {
 		err = utils.MkdirForFile(BOOTSTRAP_INFO_CACHE, 0666); utils.PanicOnError(err)
 		err = os.Rename(TMP_LOCATION_FOR_ESX, BOOTSTRAP_INFO_CACHE); utils.PanicOnError(err)
 		err = os.Chmod(BOOTSTRAP_INFO_CACHE, 0777); utils.PanicOnError(err)
-		log.Debugf("recieved bootstrap info:\n%s", string(content))
 		return true
 	}, time.Duration(300)*time.Second, time.Duration(1)*time.Second)
 }
@@ -106,6 +106,7 @@ func parseKvmBootInfo() {
 			log.Debugf("no content in %s, it may not be ready, wait it ...", VIRTIO_PORT_PATH)
 			return false
 		}
+		log.Debugf("recieved bootstrap info:\nsize:%d\n%s", len(content), string(content))
 
 		if err := json.Unmarshal(content, &bootstrapInfo); err != nil {
 			panic(errors.Wrap(err, fmt.Sprintf("unable to JSON parse:\n %s", string(content))))
@@ -114,7 +115,6 @@ func parseKvmBootInfo() {
 		err = utils.MkdirForFile(BOOTSTRAP_INFO_CACHE, 0666); utils.PanicOnError(err)
 		err = ioutil.WriteFile(BOOTSTRAP_INFO_CACHE, content, 0666); utils.PanicOnError(err)
 		err = os.Chmod(BOOTSTRAP_INFO_CACHE, 0777); utils.PanicOnError(err)
-		log.Debugf("recieved bootstrap info:\n%s", string(content))
 		return true
 	}, time.Duration(300)*time.Second, time.Duration(1)*time.Second)
 }
