@@ -764,15 +764,12 @@ notice - 5
 info - 6 (default)
 debug - 7
 */
-func refreshLogLevel(ctx *server.CommandContext) interface{} {
-	cmd := &lbLogLevelConf{}
-	ctx.GetCommand(cmd)
-
+func doRefreshLogLevel(level string)  {
 	lb_log_file, err := ioutil.TempFile(LB_CONF_DIR, "rsyslog")
 	utils.PanicOnError(err)
 	conf := fmt.Sprintf(`$ModLoad imudp
 $UDPServerRun 514
-local1.%s     /var/log/haproxy.log`, strings.ToLower(cmd.Level))
+local1.%s     /var/log/haproxy.log`, strings.ToLower(level))
 	_, err = lb_log_file.Write([]byte(conf))
 	utils.PanicOnError(err)
 
@@ -782,6 +779,13 @@ local1.%s     /var/log/haproxy.log`, strings.ToLower(cmd.Level))
 	}
 	err = bash.Run()
 	utils.PanicOnError(err)
+}
+
+func refreshLogLevel(ctx *server.CommandContext) interface{} {
+	cmd := &lbLogLevelConf{}
+	ctx.GetCommand(cmd)
+
+	doRefreshLogLevel(cmd.Level)
 
 	return nil
 }
