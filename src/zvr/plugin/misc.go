@@ -26,6 +26,7 @@ type InitConfig struct {
 	RestartDnsmasqAfterNumberOfSIGUSER1 int `json:"restartDnsmasqAfterNumberOfSIGUSER1"`
 	Uuid string `json:"uuid"`
 	MgtCidr string `json:"mgtCidr"`
+	LogLevel string `json:"logLevel"`
 }
 
 type pingRsp struct {
@@ -82,6 +83,8 @@ func initHandler(ctx *server.CommandContext) interface{} {
 		tree.Set(fmt.Sprintf("system task-scheduler task ssh executable path '%s'", utils.Cronjob_file_ssh))
 	}
 	tree.Apply(false)
+
+	doRefreshLogLevel(initConfig.LogLevel)
 
 	return nil
 }
