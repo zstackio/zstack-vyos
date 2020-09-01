@@ -66,9 +66,19 @@ func (d *DnsmasqConf) RestartDnsmasq() error {
 	err = ioutil.WriteFile(DNSMASQ_CONF_PATH_TEMP, buf.Bytes(), 0755)
 	utils.PanicOnError(err)
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo mv %s %s; sudo pkill -9 dnsmasq; sudo %s", DNSMASQ_CONF_PATH_TEMP, DNSMASQ_CONF_PATH, DNSMASQ_BIN_PATH),
+		Command: fmt.Sprintf("sudo mv %s %s",
+			DNSMASQ_CONF_PATH_TEMP, DNSMASQ_CONF_PATH),
 	}
 	err = bash.Run()
+	utils.PanicOnError(err)
+
+	err = utils.Retry(func () error {
+		bash = utils.Bash {
+			Command: fmt.Sprintf("sudo pkill -9 dnsmasq; sudo %s", DNSMASQ_BIN_PATH),
+		}
+		return bash.Run()
+	}, 5, 1)
+
 	utils.PanicOnError(err)
 
 	return nil
