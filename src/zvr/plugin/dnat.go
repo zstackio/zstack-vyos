@@ -291,13 +291,11 @@ func removeDnatHandler(ctx *server.CommandContext) interface{} {
 	}
 
 	for _, r := range cmd.Rules {
-		for port := r.VipPortStart; port <= r.VipPortEnd; port++ {
-                        proto := "udp"
-                        if r.ProtocolType != "UDP" {
-                                proto = "tcp"
-                        }
-			utils.CleanConnTrackConnection(r.VipIp, proto, port)
+		proto := "udp"
+		if r.ProtocolType != "UDP" {
+			proto = "tcp"
 		}
+		utils.CleanConnTrackConnectionPortRange(r.VipIp, proto, r.VipPortStart, r.VipPortEnd)
 	}
 	return nil
 }
