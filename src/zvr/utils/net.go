@@ -319,11 +319,27 @@ func GetPrivteInterface() []string  {
 	return nics
 }
 
+func CleanConnTrackConnectionPortRange(ip string, proto string, portStart, portEnd int) error  {
+	bash := Bash{
+		Command: fmt.Sprintf("sudo conntrack -d %s -p %s --dport %d-%d -D", ip, proto, portStart, portEnd),
+	}
+	ret, _, _, err := bash.RunWithReturn()
+	if err != nil {
+		return err
+	}
+	if ret != 0 {
+		return errors.New(fmt.Sprintf("conntrack -d %s -p %s --dport %d-%d -D failed return %d",
+			ip, proto, portStart, portEnd, ret))
+	}
+
+	return nil
+}
+
 func CleanConnTrackConnection(ip string, proto string, port int) error  {
 	var command string
-	if (proto == "") {
+	if proto == "" {
 		command = fmt.Sprintf("sudo conntrack -d %s -D", ip)
-	} else if (port == 0) {
+	} else if port == 0 {
 		command = fmt.Sprintf("sudo conntrack -d %s -p %s -D", ip, proto)
 	} else {
 		command = fmt.Sprintf("sudo conntrack -d %s -p %s --dport %d -D", ip, proto, port)
