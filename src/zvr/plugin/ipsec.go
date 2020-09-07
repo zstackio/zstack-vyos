@@ -19,6 +19,10 @@ const(
 	IPSecInfoMaxSize = 256
 
 	VYOSHA_IPSEC_SCRIPT = "/home/vyos/zvr/keepalived/script/ipsec.sh"
+
+	/* because strongswan 4.5.2 rekey will fail, a work around method is to restart the vpn before the rekey happened */
+	IPSecIkeRekeyInterval = 28800 /*  8 * 3600 seconds */
+	IPSecRestartInterval = IPSecIkeRekeyInterval - 600 /* restart the vpn 10 mins before rekey */
 )
 
 type ipsecInfo struct {
@@ -562,10 +566,37 @@ func writeIpsecHaScript(enable bool)  {
 	err := ioutil.WriteFile(VYOSHA_IPSEC_SCRIPT, []byte(conent), 0755); utils.PanicOnError(err)
 }
 
+func restartIPSecVpnTimer()  {
+	restartTicker := time.NewTicker(time.Second * IPSecRestartInterval)
+	/* restart the vpn if vpn is already created */
+	bash := utils.Bash{
+		Command: "/opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl -op clear-vpn-ipsec-process",
+		NoLog: false,
+	}
+	bash.Run()
+
+	go func() {
+		for {
+			select {
+			case <- restartTicker.C:
+				utils.Retry(func() error {
+					bash := utils.Bash{
+						Command: "/opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl -op clear-vpn-ipsec-process",
+						NoLog: false,
+					}
+					_, _, _, err := bash.RunWithReturn()
+					return err
+				}, 3, 60)
+			}
+		}
+	} ()
+}
+
 func IPsecEntryPoint() {
 	ipsecMap = make(map[string]ipsecInfo, IPSecInfoMaxSize)
 	server.RegisterAsyncCommandHandler(CREATE_IPSEC_CONNECTION, server.VyosLock(createIPsecConnection))
 	server.RegisterAsyncCommandHandler(DELETE_IPSEC_CONNECTION, server.VyosLock(deleteIPsecConnection))
 	server.RegisterAsyncCommandHandler(SYNC_IPSEC_CONNECTION, server.VyosLock(syncIPsecConnection))
 	server.RegisterAsyncCommandHandler(UPDATE_IPSEC_CONNECTION, server.VyosLock(updateIPsecConnection))
+	restartIPSecVpnTimer()
 }
