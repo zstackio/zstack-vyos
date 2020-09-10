@@ -180,7 +180,7 @@ func restartVpnAfterConfig()  {
 		}
 
 		return err
-	}, 3, 20);utils.LogError(err)
+	}, 3, 20);log.Warn(fmt.Sprintf("setup ip sec tunnel failed: %s", err))
 }
 
 func syncIpSecRulesByIptables()  {
