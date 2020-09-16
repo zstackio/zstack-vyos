@@ -370,7 +370,7 @@ func configureVyos() {
 			//tree.Setf("interfaces ethernet %s hw-id %s", nic.name, nic.mac)
 			tree.Setf("interfaces ethernet %s address %s", nic.name, fmt.Sprintf("%v/%v", nic.ip, cidr))
 		}
-		if nic.ip6 != "" && nic.addressMode != "SLAAC" {
+		if nic.ip6 != "" {
 			tree.SetfWithoutCheckExisting("interfaces ethernet %s address %s", nic.name, fmt.Sprintf("%s/%d", nic.ip6, nic.prefixLength))
 		}
 		tree.Setf("interfaces ethernet %s duplex auto", nic.name)
