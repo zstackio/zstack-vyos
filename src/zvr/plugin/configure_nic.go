@@ -162,7 +162,7 @@ func configureNic(ctx *server.CommandContext) interface{} {
 			addr := fmt.Sprintf("%v/%v", nic.Ip, cidr)
 			tree.Setf("interfaces ethernet %s address %v", nicname, addr)
 		}
-		if nic.Ip6 != "" && nic.AddressMode != "SLAAC" {
+		if nic.Ip6 != "" {
 			tree.SetfWithoutCheckExisting("interfaces ethernet %s address %s", nicname, fmt.Sprintf("%s/%d", nic.Ip6, nic.PrefixLength))
 		}
 
