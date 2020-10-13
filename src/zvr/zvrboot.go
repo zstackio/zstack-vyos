@@ -164,7 +164,7 @@ func configureVyos() {
 		panic(errors.New("no field 'managementNic' in bootstrap info"))
 	}
 
-	haStatus := "NoHa"
+	haStatus := utils.NOHA
 	if v, ok := bootstrapInfo["haStatus"]; ok {
 		haStatus = v.(string)
 	}
@@ -352,12 +352,11 @@ func configureVyos() {
 			tree.SetfWithoutCheckExisting("interfaces ethernet %s address %s", nic.name, fmt.Sprintf("%s/%d", nic.ip6, nic.prefixLength))
 		}
 		tree.Setf("interfaces ethernet %s duplex auto", nic.name)
-		tree.Setf("interfaces ethernet %s smp_affinity auto", nic.name)
+		tree.SetNicSmpAffinity(nic.name, "auto")
 		tree.Setf("interfaces ethernet %s speed auto", nic.name)
 		if nic.mtu != 0 {
-			b := utils.NewBash()
-			b.Command = fmt.Sprintf("ip link set mtu %d dev '%s'", nic.mtu, nic.name)
-			b.Run()
+			tree.Setf("interfaces ethernet %s speed auto", nic.name)
+			tree.SetNicMtu(nic.name, nic.mtu)
 		}
 
 		if nic.isDefaultRoute {
@@ -520,7 +519,7 @@ func configureVyos() {
 
 	tree.Apply(true)
 
-	if strings.EqualFold(haStatus,"NOHA") {
+	if strings.EqualFold(haStatus,utils.NOHA) {
 		checkIpDuplicate()
 	}
 
@@ -594,6 +593,7 @@ func main() {
 		waitVirtioPortOnline()
 		parseKvmBootInfo()
 	}
+	utils.InitVyosVersion()
 	configureVyos()
 	startZvr()
 	log.Debugf("successfully configured the sysmtem and bootstrap the zstack virtual router agents")

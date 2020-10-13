@@ -251,61 +251,67 @@ func getListenerMaxCocurrenceSocket(maxConnect string) (string) {
 
 func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo)  (err error) {
 	conf := `global
-maxconn {{.MaxConnection}}
-log 127.0.0.1 local1
-user vyos
-group users
-daemon
-stats socket {{.SocketPath}} user vyos
-ulimit-n {{.ulimit}}
+    maxconn {{.MaxConnection}}
+    log 127.0.0.1 local1
+    user vyos
+    group users
+    daemon
+    stats socket {{.SocketPath}} user vyos
+    ulimit-n {{.ulimit}}
+{{if eq .Nbthread 0}}
+    #nbthread {{.Nbthread}}
+{{else}}
+    nbthread {{.Nbthread}}
+{{end}}
 defaults
-log global
-option dontlognull
-option http-server-close
+    log global
+    option dontlognull
+    option http-server-close
 
 listen {{.ListenerUuid}}
 {{if eq .Mode "https"}}
-mode http
+    mode http
 {{else}}
-mode {{.Mode}}
+    mode {{.Mode}}
 {{end}}
 {{if ne .Mode "tcp"}}
-option forwardfor
+    option forwardfor
 {{end}}
-timeout client {{.ConnectionIdleTimeout}}s
-timeout server {{.ConnectionIdleTimeout}}s
-timeout connect 60s
+    timeout client {{.ConnectionIdleTimeout}}s
+    timeout server {{.ConnectionIdleTimeout}}s
+    timeout connect 60s
 {{- if eq .AccessControlStatus "enable" }}
-#acl status: {{.AccessControlStatus}} ip entty md5: {{.AclEntryMd5}}
-acl {{.ListenerUuid}} src -f {{.AclConfPath}}
+    #acl status: {{.AccessControlStatus}} ip entty md5: {{.AclEntryMd5}}
+    acl {{.ListenerUuid}} src -f {{.AclConfPath}}
 {{- if eq .AclType "black" }}
-tcp-request connection reject if {{.ListenerUuid}}
+    tcp-request connection reject if {{.ListenerUuid}}
 {{- else }}
-tcp-request connection reject unless {{.ListenerUuid}}
+    tcp-request connection reject unless {{.ListenerUuid}}
 {{- end }}
 {{- end }}
 
-balance {{.BalancerAlgorithm}}
+    balance {{.BalancerAlgorithm}}
 {{- if eq .Mode "https"}}
-bind {{.Vip}}:{{.LoadBalancerPort}} ssl crt {{.CertificatePath}}
+    bind {{.Vip}}:{{.LoadBalancerPort}} ssl crt {{.CertificatePath}}
 {{- else}}
-bind {{.Vip}}:{{.LoadBalancerPort}}
+    bind {{.Vip}}:{{.LoadBalancerPort}}
 {{end}}
 {{- if eq .HealthCheckProtocol "http" }}
-option httpchk {{$.HttpChkMethod}} {{$.HttpChkUri}}
+    option httpchk {{$.HttpChkMethod}} {{$.HttpChkUri}}
 {{- if ne .HttpChkExpect "http_2xx" }}
-http-check expect rstatus {{$.HttpChkExpect}}
+    http-check expect rstatus {{$.HttpChkExpect}}
 {{- end }}
 {{- end }}
 {{- if eq .BalancerAlgorithm "static-rr" }}
 {{- range $ip, $weight := $.Weight }}
-server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} weight {{$weight}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
+    server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} weight {{$weight}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
 {{- end }}
 {{else}}
 {{- range $index, $ip := $.NicIps }}
-server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
+    server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
 {{- end }}
-{{- end }}`
+{{- end }}
+`
 
 	var buf, acl_buf bytes.Buffer
 	var m map[string]interface{}
@@ -336,7 +342,11 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 		m["AclConfPath"] = this.aclPath
 		m["AclEntryMd5"] =  md5.Sum([]byte(m["AclEntry"].(string)))
 	}
-	log.Debugf("lb aclstatus:%v type: %v entry: %v ", m["AccessControlStatus"].(string), m["AclType"], m["AclEntry"])
+	if utils.Vyos_version == utils.VYOS_1_2 {
+		m["Nbthread"] = utils.GetCpuNum() * 2
+	} else {
+		m["Nbthread"] = 0
+	}
 
 	err = utils.MkdirForFile(this.aclPath, 0755); utils.PanicOnError(err)
 	acl_buf.WriteString(strings.Join(ipRange2Cidrs(strings.Split(m["AclEntry"].(string), ",")),"\n"))
@@ -837,7 +847,10 @@ func makeLbAclConfFilePath(lb lbInfo) string {
 }
 
 func makeLbPidFilePath(lb lbInfo) string {
-	return filepath.Join(LB_ROOT_DIR, "pid", fmt.Sprintf("lb-%s-listener-%s.pid", lb.LbUuid, lb.ListenerUuid))
+	pidPath := filepath.Join(LB_ROOT_DIR, "pid", fmt.Sprintf("lb-%s-listener-%s.pid", lb.LbUuid, lb.ListenerUuid))
+	fd, _ := utils.CreateFileIfNotExists(pidPath, os.O_WRONLY | os.O_APPEND, 0666)
+	fd.Close()
+	return pidPath
 }
 
 func makeLbConfFilePath(lb lbInfo) string {
@@ -1102,6 +1115,7 @@ type loadBalancerCollector struct {
 }
 
 const (
+	LB_UUID = "LbUuid"
 	LB_LISTENER_UUID = "ListenerUuid"
 	LB_LISTENER_BACKEND_IP = "NicIpAddress"
 )
@@ -1111,43 +1125,43 @@ func NewLbPrometheusCollector() MetricCollector {
 		statusEntry: prom.NewDesc(
 			"zstack_lb_status",
 			"Backend server health status",
-			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
 		),
 		curSessionNumEntry: prom.NewDesc(
 			"zstack_lb_cur_session_num",
 			"Backend server active session number",
-			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
 		),
 		inByteEntry: prom.NewDesc(
 			"zstack_lb_in_bytes",
 			"Backend server traffic in bytes",
-			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
 		),
 		outByteEntry: prom.NewDesc(
 			"zstack_lb_out_bytes",
 			"Backend server traffic in bytes",
-			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
 		),
 		curSessionUsageEntry: prom.NewDesc(
 			"zstack_lb_cur_session_usage",
 			"Backend server active session ratio of max session",
-			[]string{LB_LISTENER_UUID}, nil,
+			[]string{LB_LISTENER_UUID, LB_UUID}, nil,
 		),
 
 		refusedSessionNumEntry: prom.NewDesc(
 			"zstack_lb_refused_session_num",
 			"Backend server refused session number",
-			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
 		),
 		totalSessionNumEntry: prom.NewDesc(
 			"zstack_lb_total_session_num",
 			"Backend server total session number",
-			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
 		),
 		concurrentSessionUsageEntry: prom.NewDesc(
 			"zstack_lb_concurrent_session_num",
 			"Backend server session number including active and waiting state session",
-			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
 		),
 		//vipUUIds: make(map[string]string),
 	}
@@ -1176,9 +1190,11 @@ func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
 
 		var maxSessionNum, sessionNum uint64
 		sessionNum = 0
+		lbUuid := ""
 		switch listener.(type) {
 		case *GBListener:
 			gbListener, _ := listener.(*GBListener)
+			lbUuid = gbListener.lb.LbUuid
 			counters, num = gbListener.getLbCounters(listenerUuid)
 			maxSessionNum = (uint64)(gbListener.maxSession)
 			/* get total count */
@@ -1188,6 +1204,7 @@ func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
 			break
 		case *HaproxyListener:
 			haproxyListener, _ := listener.(*HaproxyListener)
+			lbUuid = haproxyListener.lb.LbUuid
 			counters, num = haproxyListener.getLbCounters(listenerUuid)
 			maxSessionNum = (uint64)(haproxyListener.maxSession)
 			/* get total count */
@@ -1203,16 +1220,16 @@ func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
 
 		for i := 0; i < num; i++ {
 			cnt := counters[i]
-			ch <- prom.MustNewConstMetric(c.statusEntry, prom.GaugeValue, float64(cnt.status), cnt.listenerUuid, cnt.ip)
-			ch <- prom.MustNewConstMetric(c.inByteEntry, prom.GaugeValue, float64(cnt.bytesIn), cnt.listenerUuid, cnt.ip)
-			ch <- prom.MustNewConstMetric(c.outByteEntry, prom.GaugeValue, float64(cnt.bytesOut), cnt.listenerUuid, cnt.ip)
-			ch <- prom.MustNewConstMetric(c.curSessionNumEntry, prom.GaugeValue, float64(cnt.sessionNumber), cnt.listenerUuid, cnt.ip)
-			ch <- prom.MustNewConstMetric(c.refusedSessionNumEntry, prom.GaugeValue, float64(cnt.refusedSessionNumber), cnt.listenerUuid, cnt.ip)
-			ch <- prom.MustNewConstMetric(c.totalSessionNumEntry, prom.GaugeValue, float64(cnt.totalSessionNumber), cnt.listenerUuid, cnt.ip)
-			ch <- prom.MustNewConstMetric(c.concurrentSessionUsageEntry, prom.GaugeValue, float64(cnt.concurrentSessionNumber), cnt.listenerUuid, cnt.ip)
+			ch <- prom.MustNewConstMetric(c.statusEntry, prom.GaugeValue, float64(cnt.status), cnt.listenerUuid, cnt.ip, lbUuid)
+			ch <- prom.MustNewConstMetric(c.inByteEntry, prom.GaugeValue, float64(cnt.bytesIn), cnt.listenerUuid, cnt.ip, lbUuid)
+			ch <- prom.MustNewConstMetric(c.outByteEntry, prom.GaugeValue, float64(cnt.bytesOut), cnt.listenerUuid, cnt.ip, lbUuid)
+			ch <- prom.MustNewConstMetric(c.curSessionNumEntry, prom.GaugeValue, float64(cnt.sessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
+			ch <- prom.MustNewConstMetric(c.refusedSessionNumEntry, prom.GaugeValue, float64(cnt.refusedSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
+			ch <- prom.MustNewConstMetric(c.totalSessionNumEntry, prom.GaugeValue, float64(cnt.totalSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
+			ch <- prom.MustNewConstMetric(c.concurrentSessionUsageEntry, prom.GaugeValue, float64(cnt.concurrentSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
 		}
 
-		ch <- prom.MustNewConstMetric(c.curSessionUsageEntry, prom.GaugeValue, float64(sessionNum * 100 /maxSessionNum), listenerUuid)
+		ch <- prom.MustNewConstMetric(c.curSessionUsageEntry, prom.GaugeValue, float64(sessionNum * 100 /maxSessionNum), listenerUuid, lbUuid)
 	}
 
 	return nil
@@ -1363,13 +1380,13 @@ func (this *GBListener) getLbCounters(listenerUuid string) ([]*LbCounter, int) {
 		counter := LbCounter{}
 		counter.listenerUuid = listenerUuid
 		counter.ip = stat.Host
-		if (stat.Stats.Live) {
+		if stat.Stats.Live {
 			counter.status = 1
 		} else {
 			counter.status = 0
 		}
-                counter.bytesIn = stat.Stats.Tx //the direction of LB is different from backend direction
-                counter.bytesOut = stat.Stats.Rx
+		counter.bytesIn = stat.Stats.Tx //the direction of LB is different from backend direction
+		counter.bytesOut = stat.Stats.Rx
 		counter.sessionNumber = stat.Stats.Active_connections
 		counter.refusedSessionNumber = stat.Stats.Refused_connections
 		counter.totalSessionNumber = stat.Stats.Total_connections

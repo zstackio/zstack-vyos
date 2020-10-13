@@ -122,6 +122,7 @@ func main()  {
 	parseCommandOptions()
 	utils.InitLog(options.LogFile, false)
 	utils.InitBootStrapInfo()
+	utils.InitVyosVersion()
 	plugin.InitHaNicState()
 	utils.InitNatRule()
 	loadPlugins()

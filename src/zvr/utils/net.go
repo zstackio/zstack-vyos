@@ -14,7 +14,7 @@ import (
 
 const (
 	ZSTACK_ROUTE_PROTO = "zstack"
-	ZSTACK_ROUTE_PROTO_IDENTIFFER = "192"
+	ZSTACK_ROUTE_PROTO_IDENTIFFER = "201"
 )
 
 func NetmaskToCIDR(netmask string) (int, error) {
