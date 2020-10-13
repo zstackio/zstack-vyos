@@ -165,7 +165,7 @@ func configureVyos() {
 		panic(errors.New("no field 'managementNic' in bootstrap info"))
 	}
 
-	haStatus := "NoHa"
+	haStatus := utils.NOHA
 	if v, ok := bootstrapInfo["haStatus"]; ok {
 		haStatus = v.(string)
 	}
@@ -315,9 +315,9 @@ func configureVyos() {
 
 	log.Debugf("haStatus %+v", haStatus)
 	cmds := []string{}
-	if haStatus != "NoHa" {
+	if haStatus != utils.NOHA {
 		for _, nic := range nics {
-			/* when ha enaled, all nics except eth0 is shutdown when bootup */
+			/* when ha enabled, all nics except eth0 is shutdown when bootup */
 			if nic.name == "eth0" {
 				continue
 			}
@@ -374,16 +374,15 @@ func configureVyos() {
 			tree.SetfWithoutCheckExisting("interfaces ethernet %s address %s", nic.name, fmt.Sprintf("%s/%d", nic.ip6, nic.prefixLength))
 		}
 		tree.Setf("interfaces ethernet %s duplex auto", nic.name)
-		tree.Setf("interfaces ethernet %s smp_affinity auto", nic.name)
+		tree.SetNicSmpAffinity(nic.name, "auto")
 		tree.Setf("interfaces ethernet %s speed auto", nic.name)
 		if nic.mtu != 0 {
-			b := utils.NewBash()
-			b.Command = fmt.Sprintf("ip link set mtu %d dev '%s'", nic.mtu, nic.name)
-			b.Run()
+			tree.Setf("interfaces ethernet %s speed auto", nic.name)
+			tree.SetNicMtu(nic.name, nic.mtu)
 		}
 
 		if nic.isDefaultRoute {
-			tree.Setf("system gateway-address %v", nic.gateway)
+			tree.Setf("protocols static route 0.0.0.0/0 next-hop %s", nic.gateway)
 		}
 
 		if nic.l2type != "" {
@@ -530,7 +529,7 @@ func configureVyos() {
 
 	tree.Apply(true)
 
-	if strings.EqualFold(haStatus,"NOHA") {
+	if strings.EqualFold(haStatus,utils.NOHA) {
 		checkIpDuplicate()
 	}
 
@@ -554,7 +553,7 @@ func configureVyos() {
 		}
 	}
 
-	/* this is workaround for zstac*/
+	/* this is workaround for zstack*/
 	log.Debugf("the vr gateway: %s, ipv6 gateway: %s at %s", defaultGW, defaultGW6, defaultNic)
 	if defaultGW != "" {
 		//check default gw in route and it's workaround for ZSTAC-15742, the manage and public are in same cidr with different ranges
@@ -564,7 +563,7 @@ func configureVyos() {
 		ret, _, _, err := bash.RunWithReturn()
 		if err == nil && ret != 0 {
 			tree := server.NewParserFromShowConfiguration().Tree
-			tree.Deletef("system gateway-address %v", defaultGW)
+			tree.Deletef("protocols static route 0.0.0.0/0 next-hop %s", defaultGW)
 			tree.Apply(true)
 			b := utils.Bash{
 				Command: fmt.Sprintf("ip route add default via %s dev %s", defaultGW, defaultNic),
@@ -600,6 +599,7 @@ func main() {
 		waitVirtioPortOnline()
 		parseKvmBootInfo()
 	}
+	utils.InitVyosVersion()
 	configureVyos()
 	startZvr()
 	log.Debugf("successfully configured the sysmtem and bootstrap the zstack virtual router agents")
