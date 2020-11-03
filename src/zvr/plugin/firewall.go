@@ -23,9 +23,9 @@ const (
 	fwApplyUserRulesPath = "/fw/apply/rule"
 	fwUpdateRuleSetPath = "/fw/update/ruleSet"
 	fwDeleteUserRulePath = "/fw/delete/firewall"
+	fwApplyRuleSetPath = "/fw/apply/ruleSet/changes"
 	zstackRuleNumberFront = 1000
 	zstackRuleNumberEnd = 4000
-	USER_RULE_SET_PREFIX = "ZS-FW-RS"
 	FIREWALL_RULE_SOURCE_GROUP_SUFFIX = "source"
 	FIREWALL_RULE_DEST_GROUP_SUFFIX = "dest"
 	IP_SPLIT = ","
@@ -44,7 +44,6 @@ type nicTypeInfo struct {
 }
 
 type ruleInfo struct {
-	RuleSetName string `json:"ruleSetName"`
 	Action string `json:"action"`
 	Protocol string `json:"protocol"`
 	DestPort string `json:"destPort"`
@@ -62,7 +61,7 @@ type ruleInfo struct {
 
 type ethRuleSetRef struct {
 	Mac string `json:"mac"`
-	RuleSetName string `json:"ruleSetName"`
+	RuleSetInfo ruleSetInfo `json:"ruleSetInfo"`
 	Forward string `json:"forward"`
 }
 
@@ -70,6 +69,7 @@ type ruleSetInfo struct {
 	Name string `json:"name"`
 	ActionType string `json:"actionType"`
 	EnableDefaultLog bool `json:"enableDefaultLog"`
+	Rules []ruleInfo `json:"rules"`
 }
 
 type defaultRuleSetAction struct {
@@ -81,35 +81,27 @@ type getConfigCmd struct {
 	NicTypeInfos []nicTypeInfo `json:"nicInfos"`
 }
 
-type deleteFirewallCmd struct {
-	NicTypeInfos []nicTypeInfo `json:"nicInfos"`
-}
-
 type getConfigRsp struct {
-	RuleSets []ruleSetInfo `json:"ruleSets"`
-	Rules []ruleInfo `json:"rules"`
 	Refs []ethRuleSetRef `json:"refs"`
 }
 
 type applyUserRuleCmd struct {
-	RuleSets []ruleSetInfo `json:"ruleSets"`
-	Rules []ruleInfo `json:"rules"`
 	Refs []ethRuleSetRef `json:"refs"`
-	DefaultRuleSetActions []defaultRuleSetAction `json:"defaultRuleSetActions"`
-	NicTypeInfos []nicTypeInfo `json:"nicInfos"`
 }
 
 type createRuleCmd struct {
-	Rule ruleInfo `json:"rule"`
+	Ref ethRuleSetRef `json:"ref"`
 }
 
 type changeRuleStateCmd struct {
 	Rule ruleInfo `json:"rule"`
 	State string `json:"state"`
+	Mac string `json:"mac"`
+	Forward string `json:"forward"`
 }
 
 type deleteRuleCmd struct {
-	Rule ruleInfo `json:"rule"`
+	Ref ethRuleSetRef `json:"ref"`
 }
 
 type deleteRuleSetCmd struct {
@@ -133,6 +125,12 @@ type updateRuleSetCmd struct {
 	ActionType string `json:"actionType"`
 }
 
+type applyRuleSetChangesCmd struct {
+	Refs []ethRuleSetRef `json:"refs"`
+	DeleteRules []ruleInfo `json:"deleteRules"`
+	NewRules []ruleInfo `json:"newRules"`
+}
+
 func (r *ruleSetInfo) toRules() []string {
 	rules := make([]string, 0)
 	if r.ActionType != "" {
@@ -145,8 +143,8 @@ func (r *ruleSetInfo) toRules() []string {
 	return rules
 }
 
-func (r *ruleInfo) makeGroupName(suffix string) string {
-	return fmt.Sprintf("%s-%d-%s", r.RuleSetName, r.RuleNumber, suffix)
+func (r *ruleInfo) makeGroupName(ruleSetName string, suffix string) string {
+	return fmt.Sprintf("%s-%d-%s", ruleSetName, r.RuleNumber, suffix)
 }
 
 func (r *ruleInfo) toGroups(suffix string) []string {
@@ -169,7 +167,7 @@ func (r *ruleInfo) toGroups(suffix string) []string {
 	return groups
 }
 
-func (r *ruleInfo) toRules() []string {
+func (r *ruleInfo) toRules(ruleSetName string) []string {
 	rules := make([]string, 0)
 	if r.Action != "" {
 		rules = append(rules, fmt.Sprintf("action %s",r.Action))
@@ -197,14 +195,14 @@ func (r *ruleInfo) toRules() []string {
 	}
 	if r.DestIp != "" {
 		if strings.Contains(r.DestIp, IP_SPLIT) {
-			rules = append(rules, fmt.Sprintf("destination group address-group %s", r.makeGroupName(FIREWALL_RULE_DEST_GROUP_SUFFIX)))
+			rules = append(rules, fmt.Sprintf("destination group address-group %s", r.makeGroupName(ruleSetName, FIREWALL_RULE_DEST_GROUP_SUFFIX)))
 		} else {
 			rules = append(rules, fmt.Sprintf("destination address %s", r.DestIp))
 		}
 	}
 	if r.SourceIp != "" {
 		if strings.Contains(r.SourceIp, IP_SPLIT) {
-			rules = append(rules, fmt.Sprintf("source group address-group %s", r.makeGroupName(FIREWALL_RULE_SOURCE_GROUP_SUFFIX)))
+			rules = append(rules, fmt.Sprintf("source group address-group %s", r.makeGroupName(ruleSetName, FIREWALL_RULE_SOURCE_GROUP_SUFFIX)))
 		} else {
 			rules = append(rules, fmt.Sprintf("source address %s",r.SourceIp))
 		}
@@ -237,6 +235,9 @@ func isDefaultRule(n string) bool {
 	}
 }
 
+func buildRuleSetName(nicName string, forward string) string {
+	return fmt.Sprintf("%s.%s", nicName, forward)
+}
 
 func getRuleNumber(t *server.VyosConfigNode) int {
 	number, err := strconv.Atoi(t.Name())
@@ -286,7 +287,8 @@ func attachRuleSet(ctx *server.CommandContext) interface{} {
 	ref := cmd.Ref
 	tree := server.NewParserFromShowConfiguration().Tree
 	nic, err := utils.GetNicNameByMac(ref.Mac); utils.PanicOnError(err)
-	tree.AttachRuleSetOnInterface(nic, ref.Forward, ref.RuleSetName)
+	ruleSetName := buildRuleSetName(nic, ref.Forward)
+	tree.AttachRuleSetOnInterface(nic, ref.Forward, ruleSetName)
 	tree.Apply(false)
 	return nil
 }
@@ -313,15 +315,56 @@ func createRuleSet(ctx *server.CommandContext) interface{} {
 func deleteRule(ctx *server.CommandContext) interface{} {
 	cmd := &deleteRuleCmd{}
 	ctx.GetCommand(cmd)
-	rule := cmd.Rule
+	ref := cmd.Ref
 	tree := server.NewParserFromShowConfiguration().Tree
-	tree.Deletef("firewall name %s rule %v", rule.RuleSetName, rule.RuleNumber)
-	if r := tree.FindGroupByName(rule.makeGroupName(FIREWALL_RULE_SOURCE_GROUP_SUFFIX), "address"); r != nil {
-		r.Delete()
+	nic, err := utils.GetNicNameByMac(ref.Mac); utils.PanicOnError(err)
+	ruleSetName := buildRuleSetName(nic, ref.Forward)
+	for _, rule := range ref.RuleSetInfo.Rules {
+		tree.Deletef("firewall name %s rule %v", ruleSetName, rule.RuleNumber)
+		if r := tree.FindGroupByName(rule.makeGroupName(ruleSetName, FIREWALL_RULE_SOURCE_GROUP_SUFFIX), "address"); r != nil {
+			r.Delete()
+		}
+		if r := tree.FindGroupByName(rule.makeGroupName(ruleSetName, FIREWALL_RULE_DEST_GROUP_SUFFIX), "address"); r != nil {
+			r.Delete()
+		}
 	}
-	if r := tree.FindGroupByName(rule.makeGroupName(FIREWALL_RULE_DEST_GROUP_SUFFIX), "address"); r != nil {
-		r.Delete()
+
+	tree.Apply(false)
+	return nil
+}
+
+func applyRuleSetChanges(ctx *server.CommandContext) interface{} {
+	cmd := &applyRuleSetChangesCmd{}
+	ctx.GetCommand(cmd)
+	tree := server.NewParserFromShowConfiguration().Tree
+	refs := cmd.Refs
+	for _, ref := range refs {
+		nic, err := utils.GetNicNameByMac(ref.Mac); utils.PanicOnError(err)
+		ruleSetName := buildRuleSetName(nic, ref.Forward)
+		for _, rule := range cmd.DeleteRules {
+			tree.Deletef("firewall name %s rule %v", ruleSetName, rule.RuleNumber)
+			if r := tree.FindGroupByName(rule.makeGroupName(ruleSetName, FIREWALL_RULE_SOURCE_GROUP_SUFFIX), "address"); r != nil {
+				r.Delete()
+			}
+			if r := tree.FindGroupByName(rule.makeGroupName(ruleSetName, FIREWALL_RULE_DEST_GROUP_SUFFIX), "address"); r != nil {
+				r.Delete()
+			}
+		}
+
+		for _, rule := range cmd.NewRules {
+			if rule.SourceIp != "" && strings.ContainsAny(rule.SourceIp, IP_SPLIT) {
+				log.Debug(rule.toGroups(FIREWALL_RULE_SOURCE_GROUP_SUFFIX))
+				tree.SetGroupsCheckExisting("address", rule.makeGroupName(ruleSetName, FIREWALL_RULE_SOURCE_GROUP_SUFFIX), rule.toGroups(FIREWALL_RULE_SOURCE_GROUP_SUFFIX))
+			}
+			if rule.DestIp != "" && strings.ContainsAny(rule.DestIp, IP_SPLIT) {
+				log.Debug(rule.toGroups(FIREWALL_RULE_DEST_GROUP_SUFFIX))
+				tree.SetGroupsCheckExisting("address", rule.makeGroupName(ruleSetName, FIREWALL_RULE_DEST_GROUP_SUFFIX), rule.toGroups(FIREWALL_RULE_DEST_GROUP_SUFFIX))
+			}
+
+			tree.CreateUserFirewallRuleWithNumber(ruleSetName, rule.RuleNumber, rule.toRules(ruleSetName))
+		}
 	}
+
 	tree.Apply(false)
 	return nil
 }
@@ -330,19 +373,32 @@ func createRule(ctx *server.CommandContext) interface{} {
 	cmd := &createRuleCmd{}
 	ctx.GetCommand(cmd)
 	tree := server.NewParserFromShowConfiguration().Tree
-	rule := cmd.Rule
-	log.Debug(rule)
-	log.Debug(rule.toRules())
-	if rule.SourceIp != "" && strings.ContainsAny(rule.SourceIp, IP_SPLIT) {
-		log.Debug(rule.toGroups(FIREWALL_RULE_SOURCE_GROUP_SUFFIX))
-		tree.SetGroupsCheckExisting("address", rule.makeGroupName(FIREWALL_RULE_SOURCE_GROUP_SUFFIX), rule.toGroups(FIREWALL_RULE_SOURCE_GROUP_SUFFIX))
-	}
-	if rule.DestIp != "" && strings.ContainsAny(rule.DestIp, IP_SPLIT) {
-		log.Debug(rule.toGroups(FIREWALL_RULE_DEST_GROUP_SUFFIX))
-		tree.SetGroupsCheckExisting("address", rule.makeGroupName(FIREWALL_RULE_DEST_GROUP_SUFFIX), rule.toGroups(FIREWALL_RULE_DEST_GROUP_SUFFIX))
+	ref := cmd.Ref
+	nic, err := utils.GetNicNameByMac(ref.Mac); utils.PanicOnError(err)
+	ruleSetName := buildRuleSetName(nic, ref.Forward)
+	if rs := tree.Get(fmt.Sprintf("firewall name %s", ruleSetName)); rs == nil {
+		tree.CreateFirewallRuleSet(ruleSetName, ref.RuleSetInfo.toRules())
 	}
 
-	tree.CreateUserFirewallRuleWithNumber(rule.RuleSetName, rule.RuleNumber, rule.toRules())
+	for _, rule := range ref.RuleSetInfo.Rules {
+		log.Debug(rule)
+		log.Debug(rule.toRules(ruleSetName))
+		if rule.SourceIp != "" && strings.ContainsAny(rule.SourceIp, IP_SPLIT) {
+			log.Debug(rule.toGroups(FIREWALL_RULE_SOURCE_GROUP_SUFFIX))
+			tree.SetGroupsCheckExisting("address", rule.makeGroupName(ruleSetName, FIREWALL_RULE_SOURCE_GROUP_SUFFIX), rule.toGroups(FIREWALL_RULE_SOURCE_GROUP_SUFFIX))
+		}
+		if rule.DestIp != "" && strings.ContainsAny(rule.DestIp, IP_SPLIT) {
+			log.Debug(rule.toGroups(FIREWALL_RULE_DEST_GROUP_SUFFIX))
+			tree.SetGroupsCheckExisting("address", rule.makeGroupName(ruleSetName, FIREWALL_RULE_DEST_GROUP_SUFFIX), rule.toGroups(FIREWALL_RULE_DEST_GROUP_SUFFIX))
+		}
+
+		tree.CreateUserFirewallRuleWithNumber(ruleSetName, rule.RuleNumber, rule.toRules(ruleSetName))
+	}
+
+	if rs := tree.Get(fmt.Sprintf("interfaces ethernet %s firewall %s name %s", nic, ref.Forward, ruleSetName)); rs == nil {
+		tree.AttachFirewallToInterface(nic, ref.Forward)
+	}
+
 	tree.Apply(false)
 	return nil
 }
@@ -352,7 +408,9 @@ func changeRuleState(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 	tree := server.NewParserFromShowConfiguration().Tree
 	rule := cmd.Rule
-	tree.ChangeFirewallRuleState(rule.RuleSetName, rule.RuleNumber, cmd.State)
+	nic, err := utils.GetNicNameByMac(cmd.Mac); utils.PanicOnError(err)
+	ruleSetName := buildRuleSetName(nic, cmd.Forward)
+	tree.ChangeFirewallRuleState(ruleSetName, rule.RuleNumber, cmd.State)
 	tree.Apply(false)
 	return nil
 }
@@ -384,83 +442,73 @@ func getFirewallConfig(ctx *server.CommandContext) interface{} {
 
 	//sync ruleSet and rules
 	rs := tree.Get("firewall name")
-	rules := make([]ruleInfo, 0)
-	ruleSets := make([]ruleSetInfo, 0)
 	if ruleSetNodes := rs.Children(); ruleSetNodes == nil {
-		return getConfigRsp{Rules:nil, RuleSets:nil, Refs:nil}
+		return getConfigRsp{Refs:nil}
 	} else {
-		for _, ruleSetNode := range ruleSetNodes {
-			ruleSet := ruleSetInfo{}
-			ruleSet.Name = ruleSetNode.Name()
-			ruleSet.ActionType = ruleSetNode.Get("default-action").Value()
-			if d := ruleSetNode.Get("enable-default-log"); d != nil {
-				ruleSet.EnableDefaultLog = d.Value() == "true"
-			}
-			ruleSets = append(ruleSets, ruleSet)
+		refs := make([]ethRuleSetRef, 0)
+		for _, e := range ethInfos {
+			if eNode := tree.Getf("interfaces ethernet %s firewall", e.Name); eNode != nil {
+				if len(eNode.Children()) == 0 {
+					continue
+				}
 
-			if r := ruleSetNode.Get("rule"); r != nil {
-				for _, rc := range r.Children() {
-					rules = append(rules, ruleInfo{
-						RuleSetName: ruleSetNode.Name(),
-						RuleNumber: getRuleNumber(rc),
-						Action: rc.GetChildrenValue("action"),
-						Protocol: rc.GetChildrenValue("protocol"),
-						Tcp:rc.GetChildrenValue("tcp flags"),
-						Icmp:rc.GetChildrenValue("icmp type-name"),
-						EnableLog: rc.GetChildrenValue("log") == "enable",
-						State: getRuleState(rc),
-						SourcePort: rc.GetChildrenValue("source port"),
-						DestPort:rc.GetChildrenValue("destination port"),
-						DestIp:getIp(rc,"destination"),
-						SourceIp:getIp(rc,"source"),
-						AllowStates:getAllowStates(rc),
-						IsDefault:isDefaultRule(rc.Name()),
+				for _, ec := range eNode.Children() {
+					if ec.GetChildrenValue("name") == "" {
+						continue
+					}
+					mac, err := utils.GetMacByNicName(e.Name)
+					utils.PanicOnError(err)
+
+				    ruleSetName := ec.GetChildrenValue("name")
+					ruleSetNode := rs.Get(ruleSetName)
+					ruleSet := ruleSetInfo{}
+					ruleSet.Name = ruleSetNode.Name()
+					ruleSet.ActionType = ruleSetNode.Get("default-action").Value()
+					if d := ruleSetNode.Get("enable-default-log"); d != nil {
+						ruleSet.EnableDefaultLog = d.Value() == "true"
+					}
+
+					rules := make([]ruleInfo, 0)
+
+					if r := ruleSetNode.Get("rule"); r != nil {
+						for _, rc := range r.Children() {
+							rules = append(rules, ruleInfo {
+								RuleNumber:  getRuleNumber(rc),
+								Action:      rc.GetChildrenValue("action"),
+								Protocol:    rc.GetChildrenValue("protocol"),
+								Tcp:         rc.GetChildrenValue("tcp flags"),
+								Icmp:        rc.GetChildrenValue("icmp type-name"),
+								EnableLog:   rc.GetChildrenValue("log") == "enable",
+								State:       getRuleState(rc),
+								SourcePort:  rc.GetChildrenValue("source port"),
+								DestPort:    rc.GetChildrenValue("destination port"),
+								DestIp:      getIp(rc, "destination"),
+								SourceIp:    getIp(rc, "source"),
+								AllowStates: getAllowStates(rc),
+								IsDefault:   isDefaultRule(rc.Name()),
+							})
+						}
+					}
+
+					ruleSet.Rules = rules
+
+					refs = append(refs, ethRuleSetRef{
+						Forward:     ec.Name(),
+						RuleSetInfo: ruleSet,
+						Mac:         mac,
 					})
 				}
 			}
 		}
-	}
 
-	//sync ruleSet interface ref
-	refs := make([]ethRuleSetRef,0)
-	for _,e := range ethInfos {
-		if eNode := tree.Getf("interfaces ethernet %s firewall", e.Name); eNode != nil {
-			if len(eNode.Children()) == 0 {
-				continue
-			}
-			for _, ec := range eNode.Children() {
-				if ec.GetChildrenValue("name") == "" {
-					continue
-				}
-				mac, err := utils.GetMacByNicName(e.Name); utils.PanicOnError(err)
-				refs = append(refs, ethRuleSetRef{
-					Forward:     ec.Name(),
-					RuleSetName: ec.GetChildrenValue("name"),
-					Mac:     mac,
-				})
-			}
-		}
+		return getConfigRsp{Refs: refs}
 	}
-	return getConfigRsp{Rules:rules, RuleSets:ruleSets, Refs:refs}
 }
 
 func deleteOldRules(tree *server.VyosConfigTree) {
-	//detach ruleSet first
-	nics, _ := utils.GetAllNics()
-	for _, nic := range nics {
-		if iNode := tree.Getf("interfaces ethernet %s firewall out", nic.Name); iNode != nil {
-			iNode.Delete()
-		}
-	}
-	tree.Apply(false)
-
 	rs := tree.Get("firewall name")
 	if ruleSetNodes := rs.Children(); ruleSetNodes != nil {
 		for _, ruleSetNode := range ruleSetNodes {
-			if strings.HasPrefix(ruleSetNode.Name(), USER_RULE_SET_PREFIX) {
-				tree.Deletef("firewall name %s", ruleSetNode.Name())
-				continue
-			}
 			if r := ruleSetNode.Get("rule"); r != nil {
 				for _, rc := range r.Children() {
 					if !isDefaultRule(rc.Name()) {
@@ -503,31 +551,29 @@ func applyUserRules(ctx *server.CommandContext) interface{} {
 	tree := server.NewParserFromShowConfiguration().Tree
 	deleteOldRules(tree)
 
-	for _, ruleSet := range cmd.RuleSets {
-		tree.CreateFirewallRuleSet(ruleSet.Name, ruleSet.toRules())
-	}
-
-	for _, rule := range cmd.Rules {
-		if rule.SourceIp != "" && strings.ContainsAny(rule.SourceIp, IP_SPLIT) {
-			log.Debug(rule.toGroups(FIREWALL_RULE_SOURCE_GROUP_SUFFIX))
-			tree.SetGroupsCheckExisting("address", rule.makeGroupName(FIREWALL_RULE_SOURCE_GROUP_SUFFIX), rule.toGroups(FIREWALL_RULE_SOURCE_GROUP_SUFFIX))
-		}
-		if rule.DestIp != "" && strings.ContainsAny(rule.DestIp, IP_SPLIT) {
-			log.Debug(rule.toGroups(FIREWALL_RULE_DEST_GROUP_SUFFIX))
-			tree.SetGroupsCheckExisting("address", rule.makeGroupName(FIREWALL_RULE_DEST_GROUP_SUFFIX), rule.toGroups(FIREWALL_RULE_DEST_GROUP_SUFFIX))
-		}
-		tree.CreateUserFirewallRuleWithNumber(rule.RuleSetName, rule.RuleNumber, rule.toRules())
-	}
-
 	for _, ref := range cmd.Refs {
 		nic, err := utils.GetNicNameByMac(ref.Mac); utils.PanicOnError(err)
-		tree.AttachRuleSetOnInterface(nic, ref.Forward, ref.RuleSetName)
-	}
+		ruleSetName := buildRuleSetName(nic, ref.Forward)
 
-	for _, action := range cmd.DefaultRuleSetActions {
-		tree.SetFirewalRuleSetAction(action.RuleSetName, action.ActionType)
-	}
+		//create ruleSet
+		tree.CreateFirewallRuleSet(ruleSetName, ref.RuleSetInfo.toRules())
 
+		//attach ruleset to nic
+		tree.AttachRuleSetOnInterface(nic, ref.Forward, ruleSetName)
+
+		//create address group
+		for _, rule := range ref.RuleSetInfo.Rules {
+			if rule.SourceIp != "" && strings.ContainsAny(rule.SourceIp, IP_SPLIT) {
+				log.Debug(rule.toGroups(FIREWALL_RULE_SOURCE_GROUP_SUFFIX))
+				tree.SetGroupsCheckExisting("address", rule.makeGroupName(ruleSetName, FIREWALL_RULE_SOURCE_GROUP_SUFFIX), rule.toGroups(FIREWALL_RULE_SOURCE_GROUP_SUFFIX))
+			}
+			if rule.DestIp != "" && strings.ContainsAny(rule.DestIp, IP_SPLIT) {
+				log.Debug(rule.toGroups(FIREWALL_RULE_DEST_GROUP_SUFFIX))
+				tree.SetGroupsCheckExisting("address", rule.makeGroupName(ruleSetName, FIREWALL_RULE_DEST_GROUP_SUFFIX), rule.toGroups(FIREWALL_RULE_DEST_GROUP_SUFFIX))
+			}
+			tree.CreateUserFirewallRuleWithNumber(ruleSetName, rule.RuleNumber, rule.toRules(ruleSetName))
+		}
+	}
 	tree.Apply(false)
 	return nil
 }
@@ -652,6 +698,9 @@ func moveNicInForwardFirewall() {
 func allowNewStateTrafficOnPubNic(nicInfos []nicTypeInfo) {
 	tree := server.NewParserFromShowConfiguration().Tree
 	for _, nicInfo := range nicInfos {
+		if nicInfo.NicType == "Private" {
+			continue
+		}
 		nicName, err := utils.GetNicNameByMac(nicInfo.Mac); utils.PanicOnError(err)
 		eNode := tree.Getf("firewall name %s.in rule", nicName)
 		if eNode == nil {
@@ -672,6 +721,7 @@ func allowNewStateTrafficOnPubNic(nicInfos []nicTypeInfo) {
 }
 
 func FirewallEntryPoint() {
+	server.RegisterAsyncCommandHandler(fwApplyRuleSetPath, server.VyosLock(applyRuleSetChanges))
 	server.RegisterAsyncCommandHandler(fwGetConfigPath, server.VyosLock(getFirewallConfig))
 	server.RegisterAsyncCommandHandler(fwDeleteUserRulePath, server.VyosLock(deleteUserRule))
 	server.RegisterAsyncCommandHandler(fwCreateRulePath, server.VyosLock(createRule))
