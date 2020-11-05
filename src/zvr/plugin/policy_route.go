@@ -421,7 +421,7 @@ func createPolicyRouteRules(rules []policyRuleInfo, rsMap map[string]bool) error
 			cmd += " -s " + rule.SourceIp
 		}
 		if rule.DestIp != "" {
-			cmd += " -s " + rule.SourceIp
+			cmd += " -d " + rule.DestIp
 		}
 		if rule.Protocol != "" {
 			cmd += " -p " + rule.Protocol
