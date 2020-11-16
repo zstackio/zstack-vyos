@@ -224,6 +224,11 @@ func syncIpSecRulesByIptables()  {
 			rule := utils.NewIptablesRule("",  remoteCidr, "", 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
 				utils.RETURN, utils.IpsecRuleComment + info.Uuid)
 			filterRules[nicname] = append(filterRules[nicname], rule)
+
+			/* add remote cidr rule in local chain, so that remove cidr can access lb service of vpc */
+			rule = utils.NewIptablesRule("",  remoteCidr, "", 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
+				utils.RETURN, utils.IpsecRuleComment + info.Uuid)
+			localfilterRules[nicname] = append(localfilterRules[nicname], rule)
 		}
 
 		/* nat rule */
@@ -333,6 +338,18 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 		des = fmt.Sprintf("IPSEC-%s-%s", info.Uuid, cidr)
 		if r := tree.FindFirewallRuleByDescription(nicname, "in", des); r == nil {
 			tree.SetZStackFirewallRuleOnInterface(nicname, "front","in",
+				"action accept",
+				"state established enable",
+				"state related enable",
+				"state new enable",
+				fmt.Sprintf("description %v", des),
+				fmt.Sprintf("source address %v", cidr),
+			)
+		}
+
+		/* add remote cidr rule in local chain, so that remove cidr can access lb service of vpc */
+		if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
+			tree.SetZStackFirewallRuleOnInterface(nicname, "front","local",
 				"action accept",
 				"state established enable",
 				"state related enable",
@@ -498,7 +515,13 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 		if r := tree.FindFirewallRuleByDescriptionRegex(nicname, "in", des, utils.StringRegCompareFn); r != nil {
 			r.Delete()
 		} else {
-			break;
+			break
+		}
+
+		if r := tree.FindFirewallRuleByDescriptionRegex(nicname, "local", des, utils.StringRegCompareFn); r != nil {
+			r.Delete()
+		} else {
+			break
 		}
 	}
 
