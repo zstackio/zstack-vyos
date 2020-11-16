@@ -20,10 +20,13 @@ const(
 
 	VYOSHA_IPSEC_SCRIPT = "/home/vyos/zvr/keepalived/script/ipsec.sh"
 
-	/* because strongswan 4.5.2 rekey will fail, a work around method is to restart the vpn before the rekey happened */
-	IPSecIkeRekeyInterval = 28800 /*  8 * 3600 seconds */
+	/* because strongswan 4.5.2 rekey will fail with aliyun ipsec vpn,
+	  a work around method is to restart the vpn before the rekey happened */
+	IPSecIkeRekeyInterval = 86400 /*  24 * 3600 seconds */
 	IPSecRestartInterval = IPSecIkeRekeyInterval - 600 /* restart the vpn 10 mins before rekey */
 )
+
+var AutoRestartVpn = false
 
 type ipsecInfo struct {
 	Uuid string `json:"uuid"`
@@ -49,6 +52,7 @@ type ipsecInfo struct {
 
 type createIPsecCmd struct {
 	Infos []ipsecInfo `json:"infos"`
+	AutoRestartVpn bool `json:"autoRestartVpn"`
 }
 
 type deleteIPsecCmd struct {
@@ -57,6 +61,7 @@ type deleteIPsecCmd struct {
 
 type syncIPsecCmd struct {
 	Infos []ipsecInfo `json:"infos"`
+	AutoRestartVpn bool `json:"autoRestartVpn"`
 }
 
 type updateIPsecReq struct {
@@ -108,7 +113,7 @@ func getIPsecPeers() (peers []string) {
            */
 
 /* get vpn peer status */
-func getVpnPeerStatus(peer string)  (status bool) {
+func isVpnPeerUp(peer string)  (status bool) {
 	/*
 	/opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl --show-ipsec-sa-peer=10.86.0.3
 	Peer ID / IP                            Local ID / IP
@@ -120,36 +125,31 @@ func getVpnPeerStatus(peer string)  (status bool) {
     	1       down   n/a            n/a      n/a     no     0       3600    all
 	*/
 	bash := utils.Bash{
-		Command: fmt.Sprintf("/opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl --show-ipsec-sa-peer=%s | grep -w 'down'", peer),
+		Command: fmt.Sprintf("/opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl --show-ipsec-sa-peer=%s | grep -w 'up'", peer),
 	}
 	ret, _, _, err := bash.RunWithReturn()
 	/* command fail, will try again */
-	if (err != nil) {
+	if err != nil {
 		return false
 	}
 
-	/* ret = 0 means some tunnel is down */
-	if (ret == 0) {
-		return false
-	} else {
+	/* ret = 0 means some tunnel is up */
+	if ret == 0 {
 		return true
+	} else {
+		return false
 	}
 }
 
-func checkVpnStateUp()  error {
+func isVpnAllPeersUp()  bool {
 	peers := getIPsecPeers()
-	peersRestart := []string{}
 	for _, peer := range peers {
-		if (getVpnPeerStatus(peer) == false) {
-			peersRestart = append(peersRestart, peer)
+		if !isVpnPeerUp(peer) {
+			return false
 		}
 	}
 
-	if (len(peersRestart) != 0) {
-		return fmt.Errorf("peers [%s] still has tunnel down after 4 times retry", peersRestart)
-	}
-
-	return nil
+	return true
 }
 
 /* /opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl is a tool to change ipsec config, it has options:
@@ -163,23 +163,25 @@ func checkVpnStateUp()  error {
 	clear-vtis-for-peer
 	*/
 func restartVpnAfterConfig()  {
-	if (checkVpnStateUp() == nil) {
+	if isVpnAllPeersUp() {
 		return
 	}
 
-	bash := utils.Bash{
-		Command: "/opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl -op clear-vpn-ipsec-process",
-	}
-	bash.Run()
+	/* wait 20 seconds to let all peer go up */
 	time.Sleep(20 * time.Second)
 
 	/* it need a log time to make sure checkVpnState can find new created tunnels */
-	err := utils.Retry(func() (err error) {
-		if err = checkVpnStateUp(); err != nil {
-			bash.Run()
+	err := utils.Retry(func() error {
+		if isVpnAllPeersUp() {
+			return nil
 		}
 
-		return err
+		bash := utils.Bash{
+			Command: "/opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl -op clear-vpn-ipsec-process",
+		}
+		bash.Run()
+
+		return fmt.Errorf("there is some ipsec peer is not up")
 	}, 3, 20);log.Warn(fmt.Sprintf("setup ip sec tunnel failed: %s", err))
 }
 
@@ -251,6 +253,7 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 	tree.Setf("vpn ipsec ipsec-interfaces interface %s", nicname)
 
 	// create ike group
+	tree.Setf("vpn ipsec ike-group %s lifetime %d", info.Uuid, IPSecIkeRekeyInterval)
 	tree.Setf("vpn ipsec ike-group %s proposal 1 dh-group %v", info.Uuid, info.IkeDhGroup)
 	tree.Setf("vpn ipsec ike-group %s proposal 1 encryption %v", info.Uuid, info.IkeEncryptionAlgorithm)
 	tree.Setf("vpn ipsec ike-group %s proposal 1 hash %v", info.Uuid, info.IkeAuthAlgorithm)
@@ -378,6 +381,7 @@ func openNatTraversal(tree *server.VyosConfigTree) {
 func createIPsecConnection(ctx *server.CommandContext) interface{} {
 	cmd := &createIPsecCmd{}
 	ctx.GetCommand(cmd)
+	AutoRestartVpn = cmd.AutoRestartVpn
 
 	vyos := server.NewParserFromShowConfiguration()
 	tree := vyos.Tree
@@ -406,6 +410,7 @@ func createIPsecConnection(ctx *server.CommandContext) interface{} {
 func syncIPsecConnection(ctx *server.CommandContext) interface{} {
 	cmd := &syncIPsecCmd{}
 	ctx.GetCommand(cmd)
+	AutoRestartVpn = cmd.AutoRestartVpn
 
 	vyos := server.NewParserFromShowConfiguration()
 	tree := vyos.Tree
@@ -579,6 +584,10 @@ func restartIPSecVpnTimer()  {
 		for {
 			select {
 			case <- restartTicker.C:
+				if !AutoRestartVpn {
+					return
+				}
+
 				utils.Retry(func() error {
 					bash := utils.Bash{
 						Command: "/opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl -op clear-vpn-ipsec-process",
