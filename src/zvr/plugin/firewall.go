@@ -121,7 +121,8 @@ type detachRuleSetCmd struct {
 }
 
 type updateRuleSetCmd struct {
-	Name string `json:"ruleSetName"`
+	Mac string `json:"mac"`
+	Forward string `json:"forward"`
 	ActionType string `json:"actionType"`
 }
 
@@ -377,7 +378,7 @@ func createRule(ctx *server.CommandContext) interface{} {
 	nic, err := utils.GetNicNameByMac(ref.Mac); utils.PanicOnError(err)
 	ruleSetName := buildRuleSetName(nic, ref.Forward)
 	if rs := tree.Get(fmt.Sprintf("firewall name %s", ruleSetName)); rs == nil {
-		tree.CreateFirewallRuleSet(ruleSetName, ref.RuleSetInfo.toRules())
+		tree.CreateFirewallRuleSet(ruleSetName, []string{"default-action accept"})
 	}
 
 	for _, rule := range ref.RuleSetInfo.Rules {
@@ -531,7 +532,9 @@ func updateRuleSet(ctx *server.CommandContext) interface{} {
 	cmd := &updateRuleSetCmd{}
 	ctx.GetCommand(cmd)
 	tree := server.NewParserFromShowConfiguration().Tree
-	tree.SetFirewalRuleSetAction(cmd.Name, cmd.ActionType)
+	nic, err := utils.GetNicNameByMac(cmd.Mac); utils.PanicOnError(err)
+	ruleSetName := buildRuleSetName(nic, cmd.Forward)
+	tree.SetFirewalRuleSetAction(ruleSetName, cmd.ActionType)
 	tree.Apply(false)
 	return nil
 }
