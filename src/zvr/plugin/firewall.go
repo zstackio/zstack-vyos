@@ -600,7 +600,7 @@ func getStateRule(t *server.VyosConfigNode) (int, string) {
 	nicType := ""
 	for _, cn := range t.Children() {
 		number, _ := strconv.Atoi(cn.Name())
-		if number > zstackRuleNumberFront {
+		if number > zstackRuleNumberFront && number < zstackRuleNumberEnd {
 			continue
 		}
 
@@ -652,7 +652,7 @@ func moveNicInForwardFirewall() {
 		}
 
 		ruleNumber, nicType := getStateRule(eNode)
-		if ruleNumber != 0 {
+		if ruleNumber != 0 && ruleNumber < zstackRuleNumberFront {
 			deleteCommands = append(deleteCommands, fmt.Sprintf("firewall name %s.in rule %v", nic.Name, ruleNumber))
 			if nicType == "Private" {
 				tree.SetZStackFirewallRuleOnInterface(nic.Name, "behind", "in",
