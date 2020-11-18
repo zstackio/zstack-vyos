@@ -279,7 +279,7 @@ root@vyos:/home/vyos# df -h -B 1 | grep vda1
 */
 func getDiskCpuInfo() []*diskInfo {
 	bash := &utils.Bash{
-		Command: fmt.Sprintf("df -h -l -B 1 | grep vda1"),
+		Command: fmt.Sprintf("df -h -l -B 1 | grep -E ' /$'"),
 		NoLog:   true,
 	}
 	ret, stdout, _, _ := bash.RunWithReturn()
