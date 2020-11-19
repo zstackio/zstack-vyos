@@ -686,6 +686,10 @@ func moveNicInForwardFirewall() {
 					"state new enable",
 				)
 			}
+		} else {
+			if eNode.Get("9999") != nil {
+				tree.Deletef("firewall name %v.in rule %v", nic.Name, 9999)
+			}
 		}
 	}
 
