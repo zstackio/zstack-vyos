@@ -26,6 +26,14 @@ func CreateFileIfNotExists(filePath string, flag int, perm os.FileMode) (*os.Fil
 	return os.OpenFile(filePath, flag, perm)
 }
 
+func DeleteFile(filePath string) error{
+	if err := os.Remove(filePath); err != nil {
+		return err
+	}
+	return nil
+}
+
+
 func PathExists(filepath string) (bool, error) {
 	_, err := os.Stat(filepath)
 	if os.IsNotExist(err) {
