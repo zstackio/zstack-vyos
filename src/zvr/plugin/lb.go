@@ -30,7 +30,7 @@ const (
 	REFRESH_LB_LOG_LEVEL_PATH = "/lb/log/level"
 	DELETE_LB_PATH = "/lb/delete"
 	CREATE_CERTIFICATE_PATH = "/certificate/create"
-
+	DELETE_CERTIFICATE_PATH   = "/certificate/delete"
 	LB_ROOT_DIR = "/home/vyos/zvr/lb/"
 	LB_CONF_DIR = "/home/vyos/zvr/lb/conf/"
 	CERTIFICATE_ROOT_DIR = "/home/vyos/zvr/certificate/"
@@ -62,6 +62,10 @@ type lbInfo struct {
 type certificateInfo struct {
 	Uuid string `json:"uuid"`
 	Certificate string `json:"certificate"`
+}
+
+type deleteCertificateCmd struct {
+	Uuid string `json:"uuid"`
 }
 
 type Listener interface {
@@ -1021,6 +1025,23 @@ func createCertificate(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
+func deleteCertificate(ctx *server.CommandContext) interface{} {
+	cmd := &deleteCertificateCmd{}
+	ctx.GetCommand(cmd)
+
+	certificatePath := makeCertificatePath(cmd.Uuid)
+	if e, _ := utils.PathExists(certificatePath); !e {
+		return nil
+	}
+
+	if err := utils.DeleteFile(certificatePath); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+
 func init() {
 	os.Mkdir(LB_ROOT_DIR, os.ModePerm)
 	os.Mkdir(LB_CONF_DIR, os.ModePerm)
@@ -1353,4 +1374,5 @@ func LbEntryPoint() {
 	server.RegisterAsyncCommandHandler(REFRESH_LB_LOG_LEVEL_PATH, server.VyosLock(refreshLogLevel))
 	server.RegisterAsyncCommandHandler(DELETE_LB_PATH, server.VyosLock(deleteLb))
 	server.RegisterAsyncCommandHandler(CREATE_CERTIFICATE_PATH, server.VyosLock(createCertificate))
+	server.RegisterAsyncCommandHandler(DELETE_CERTIFICATE_PATH, server.VyosLock(deleteCertificate))
 }
