@@ -31,6 +31,7 @@ func loadPlugins()  {
 	plugin.PolicyRouteEntryPoint()
 	plugin.PimdEntryPoint()
 	plugin.FirewallEntryPoint()
+	plugin.PerformanceEntryPoint()
 }
 
 var options server.Options

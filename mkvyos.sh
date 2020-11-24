@@ -122,12 +122,19 @@ download /boot/grub/grub.cfg /tmp/grub.cfg
 ! sed -e 's/^set[[:space:]]\+timeout[[:space:]]*=[[:space:]]*[[:digit:]]\+/set timeout=0/g' -e '/^echo.*Grub menu/,/^fi$/d' /tmp/grub.cfg > /tmp/grub.cfg.new
 upload /tmp/grub.cfg.new /boot/grub/grub.cfg
 download /etc/security/limits.conf /tmp/limits.conf
-! grep -w "vyos" /tmp/limits.conf  | grep soft || echo "vyos soft nofile 1000000" >> /tmp/limits.conf
-! grep -w "vyos" /tmp/limits.conf  | grep hard || echo "vyos hard nofile 1000000" >> /tmp/limits.conf
+! grep -w "vyos" /tmp/limits.conf | grep nofile | grep soft && sed -i 's/vyos soft nofile [0-9]*/vyos soft nofile 20971520/' /tmp/limits.conf || echo "vyos soft nofile 20971520" >> /tmp/limits.conf
+! grep -w "vyos" /tmp/limits.conf | grep nofile | grep hard && sed -i 's/vyos hard nofile [0-9]*/vyos hard nofile 20971520/' /tmp/limits.conf || echo "vyos hard nofile 20971520" >> /tmp/limits.conf
+! grep -w "root" /tmp/limits.conf | grep nofile | grep soft && sed -i 's/root soft nofile [0-9]*/root soft nofile 20971520/' /tmp/limits.conf || echo "root soft nofile 20971520" >> /tmp/limits.conf
+! grep -w "root" /tmp/limits.conf | grep nofile | grep hard && sed -i 's/root hard nofile [0-9]*/root hard nofile 20971520/' /tmp/limits.conf || echo "root hard nofile 20971520" >> /tmp/limits.conf
 upload /tmp/limits.conf /etc/security/limits.conf
+download /etc/sysctl.conf /tmp/sysctl.conf
+! grep -w "fs" /tmp/sysctl.conf | grep nr_open  && sed -i 's/fs.nr_open=[0-9]*/fs.nr_open=20971520/' /tmp/sysctl.conf   || echo "fs.nr_open=20971520"  >> /tmp/sysctl.conf
+! grep -w "fs" /tmp/sysctl.conf | grep file-max && sed -i 's/fs.file-max=[0-9]*/fs.file-max=26268608/' /tmp/sysctl.conf || echo "fs.file-max=26268608" >> /tmp/sysctl.conf
+upload /tmp/sysctl.conf /etc/sysctl.conf
 _EOF_
 
 /bin/rm -rf $tmpdir
+/bin/rm -rf /tmp/grub.cfg /tmp/limits.conf /tmp/sysctl.conf
 
 if [ $isVmdk -eq 1 ]; then
     /bin/rm -f "$1"
