@@ -44,6 +44,8 @@ const (
 	//reserve some sockets for haproxy if specify the parameter "ulimit-n"
 	RESERVE_SOCK_COUNT = 100
 	MAX_SOCK_COUNT = 1048576
+
+	LB_LOCAL_ICMP_FIREWALL_RULE_NUMBER = 2000
 )
 
 type lbInfo struct {
@@ -77,8 +79,9 @@ type Listener interface {
 	postActionListenerServiceStart() ( err error)
 	stopListenerService() ( err error)
 	postActionListenerServiceStop() (ret int, err error)
-        getLbCounters(listenerUuid string) ([]*LbCounter, int)
+	getLbCounters(listenerUuid string) ([]*LbCounter, int)
 	getIptablesRule()([]utils.IptablesRule, string)
+	getLbInfo() (lb lbInfo)
 }
 
 // the listener implemented with HaProxy
@@ -88,6 +91,7 @@ type HaproxyListener struct {
 	pidPath	string
 	sockPath string
 	firewallDes string
+	firewallLocalICMPDes string
 	maxConnect string
 	maxSession int   //same to maxConnect
 	aclPath string
@@ -99,6 +103,7 @@ type GBListener struct {
 	confPath string
 	pidPath	string
 	firewallDes string
+	firewallLocalICMPDes string
 	apiPort string // restapi binding port range from 50000-60000
 	maxConnect string
 	maxSession int   //same to maxConnect
@@ -153,6 +158,7 @@ func getListener(lb lbInfo) Listener {
 	sockPath := makeLbSocketPath(lb)
 	aclPath := makeLbAclConfFilePath(lb)
 	des := makeLbFirewallRuleDescription(lb)
+	localICMPDes := makeLbFirewallLocalICMPRuleDescription(lb)
 
 	switch lb.Mode {
 	case "udp":
@@ -161,9 +167,9 @@ func getListener(lb lbInfo) Listener {
 			log.Errorf("there is no free port for rest api for listener: %v \n", lb.ListenerUuid)
 			return nil
 		}
-		return &GBListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, apiPort:port, aclPath:aclPath}
+		return &GBListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, firewallLocalICMPDes:localICMPDes, apiPort:port, aclPath:aclPath}
 	case "tcp", "https", "http":
-		return &HaproxyListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, sockPath:sockPath, aclPath:aclPath}
+		return &HaproxyListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, firewallLocalICMPDes:localICMPDes, sockPath:sockPath, aclPath:aclPath}
 	default:
 		utils.PanicOnError(fmt.Errorf("No such listener %v", lb.Mode))
 	}
@@ -470,6 +476,13 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 		)
 	}
 
+	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallLocalICMPDes); r == nil {
+		tree.SetFirewallWithRuleNumber(nicname, "local", LB_LOCAL_ICMP_FIREWALL_RULE_NUMBER,
+			fmt.Sprintf("description %v", this.firewallLocalICMPDes),
+			"protocol icmp",
+			"action accept")
+	}
+
 	dropRuleDes := fmt.Sprintf("lb-%v-%s-drop", this.lb.LbUuid, this.lb.ListenerUuid)
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", dropRuleDes); r != nil {
 		r.Delete()
@@ -507,6 +520,9 @@ func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error
 		if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r != nil {
 			r.Delete()
 		}
+		if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallLocalICMPDes); (r != nil) && (getListenerCountInLB(this.lb) == 0) {
+			r.Delete()
+		}
 		cleanInternalFirewallRule(tree, this.firewallDes)
 		tree.Apply(false)
 	}
@@ -532,6 +548,11 @@ func (this *HaproxyListener) getIptablesRule()([]utils.IptablesRule, string) {
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
 	return []utils.IptablesRule{utils.NewLoadBalancerIptablesRule(utils.TCP, this.lb.Vip, this.lb.LoadBalancerPort,
 		utils.RETURN, utils.LbRuleComment + this.lb.ListenerUuid, nil)}, nicname
+}
+
+func (this *HaproxyListener) getLbInfo() (lb lbInfo) {
+	lb = this.lb
+	return
 }
 
 func (this *GBListener) adaptListenerParameter(m map[string]interface{}) (map[string]interface{}, error) {
@@ -741,10 +762,17 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 			fmt.Sprintf("protocol udp"),
 			"action accept",
 		)
-
-		tree.AttachFirewallToInterface(nicname, "local")
-		tree.Apply(false)
 	}
+
+	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallLocalICMPDes); r == nil {
+		tree.SetFirewallWithRuleNumber(nicname, "local", LB_LOCAL_ICMP_FIREWALL_RULE_NUMBER,
+			fmt.Sprintf("description %v", this.firewallLocalICMPDes),
+			"protocol icmp",
+			"action accept")
+	}
+
+	tree.AttachFirewallToInterface(nicname, "local")
+	tree.Apply(false)
 	return nil
 }
 
@@ -755,6 +783,11 @@ func (this *GBListener) getIptablesRule()([]utils.IptablesRule, string) {
 		utils.NewLoadBalancerIptablesRule(utils.TCP, "", dport, utils.ACCEPT, utils.LbRuleComment + this.lb.ListenerUuid, nil),
 		utils.NewLoadBalancerIptablesRule(utils.UDP, this.lb.Vip, this.lb.LoadBalancerPort, utils.ACCEPT, utils.LbRuleComment + this.lb.ListenerUuid, nil)},
 		nicname
+}
+
+func (this *GBListener) getLbInfo() (lb lbInfo) {
+	lb = this.lb
+	return
 }
 
 func (this *GBListener) stopListenerService() ( err error) {
@@ -781,6 +814,9 @@ func (this *GBListener) postActionListenerServiceStop() (ret int, err error) {
 		for r != nil {
 			r.Delete()
 			r = tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes)
+		}
+		if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallLocalICMPDes); (r != nil) && (getListenerCountInLB(this.lb) == 0) {
+			r.Delete()
 		}
 		cleanInternalFirewallRule(tree, this.firewallDes)
 		tree.Apply(false)
@@ -826,6 +862,10 @@ type deleteLbCmd struct {
 
 func makeLbFirewallRuleDescription(lb lbInfo) string {
 	return fmt.Sprintf("LB-%v-%v", lb.LbUuid, lb.ListenerUuid)
+}
+
+func makeLbFirewallLocalICMPRuleDescription(lb lbInfo) string {
+	return fmt.Sprintf("LBICMP-%v", lb.LbUuid)
 }
 
 func setLb(lb lbInfo) {
@@ -1272,6 +1312,28 @@ type GoBetweenServerStat struct {
 var LbListeners map[string]interface{}
 var goBetweenClient = &http.Client{
 	Timeout: time.Second * 5,
+}
+
+func getListenerCountInLB(lb lbInfo) (counter int) {
+	counter = 0;
+	for _, listener := range LbListeners {
+		var lbtmp lbInfo
+		switch v := listener.(type) {
+		case *HaproxyListener:
+			lbtmp = v.getLbInfo()
+			break
+		case *GBListener:
+			lbtmp = v.getLbInfo()
+			break
+		default:
+			continue
+		}
+		if lb.LbUuid == lbtmp.LbUuid {
+			counter++
+		}
+	}
+	log.Debugf("lb-%s contains %d listener", lb.LbUuid, counter)
+	return
 }
 
 func getGoBetweenStat(port string, server string )  (*GoBetweenServerStat, error){
