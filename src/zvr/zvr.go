@@ -3,8 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"os"
+	"os/exec"
+	"time"
+
+	log "github.com/Sirupsen/logrus"
+
 	"zvr/plugin"
 	"zvr/server"
 	"zvr/utils"
@@ -31,6 +35,27 @@ func loadPlugins()  {
 	plugin.PolicyRouteEntryPoint()
 	plugin.PimdEntryPoint()
 	plugin.FirewallEntryPoint()
+}
+
+// Note: there shouldn't be 'daily' etc. in the following config files.
+var logfiles = []string{
+	"/etc/logrotate.d/haproxy",
+}
+
+func doLogRotate(fpath string) {
+	cmd := exec.Command("/usr/sbin/logrotate", fpath)
+	cmd.Start()
+}
+
+func setupRotates() {
+	go func() {
+		for {
+			time.Sleep(time.Minute)
+			for _, cfgfile := range(logfiles) {
+				doLogRotate(cfgfile)
+			}
+		}
+	}()
 }
 
 var options server.Options
@@ -96,6 +121,7 @@ func main()  {
 	plugin.InitHaNicState()
 	utils.InitNatRule()
 	loadPlugins()
+	setupRotates()
 	server.VyosLockInterface(configureZvrFirewall)()
 
 	server.Start()
