@@ -62,6 +62,26 @@ func setupRotates() {
 	}()
 }
 
+var logfiles = []string{
+	"/etc/logrotate.d/haproxy",
+}
+
+func doLogRotate(fpath string) {
+	cmd := exec.Command("/usr/sbin/logrotate", fpath)
+	cmd.Start()
+}
+
+func setupRotates() {
+	go func() {
+		for {
+			time.Sleep(time.Minute)
+			for _, cfgfile := range(logfiles) {
+				doLogRotate(cfgfile)
+			}
+		}
+	}()
+}
+
 var options server.Options
 
 func abortOnWrongOption(msg string) {
