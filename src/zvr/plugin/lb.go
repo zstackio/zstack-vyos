@@ -43,7 +43,7 @@ const (
 	LISTENER_MAP_SIZE = 128
 	//reserve some sockets for haproxy if specify the parameter "ulimit-n"
 	RESERVE_SOCK_COUNT = 100
-	MAX_SOCK_COUNT = 1048576
+	MAX_SOCK_COUNT = 20971520
 
 	LB_LOCAL_ICMP_FIREWALL_RULE_NUMBER = 2000
 )
