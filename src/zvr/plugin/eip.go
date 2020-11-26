@@ -252,7 +252,6 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 	snatGwDes := makeEipDescriptionForGw(eip)
 	nicname, err :=  utils.GetNicNameByMac(eip.PublicMac)
 	if err != nil && eip.PublicMac != "" {
-		var nicname string
 		err = utils.Retry(func() error {
 			var e error
 			nicname, e = utils.GetNicNameByMac(eip.PublicMac)
