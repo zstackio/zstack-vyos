@@ -38,6 +38,7 @@ func loadPlugins()  {
 	plugin.PerformanceEntryPoint()
 }
 
+// Note: there shouldn't be 'daily' etc. in the following config files.
 var logfiles = []string{
 	"/etc/logrotate.d/haproxy",
 }

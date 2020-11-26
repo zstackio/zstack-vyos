@@ -1391,8 +1391,8 @@ local1.info     /var/log/haproxy.log`
 
 	lb_log_rotatoe_file, err := ioutil.TempFile(LB_CONF_DIR, "rotation"); utils.PanicOnError(err)
 	rotate_conf := `/var/log/haproxy.log {
-size 102400k
-daily
+size 50M
+#daily
 rotate 10
 compress
 copytruncate
@@ -1400,8 +1400,8 @@ notifempty
 missingok
 }
 /var/log/gobetween*.log {
-size 102400k
-daily
+size 50M
+#daily
 rotate 10
 compress
 copytruncate
