@@ -570,13 +570,9 @@ missingok
 	_, err = zvr_log_rotatoe_file.Write([]byte(zvr_rotate_conf))
 	utils.PanicOnError(err)
 
-	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/dhcp.conf; sudo mv %s /etc/logrotate.d/dhcp; sudo mv %s /etc/logrotate.d/zvr;" +
-			"sudo /etc/init.d/rsyslog restart",
-			dhcp_log_file.Name(), dhcp_log_rotatoe_file.Name(), zvr_log_rotatoe_file.Name()),
-	}
-	err = bash.Run()
-	utils.PanicOnError(err)
+	os.Rename(dhcp_log_file.Name(), "/etc/rsyslog.d/dhcp.conf")
+	os.Rename(dhcp_log_rotatoe_file.Name(), "/etc/logrotate.d/dhcp")
+	os.Rename(zvr_log_rotatoe_file.Name(), "/etc/logrotate.d/zvr")
 }
 
 func init() {
