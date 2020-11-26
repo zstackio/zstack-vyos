@@ -302,7 +302,7 @@ $UDPServerRun 514
 local2.debug     /var/log/keepalived.log`
 	_, err = log_file.Write([]byte(conf)); utils.PanicOnError(err)
 
-	log_rotatoe_file, err := ioutil.TempFile(KeepalivedConfigPath, "rotation"); utils.PanicOnError(err)
+	log_rotate_file, err := ioutil.TempFile(KeepalivedConfigPath, "rotation"); utils.PanicOnError(err)
 	rotate_conf := `/var/log/keepalived.log {
 size 10240k
 rotate 20
@@ -311,13 +311,9 @@ copytruncate
 notifempty
 missingok
 }`
-	_, err = log_rotatoe_file.Write([]byte(rotate_conf)); utils.PanicOnError(err)
-
-	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/keepalived.conf; sudo mv %s /etc/logrotate.d/keepalived; sudo /etc/init.d/rsyslog restart",
-			log_file.Name(), log_rotatoe_file.Name()),
-	}
-	err = bash.Run();utils.PanicOnError(err)
+	_, err = log_rotate_file.Write([]byte(rotate_conf)); utils.PanicOnError(err)
+	os.Rename(log_file.Name(), "/etc/rsyslog.d/keepalived.conf")
+	os.Rename(log_rotate_file.Name(), "/etc/logrotate.d/keepalived")
 }
 
 func checkKeepalivedRunning()  {
