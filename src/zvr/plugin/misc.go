@@ -96,6 +96,11 @@ restrict -6 default kod notrap nomodify nopeer noquery
 restrict 127.0.0.1
 restrict ::1
 
+# Listen local ports only
+interface ignore wildcard
+interface listen 127.0.0.1
+interface listen ::1
+
 #
 # The remainder of this file is for parameters that are set up via
 # the Vyatta configuration subsystem.
