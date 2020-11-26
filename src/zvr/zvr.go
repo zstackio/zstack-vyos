@@ -43,8 +43,7 @@ var logfiles = []string{
 }
 
 func doLogRotate(fpath string) {
-	cmd := exec.Command("/usr/sbin/logrotate", fpath)
-	cmd.Start()
+	exec.Command("/usr/sbin/logrotate", fpath).Run()
 }
 
 func setupRotates() {
