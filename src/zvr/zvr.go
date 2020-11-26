@@ -44,8 +44,7 @@ var logfiles = []string{
 }
 
 func doLogRotate(fpath string) {
-	cmd := exec.Command("/usr/sbin/logrotate", fpath)
-	cmd.Start()
+	exec.Command("/usr/sbin/logrotate", fpath).Run()
 }
 
 func setupRotates() {
@@ -57,6 +56,10 @@ func setupRotates() {
 			}
 		}
 	}()
+}
+
+func restartRsyslog() {
+	exec.Command("sudo", "/etc/init.d/rsyslog", "restart").Run()
 }
 
 var options server.Options
@@ -115,7 +118,7 @@ func configureZvrFirewall() {
 }
 
 func main()  {
-
+	restartRsyslog()
 	parseCommandOptions()
 	utils.InitLog(options.LogFile, false)
 	utils.InitBootStrapInfo()

@@ -954,12 +954,7 @@ local1.%s     /var/log/haproxy.log`, strings.ToLower(level))
 	_, err = lb_log_file.Write([]byte(conf))
 	utils.PanicOnError(err)
 
-	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/haproxy.conf; sudo /etc/init.d/rsyslog restart",
-			lb_log_file.Name()),
-	}
-	err = bash.Run()
-	utils.PanicOnError(err)
+	os.Rename(lb_log_file.Name(), "/etc/rsyslog.d/haproxy.conf")
 }
 
 func refreshLogLevel(ctx *server.CommandContext) interface{} {
@@ -1422,13 +1417,9 @@ notifempty
 missingok
 }`
 	_, err = auth_rotatoe_file.Write([]byte(auth_rotate_conf)); utils.PanicOnError(err)
-
-	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/haproxy.conf; sudo mv %s /etc/logrotate.d/haproxy; sudo mv %s /etc/logrotate.d/auth; sudo /etc/init.d/rsyslog restart",
-			lb_log_file.Name(), lb_log_rotatoe_file.Name(), auth_rotatoe_file.Name()),
-	}
-	err = bash.Run();utils.PanicOnError(err)
-
+	os.Rename(lb_log_file.Name(), "/etc/rsyslog.d/haproxy.conf")
+	os.Rename(lb_log_rotatoe_file.Name(), "/etc/logrotate.d/haproxy")
+	os.Rename(auth_rotatoe_file.Name(), "/etc/logrotate.d/auth")
 }
 
 func LbEntryPoint() {
