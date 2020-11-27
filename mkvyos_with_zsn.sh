@@ -14,6 +14,12 @@ if [ $? -ne 0 ]; then
    exit 1
 fi
 
+which guestmount > /dev/null
+if [ $? -ne 0 ]; then
+   echo "guestmount is not installed"
+   exit 1
+fi
+
 usage() {
    echo "
 USAGE:
@@ -63,6 +69,15 @@ fi
 
 set -e
 
+imageFileSystem=$(mktemp -d)
+guestmount -a $imgfile --ro $imageFileSystem -m /dev/sda1
+if [ -f $imageFileSystem/opt/vyatta/etc/version ]; then
+  ROOTPATH="/"
+else
+  ROOTPATH="/boot/zs_vyos/rw/"
+fi
+guestunmount $imageFileSystem
+
 tmpdir=$(mktemp -d)
 
 atexit() {
@@ -96,24 +111,25 @@ guestfish <<_EOF_
 add $imgfile
 run
 mount /dev/sda1 /
-write /etc/version $VERSION
-mkdir-p /usr/local/zstack/zsn-agent/bin
-upload $ZVR $SBIN_DIR/zvr
-upload $ZVRBOOT $SBIN_DIR/zvrboot
-upload $ZVRSCRIPT /etc/init.d/zstack-virtualrouteragent
-upload $tmpdir/zsn-agent $ZSN_DIR/zsn-agent
-upload $tmpdir/zstack-network-agent /etc/init.d/zstack-network-agent
-upload $HAPROXY $SBIN_DIR/haproxy
-upload $GOBETWEEN $SBIN_DIR/gobetween
-upload $KEEPALIVED /usr/sbin/keepalived
-mkdir-p /home/vyos/zvr/keepalived/script
-upload $PIMD $SBIN_DIR/pimd
-upload $ZVR_VERSION /home/vyos/zvr/version
-upload $HEALTHCHECK /usr/share/healthcheck.sh
-mkdir-p /home/vyos/zvr/ssh
-upload $SSHD /home/vyos/zvr/ssh/sshd.sh
-upload $ZSN /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
-upload -<<END /opt/vyatta/etc/config/scripts/vyatta-postconfig-bootup.script
+write $ROOTPATH/etc/version $VERSION
+mkdir-p $ROOTPATH/usr/local/zstack/zsn-agent/bin
+upload $ZVR $ROOTPATH$SBIN_DIR/zvr
+upload $ZVRBOOT $ROOTPATH$SBIN_DIR/zvrboot
+upload $ZVRSCRIPT $ROOTPATH/etc/init.d/zstack-virtualrouteragent
+upload $tmpdir/zsn-agent $ROOTPATH$ZSN_DIR/zsn-agent
+upload $tmpdir/zstack-network-agent $ROOTPATH/etc/init.d/zstack-network-agent
+upload $HAPROXY $ROOTPATH$SBIN_DIR/haproxy
+upload $GOBETWEEN $ROOTPATH$SBIN_DIR/gobetween
+upload $KEEPALIVED $ROOTPATH/usr/sbin/keepalived
+mkdir-p $ROOTPATH/home/vyos/zvr/keepalived/script
+upload $PIMD $ROOTPATH/$SBIN_DIR/pimd
+upload $ZVR_VERSION $ROOTPATH/home/vyos/zvr/version
+upload $HEALTHCHECK $ROOTPATH/usr/share/healthcheck.sh
+mkdir-p $ROOTPATH/home/vyos/zvr/ssh
+upload $SSHD $ROOTPATH/home/vyos/zvr/ssh/sshd.sh
+upload $ZSN $ROOTPATH/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
+mkdir-p $ROOTPATH/opt/vyatta/etc/config/scripts/
+upload -<<END $ROOTPATH/opt/vyatta/etc/config/scripts/vyatta-postconfig-bootup.script
 #!/bin/bash
 chmod +x $SBIN_DIR/zvrboot
 chmod +x $SBIN_DIR/zvr
@@ -129,7 +145,7 @@ chmod +x /home/vyos/zvr/ssh/sshd.sh
 chmod +x /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 mkdir -p /home/vyos/zvr
 mkdir -p /home/vyos/zvr/keepalived/script
-chown vyos:users /home/vyos/zvr
+chown vyos:users /home/vyos/ -R
 chown vyos:users $SBIN_DIR/zvr
 chown vyos:users $ZSN_DIR/zsn-agent
 chown vyos:users $SBIN_DIR/haproxy

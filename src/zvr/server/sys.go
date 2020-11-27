@@ -44,6 +44,7 @@ func FindNicNameByMac(mac string) (string, bool) {
 
 func RunVyosScriptAsUserVyos(command string) {
 	template := `export vyatta_sbindir=/opt/vyatta/sbin
+%s
 SET=${vyatta_sbindir}/my_set
 DELETE=${vyatta_sbindir}/my_delete
 COPY=${vyatta_sbindir}/my_copy
@@ -77,7 +78,16 @@ if [ $? -ne 0 ]; then
 fi
 
 `
-	command = fmt.Sprintf(template, command)
+	env_1_2 := `export vyos_libexec_dir=/usr/libexec/vyos
+export vyos_validators_dir=/usr/libexec/vyos/validators
+export vyos_conf_scripts_dir=/usr/libexec/vyos/conf_mode`
+	env_1_1_7 := ``
+	env := env_1_2
+	if utils.Vyos_version == utils.VYOS_1_1_7 {
+		env = env_1_1_7
+	}
+
+	command = fmt.Sprintf(template, env, command)
 	tmpfile, err := ioutil.TempFile("", "zvr"); utils.PanicOnError(err)
 	defer os.Remove(tmpfile.Name())
 
@@ -93,7 +103,13 @@ fi
 }
 
 func RunVyosScript(command string, args map[string]string) {
+	env_1_2 := `export vyos_libexec_dir=/usr/libexec/vyos
+export vyos_validators_dir=/usr/libexec/vyos/validators
+export vyos_conf_scripts_dir=/usr/libexec/vyos/conf_mode`
+	env_1_1_7 := ``
+
 	template := `export vyatta_sbindir=/opt/vyatta/sbin
+%s
 SET=${vyatta_sbindir}/my_set
 DELETE=${vyatta_sbindir}/my_delete
 COPY=${vyatta_sbindir}/my_copy
@@ -127,8 +143,13 @@ if [ $? -ne 0 ]; then
 fi
 
 `
+	env := env_1_2
+	if utils.Vyos_version == utils.VYOS_1_1_7 {
+		env = env_1_1_7
+	}
+
 	bash := &utils.Bash{
-		Command: fmt.Sprintf(template, command),
+		Command: fmt.Sprintf(template, env, command),
 		Arguments: args,
 		NoLog: true,
 	}

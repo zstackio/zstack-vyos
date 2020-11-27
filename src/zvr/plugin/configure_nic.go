@@ -167,13 +167,13 @@ func configureNic(ctx *server.CommandContext) interface{} {
 		}
 
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s duplex auto", nicname)
-		tree.SetfWithoutCheckExisting("interfaces ethernet %s smp_affinity auto", nicname)
+		tree.SetNicSmpAffinity(nicname, "auto")
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s speed auto", nicname)
+		mtu := 1500
 		if nic.Mtu != 0 {
-			b := utils.NewBash()
-			b.Command = fmt.Sprintf("ip link set mtu %d dev '%s'", nic.Mtu, nicname)
-			b.Run()
+			mtu = nic.Mtu
 		}
+		tree.SetNicMtu(nicname, mtu)
 
 		if nic.Ip6 != "" && nic.Category == "Private"{
 			switch nic.AddressMode {
