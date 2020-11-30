@@ -14,16 +14,10 @@ if [ $? -ne 0 ]; then
    exit 1
 fi
 
-which guestmount > /dev/null
-if [ $? -ne 0 ]; then
-   echo "guestmount is not installed"
-   exit 1
-fi
-
 usage() {
    echo "
 USAGE:
-$0 path_to_image path_to_zvr_tar path_to_zsn_vyos_bin"
+$0 path_to_image path_to_zvr_tar path_to_zsn_vyos_bin vyos_version"
 }
 
 if [ -z $1 ]; then
@@ -59,6 +53,17 @@ if [ ! -f $3 ]; then
    exit 1
 fi
 
+vyosVersion="1.1.7"
+if [ ! -z $4 ]; then
+   vyosVersion=$4
+   echo "vyos version $vyosVersion"
+   if [ $vyosVersion != "1.1.7" ] && [ $vyosVersion != "1.2.0" ]; then
+       echo "vyos version must be 1.1.7 or 1.2.0"
+       usage
+       exit 1
+   fi
+fi
+
 imgfile=$1
 isVmdk=0
 if echo $1 | grep -q -i '\.vmdk$'; then
@@ -69,14 +74,11 @@ fi
 
 set -e
 
-imageFileSystem=$(mktemp -d)
-guestmount -a $imgfile --ro $imageFileSystem -m /dev/sda1
-if [ -f $imageFileSystem/opt/vyatta/etc/version ]; then
+if [ $vyosVersion = "1.1.7" ]; then
   ROOTPATH="/"
 else
   ROOTPATH="/boot/zs_vyos/rw/"
 fi
-guestunmount $imageFileSystem
 
 tmpdir=$(mktemp -d)
 
@@ -163,16 +165,12 @@ END
 download /boot/grub/grub.cfg /tmp/grub.cfg
 ! sed -e 's/^set[[:space:]]\+timeout[[:space:]]*=[[:space:]]*[[:digit:]]\+/set timeout=0/g' -e '/^echo.*Grub menu/,/^fi$/d' /tmp/grub.cfg > /tmp/grub.cfg.new
 upload /tmp/grub.cfg.new /boot/grub/grub.cfg
-download /etc/security/limits.conf /tmp/limits.conf
+download $ROOTPATH/etc/security/limits.conf /tmp/limits.conf
 ! grep -w "vyos" /tmp/limits.conf | grep nofile | grep soft && sed -i 's/vyos soft nofile [0-9]*/vyos soft nofile 20971520/' /tmp/limits.conf || echo "vyos soft nofile 20971520" >> /tmp/limits.conf
 ! grep -w "vyos" /tmp/limits.conf | grep nofile | grep hard && sed -i 's/vyos hard nofile [0-9]*/vyos hard nofile 20971520/' /tmp/limits.conf || echo "vyos hard nofile 20971520" >> /tmp/limits.conf
 ! grep -w "root" /tmp/limits.conf | grep nofile | grep soft && sed -i 's/root soft nofile [0-9]*/root soft nofile 20971520/' /tmp/limits.conf || echo "root soft nofile 20971520" >> /tmp/limits.conf
 ! grep -w "root" /tmp/limits.conf | grep nofile | grep hard && sed -i 's/root hard nofile [0-9]*/root hard nofile 20971520/' /tmp/limits.conf || echo "root hard nofile 20971520" >> /tmp/limits.conf
-upload /tmp/limits.conf /etc/security/limits.conf
-download /etc/sysctl.conf /tmp/sysctl.conf
-! grep -w "fs" /tmp/sysctl.conf | grep nr_open  && sed -i 's/fs.nr_open=[0-9]*/fs.nr_open=20971520/' /tmp/sysctl.conf   || echo "fs.nr_open=20971520"  >> /tmp/sysctl.conf
-! grep -w "fs" /tmp/sysctl.conf | grep file-max && sed -i 's/fs.file-max=[0-9]*/fs.file-max=26268608/' /tmp/sysctl.conf || echo "fs.file-max=26268608" >> /tmp/sysctl.conf
-upload /tmp/sysctl.conf /etc/sysctl.conf
+upload /tmp/limits.conf $ROOTPATH/etc/security/limits.conf
 _EOF_
 
 /bin/rm -rf $tmpdir
