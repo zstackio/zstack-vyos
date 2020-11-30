@@ -52,6 +52,13 @@ func InitVyosVersion() {
                         Vyos_version = VYOS_1_2
                 }
         }
+
+        b := Bash{
+                Command: "! grep -w 'fs' /tmp/sysctl.conf | grep nr_open  && sed -i 's/fs.nr_open=[0-9]*/fs.nr_open=20971520/' /tmp/sysctl.conf   || echo 'fs.nr_open=20971520'  >> /etc/sysctl.conf;" +
+                        "! grep -w 'fs' /tmp/sysctl.conf | grep file-max && sed -i 's/fs.file-max=[0-9]*/fs.file-max=26268608/' /tmp/sysctl.conf || echo 'fs.file-max=26268608' >> /etc/sysctl.conf",
+        }
+        b.Run()
+        b.PanicIfError()
 }
 
 func GetCpuNum() int  {
