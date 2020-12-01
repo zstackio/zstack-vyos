@@ -2,6 +2,7 @@ package utils
 
 import (
 	"os"
+	"os/exec"
 	"path"
 )
 
@@ -41,4 +42,8 @@ func PathExists(filepath string) (bool, error) {
 	} else  {
 		return true, nil
 	}
+}
+
+func SudoMoveFile(oldpath, newpath string) error {
+	return exec.Command("sudo", "/bin/mv", "-f", oldpath, newpath).Run()
 }
