@@ -93,8 +93,8 @@ func parseEsxBootInfo() {
 		}
 
 		err = utils.MkdirForFile(BOOTSTRAP_INFO_CACHE, 0666); utils.PanicOnError(err)
-		err = os.Rename(TMP_LOCATION_FOR_ESX, BOOTSTRAP_INFO_CACHE); utils.PanicOnError(err)
-		err = os.Chmod(BOOTSTRAP_INFO_CACHE, 0777); utils.PanicOnError(err)
+		err = ioutil.WriteFile(BOOTSTRAP_INFO_CACHE, content, 0777); utils.PanicOnError(err)
+		os.Remove(TMP_LOCATION_FOR_ESX)
 		return true
 	}, time.Duration(300)*time.Second, time.Duration(1)*time.Second)
 }

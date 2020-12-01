@@ -312,8 +312,8 @@ notifempty
 missingok
 }`
 	_, err = log_rotate_file.Write([]byte(rotate_conf)); utils.PanicOnError(err)
-	os.Rename(log_file.Name(), "/etc/rsyslog.d/keepalived.conf")
-	os.Rename(log_rotate_file.Name(), "/etc/logrotate.d/keepalived")
+	utils.SudoMoveFile(log_file.Name(), "/etc/rsyslog.d/keepalived.conf")
+	utils.SudoMoveFile(log_rotate_file.Name(), "/etc/logrotate.d/keepalived")
 }
 
 func checkKeepalivedRunning()  {
