@@ -3,6 +3,7 @@ package plugin
 import (
 	"bytes"
 	"os"
+	"strings"
 	"zvr/server"
 	"zvr/utils"
 	log "github.com/Sirupsen/logrus"
@@ -218,7 +219,7 @@ func init ()  {
 	os.MkdirAll(NTP_CONF_DIR, os.ModePerm)
 	ver, err := ioutil.ReadFile(VERSION_FILE_PATH)
 	if err == nil {
-		VERSION = string(ver)
+		VERSION = strings.TrimSpace(string(ver))
 	}
 	RegisterHealthCheckCallback(&fsHealthCheck{})
 	RegisterHealthCheckCallback(&networkHealthCheck{})

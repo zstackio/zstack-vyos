@@ -65,7 +65,8 @@ do_start() {
     fi
 
     chown -R vyos:users $HOMDIR
-    su - vyos -c "nohup $SERVER -ip $ETH0_IP -logfile $LOGFILE >$BOOTLOG 2>&1 < /dev/null &"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') start start zstack virtual router " >>$BOOTLOG
+    su - vyos -c "nohup $SERVER -ip $ETH0_IP -logfile $LOGFILE >>$BOOTLOG 2>&1 < /dev/null &"
 
     sleep 1
 
@@ -77,6 +78,7 @@ do_start() {
         if [ "$c"=="1" ]
         then
             echo "failed, retrying the $retry time"
+            echo "$(date '+%Y-%m-%d %H:%M:%S') start start zstack virtual router failed, retrying the $retry time " >>$BOOTLOG
             su - vyos -c "nohup $SERVER -ip $ETH0_IP -logfile $LOGFILE >>$BOOTLOG 2>&1 < /dev/null &"
             sleep $(( retry++ ))
         else
@@ -95,6 +97,7 @@ start_server() {
     if [ $ret -eq 0 ]; then
         pid=$(get_pid)
         echo "zstack virtual router agent [PID:$pid] is running already"
+        echo "$(date '+%Y-%m-%d %H:%M:%S') zstack virtual router agent [PID:$pid] is running already " >>$BOOTLOG
     elif [ $ret -eq 1 ]; then
         do_start ""
     fi
@@ -102,11 +105,13 @@ start_server() {
 
 do_stop() {
     pid=$(get_pid)
+    echo "$(date '+%Y-%m-%d %H:%M:%S') stop virtual router agent  pid: $pid" >>$BOOTLOG
     if [ x$pid != x"" ]; then
         kill -SIGINT $pid
         sleep 1
         kill -SIGTERM $pid 2> /dev/null
         while kill -0 $pid; do
+             echo "$(date '+%Y-%m-%d %H:%M:%S') stop virtual router agent  pid: $pid" >>$BOOTLOG
             sleep 1
         done
     fi
@@ -117,6 +122,7 @@ stop_server() {
     ret=$?
     if [ $ret -ne 0 ]; then
         echo "zstack virtual router agent stopped already"
+        echo "$(date '+%Y-%m-%d %H:%M:%S') zstack virtual router agent stopped already" >>$BOOTLOG
 	return
     fi
     (

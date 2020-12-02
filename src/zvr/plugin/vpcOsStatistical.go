@@ -279,7 +279,7 @@ root@vyos:/home/vyos# df -h -B 1 | grep vda1
 */
 func getDiskCpuInfo() []*diskInfo {
 	bash := &utils.Bash{
-		Command: fmt.Sprintf("df -h -l -B 1 | grep -E ' /$'"),
+		Command: fmt.Sprintf("df -h -l -B 1 | grep vda"),
 		NoLog:   true,
 	}
 	ret, stdout, _, _ := bash.RunWithReturn()
@@ -330,6 +330,11 @@ func getDiskCpuInfo() []*diskInfo {
 		usage.freePercent = 100 - usage.usedPercent
 
 		disks := strings.Split(strings.Trim(items[0], "/"), "/")
+		if len(disks) < 2 {
+			log.Debugf("getDiskCpuInfo disks %s, items: %+v", disks, items[0])
+			continue
+		}
+
 		usage.device = disks[1]
 		usage.fstype = "ext4"
 		usage.mountpoint = "/"
