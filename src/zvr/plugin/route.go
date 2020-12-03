@@ -4,6 +4,7 @@ import (
 	"zvr/server"
 	"zvr/utils"
 	"fmt"
+	"strings"
 	"github.com/pkg/errors"
 )
 
@@ -38,6 +39,9 @@ func setRoutes(infos []routeInfo) {
 	tree := server.NewParserFromShowConfiguration().Tree
 	if rs := tree.Get("protocols static route"); rs != nil {
 		for _, r := range rs.Children() {
+			if strings.Contains(r.Name(),"0.0.0.0/0") {
+				continue;
+			}
 			r.Delete()
 		}
 	}
