@@ -294,7 +294,7 @@ func (vipRules *vipQosRules) VipQosDelRule(rule qosRule, nicName string, direct 
 				nicName, rule.prioId),
 		}
 		bash.Run()
-		bash.PanicIfError()
+		//bash.PanicIfError()
 		vipRules.filterMap.Reset()
 	}
 	log.Debugf("VipQosDelRule ip %s port %d, filterPos %d, remain port number %d", rule.ip, rule.port, rule.filterPos, len(vipRules.portRules))
