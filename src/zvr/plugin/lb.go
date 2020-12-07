@@ -33,6 +33,7 @@ const (
 	DELETE_CERTIFICATE_PATH   = "/certificate/delete"
 	LB_ROOT_DIR = "/home/vyos/zvr/lb/"
 	LB_CONF_DIR = "/home/vyos/zvr/lb/conf/"
+	LB_PID_DIR = "/home/vyos/zvr/lb/pid/"
 	CERTIFICATE_ROOT_DIR = "/home/vyos/zvr/certificate/"
 	LB_SOCKET_DIR = "/home/vyos/zvr/lb/sock/"
 
@@ -1093,6 +1094,8 @@ func deleteCertificate(ctx *server.CommandContext) interface{} {
 func init() {
 	os.Mkdir(LB_ROOT_DIR, os.ModePerm)
 	os.Mkdir(LB_CONF_DIR, os.ModePerm)
+	os.Mkdir(LB_PID_DIR, os.ModePerm)
+	os.Chmod(LB_PID_DIR, os.ModePerm)
 	os.Mkdir(LB_SOCKET_DIR, os.ModePerm | os.ModeSocket)
 	LbListeners = make(map[string]interface{}, LISTENER_MAP_SIZE)
 	enableLbLog()
