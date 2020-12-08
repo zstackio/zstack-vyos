@@ -180,9 +180,9 @@ func GetIpFromUrl(url string) (string, error) {
 }
 
 func CheckIpDuplicate(nicname, ip string) bool {
-	b := Bash{Command: fmt.Sprintf("sudo arping -q -D -w 1.5 -c 1 -I %s %s > /dev/null", nicname, ip) }
+	b := Bash{Command: fmt.Sprintf("sudo arping -D -w 1.5 -c 1 -I %s %s", nicname, ip) }
 	err := b.Run()
-	return (err != nil)
+	return err != nil
 }
 
 func CheckZStackRouteExists(ip string) bool {
