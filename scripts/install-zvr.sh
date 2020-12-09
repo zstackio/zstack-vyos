@@ -64,6 +64,14 @@ fi
 chown vyos:users $TARGET_SSHD
 chmod +x $TARGET_SSHD
 
+TARGET_ZVRMONITOR=/home/vyos/zvr/ssh/zvr-monitor.sh
+if [[ ! -f $TARGET_ZVRMONITOR || $(diff zvr-monitor.sh $TARGET_ZVRMONITOR) ]]; then
+    yes | mkdir -p `dirname $TARGET_ZVRMONITOR`
+    yes | cp -f zvr-monitor.sh $TARGET_ZVRMONITOR
+fi
+chown vyos:users $TARGET_ZVRMONITOR
+chmod +x $TARGET_ZVRMONITOR
+
 TARGET_ZSN=/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 if [[ ! -f $TARGET_ZSN || $(diff zsn-crontab.sh $TARGET_ZSN) ]]; then
     yes | mkdir -p `dirname $TARGET_ZSN`

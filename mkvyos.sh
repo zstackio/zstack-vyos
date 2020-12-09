@@ -88,6 +88,7 @@ KEEPALIVED=$tmpdir/keepalived
 HEALTHCHECK=$tmpdir/healthcheck.sh
 PIMD=$tmpdir/pimd
 SSHD=$tmpdir/sshd.sh
+ZVRMONITOR=$tmpdir/zvr-monitor.sh
 SYSCTL=$tmpdir/sysctl.conf
 ZSN=$tmpdir/zsn-crontab.sh
 SBIN_DIR=/opt/vyatta/sbin
@@ -111,6 +112,7 @@ upload $ZVR_VERSION $ROOTPATH/home/vyos/zvr/version
 upload $HEALTHCHECK $ROOTPATH/usr/share/healthcheck.sh
 mkdir-p $ROOTPATH/home/vyos/zvr/ssh
 upload $SSHD $ROOTPATH/home/vyos/zvr/ssh/sshd.sh
+upload $ZVRMONITOR $ROOTPATH/home/vyos/zvr/ssh/zvr-monitor.sh
 upload $SYSCTL $ROOTPATH/etc/sysctl.conf
 upload $ZSN $ROOTPATH/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 mkdir-p $ROOTPATH/opt/vyatta/etc/config/scripts/
@@ -125,6 +127,7 @@ chmod +x /usr/sbin/keepalived
 chmod +x $SBIN_DIR/pimd
 chmod +x /usr/share/healthcheck.sh
 chmod +x /home/vyos/zvr/ssh/sshd.sh
+chmod +x /home/vyos/zvr/ssh/zvr-monitor.sh
 chmod 644 /etc/sysctl.conf
 chmod +x /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 mkdir -p /home/vyos/zvr/keepalived/script/
@@ -135,6 +138,7 @@ chown vyos:users $SBIN_DIR/gobetween
 chown vyos:users $SBIN_DIR/pimd
 chown vyos:users /usr/share/healthcheck.sh
 chown vyos:users /home/vyos/zvr/ssh/sshd.sh
+chown vyos:users /home/vyos/zvr/ssh/zvr-monitor.sh
 chown root:root /etc/sysctl.conf
 chown vyos:users /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 $SBIN_DIR/zvrboot >/home/vyos/zvr/zvrboot.log 2>&1 < /dev/null &

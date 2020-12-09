@@ -15,6 +15,7 @@ const (
 	INIT_PATH = "/init"
 	PING_PATH = "/ping"
 	ECHO_PATH = "/echo"
+	TEST_PATH = "/test"
 	CONFIGURE_NTP_PATH = "/configurentp"
 	/* please follow following rule to change the version:
 	  http://confluence.zstack.io/pages/viewpage.action?pageId=34014178 */
@@ -144,6 +145,11 @@ func initHandler(ctx *server.CommandContext) interface{} {
 		tree.Set("system task-scheduler task zsn interval 1")
 		tree.Set(fmt.Sprintf("system task-scheduler task zsn executable path '%s'", utils.Cronjob_file_zsn))
 	}
+
+	if tree.Get("system task-scheduler task zvr-monitor") == nil {
+		tree.Set("system task-scheduler task zvr-monitor interval 1")
+		tree.Set(fmt.Sprintf("system task-scheduler task zvr-monitor executable path '%s'", utils.Cronjob_file_zvrMonitor))
+	}
 	tree.Apply(false)
 
 	doRefreshLogLevel(initConfig.LogLevel)
@@ -170,6 +176,10 @@ func echoHandler(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
+func testHandler(ctx *server.CommandContext) interface{} {
+	return nil
+}
+
 func configureNtpHandle(ctx *server.CommandContext) interface{}{
 	cmd := &configureNtpCmd{}
 	ctx.GetCommand(cmd)
@@ -181,6 +191,7 @@ func MiscEntryPoint() {
 	server.RegisterAsyncCommandHandler(INIT_PATH, initHandler)
 	server.RegisterAsyncCommandHandler(PING_PATH, pingHandler)
 	server.RegisterSyncCommandHandler(ECHO_PATH, echoHandler)
+	server.RegisterSyncCommandHandler(TEST_PATH, server.VyosLock(testHandler))
 	server.RegisterAsyncCommandHandler(CONFIGURE_NTP_PATH, configureNtpHandle)
 }
 
