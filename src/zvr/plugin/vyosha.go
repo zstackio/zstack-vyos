@@ -1,12 +1,13 @@
 package plugin
 
 import (
-	"zvr/server"
 	"fmt"
-	"zvr/utils"
 	log "github.com/Sirupsen/logrus"
+	"io/ioutil"
 	"strings"
 	"time"
+	"zvr/server"
+	"zvr/utils"
 )
 
 const (
@@ -135,6 +136,32 @@ func postHaStatusToManageNode(status KeepAlivedStatus) {
 	err := utils.HttpPostForObject(haStatusCallbackUrl, map[string]string{"commandpath": "/vpc/hastatus", }, cmd, nil)
 }*/
 
+func NonManagementUpNics() []string {
+	var upNics []string
+	nics, _ := utils.GetAllNics()
+	for _, nic := range nics {
+		/* skip management nic */
+		if nic.Name == "eth0" {
+			continue
+		}
+
+		if strings.Contains(nic.Name, "eth") {
+			path := fmt.Sprintf("/sys/class/net/%s/operstate", nic.Name)
+			operstate, err := ioutil.ReadFile(path)
+			if err != nil {
+				continue
+			}
+
+			state := strings.TrimSpace(string(operstate))
+			if state == "up" {
+				upNics = append(upNics, nic.Name)
+			}
+		}
+	}
+
+	return upNics
+}
+
 func getKeepAlivedStatusTask()  {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -147,6 +174,16 @@ func getKeepAlivedStatusTask()  {
 		        if utils.IsHaEnabled() {
 				newHaStatus := getKeepAlivedStatus()
 				if newHaStatus == KeepAlivedStatus_Unknown || newHaStatus == keepAlivedStatus {
+					/* sometime keepalived is in backup state, but nic is up,
+					   we need to call notify script to correct it */
+
+					if newHaStatus == KeepAlivedStatus_Backup{
+						upNics := NonManagementUpNics()
+						if len(upNics) > 0 {
+							log.Warnf("nic %s is up when keepalived state is backup", upNics)
+							server.VyosLockInterface(callStatusChangeScripts)()
+						}
+					}
 					continue
 				}
 
@@ -212,7 +249,7 @@ func addHaNicVipPair(pairs []nicVipPair, callscript bool)  {
 		}
 
 		if !found {
-			count ++;
+			count ++
 			haVipPairs.pairs = append(haVipPairs.pairs, p)
 		}
 	}
