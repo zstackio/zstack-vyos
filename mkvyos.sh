@@ -65,8 +65,10 @@ fi
 
 if [ $vyosVersion = "1.1.7" ]; then
   ROOTPATH="/"
+  VyosPostScript="/opt/vyatta/etc/config/scripts/vyatta-postconfig-bootup.script"
 else
   ROOTPATH="/boot/zs_vyos/rw/"
+  VyosPostScript="/boot/zs_vyos/rw/config/scripts/vyos-postconfig-bootup.script"
 fi
 
 tmpdir=$(mktemp -d)
@@ -114,7 +116,7 @@ upload $SSHD $ROOTPATH/home/vyos/zvr/ssh/sshd.sh
 upload $SYSCTL $ROOTPATH/etc/sysctl.conf
 upload $ZSN $ROOTPATH/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 mkdir-p $ROOTPATH/opt/vyatta/etc/config/scripts/
-upload -<<END $ROOTPATH/opt/vyatta/etc/config/scripts/vyatta-postconfig-bootup.script
+upload -<<END $VyosPostScript
 #!/bin/bash
 chmod +x $SBIN_DIR/zvrboot
 chmod +x $SBIN_DIR/zvr
