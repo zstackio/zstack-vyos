@@ -178,7 +178,7 @@ func configureNtpHandle(ctx *server.CommandContext) interface{}{
 	return nil
 }
 func MiscEntryPoint() {
-	server.RegisterAsyncCommandHandler(INIT_PATH, initHandler)
+	server.RegisterAsyncCommandHandler(INIT_PATH, server.VyosLock(initHandler))
 	server.RegisterAsyncCommandHandler(PING_PATH, pingHandler)
 	server.RegisterSyncCommandHandler(ECHO_PATH, echoHandler)
 	server.RegisterAsyncCommandHandler(CONFIGURE_NTP_PATH, configureNtpHandle)
