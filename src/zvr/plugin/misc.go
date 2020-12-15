@@ -150,6 +150,13 @@ func initHandler(ctx *server.CommandContext) interface{} {
 		tree.Set("system task-scheduler task zvr-monitor interval 1")
 		tree.Set(fmt.Sprintf("system task-scheduler task zvr-monitor executable path '%s'", utils.Cronjob_file_zvrMonitor))
 	}
+
+	if tree.Get("system task-scheduler task cpu-monitor") == nil {
+		tree.Set("system task-scheduler task cpu-monitor interval 1")
+		tree.Set("system task-scheduler task cpu-monitor executable path /usr/bin/top")
+		tree.Set("system task-scheduler task cpu-monitor executable path 'b -n 1 -H >> /var/log/top.log'")
+	}
+
 	tree.Apply(false)
 
 	doRefreshLogLevel(initConfig.LogLevel)

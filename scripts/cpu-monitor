@@ -1,0 +1,9 @@
+/var/log/top*.log {
+size 10M
+#daily
+rotate 3
+compress
+copytruncate
+notifempty
+missingok
+}
