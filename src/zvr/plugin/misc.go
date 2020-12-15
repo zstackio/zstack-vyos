@@ -154,7 +154,7 @@ func initHandler(ctx *server.CommandContext) interface{} {
 	if tree.Get("system task-scheduler task cpu-monitor") == nil {
 		tree.Set("system task-scheduler task cpu-monitor interval 1")
 		tree.Set("system task-scheduler task cpu-monitor executable path /usr/bin/top")
-		tree.Set("system task-scheduler task cpu-monitor executable path 'b -n 1 -H >> /var/log/top.log'")
+		tree.Set("system task-scheduler task cpu-monitor executable arguments 'b -n 1 -H >> /var/log/top.log'")
 	}
 
 	tree.Apply(false)
