@@ -474,6 +474,20 @@ func deleteIPsecConnection(ctx *server.CommandContext) interface{} {
 	for _, info := range cmd.Infos {
 		delete(ipsecMap, info.Uuid)
 	}
+
+	
+	bash := utils.Bash{
+		Command: fmt.Sprintf("ip rule list | grep 32766"),
+	}
+	_, out, _, err := bash.RunWithReturn();; utils.PanicOnError(err)
+	if out == "" {
+		bash := utils.Bash{
+			Command: fmt.Sprintf("ip rule add from all table main pref 32766"),
+		}
+		_, _, _, err := bash.RunWithReturn(); utils.PanicOnError(err)
+	}
+
+
 	if utils.IsSkipVyosIptables() {
 		syncIpSecRulesByIptables()
 	}

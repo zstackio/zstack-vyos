@@ -40,7 +40,7 @@ func setRoutes(infos []routeInfo) {
 	if rs := tree.Get("protocols static route"); rs != nil {
 		for _, r := range rs.Children() {
 			if strings.Contains(r.Name(),"0.0.0.0/0") {
-				continue;
+				continue
 			}
 			r.Delete()
 		}
