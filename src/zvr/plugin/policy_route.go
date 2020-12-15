@@ -179,7 +179,7 @@ func deleteIpRules()  {
 	bash := utils.Bash {
 		Command: fmt.Sprintf("ip rule | grep '%s'", POLICY_ROUTE_TABLE_CHAIN),
 	}
-	_, o, _, err := bash.RunWithReturn(); utils.PanicOnError(err)
+	_, o, _, _ := bash.RunWithReturn()
 	if o != "" {
 		lines := strings.Split(o, "\n")
 		var newCmds []string
@@ -191,13 +191,13 @@ func deleteIpRules()  {
 			if strings.Contains(line, "fwmark") {
 				items := strings.Fields(line)
 				tableId, _ := strconv.ParseInt(strings.Replace(strings.TrimSpace(items[4]), "0x", "", 1), 16, 64)
-				newCmd := fmt.Sprintf("ip rule del fwmark %d table %d", tableId, tableId)
+				newCmd := fmt.Sprintf("sudo ip rule del fwmark %d table %d", tableId, tableId)
 				newCmds = append(newCmds, newCmd)
 			} else {
 				items := strings.Fields(line)
 				tables := strings.Split(items[4], "-")
 				tableId, _ := strconv.ParseInt(strings.TrimSpace(tables[2]), 10, 64)
-				newCmd := fmt.Sprintf("ip rule del from %s table %d", items[2], tableId)
+				newCmd := fmt.Sprintf("sudo ip rule del from %s table %d", items[2], tableId)
 				newCmds = append(newCmds, newCmd)
 			}
 		}
@@ -213,11 +213,15 @@ func deletePolicyRoutes()  {
 	bash := utils.Bash {
 		Command: fmt.Sprintf("sudo iptables-save -t mangle | grep '%s'", POLICY_ROUTE_COMMENT),
 	}
-	_, o, _, err := bash.RunWithReturn(); utils.PanicOnError(err)
+	_, o, _, _ := bash.RunWithReturn()
 	if o != "" {
 		lines := strings.Split(o, "\n")
 		var newCmds []string
 		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
 			newCmd := strings.Replace(line, "-A ", "-D ", 1)
 			newCmds = append(newCmds, IPTABLES_MANGLE_DELETE + newCmd)
 		}
@@ -231,11 +235,16 @@ func deletePolicyRoutes()  {
 	bash = utils.Bash {
 		Command: fmt.Sprintf("sudo iptables-save -t mangle | grep ':' | grep '%s' | awk '{print $1}'", POLICY_ROUTE_RULE_CHAIN),
 	}
-	_, o, _, err = bash.RunWithReturn(); utils.PanicOnError(err)
+	_, o, _, _ = bash.RunWithReturn()
 	if o != "" {
 		lines := strings.Split(o, "\n")
 		var newCmds []string
 		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+
 			newCmd := strings.Replace(line, ":", "", 1)
 			newCmds = append(newCmds, "sudo iptables -t mangle -X " + newCmd)
 		}
@@ -248,11 +257,12 @@ func deletePolicyRoutes()  {
 	bash = utils.Bash {
 		Command: fmt.Sprintf("sudo iptables-save -t mangle | grep ':' | grep '%s' | awk '{print $1}'", POLICY_ROUTE_TABLE_CHAIN),
 	}
-	_, o, _, err = bash.RunWithReturn(); utils.PanicOnError(err)
+	_, o, _, _ = bash.RunWithReturn()
 	if o != "" {
 		lines := strings.Split(o, "\n")
 		var newCmds []string
 		for _, line := range lines {
+			line = strings.TrimSpace(line)
 			if line == "" {
 				continue
 			}
@@ -271,15 +281,16 @@ func deletePolicyRoutes()  {
 	bash = utils.Bash {
 		Command: fmt.Sprintf("sudo grep '%s' %s | awk '{print $1}'", POLICY_ROUTE_TABLE_CHAIN, POLICY_ROUTE_TABLE_FILE),
 	}
-	_, o, _, err = bash.RunWithReturn(); utils.PanicOnError(err)
+	_, o, _, _ = bash.RunWithReturn()
 	if o != "" {
 		lines := strings.Split(o, "\n")
 		var newCmds []string
 		for _, line := range lines {
+			line = strings.TrimSpace(line)
 			if line == "" {
 				continue
 			}
-			newCmds = append(newCmds, fmt.Sprintf("ip route flush  table %s", line))
+			newCmds = append(newCmds, fmt.Sprintf("sudo ip route flush  table %s", line))
 		}
 		bash = utils.Bash {
 			Command: strings.Join(newCmds, ";"),
@@ -295,7 +306,7 @@ func createPolicyRouteTables(tableIds []int) error {
 	for _, rt := range tableIds {
 		chainName := getPolicyRouteTableChainName(rt)
 		routeTablesCmds = append(routeTablesCmds, fmt.Sprintf("sudo ip route flush table %d", rt))
-		routeTablesCmds = append(routeTablesCmds, fmt.Sprintf("ip rule add fwmark %d table %d", rt, rt))
+		routeTablesCmds = append(routeTablesCmds, fmt.Sprintf("sudo ip rule add fwmark %d table %d", rt, rt))
 		routeTablesCmds = append(routeTablesCmds, fmt.Sprintf("sudo iptables -t mangle -N %s", chainName))
 		routeTablesCmds = append(routeTablesCmds, fmt.Sprintf(IPTABLES_MANGLE + " -A %s -m mark --mark 0 -j MARK --set-mark %d", chainName, rt))
 		routeTablesCmds = append(routeTablesCmds, fmt.Sprintf(IPTABLES_MANGLE + " -A %s -j CONNMARK --set-mark %d", chainName, rt))
@@ -321,10 +332,10 @@ func createPolicyRouteTableEntry(routes []policyRouteInfo) error {
 	for _, route := range routes {
 		if route.OutNicMic != "" {
 			nicName, err := utils.GetNicNameByMac(route.OutNicMic);utils.PanicOnError(err)
-			routeTablesCmds = append(routeTablesCmds, fmt.Sprintf("ip route add %s dev %s table %d",
+			routeTablesCmds = append(routeTablesCmds, fmt.Sprintf("sudo ip route add %s dev %s table %d",
 				route.DestinationCidr, nicName, route.TableNumber))
 		} else {
-			routeTablesCmds = append(routeTablesCmds, fmt.Sprintf("ip route add %s metric %d via %s table %d",
+			routeTablesCmds = append(routeTablesCmds, fmt.Sprintf("sudo ip route add %s metric %d via %s table %d",
 				route.DestinationCidr, route.Distance, route.NextHopIp, route.TableNumber))
 		}
 	}
@@ -411,7 +422,7 @@ func createPolicyRouteRules(rules []policyRuleInfo, rsMap map[string]bool) error
 
 		if rsMap[rule.RuleSetName] {
 			/* rule.RuleNumber */
-			cmd := fmt.Sprintf("ip rule add from %s table %d", rule.SourceIp, rule.TableNumber)
+			cmd := fmt.Sprintf("sudo ip rule add from %s table %d", rule.SourceIp, rule.TableNumber)
 			ruleCmds = append(ruleCmds, cmd)
 			continue
 		}
