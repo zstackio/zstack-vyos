@@ -72,6 +72,12 @@ fi
 chown vyos:users $TARGET_ZVRMONITOR
 chmod +x $TARGET_ZVRMONITOR
 
+TARGET_CPUMONITOR=/etc/logrotate.d/cpu-monitor
+if [[ ! -f $TARGET_CPUMONITOR || $(diff cpu-monitor $TARGET_CPUMONITOR) ]]; then
+    yes | mkdir -p `dirname $TARGET_CPUMONITOR`
+    yes | cp -f cpu-monitor $TARGET_CPUMONITOR
+fi
+
 TARGET_ZSN=/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 if [[ ! -f $TARGET_ZSN || $(diff zsn-crontab.sh $TARGET_ZSN) ]]; then
     yes | mkdir -p `dirname $TARGET_ZSN`

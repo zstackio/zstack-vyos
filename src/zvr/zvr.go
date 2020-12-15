@@ -41,6 +41,7 @@ func loadPlugins()  {
 // Note: there shouldn't be 'daily' etc. in the following config files.
 var logfiles = []string{
 	"/etc/logrotate.d/haproxy",
+	"/etc/logrotate.d/cpu-monitor",
 }
 
 func doLogRotate(fpath string) {

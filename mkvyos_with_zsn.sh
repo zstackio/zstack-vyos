@@ -102,6 +102,7 @@ PIMD=$tmpdir/pimd
 HEALTHCHECK=$tmpdir/healthcheck.sh
 SSHD=$tmpdir/sshd.sh
 ZVRMONITOR=$tmpdir/zvr-monitor.sh
+CPUMONITOR=$tmpdir/cpu-monitor
 SYSCTL=$tmpdir/sysctl.conf
 ZSN=$tmpdir/zsn-crontab.sh
 SBIN_DIR=/opt/vyatta/sbin
@@ -134,6 +135,7 @@ upload $HEALTHCHECK $ROOTPATH/usr/share/healthcheck.sh
 mkdir-p $ROOTPATH/home/vyos/zvr/ssh
 upload $SSHD $ROOTPATH/home/vyos/zvr/ssh/sshd.sh
 upload $ZVRMONITOR $ROOTPATH/home/vyos/zvr/ssh/zvr-monitor.sh
+upload $CPUMONITOR $ROOTPATH/etc/logrotate.d/cpu-monitor
 upload $SYSCTL $ROOTPATH/etc/sysctl.conf
 upload $ZSN $ROOTPATH/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 mkdir-p $ROOTPATH/opt/vyatta/etc/config/scripts/
