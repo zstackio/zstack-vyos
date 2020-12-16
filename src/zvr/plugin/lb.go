@@ -261,8 +261,10 @@ func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo)  (err err
     ulimit-n {{.ulimit}}
 {{if eq .Nbthread 0}}
     #nbthread {{.Nbthread}}
+    nbproc {{.Nbprocess}}
 {{else}}
     nbthread {{.Nbthread}}
+    #nbproc {{.Nbprocess}}
 {{end}}
 defaults
     log global
