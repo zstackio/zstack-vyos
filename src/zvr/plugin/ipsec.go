@@ -479,10 +479,10 @@ func deleteIPsecConnection(ctx *server.CommandContext) interface{} {
 	bash := utils.Bash{
 		Command: fmt.Sprintf("ip rule list | grep 32766"),
 	}
-	_, out, _, err := bash.RunWithReturn();; utils.PanicOnError(err)
+	_, out, _, _ := bash.RunWithReturn()
 	if out == "" {
 		bash := utils.Bash{
-			Command: fmt.Sprintf("ip rule add from all table main pref 32766"),
+			Command: fmt.Sprintf("sudo ip rule add from all table main pref 32766"),
 		}
 		_, _, _, err := bash.RunWithReturn(); utils.PanicOnError(err)
 	}
