@@ -199,7 +199,7 @@ func CheckZStackRouteExists(ip string) bool {
 func DeleteRouteIfExists(ip string) error {
 	if CheckZStackRouteExists(ip) == true {
 		bash := Bash{
-			Command: fmt.Sprintf("ip route del %s/32", ip),
+			Command: fmt.Sprintf("sudo ip route del %s/32", ip),
 		}
 		_, _, _, err := bash.RunWithReturn()
 		if err != nil {
@@ -217,11 +217,11 @@ func SetZStackRoute(ip string, nic string, gw string) error {
 	var bash Bash
 	if gw == "" {
 		bash = Bash{
-			Command: fmt.Sprintf("ip route add %s/32 dev %s proto %s", ip, nic, ZSTACK_ROUTE_PROTO),
+			Command: fmt.Sprintf("sudo ip route add %s/32 dev %s proto %s", ip, nic, ZSTACK_ROUTE_PROTO),
 		}
 	} else {
 		bash = Bash{
-			Command: fmt.Sprintf("ip route add %s/32 via %s dev %s proto %s", ip, gw, nic, ZSTACK_ROUTE_PROTO),
+			Command: fmt.Sprintf("sudo ip route add %s/32 via %s dev %s proto %s", ip, gw, nic, ZSTACK_ROUTE_PROTO),
 		}
 	}
 
@@ -248,7 +248,7 @@ func GetNicForRoute(ip string) string {
 func RemoveZStackRoute(ip string) error {
 	SetZStackRouteProtoIdentifier()
 	bash := Bash{
-		Command: fmt.Sprintf("ip route del %s/32 proto %s", ip, ZSTACK_ROUTE_PROTO),
+		Command: fmt.Sprintf("sudo ip route del %s/32 proto %s", ip, ZSTACK_ROUTE_PROTO),
 	}
 	ret, _, _, err := bash.RunWithReturn()
 	if err != nil {
@@ -415,7 +415,7 @@ func GetNexthop(dst string) (string, error) {
 
 func AddRoute(dst, nexthop string) error {
 	bash := Bash{
-		Command: fmt.Sprintf("ip route add %s via %s", dst, nexthop),
+		Command: fmt.Sprintf("sudo ip route add %s via %s", dst, nexthop),
 	}
 	ret, _, e, err := bash.RunWithReturn()
 	if err != nil{
@@ -438,7 +438,7 @@ func DelIp6DefaultRoute() error {
 	}
 
 	bash = Bash{
-		Command: fmt.Sprintf(fmt.Sprintf("ip -6 route del default via %s", oldGw6)),
+		Command: fmt.Sprintf(fmt.Sprintf("sudo ip -6 route del default via %s", oldGw6)),
 	}
 	_, _, _, err = bash.RunWithReturn()
 
@@ -461,9 +461,9 @@ func AddIp6DefaultRoute(gw6, dev string)  {
 
 	var cmds []string
 	if oldGw6 != "" {
-		cmds = append(cmds, fmt.Sprintf("ip -6 route del default via %s", oldGw6))
+		cmds = append(cmds, fmt.Sprintf("sudo ip -6 route del default via %s", oldGw6))
 	}
-	cmds = append(cmds, fmt.Sprintf("ip -6 route add default via %s dev %s", gw6, dev))
+	cmds = append(cmds, fmt.Sprintf("sudo ip -6 route add default via %s dev %s", gw6, dev))
 	bash = Bash{
 		Command: strings.Join(cmds, ";"),
 	}

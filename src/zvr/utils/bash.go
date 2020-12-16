@@ -115,7 +115,7 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 			cmd.Process.Signal(syscall.SIGTERM)
 			err = fmt.Errorf("bash command %s timeout in 120 sec", b.Command)
 			retCode = -1
-		case err := <-done:
+		case err = <-done:
 			var waitStatus syscall.WaitStatus
 			if err != nil {
 				if exitError, ok := err.(*exec.ExitError); ok {
@@ -142,6 +142,7 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 			"return code": fmt.Sprintf("%v", retCode),
 			"stdout": stdout,
 			"stderr": stderr,
+			"err": fmt.Sprintf("%v", err),
 		}).Debugf("shell done: %s", b.Command)
 	}
 
