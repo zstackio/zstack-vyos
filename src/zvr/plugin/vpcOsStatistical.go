@@ -193,6 +193,9 @@ type cpuInfo struct {
 	iowait  float64
 	irq     float64
 	softirq float64
+	steal   float64
+	guest   float64
+	guest_nice   float64
 
 	total float64
 }
@@ -207,6 +210,8 @@ cpu2 628977 0 1556558 1093526709 3767 0 7735 0 0 0
 cpu3 619963 0 1488060 1093814434 2440 0 8456 0 0 0
 intr 2282219413 152 368 0 0 9 0 2 0 0 3 0 1096906 822 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 873503192 279 0 8192200 0 263993 28 0 3833769 81 0
 .......
+ref: https://www.kgoettler.com/post/proc-stat/
+ref: https://elixir.bootlin.com/linux/latest/source/fs/proc/stat.c
 */
 func getVPCCpuInfo() []*cpuInfo {
 	infoFromFile, err := ioutil.ReadFile("/proc/stat")
@@ -237,8 +242,11 @@ func getVPCCpuInfo() []*cpuInfo {
 		usage.iowait, _ = strconv.ParseFloat(strings.Trim(items[5], " "), 64)
 		usage.irq, _ = strconv.ParseFloat(strings.Trim(items[6], " "), 64)
 		usage.softirq, _ = strconv.ParseFloat(strings.Trim(items[7], " "), 64)
+		usage.steal, _ = strconv.ParseFloat(strings.Trim(items[8], " "), 64)
+		usage.guest, _ = strconv.ParseFloat(strings.Trim(items[9], " "), 64)
+		usage.guest_nice, _ = strconv.ParseFloat(strings.Trim(items[10], " "), 64)
 
-		usage.total = usage.user + usage.nice + usage.system + usage.idle + usage.iowait + usage.irq + usage.softirq
+		usage.total = usage.user + usage.nice + usage.system + usage.idle + usage.iowait + usage.irq + usage.softirq + usage.steal
 
 		if usage.total == 0 {
 			log.Debugf("getDiskCpuInfo line %s, items: %+v", line, items)
