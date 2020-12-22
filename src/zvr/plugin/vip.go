@@ -661,7 +661,7 @@ func setVip(ctx *server.CommandContext) interface{} {
 			utils.PanicOnError(err)
 			addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
 			tree.Deletef("interfaces ethernet %s address %v", nicname, addr)
-			cmd := fmt.Sprintf("ip address del %s dev %s", addr, nicname)
+			cmd := fmt.Sprintf("sudo ip address del %s dev %s", addr, nicname)
 			cmds = append(cmds, cmd)
 		}
 		tree.Apply(false)
@@ -697,7 +697,7 @@ func setVip(ctx *server.CommandContext) interface{} {
 			cidr, err := utils.NetmaskToCIDR(vip.Netmask)
 			utils.PanicOnError(err)
 			addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
-			cmd := fmt.Sprintf("ip address del %s dev %s", addr, nicname)
+			cmd := fmt.Sprintf("sudo ip address del %s dev %s", addr, nicname)
 			cmds = append(cmds, cmd)
 		}
 
