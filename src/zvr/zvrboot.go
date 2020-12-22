@@ -369,9 +369,7 @@ func configureVyos() {
 		}
 
 		if nic.l2type != "" {
-			b := utils.NewBash()
-			b.Command = fmt.Sprintf("ip link set dev %s alias '%s'", nic.name, makeAlias(nic))
-			b.Run()
+			tree.Setf("interfaces ethernet %s description %s", nic.name, makeAlias(nic))
 		}
 
 		if haStatus != utils.NOHA && nic.name != "eth0" {
