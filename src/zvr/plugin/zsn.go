@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"os"
 	"zvr/server"
 	"fmt"
 	"io/ioutil"
@@ -8,6 +9,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"net/http"
 	"time"
+	"zvr/utils"
 )
 
 const (
@@ -19,6 +21,10 @@ const (
 	zsn_connection_uri = "/conn"
 	zsn_enable_uri = "/enable"
 	zsn_disable_uri = "/disable"
+
+	zsn_state_file = "/tmp/dr"
+	ZSN_STATE_FILE_DISABLE = "-960"
+	ZSN_STATE_FILE_ENABLE = "960"
 )
 
 type setDistributedRoutingReq struct {
@@ -100,11 +106,16 @@ func setDistributedRouting(ctx *server.CommandContext) interface{} {
 	var z zsnAgent
 	t := &zsnsetDistributedRoutingRsp{}
 
+	fd, _ := utils.CreateFileIfNotExists(zsn_state_file, os.O_WRONLY | os.O_TRUNC, os.ModePerm)
+	fd.Truncate(0)
 	if cmd.Enabled {
 		r = z.enable()
+		fd.Write([]byte(ZSN_STATE_FILE_ENABLE))
 	} else {
 		r = z.disable()
+		fd.Write([]byte(ZSN_STATE_FILE_DISABLE))
 	}
+	fd.Close()
 
 	err := json.Unmarshal([]byte(r), &t)
 	if  err != nil {
