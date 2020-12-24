@@ -266,7 +266,7 @@ func configureNic(ctx *server.CommandContext) interface{} {
 		}
 
 		if nic.L2Type != "" {
-			tree.Setf("interfaces ethernet %s description %s", nicname, makeAlias(nic))
+			tree.Setf("interfaces ethernet %s description '%s'", nicname, makeAlias(nic))
 		}
 
 		if nic.Category == "Private" {
