@@ -47,6 +47,12 @@ const (
 	MAX_SOCK_COUNT = 20971520
 
 	LB_LOCAL_ICMP_FIREWALL_RULE_NUMBER = 2000
+	HAPROXY_VERSION_1_6_9 = "1.6.9"
+	HAPROXY_VERSION_2_1_0 = "2.1.0"
+)
+
+var (
+	haproxyVersion = HAPROXY_VERSION_1_6_9
 )
 
 type lbInfo struct {
@@ -259,12 +265,10 @@ func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo)  (err err
     daemon
     stats socket {{.SocketPath}} user vyos
     ulimit-n {{.ulimit}}
-{{if eq .Nbthread 0}}
-    #nbthread {{.Nbthread}}
+{{if eq .HaproxyVersion "1.6.9"}}
     nbproc {{.Nbprocess}}
 {{else}}
-    nbthread {{.Nbthread}}
-    #nbproc {{.Nbprocess}}
+    nbthread {{.Nbprocess}}
 {{end}}
 defaults
     log global
@@ -345,11 +349,10 @@ listen {{.ListenerUuid}}
 		m["AclConfPath"] = this.aclPath
 		m["AclEntryMd5"] =  md5.Sum([]byte(m["AclEntry"].(string)))
 	}
-	if utils.Vyos_version == utils.VYOS_1_2 {
-		m["Nbthread"] = utils.GetCpuNum() * 2
-	} else {
-		m["Nbthread"] = 0
+	if _, exist := m["Nbprocess"]; !exist {
+		m["Nbprocess"] = "1"
 	}
+	m["HaproxyVersion"] = haproxyVersion
 
 	err = utils.MkdirForFile(this.aclPath, 0755); utils.PanicOnError(err)
 	acl_buf.WriteString(strings.Join(ipRange2Cidrs(strings.Split(m["AclEntry"].(string), ",")),"\n"))
@@ -1106,6 +1109,16 @@ func init() {
 	LbListeners = make(map[string]interface{}, LISTENER_MAP_SIZE)
 	enableLbLog()
 	RegisterPrometheusCollector(NewLbPrometheusCollector())
+
+	bash := utils.Bash{
+		Command: fmt.Sprintf("/opt/vyatta/sbin/haproxy -ver | grep version"),
+	}
+
+	if ret, out, _, err := bash.RunWithReturn(); ret == 0 && err == nil {
+		if strings.Contains(out, HAPROXY_VERSION_2_1_0) {
+			haproxyVersion = HAPROXY_VERSION_2_1_0
+		}
+	}
 }
 
 type loadBalancerCollector struct {
