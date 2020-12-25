@@ -266,9 +266,7 @@ func configureNic(ctx *server.CommandContext) interface{} {
 		}
 
 		if nic.L2Type != "" {
-			b := utils.NewBash()
-			b.Command = fmt.Sprintf("sudo ip link set dev %s alias '%s'", nicname, makeAlias(nic))
-			b.Run()
+			tree.Setf("interfaces ethernet %s description '%s'", nicname, makeAlias(nic))
 		}
 
 		if nic.Category == "Private" {
