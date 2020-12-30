@@ -43,10 +43,14 @@ var logfiles = []string{
 }
 
 func doLogRotate(fpath string) {
-	exec.Command("/usr/sbin/logrotate", fpath).Run()
+	exec.Command("sudo", "/usr/sbin/logrotate", fpath).Run()
 }
 
 func setupRotates() {
+	for _, cfgfile := range(logfiles) {
+		utils.SetFileOwner(cfgfile, "root", "root")
+	}
+
 	go func() {
 		for {
 			time.Sleep(time.Minute)
