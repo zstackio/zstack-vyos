@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"fmt"
 	"os"
+	"os/exec"
 	"path"
 )
 
@@ -33,4 +35,8 @@ func PathExists(filepath string) (bool, error) {
 	} else  {
 		return true, nil
 	}
+}
+
+func SetFileOwner(fpath, owner, group string) error {
+	return exec.Command("sudo", "/bin/chown", fmt.Sprintf("%s:%s", owner, group), fpath).Run()
 }
