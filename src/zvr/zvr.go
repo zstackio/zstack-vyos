@@ -35,6 +35,7 @@ func loadPlugins()  {
 	plugin.PolicyRouteEntryPoint()
 	plugin.PimdEntryPoint()
 	plugin.FirewallEntryPoint()
+	plugin.PerformanceEntryPoint()
 }
 
 // Note: there shouldn't be 'daily' etc. in the following config files.
