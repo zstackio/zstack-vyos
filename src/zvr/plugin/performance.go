@@ -2,8 +2,8 @@ package plugin
 
 import (
 	"fmt"
-	"strings"
 	"strconv"
+	"strings"
 	"zvr/utils"
 
 	log "github.com/Sirupsen/logrus"
@@ -21,14 +21,30 @@ func getKernelVersion() float64 {
 	b := &utils.Bash{
 		Command: fmt.Sprintf("uname -r"),
 	}
-	_, out, _, err := b.RunWithReturn(); utils.PanicOnError(err)
+	_, out, _, err := b.RunWithReturn()
+	utils.PanicOnError(err)
 	unameR := strings.Split(out, "-")
 	version := strings.Split(unameR[0], ".")
-	versionS,err := strconv.ParseFloat(version[0] + "." + version[1], 64)
+	versionS, _ := strconv.ParseFloat(version[0]+"."+version[1], 64)
 	return versionS
 }
 
 func setConntrackTable(buckets int, max int) {
+
+	bash := &utils.Bash{
+		Command: fmt.Sprintf("sudo bash -c 'cat %s'", CONNTRACK_MAX_PATH),
+	}
+
+	_, currentSize, _, err := bash.RunWithReturn()
+	utils.PanicOnError(err)
+
+	currentSizeInt, _ := strconv.Atoi(strings.Trim(currentSize, "\n"))
+
+	if currentSizeInt >= max {
+		log.Debugf("current conntrack table size %d >= %d, remain unchanged", currentSizeInt, max)
+		return
+	}
+
 	log.Debugf("set CONNTRACK_BUCKETS=%d CONNTRACK_MAX=%d", buckets, max)
 
 	ver := getKernelVersion()
