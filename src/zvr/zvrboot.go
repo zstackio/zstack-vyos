@@ -381,10 +381,6 @@ func configureVyos() {
 			tree.SetNicMtu(nic.name, nic.mtu)
 		}
 
-		if nic.isDefaultRoute {
-			tree.Setf("protocols static route 0.0.0.0/0 next-hop %s", nic.gateway)
-		}
-
 		if nic.l2type != "" {
 			tree.Setf("interfaces ethernet %s description '%s'", nic.name, makeAlias(nic))
 		}
@@ -408,6 +404,13 @@ func configureVyos() {
 			tree.Setf("interfaces ethernet %s ipv6 router-advert max-interval 60", nic.name)
 			tree.Setf("interfaces ethernet %s ipv6 router-advert min-interval 15", nic.name)
 			tree.Setf("interfaces ethernet %s ipv6 router-advert send-advert true", nic.name)
+		}
+
+		tree.Apply(true)
+
+		if nic.isDefaultRoute {
+			pubNic, err := utils.GetNicNameByMac(nic.mac); utils.PanicOnError(err)
+			utils.AddIp4DefaultRoute(nic.gateway, pubNic)
 		}
 	}
 
@@ -563,6 +566,7 @@ func configureVyos() {
 			tree := server.NewParserFromShowConfiguration().Tree
 			tree.Deletef("protocols static route 0.0.0.0/0 next-hop %s", defaultGW)
 			tree.Apply(true)
+
 			b := utils.Bash{
 				Command: fmt.Sprintf("ip route add default via %s dev %s", defaultGW, defaultNic),
 			}
