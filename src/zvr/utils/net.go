@@ -469,3 +469,42 @@ func AddIp6DefaultRoute(gw6, dev string)  {
 	}
 	_, _, _, err = bash.RunWithReturn(); PanicOnError(err)
 }
+
+
+func DelIp4DefaultRoute() error {
+	bash := Bash{
+		Command: fmt.Sprintf("ip -4 r | grep default | awk '{print $3}'"),
+	}
+	ret, oldGw4, _, err := bash.RunWithReturn()
+	if err != nil || ret != 0 {
+		return nil
+	}
+
+	bash = Bash{
+		Command: fmt.Sprintf(fmt.Sprintf("sudo ip -4 route del default via %s", oldGw4)),
+	}
+	_, _, _, err = bash.RunWithReturn()
+
+	return err
+}
+
+func AddIp4DefaultRoute(gw4, dev string)  {
+	oldGw4 := ""
+	bash := Bash{
+		Command: fmt.Sprintf("ip -4 r | grep default | awk '{print $3}'"),
+	}
+	ret, o, _, err := bash.RunWithReturn()
+	if err == nil && ret == 0{
+		oldGw4 = o
+	}
+
+	var cmds []string
+	if oldGw4 != "" {
+		cmds = append(cmds, fmt.Sprintf("sudo ip -4 route del default via %s", oldGw4))
+	}
+	cmds = append(cmds, fmt.Sprintf("sudo ip -4 route add default via %s dev %s", gw4, dev))
+	bash = Bash{
+		Command: strings.Join(cmds, ";"),
+	}
+	_, _, _, err = bash.RunWithReturn(); PanicOnError(err)
+}

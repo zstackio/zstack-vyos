@@ -435,10 +435,13 @@ func changeDefaultNic(ctx *server.CommandContext) interface{} {
 
 	tree := server.NewParserFromShowConfiguration().Tree
 	/* change default gateway */
-	tree.Deletef("system gateway-address")
 	if cmd.NewNic.Gateway != "" {
-		tree.Setf("system gateway-address %s", cmd.NewNic.Gateway)
+		utils.DelIp4DefaultRoute()
+		pubNic, err := utils.GetNicNameByMac(cmd.NewNic.Mac); utils.PanicOnError(err)
+		utils.AddIp4DefaultRoute(cmd.NewNic.Gateway, pubNic)
 	}
+
+
 	utils.DelIp6DefaultRoute()
 	if cmd.NewNic.Gateway6 != "" {
 		pubNic, err := utils.GetNicNameByMac(cmd.NewNic.Mac); utils.PanicOnError(err)
