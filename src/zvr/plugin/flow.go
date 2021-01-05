@@ -203,7 +203,7 @@ func makeEnv() interface{} {
         bash := utils.Bash {
                 Command: "sudo iptables -t raw -C  PREROUTING -j VYATTA_CT_PREROUTING_HOOK",
         }
-        ret, o, _, err := bash.RunWithReturn(); utils.PanicOnError(err)
+        ret, o, _, _ := bash.RunWithReturn()
         log.Debugf(fmt.Sprintf("iptables raw output: %v ", o))
         if ret != 0 {
                 ruleset := strings.Split(rules, "\n")
