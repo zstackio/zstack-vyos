@@ -35,6 +35,13 @@ type InitConfig struct {
 	TimeServers []string `json:"timeServers"`
 }
 
+type initRsp struct {
+	Uuid string `json:"uuid"`
+	ZvrVersion string `json:"zvrVersion"`
+	VyosVersion string `json:"vyosVersion"`
+	KernelVersion string `json:"kernelVersion"`
+}
+
 type pingRsp struct {
 	Uuid string `json:"uuid"`
 	Version string `json:"version"`
@@ -148,7 +155,8 @@ func initHandler(ctx *server.CommandContext) interface{} {
 
 	doRefreshLogLevel(initConfig.LogLevel)
 	configureNtp(initConfig.TimeServers)
-	return nil
+	return initRsp{Uuid: initConfig.Uuid, ZvrVersion: VERSION, VyosVersion: utils.Vyos_version,
+		KernelVersion: utils.Kernel_version}
 }
 
 func pingHandler(ctx *server.CommandContext) interface{} {
