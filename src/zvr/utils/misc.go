@@ -1,11 +1,12 @@
 package utils
 
 import (
+        "fmt"
+        log "github.com/Sirupsen/logrus"
         "io/ioutil"
         "regexp"
         "runtime"
         "strings"
-        log "github.com/Sirupsen/logrus"
 )
 
 type CompareStringFunc func(string, string) bool
@@ -26,6 +27,8 @@ var (
 
         Vyos_version_file = "/opt/vyatta/etc/version"
         Vyos_version = VYOS_1_1_7
+
+        Kernel_version = "3.1.13"
 )
 
 func CompareString(src, target string)  bool {
@@ -55,6 +58,16 @@ func InitVyosVersion() {
                 }
         }
         log.Debugf("zstack vyos version %s", Vyos_version)
+
+        b := &Bash{
+                Command: fmt.Sprintf("uname -r"),
+        }
+        ret, out, _, _ := b.RunWithReturn()
+        if ret == 0 {
+                unameR := strings.Split(out, "-")
+                Kernel_version = unameR[0]
+                log.Debugf("zstack kernel version %s", Kernel_version)
+        }
 }
 
 func GetCpuNum() int  {
