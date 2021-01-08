@@ -305,22 +305,26 @@ func createEip(ctx *server.CommandContext) interface{} {
 	if utils.IsSkipVyosIptables() {
 		eipMap[eip.VipIp] = eip
 		syncEipByIptables()
-		return nil
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
 		setEip(tree, eip)
 		tree.Apply(false)
 
 		err := checkEipIpTableRules(eip, true);
-		if (err != nil) {
+		if err != nil {
 			/* rollback */
 			deleteEip(tree, eip)
 			tree.Apply(false)
 			/* utils.PanicOnError(err) will response error message to ZStack, return value can not do it */
 			utils.PanicOnError(err)
 		}
-		return err;
 	}
+
+	/* before eip is enabled, delete existed connection */
+	t := utils.ConnectionTrackTuple{IsNat: false, IsDst: true, Ip: eip.VipIp, Protocol: "", PortStart: 0, PortEnd: 0}
+	t.CleanConnTrackConnection()
+	
+	return nil
 }
 
 func removeEip(ctx *server.CommandContext) interface{} {
@@ -341,7 +345,11 @@ func removeEip(ctx *server.CommandContext) interface{} {
 		}, 3, 1); utils.LogError(err)
 	}
 
-	utils.CleanConnTrackConnection(eip.VipIp, "", 0)
+	/* before eip is disabled, delete existed connections */
+	t := utils.ConnectionTrackTuple{IsNat: false, IsDst: true, Ip: eip.VipIp, Protocol: "", PortStart: 0, PortEnd: 0}
+	t.CleanConnTrackConnection()
+	t = utils.ConnectionTrackTuple{IsNat: false, IsDst: false, Ip: eip.GuestIp, Protocol: "", PortStart: 0, PortEnd: 0}
+	t.CleanConnTrackConnection()
 
 	return nil
 }

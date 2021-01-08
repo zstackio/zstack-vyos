@@ -157,8 +157,7 @@ func checkIpDuplicate () {
 
 func configureVyos() {
 	resetVyos()
-	var defaultNic, defaultGW string = "", ""
-	defaultGW6 := ""
+	var defaultNic utils.Nic
 
 	mgmtNic := bootstrapInfo["managementNic"].(map[string]interface{})
 	if mgmtNic == nil {
@@ -314,27 +313,6 @@ func configureVyos() {
 	}
 
 	log.Debugf("haStatus %+v", haStatus)
-	cmds := []string{}
-	if haStatus != utils.NOHA {
-		for _, nic := range nics {
-			/* when ha enabled, all nics except eth0 is shutdown when bootup */
-			if nic.name == "eth0" {
-				continue
-			}
-
-			cmds = append(cmds, fmt.Sprintf("ip link set dev %v down", nic.name))
-		}
-
-		if len(cmds) != 0 {
-			b := utils.Bash{
-				Command: strings.Join(cmds, "\n"),
-			}
-
-			b.Run()
-			b.PanicIfError()
-		}
-	}
-
 	vyos := server.NewParserFromShowConfiguration()
 	tree := vyos.Tree
 
@@ -381,11 +359,20 @@ func configureVyos() {
 			tree.SetNicMtu(nic.name, nic.mtu)
 		}
 		if nic.isDefaultRoute {
-			tree.Setf("protocols static route 0.0.0.0/0 next-hop %s", nic.gateway)
+			if nic.gateway != "" {
+				tree.Setf("protocols static route 0.0.0.0/0 next-hop %v", nic.gateway)
+			}
+			if nic.gateway6 != "" {
+				tree.Setf("protocols static route6 ::/0 next-hop %v", nic.gateway6)
+			}
 		}
 
 		if nic.l2type != "" {
 			tree.Setf("interfaces ethernet %s description '%s'", nic.name, makeAlias(nic))
+		}
+
+		if haStatus != utils.NOHA && nic.name != "eth0" {
+			tree.Setf("interfaces ethernet %s disable", nic.name)
 		}
 
 		if nic.ip6 != "" && nic.category == "Private" {
@@ -429,6 +416,10 @@ func configureVyos() {
 		for _, nic := range nics {
 			var err error
 			setNic(nic)
+			if nic.isDefaultRoute {
+				defaultNic = utils.Nic{Name: nic.name, Mac: nic.mac, Ip:nic.ip, Ip6: nic.ip6,
+					Gateway: nic.gateway, Gateway6:nic.gateway6}
+			}
 			if nic.category == "Private" {
 				err = utils.InitNicFirewall(nic.name, nic.ip, false, utils.REJECT)
 			} else {
@@ -442,9 +433,8 @@ func configureVyos() {
 		for _, nic := range nics {
 			setNic(nic)
 			if nic.isDefaultRoute {
-				defaultGW = nic.gateway
-				defaultNic = nic.name
-				defaultGW6 = nic.gateway6
+				defaultNic = utils.Nic{Name: nic.name, Mac: nic.mac, Ip:nic.ip, Ip6: nic.ip6,
+					Gateway: nic.gateway, Gateway6:nic.gateway6}
 			}
 			tree.SetFirewallOnInterface(nic.name, "local",
 				"action accept",
@@ -551,30 +541,34 @@ func configureVyos() {
 		}
 	}
 
-	/* this is workaround for zstack*/
-	log.Debugf("the vr gateway: %s, ipv6 gateway: %s at %s", defaultGW, defaultGW6, defaultNic)
-	if defaultGW != "" {
-		//check default gw in route and it's workaround for ZSTAC-15742, the manage and public are in same cidr with different ranges
+	/* this is workaround for ZStack*/
+	log.Debugf("the vr gateway: %s, ipv6 gateway: %s at %s", defaultNic.Gateway, defaultNic.Gateway6, defaultNic.Name)
+	if defaultNic.Gateway != "" {
+		/* to fix ZSTAC-15742, the manage and public are in same cidr with different ranges,
+		   then default route interface is management nic.
+		   # route -n
+		    Kernel IP routing table
+		    Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+		    0.0.0.0         172.24.0.1      0.0.0.0         UG    0      0        0 eth0  ### should be eth1
+		   in this case, we need change the default route to public route
+		   to make vpc ha work, even add route failed, it will make zvrboot boot fail */
 		bash := utils.Bash{
-			Command: fmt.Sprintf("route -n| grep -w %s|grep -w %s", defaultGW, defaultNic),
+			Command: fmt.Sprintf("route -n| grep -w %s|grep -v %s", defaultNic.Gateway, defaultNic.Name),
 		}
 		ret, _, _, err := bash.RunWithReturn()
-		if err == nil && ret != 0 {
+		if err == nil && ret == 0 {
 			tree := server.NewParserFromShowConfiguration().Tree
-			tree.Deletef("protocols static route 0.0.0.0/0 next-hop %s", defaultGW)
+			tree.Deletef("protocols static route 0.0.0.0/0 next-hop %v", defaultNic.Gateway)
 			tree.Apply(true)
 
 			b := utils.Bash{
-				Command: fmt.Sprintf("ip route add default via %s dev %s", defaultGW, defaultNic),
+				Command: fmt.Sprintf("ip route add default via %s dev %s", defaultNic.Gateway, defaultNic.Name),
 			}
 			b.Run()
-			b.PanicIfError()
 		}
 	}
 
-	if defaultGW6 != "" {
-		utils.AddIp6DefaultRoute(defaultGW6, defaultNic)
-	}
+	utils.WriteDefaultHaScript(&defaultNic)
 }
 
 func startZvr()  {

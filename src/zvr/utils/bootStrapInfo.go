@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"io/ioutil"
 	log "github.com/Sirupsen/logrus"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 const (
 	BOOTSTRAP_INFO_CACHE = "/home/vyos/zvr/bootstrap-info.json"
 	DEFAULT_SSH_PORT = 22
+	VYOSHA_DEFAULT_ROUTE_SCRIPT = "/home/vyos/zvr/keepalived/script/defaultroute.sh"
 )
 
 const  (
@@ -55,7 +57,7 @@ func InitBootStrapInfo() {
 	}
 }
 
-func IsHaEabled() bool {
+func IsHaEnabled() bool {
 	if _, ok := bootstrapInfo["haStatus"]; ok {
 		if !strings.EqualFold(bootstrapInfo["haStatus"].(string), NOHA) {
 			return true
@@ -132,4 +134,18 @@ func GetMnNodeIps() map[string]string {
 	}
 
 	return mnNodeIps
+}
+
+func WriteDefaultHaScript(defaultNic *Nic)  {
+	defaultNicName, err := GetNicNameByMac(defaultNic.Mac); PanicOnError(err)
+	conent := ""
+	if defaultNic.Gateway != "" {
+		conent += fmt.Sprintln(fmt.Sprintf("ip route add default %s via %s || true", defaultNic.Gateway, defaultNicName))
+	}
+
+	if defaultNic.Gateway6 != "" {
+		conent += fmt.Sprintln(fmt.Sprintf("ip -6 route add default %s via %s || true", defaultNic.Gateway6, defaultNicName))
+	}
+
+	err = ioutil.WriteFile(VYOSHA_DEFAULT_ROUTE_SCRIPT, []byte(conent), 0755); PanicOnError(err)
 }

@@ -153,7 +153,7 @@ func getHostNameFromIpMac(ip, mac string) string {
 func writeDhcpScriptFile() {
 	var fileList []dhcpServerFiles
 	var dhcpServerTemplate string
-	if utils.IsHaEabled() {
+	if utils.IsHaEnabled() {
 		/* generate a temp configure file for ha */
 		for _, dhcp := range DhcpServerEntries {
 			nicname, err := utils.GetNicNameByMac(dhcp.NicMac)

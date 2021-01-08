@@ -295,7 +295,9 @@ func removeDnatHandler(ctx *server.CommandContext) interface{} {
 		if r.ProtocolType != "UDP" {
 			proto = "tcp"
 		}
-		utils.CleanConnTrackConnectionPortRange(r.VipIp, proto, r.VipPortStart, r.VipPortEnd)
+		t := utils.ConnectionTrackTuple{IsNat:false, IsDst: true, Ip: r.VipIp, Protocol: proto,
+			PortStart: r.VipPortStart, PortEnd: r.VipPortEnd}
+		t.CleanConnTrackConnection()
 	}
 	return nil
 }

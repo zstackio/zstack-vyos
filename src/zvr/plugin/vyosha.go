@@ -118,7 +118,7 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 }
 
 func IsMaster() bool {
-	if !utils.IsHaEabled() {
+	if !utils.IsHaEnabled() {
 		return true
 	}
 
@@ -171,7 +171,7 @@ func getKeepAlivedStatusTask()  {
 	for  {
 		select {
 		case <-ticker.C:
-		        if utils.IsHaEabled() {
+		        if utils.IsHaEnabled() {
 				newHaStatus := getKeepAlivedStatus()
 				if newHaStatus == KeepAlivedStatus_Unknown || newHaStatus == keepAlivedStatus {
 					/* sometime keepalived is in backup state, but nic is up,
@@ -206,7 +206,7 @@ func keepAlivedCheckTask()  {
 	for  {
 		select {
 		case <-ticker.C:
-		        if utils.IsHaEabled() {
+		        if utils.IsHaEnabled() {
 				checkKeepalivedRunning()
 			}
 		}
@@ -301,23 +301,12 @@ func mountTmpFolderAsTmpfs()  {
 func InitHaNicState()  {
 	mountTmpFolderAsTmpfs()
 
-	if !utils.IsHaEabled() {
+	if !utils.IsHaEnabled() {
 		return
 	}
 
 	/* if ha is enable, shutdown all interface except eth0 */
 	cmds := []string{}
-	nics, _ := utils.GetAllNics()
-	for _, nic := range nics {
-		if nic.Name == "eth0" {
-			continue
-		}
-
-		if strings.Contains(nic.Name, "eth") {
-			cmds = append(cmds, fmt.Sprintf("ip link set dev %v down", nic.Name))
-		}
-	}
-
 	cmds = append(cmds, fmt.Sprintf("sudo sysctl -w net.ipv4.ip_nonlocal_bind=1"))
 	b := utils.Bash{
 		Command: strings.Join(cmds, "\n"),
@@ -334,7 +323,7 @@ func init() {
 
 func VyosHaEntryPoint() {
 	server.RegisterAsyncCommandHandler(SET_VYOSHA_PATH, server.VyosLock(setVyosHaHandler))
-	if utils.IsHaEabled() {
+	if utils.IsHaEnabled() {
 		/* set as unknown, then getKeepAlivedStatusTask will get master or backup, then will the right script  */
 		keepAlivedStatus = KeepAlivedStatus_Unknown
 	}

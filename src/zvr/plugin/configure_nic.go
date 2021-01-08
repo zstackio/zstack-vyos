@@ -273,24 +273,16 @@ func configureNic(ctx *server.CommandContext) interface{} {
 			log.Debug("start configure LB firewall rule")
 			configureLBFirewallRule(tree, nicname)
 		}
+
+		if !IsMaster() {
+			tree.Setf("interfaces ethernet %s disable", nicname)
+		}
 	}
 
 	tree.Apply(false)
 
 	if IsMaster() {
 		checkNicIsUp(nicname, true)
-	} else {
-		cmds := []string{}
-		for _, nic := range cmd.Nics {
-			nicname, _ = utils.GetNicNameByMac(nic.Mac)
-			cmds = append(cmds, fmt.Sprintf("sudo ip link set dev %v down", nicname))
-		}
-		b := utils.Bash{
-			Command: strings.Join(cmds, "\n"),
-		}
-
-		b.Run()
-		b.PanicIfError()
 	}
 
 	generateNotityScripts()
@@ -305,7 +297,7 @@ func configureNic(ctx *server.CommandContext) interface{} {
 			continue
 		}
 
-		if (!utils.IsHaEabled()) {
+		if (!utils.IsHaEnabled()) {
 			if nic.Ip != "" && utils.CheckIpDuplicate(nicname, nic.Ip) == true {
 				utils.PanicOnError(errors.Errorf("duplicate ip %s in nic %s", nic.Ip, nic.Mac))
 			}
@@ -435,15 +427,14 @@ func changeDefaultNic(ctx *server.CommandContext) interface{} {
 
 	tree := server.NewParserFromShowConfiguration().Tree
 	/* change default gateway */
+	pubNic, err := utils.GetNicNameByMac(cmd.NewNic.Mac); utils.PanicOnError(err)
+	tree.Deletef("protocols static route 0.0.0.0/0")
+	tree.Deletef("protocols static route6 ::/0")
 	if cmd.NewNic.Gateway != "" {
-		tree.Deletef("protocols static route 0.0.0.0/0")
-		tree.Setf("protocols static route 0.0.0.0/0 next-hop %s", cmd.NewNic.Gateway)
+		tree.Setf("protocols static route 0.0.0.0/0 next-hop %v", cmd.NewNic.Gateway)
 	}
-
-	utils.DelIp6DefaultRoute()
 	if cmd.NewNic.Gateway6 != "" {
-		pubNic, err := utils.GetNicNameByMac(cmd.NewNic.Mac); utils.PanicOnError(err)
-		utils.AddIp6DefaultRoute(cmd.NewNic.Gateway6, pubNic)
+		tree.Setf("protocols static route6 ::/0 next-hop %v", cmd.NewNic.Gateway6)
 	}
 
 	if utils.IsSkipVyosIptables() {
@@ -491,11 +482,18 @@ func changeDefaultNic(ctx *server.CommandContext) interface{} {
 
 	tree.Apply(false)
 
-	// clear contrack records
-	bash := utils.Bash{
-		Command: "sudo conntrack -D",
+	/* delete snat connection on old gateway */
+	if len(cmd.Snats) > 0 {
+		t := utils.ConnectionTrackTuple{IsNat:true, IsDst: true, Ip: cmd.Snats[0].PublicIp, Protocol: "",
+			PortStart: 0, PortEnd: 0}
+		t.CleanConnTrackConnection()
 	}
-	err := bash.Run()
+
+	defaultNic := &utils.Nic{Name: pubNic, Gateway: cmd.NewNic.Gateway, Gateway6:cmd.NewNic.Gateway6, Mac:cmd.NewNic.Mac,
+		Ip: cmd.NewNic.Ip, Ip6: cmd.NewNic.Ip6}
+	if utils.IsHaEnabled() {
+		utils.WriteDefaultHaScript(defaultNic)
+	}
 
 	return err
 }

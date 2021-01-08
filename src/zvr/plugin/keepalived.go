@@ -89,6 +89,9 @@ sudo ip link set up dev {{$name}} || true
 #start dhcp server
 (/bin/bash /home/vyos/zvr/keepalived/script/dhcpd.sh) &
 
+#add default route
+(/bin/bash /home/vyos/zvr/keepalived/script/defaultroute.sh) &
+
 #notify Mn node
 (sudo curl -H "Content-Type: application/json" -H "commandpath: /vpc/hastatus" -X POST -d '{"virtualRouterUuid": "{{.VrUuid}}", "haStatus":"Master"}' {{.CallBackUrl}}) &
 
@@ -320,7 +323,7 @@ func checkKeepalivedRunning()  {
 			Command: fmt.Sprintf("sudo pkill -9 keepalived; sudo %s -D -S 2 -f %s", KeepalivedBinaryFile, KeepalivedConfigFile),
 		}
 
-		bash.RunWithReturn();
+		bash.RunWithReturn()
 	}
 
 }
