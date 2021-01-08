@@ -511,7 +511,7 @@ func init ()  {
 }
 
 func writePolicyRouteHaScript(routes string)  {
-	if !utils.IsHaEabled() {
+	if !utils.IsHaEnabled() {
 		return
 	}
 
