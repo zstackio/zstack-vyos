@@ -380,6 +380,9 @@ func configureVyos() {
 			tree.Setf("interfaces ethernet %s speed auto", nic.name)
 			tree.SetNicMtu(nic.name, nic.mtu)
 		}
+		if nic.isDefaultRoute {
+			tree.Setf("protocols static route 0.0.0.0/0 next-hop %s", nic.gateway)
+		}
 
 		if nic.l2type != "" {
 			tree.Setf("interfaces ethernet %s description '%s'", nic.name, makeAlias(nic))
@@ -406,12 +409,6 @@ func configureVyos() {
 			tree.Setf("interfaces ethernet %s ipv6 router-advert send-advert true", nic.name)
 		}
 
-		tree.Apply(true)
-
-		if nic.isDefaultRoute {
-			pubNic, err := utils.GetNicNameByMac(nic.mac); utils.PanicOnError(err)
-			utils.AddIp4DefaultRoute(nic.gateway, pubNic)
-		}
 	}
 
 	sshport := bootstrapInfo["sshPort"].(float64)
