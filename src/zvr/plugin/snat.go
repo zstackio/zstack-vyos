@@ -32,6 +32,7 @@ type removeSnatCmd struct {
 
 type syncSnatCmd struct {
 	Snats []snatInfo `json:"snats"`
+	Enable bool `json:"enable"`
 }
 
 type setSnatStateCmd struct {
@@ -216,6 +217,14 @@ func setSnatStateHandler(ctx *server.CommandContext) interface{} {
 		applySnatRules(cmd.Snats, cmd.Enable)
 	}
 
+	// clear contrack records
+	if len(cmd.Snats) > 0 {
+		bash := utils.Bash{
+			Command: fmt.Sprintf("sudo conntrack -D --src-nat %s", cmd.Snats[0].PublicIp),
+		}
+		bash.Run()
+	}
+
 	if cmd.Enable {
 		return setNetworkServiceRsp{ServiceStatus:"enable"}
 	} else {
@@ -228,18 +237,20 @@ func syncSnatHandler(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 
 	if utils.IsSkipVyosIptables() {
-		syncSnatByIptables(cmd.Snats, true)
+		syncSnatByIptables(cmd.Snats, cmd.Enable)
 	} else {
-		applySnatRules(cmd.Snats, true)
+		applySnatRules(cmd.Snats, cmd.Enable)
 	}
 
 	// clear contrack records
-	bash := utils.Bash{
-		Command: "sudo conntrack -D",
-	}
-	err := bash.Run()
-	if err != nil {
-		return err
+	if len(cmd.Snats) > 0 {
+		bash := utils.Bash{
+			Command: fmt.Sprintf("sudo conntrack -D --src-nat %s", cmd.Snats[0].PublicIp),
+		}
+		err := bash.Run()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
