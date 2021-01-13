@@ -360,7 +360,7 @@ func getMrouteHandler(ctx *server.CommandContext) interface{} {
 }
 
 func writePimdHaScript(enable bool)  {
-	if !utils.IsHaEabled() {
+	if !utils.IsHaEnabled() {
 		return
 	}
 

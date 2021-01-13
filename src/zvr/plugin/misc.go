@@ -176,7 +176,7 @@ func pingHandler(ctx *server.CommandContext) interface{} {
 
 	addRouteIfCallbackIpChanged()
 	var haStatus string
-	if !utils.IsHaEabled() {
+	if !utils.IsHaEnabled() {
 		haStatus = utils.NOHA
 	} else if IsMaster() {
 		haStatus = utils.HAMASTER

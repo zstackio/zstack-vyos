@@ -594,7 +594,7 @@ func updateIPsecConnection(ctx *server.CommandContext) interface{} {
 }
 
 func writeIpsecHaScript(enable bool)  {
-	if !utils.IsHaEabled() {
+	if !utils.IsHaEnabled() {
 		return
 	}
 
