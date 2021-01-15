@@ -260,10 +260,13 @@ func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo)  (err err
 	conf := `global
     maxconn {{.MaxConnection}}
     log 127.0.0.1 local1
-    user vyos
-    group users
+    #user vyos
+    #group users
+    uid {{.uid}}
+    gid {{.gid}}
     daemon
-    stats socket {{.SocketPath}} user vyos
+    #stats socket {{.SocketPath}} user vyos
+    stats socket {{.SocketPath}} gid {{.gid}} uid {{.uid}}
     ulimit-n {{.ulimit}}
 {{if eq .HaproxyVersion "1.6.9"}}
     nbproc {{.Nbprocess}}
@@ -353,6 +356,21 @@ listen {{.ListenerUuid}}
 		m["Nbprocess"] = "1"
 	}
 	m["HaproxyVersion"] = haproxyVersion
+
+
+	bash := utils.Bash{
+		Command: fmt.Sprintf("sudo id -u vyos"),
+	}
+	_, result, _, _ := bash.RunWithReturn();
+	_, er := strconv.Atoi(strings.Replace(result, "\n", "", -1));utils.PanicOnError(er)
+	m["uid"] = result
+
+	b := utils.Bash{
+		Command: fmt.Sprintf("sudo id -g vyos"),
+	}
+	_, re, _, _ := b.RunWithReturn();
+	_, e := strconv.Atoi(strings.Replace(re, "\n", "", -1));utils.PanicOnError(e)
+	m["gid"] = re
 
 	err = utils.MkdirForFile(this.aclPath, 0755); utils.PanicOnError(err)
 	acl_buf.WriteString(strings.Join(ipRange2Cidrs(strings.Split(m["AclEntry"].(string), ",")),"\n"))
