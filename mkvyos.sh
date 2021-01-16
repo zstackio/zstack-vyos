@@ -89,6 +89,7 @@ GOBETWEEN=$tmpdir/gobetween
 KEEPALIVED=$tmpdir/keepalived
 HEALTHCHECK=$tmpdir/healthcheck.sh
 PIMD=$tmpdir/pimd
+UACCTD=$tmpdir/uacctd
 SSHD=$tmpdir/sshd.sh
 SYSCTL=$tmpdir/sysctl.conf
 ZSN=$tmpdir/zsn-crontab.sh
@@ -109,6 +110,7 @@ upload $GOBETWEEN $ROOTPATH$SBIN_DIR/gobetween
 upload $KEEPALIVED $ROOTPATH/usr/sbin/keepalived
 mkdir-p $ROOTPATH/home/vyos/zvr/keepalived/script
 upload $PIMD $ROOTPATH$SBIN_DIR/pimd
+upload $UACCTD $ROOTPATH$SBIN_DIR/uacctd
 upload $ZVR_VERSION $ROOTPATH/home/vyos/zvr/version
 upload $HEALTHCHECK $ROOTPATH/usr/share/healthcheck.sh
 mkdir-p $ROOTPATH/home/vyos/zvr/ssh
@@ -125,6 +127,7 @@ chmod +x $SBIN_DIR/haproxy
 chmod +x $SBIN_DIR/gobetween
 chmod +x /usr/sbin/keepalived
 chmod +x $SBIN_DIR/pimd
+chmod +x $SBIN_DIR/uacctd
 chmod +x /usr/share/healthcheck.sh
 chmod +x /home/vyos/zvr/ssh/sshd.sh
 chmod 644 /etc/sysctl.conf
@@ -135,6 +138,7 @@ chown vyos:users $SBIN_DIR/zvr
 chown vyos:users $SBIN_DIR/haproxy
 chown vyos:users $SBIN_DIR/gobetween
 chown vyos:users $SBIN_DIR/pimd
+chown vyos:users $SBIN_DIR/uacctd
 chown vyos:users /usr/share/healthcheck.sh
 chown vyos:users /home/vyos/zvr/ssh/sshd.sh
 chown root:root /etc/sysctl.conf

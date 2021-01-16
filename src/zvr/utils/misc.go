@@ -27,7 +27,9 @@ var (
         Vyos_version_file = "/opt/vyatta/etc/version"
         Vyos_version = VYOS_1_1_7
 
-        Kernel_version = "3.1.13"
+        Kernel_version = Kernel_3_13_11
+        Kernel_3_13_11 = "3.13.11"
+        Kernel_5_4_80  = "5.4.80"
 )
 
 func CompareString(src, target string)  bool {
