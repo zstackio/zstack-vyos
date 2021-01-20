@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"strings"
+	"strconv"
 	"zvr/server"
 	"zvr/utils"
 	log "github.com/Sirupsen/logrus"
@@ -33,6 +34,7 @@ type InitConfig struct {
 	MgtCidr string `json:"mgtCidr"`
 	LogLevel string `json:"logLevel"`
 	TimeServers []string `json:"timeServers"`
+        Parms map[string]string `json:"parms"`
 }
 
 type initRsp struct {
@@ -81,6 +83,41 @@ func (check *fsHealthCheck)healthCheck() (status HealthStatus) {
 		status.HealthDetail = fmt.Sprintf("RO file system: %s", output)
 	}
 	return status
+}
+
+
+func configure(parms map[string]string){
+	if value, exist := parms["ipv4LocalPortRange"];exist {
+		if strings.Count(value,"-") == 1 {
+			port := strings.Split(value, "-")
+			
+			lowPort,error := strconv.Atoi(port[0])
+			if error != nil{
+				log.Errorf("configure ipv4LocalPortRange fail beacuse %s",error)
+				return 
+			}
+
+			upPort,error := strconv.Atoi(port[1])
+			if error != nil{
+				log.Errorf("configure ipv4LocalPortRange fail beacuse %s",error)
+				return 
+			}
+
+			if (lowPort < 0 || upPort > 65535 || upPort < lowPort) || (lowPort > 0 && lowPort < 1024){
+				log.Errorf("port is not in range [1024,65535],port range %s-%s, ",port[0], port[1])
+				return 
+			}
+			
+			if lowPort == 0 || upPort == 0 {
+				log.Debugf("no need to set ip_local_port_range beacause port contain 0, port range %s-%s, ",port[0], port[1])
+			}else{
+				bash := utils.Bash{
+					Command: fmt.Sprintf("sudo sysctl -w net.ipv4.ip_local_port_range='%s %s'", port[0],port[1]),
+				}
+				bash.Run();bash.PanicIfError()
+			}
+		}
+	}
 }
 
 func configureNtp(timeServers []string){
@@ -155,6 +192,7 @@ func initHandler(ctx *server.CommandContext) interface{} {
 
 	doRefreshLogLevel(initConfig.LogLevel)
 	configureNtp(initConfig.TimeServers)
+        configure(initConfig.Parms)
 	return initRsp{Uuid: initConfig.Uuid, ZvrVersion: VERSION, VyosVersion: utils.Vyos_version,
 		KernelVersion: utils.Kernel_version}
 }
