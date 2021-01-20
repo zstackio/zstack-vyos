@@ -27,6 +27,7 @@ const(
 )
 
 var AutoRestartVpn = false
+var AutoRestartThreadCreated = false
 
 type ipsecInfo struct {
 	Uuid string `json:"uuid"`
@@ -162,8 +163,9 @@ func isVpnAllPeersUp()  bool {
 	clear-specific-tunnel-for-peer
 	clear-vtis-for-peer
 	*/
-func restartVpnAfterConfig()  {
+func restartVpnAfterConfig() {
 	if isVpnAllPeersUp() {
+		go restartIPSecVpnTimer()
 		return
 	}
 
@@ -177,12 +179,17 @@ func restartVpnAfterConfig()  {
 		}
 
 		bash := utils.Bash{
-			Command: "/opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl -op clear-vpn-ipsec-process",
+			Command: "sudo ipsec restart",
 		}
 		bash.Run()
 
 		return fmt.Errorf("there is some ipsec peer is not up")
-	}, 3, 20);log.Warn(fmt.Sprintf("setup ip sec tunnel failed: %s", err))
+	}, 3, 20)
+
+	go restartIPSecVpnTimer()
+	if err != nil {
+		log.Warn(fmt.Sprintf("setup ip sec tunnel failed: %s", err))
+	}
 }
 
 func syncIpSecRulesByIptables()  {
@@ -449,9 +456,8 @@ func syncIPsecConnection(ctx *server.CommandContext) interface{} {
 		syncIpSecRulesByIptables()
 	}
 
-	go restartVpnAfterConfig()
-
 	if len(ipsecMap) > 0 {
+		go restartVpnAfterConfig()
 		writeIpsecHaScript(true)
 	} else {
 		writeIpsecHaScript(false)
@@ -600,7 +606,7 @@ func writeIpsecHaScript(enable bool)  {
 
 	var conent string
 	if enable {
-		conent = "sudo /opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl -op clear-vpn-ipsec-process"
+		conent = "sudo ipsec restart"
 	} else {
 		conent = "echo 'no ipsec configured'"
 	}
@@ -609,14 +615,13 @@ func writeIpsecHaScript(enable bool)  {
 }
 
 func restartIPSecVpnTimer()  {
-	restartTicker := time.NewTicker(time.Second * IPSecRestartInterval)
-	/* restart the vpn if vpn is already created */
-	bash := utils.Bash{
-		Command: "/opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl -op clear-vpn-ipsec-process",
-		NoLog: false,
+	if AutoRestartThreadCreated {
+		return
 	}
-	bash.Run()
 
+	AutoRestartThreadCreated = true
+
+	restartTicker := time.NewTicker(time.Second * IPSecRestartInterval)
 	go func() {
 		for {
 			select {
@@ -625,9 +630,10 @@ func restartIPSecVpnTimer()  {
 					return
 				}
 
+				log.Debugf("restart vpn process because config flag: AutoRestartVpn ")
 				utils.Retry(func() error {
 					bash := utils.Bash{
-						Command: "/opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl -op clear-vpn-ipsec-process",
+						Command: "sudo ipsec restart",
 						NoLog: false,
 					}
 					_, _, _, err := bash.RunWithReturn()
@@ -644,5 +650,4 @@ func IPsecEntryPoint() {
 	server.RegisterAsyncCommandHandler(DELETE_IPSEC_CONNECTION, server.VyosLock(deleteIPsecConnection))
 	server.RegisterAsyncCommandHandler(SYNC_IPSEC_CONNECTION, server.VyosLock(syncIPsecConnection))
 	server.RegisterAsyncCommandHandler(UPDATE_IPSEC_CONNECTION, server.VyosLock(updateIPsecConnection))
-	restartIPSecVpnTimer()
 }
