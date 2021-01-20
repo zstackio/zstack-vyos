@@ -275,8 +275,8 @@ func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo)  (err err
 {{end}}
 defaults
     log global
-    option dontlognull
-    option http-server-close
+	option dontlognull
+	option {{.HttpMode}}
 
 listen {{.ListenerUuid}}
 {{if eq .Mode "https"}}
@@ -357,6 +357,9 @@ listen {{.ListenerUuid}}
 	}
 	m["HaproxyVersion"] = haproxyVersion
 
+        if _, exist := m["HttpMode"]; !exist{
+		m["HttpMode"] = "http-server-close"
+        }
 
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo id -u vyos"),
