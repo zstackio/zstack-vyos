@@ -362,14 +362,16 @@ listen {{.ListenerUuid}}
 		Command: fmt.Sprintf("sudo id -u vyos"),
 	}
 	_, result, _, _ := bash.RunWithReturn();
-	_, er := strconv.Atoi(strings.Replace(result, "\n", "", -1));utils.PanicOnError(er)
+	result = strings.Replace(result, "\n", "", -1)
+	_, er := strconv.Atoi(result);utils.PanicOnError(er)
 	m["uid"] = result
 
 	b := utils.Bash{
 		Command: fmt.Sprintf("sudo id -g vyos"),
 	}
 	_, re, _, _ := b.RunWithReturn();
-	_, e := strconv.Atoi(strings.Replace(re, "\n", "", -1));utils.PanicOnError(e)
+	re = strings.Replace(re, "\n", "", -1)
+	_, e := strconv.Atoi(re);utils.PanicOnError(e)
 	m["gid"] = re
 
 	err = utils.MkdirForFile(this.aclPath, 0755); utils.PanicOnError(err)
