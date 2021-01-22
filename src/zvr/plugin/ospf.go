@@ -250,12 +250,6 @@ func refreshOspf(ctx *server.CommandContext) interface{} {
 		err = p.setArea(); utils.PanicOnError(err)
 		err = p.setNetwork(); utils.PanicOnError(err)
 		err = p.setRawCmd("protocols ospf log-adjacency-changes"); utils.PanicOnError(err)
-
-		// clear contrack records
-		bash := utils.Bash{
-			Command: "sudo conntrack -D",
-		}
-		err := bash.Run(); utils.PanicOnError(err)
 	}
 
 	p.commit()

@@ -167,9 +167,10 @@ func syncSnatByIptables(Snats []snatInfo, state bool) {
 }
 
 
-func applySnatRules(Snats []snatInfo, state bool) {
+func applySnatRules(Snats []snatInfo, state bool) bool {
 	tree := server.NewParserFromShowConfiguration().Tree
 
+	update := false
 	for _, s := range Snats {
 		outNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
 		inNic, err := utils.GetNicNameByMac(s.PrivateNicMac); utils.PanicOnError(err)
@@ -177,33 +178,70 @@ func applySnatRules(Snats []snatInfo, state bool) {
 		address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
 
 		pubNicRuleNo, priNicRuleNo := getNicSNATRuleNumber(nicNumber)
-		if rs := tree.Getf("nat source rule %v", pubNicRuleNo); rs != nil {
-			rs.Delete()
-		}
-
-		if rs := tree.Getf("nat source rule %v", priNicRuleNo); rs != nil {
-			rs.Delete()
-		}
-
 		if state == true {
-			tree.SetSnatWithRuleNumber(pubNicRuleNo,
-				fmt.Sprintf("outbound-interface %s", outNic),
-				fmt.Sprintf("source address %s", address),
-				"destination address !224.0.0.0/8",
-				fmt.Sprintf("translation address %s", s.PublicIp),
-			)
+			pubRs := tree.Getf("nat source rule %v", pubNicRuleNo)
+			if pubRs == nil {
+				tree.SetSnatWithRuleNumber(pubNicRuleNo,
+					fmt.Sprintf("outbound-interface %s", outNic),
+					fmt.Sprintf("source address %s", address),
+					"destination address !224.0.0.0/8",
+					fmt.Sprintf("translation address %s", s.PublicIp),
+				)
+				update = true
+			} else {
+				nic := pubRs.GetChildrenValue("outbound-interface")
+				source := pubRs.GetChildrenValue("source address")
+				translation := pubRs.GetChildrenValue("translation address")
+				if nic != outNic || source != address || translation != s.PublicIp {
+					pubRs.Delete()
+					tree.SetSnatWithRuleNumber(pubNicRuleNo,
+						fmt.Sprintf("outbound-interface %s", outNic),
+						fmt.Sprintf("source address %s", address),
+						"destination address !224.0.0.0/8",
+						fmt.Sprintf("translation address %s", s.PublicIp),
+					)
+					update = true
+				}
+			}
 
-			tree.SetSnatWithRuleNumber(priNicRuleNo,
-				fmt.Sprintf("outbound-interface %s", inNic),
-				fmt.Sprintf("source address %v", address),
-				"destination address !224.0.0.0/8",
-				fmt.Sprintf("translation address %s", s.PublicIp),
-			)
+			priRs := tree.Getf("nat source rule %v", priNicRuleNo)
+			if priRs == nil {
+				tree.SetSnatWithRuleNumber(priNicRuleNo,
+					fmt.Sprintf("outbound-interface %s", inNic),
+					fmt.Sprintf("source address %v", address),
+					"destination address !224.0.0.0/8",
+					fmt.Sprintf("translation address %s", s.PublicIp),
+				)
+			} else {
+				nic := priRs.GetChildrenValue("outbound-interface")
+				source := priRs.GetChildrenValue("source address")
+				translation := priRs.GetChildrenValue("translation address")
+				if nic != inNic || source != address || translation != s.PublicIp {
+					priRs.Delete()
+					tree.SetSnatWithRuleNumber(priNicRuleNo,
+						fmt.Sprintf("outbound-interface %s", inNic),
+						fmt.Sprintf("source address %v", address),
+						"destination address !224.0.0.0/8",
+						fmt.Sprintf("translation address %s", s.PublicIp),
+					)
+					update = true
+				}
+			}
+		} else {
+			if rs := tree.Getf("nat source rule %v", pubNicRuleNo); rs != nil {
+				update = true
+				rs.Delete()
+			}
+
+			if rs := tree.Getf("nat source rule %v", priNicRuleNo); rs != nil {
+				update = true
+				rs.Delete()
+			}
 		}
 	}
 
 	tree.Apply(false)
-	return
+	return update
 }
 
 func setSnatStateHandler(ctx *server.CommandContext) interface{} {
@@ -213,7 +251,13 @@ func setSnatStateHandler(ctx *server.CommandContext) interface{} {
 	if utils.IsSkipVyosIptables() {
 		syncSnatByIptables(cmd.Snats, cmd.Enable)
 	} else {
-		applySnatRules(cmd.Snats, cmd.Enable)
+		update := applySnatRules(cmd.Snats, cmd.Enable)
+		if update {
+			/* after snat is enabled, delete connections which is not snat */
+			t := utils.ConnectionTrackTuple{IsNat:false, IsDst: true, Ip: cmd.Snats[0].PublicIp, Protocol: "",
+				PortStart: 0, PortEnd: 0}
+			t.CleanConnTrackConnection()
+		}
 	}
 
 	if cmd.Enable {
@@ -230,16 +274,13 @@ func syncSnatHandler(ctx *server.CommandContext) interface{} {
 	if utils.IsSkipVyosIptables() {
 		syncSnatByIptables(cmd.Snats, true)
 	} else {
-		applySnatRules(cmd.Snats, true)
-	}
-
-	// clear contrack records
-	bash := utils.Bash{
-		Command: "sudo conntrack -D",
-	}
-	err := bash.Run()
-	if err != nil {
-		return err
+		update := applySnatRules(cmd.Snats, true)
+		if update {
+			/* after snat is enabled, delete connections which is not snat */
+			t := utils.ConnectionTrackTuple{IsNat:false, IsDst: true, Ip: cmd.Snats[0].PublicIp, Protocol: "",
+				PortStart: 0, PortEnd: 0}
+			t.CleanConnTrackConnection()
+		}
 	}
 
 	return nil

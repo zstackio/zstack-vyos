@@ -213,7 +213,7 @@ func makeEnv() interface{} {
 }
 
 func writeFlowHaScript(enable bool)  {
-        if !utils.IsHaEabled() {
+        if !utils.IsHaEnabled() {
                 return
         }
 

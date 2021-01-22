@@ -486,7 +486,11 @@ func (this *HaproxyListener) stopListenerService() ( err error) {
 	} else if (pid == -1) {
 		err = nil
 	}
-	utils.CleanConnTrackConnection(this.lb.Vip, "tcp", this.lb.LoadBalancerPort)
+
+	t := utils.ConnectionTrackTuple{IsNat:false, IsDst: true, Ip: this.lb.Vip, Protocol: "tcp",
+		PortStart: this.lb.LoadBalancerPort, PortEnd: this.lb.LoadBalancerPort}
+	t.CleanConnTrackConnection()
+
 	return err
 }
 

@@ -686,7 +686,7 @@ func setVip(ctx *server.CommandContext) interface{} {
 	tree.Apply(false)
 
 	/* delete ip address from backup router */
-	if utils.IsHaEabled() && !IsMaster() {
+	if utils.IsHaEnabled() && !IsMaster() {
 		var cmds []string
 		for _, vip := range cmd.Vips {
 			if !utils.IsInManagementCidr(vip.Ip) {
@@ -739,7 +739,7 @@ func setVip(ctx *server.CommandContext) interface{} {
 		vyosVips = append(vyosVips, nicVipPair{NicName:nicname, Vip:vip.Ip, Prefix: cidr})
 	}
 
-	if utils.IsHaEabled(){
+	if utils.IsHaEnabled(){
 		addHaNicVipPair(vyosVips, IsMaster())
 	}
 
