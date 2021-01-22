@@ -283,24 +283,7 @@ func removeHaNicVipPair(pairs []nicVipPair)  {
 	}
 }
 
-func mountTmpFolderAsTmpfs()  {
-	/* mount /tmp as tmpfs */
-	b := utils.Bash{
-		Command: "sudo mount | grep '/tmp'",
-	}
-	_, o, _, _ := b.RunWithReturn()
-	o = strings.Trim(o, " \n\t")
-	if o == "" {
-		b := utils.Bash{
-			Command: "sudo mount -t tmpfs -o size=64M tmpfs /tmp",
-		}
-		b.Run()
-	}
-}
-
 func InitHaNicState()  {
-	mountTmpFolderAsTmpfs()
-
 	if !utils.IsHaEnabled() {
 		return
 	}
