@@ -573,7 +573,7 @@ func configureVyos() {
 
 func startZvr()  {
 	b := utils.Bash{
-		Command: "sudo mount -t tmpfs -o size=64M tmpfs /tmp; bash -x /etc/init.d/zstack-virtualrouteragent restart >> /tmp/agentRestart.log 2>&1",
+		Command: "bash -x /etc/init.d/zstack-virtualrouteragent restart >> /tmp/agentRestart.log 2>&1",
 	}
 	b.Run()
 	b.PanicIfError()
