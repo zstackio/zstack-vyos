@@ -17,7 +17,7 @@ fi
 usage() {
    echo "
 USAGE:
-$0 path_to_image path_to_zvr_tar path_to_zsn_vyos_bin"
+$0 path_to_image path_to_zvr_tar path_to_zsn_vyos_bin vyos_version"
 }
 
 if [ -z $1 ]; then
@@ -53,6 +53,17 @@ if [ ! -f $3 ]; then
    exit 1
 fi
 
+vyosVersion="1.1.7"
+if [ ! -z $4 ]; then
+   vyosVersion=$4
+   echo "vyos version $vyosVersion"
+   if [ $vyosVersion != "1.1.7" ] && [ $vyosVersion != "1.2.0" ]; then
+       echo "vyos version must be 1.1.7 or 1.2.0"
+       usage
+       exit 1
+   fi
+fi
+
 imgfile=$1
 isVmdk=0
 if echo $1 | grep -q -i '\.vmdk$'; then
@@ -62,6 +73,14 @@ if echo $1 | grep -q -i '\.vmdk$'; then
 fi
 
 set -e
+
+if [ $vyosVersion = "1.1.7" ]; then
+  ROOTPATH="/"
+  VyosPostScript="/opt/vyatta/etc/config/scripts/vyatta-postconfig-bootup.script"
+else
+  ROOTPATH="/boot/zs_vyos/rw/"
+  VyosPostScript="/boot/zs_vyos/rw/config/scripts/vyos-postconfig-bootup.script"
+fi
 
 tmpdir=$(mktemp -d)
 
@@ -80,8 +99,10 @@ HAPROXY=$tmpdir/haproxy
 GOBETWEEN=$tmpdir/gobetween
 KEEPALIVED=$tmpdir/keepalived
 PIMD=$tmpdir/pimd
+UACCTD=$tmpdir/uacctd
 HEALTHCHECK=$tmpdir/healthcheck.sh
 SSHD=$tmpdir/sshd.sh
+SYSCTL=$tmpdir/sysctl.conf
 ZSN=$tmpdir/zsn-crontab.sh
 SBIN_DIR=/opt/vyatta/sbin
 VERSION=`date +%Y%m%d`
@@ -96,24 +117,27 @@ guestfish <<_EOF_
 add $imgfile
 run
 mount /dev/sda1 /
-write /etc/version $VERSION
-mkdir-p /usr/local/zstack/zsn-agent/bin
-upload $ZVR $SBIN_DIR/zvr
-upload $ZVRBOOT $SBIN_DIR/zvrboot
-upload $ZVRSCRIPT /etc/init.d/zstack-virtualrouteragent
-upload $tmpdir/zsn-agent $ZSN_DIR/zsn-agent
-upload $tmpdir/zstack-network-agent /etc/init.d/zstack-network-agent
-upload $HAPROXY $SBIN_DIR/haproxy
-upload $GOBETWEEN $SBIN_DIR/gobetween
-upload $KEEPALIVED /usr/sbin/keepalived
-mkdir-p /home/vyos/zvr/keepalived/script
-upload $PIMD $SBIN_DIR/pimd
-upload $ZVR_VERSION /home/vyos/zvr/version
-upload $HEALTHCHECK /usr/share/healthcheck.sh
-mkdir-p /home/vyos/zvr/ssh
-upload $SSHD /home/vyos/zvr/ssh/sshd.sh
-upload $ZSN /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
-upload -<<END /opt/vyatta/etc/config/scripts/vyatta-postconfig-bootup.script
+write $ROOTPATH/etc/version $VERSION
+mkdir-p $ROOTPATH/usr/local/zstack/zsn-agent/bin
+upload $ZVR $ROOTPATH$SBIN_DIR/zvr
+upload $ZVRBOOT $ROOTPATH$SBIN_DIR/zvrboot
+upload $ZVRSCRIPT $ROOTPATH/etc/init.d/zstack-virtualrouteragent
+upload $tmpdir/zsn-agent $ROOTPATH$ZSN_DIR/zsn-agent
+upload $tmpdir/zstack-network-agent $ROOTPATH/etc/init.d/zstack-network-agent
+upload $HAPROXY $ROOTPATH$SBIN_DIR/haproxy
+upload $GOBETWEEN $ROOTPATH$SBIN_DIR/gobetween
+upload $KEEPALIVED $ROOTPATH/usr/sbin/keepalived
+mkdir-p $ROOTPATH/home/vyos/zvr/keepalived/script
+upload $PIMD $ROOTPATH/$SBIN_DIR/pimd
+upload $UACCTD $ROOTPATH$SBIN_DIR/uacctd
+upload $ZVR_VERSION $ROOTPATH/home/vyos/zvr/version
+upload $HEALTHCHECK $ROOTPATH/usr/share/healthcheck.sh
+mkdir-p $ROOTPATH/home/vyos/zvr/ssh
+upload $SSHD $ROOTPATH/home/vyos/zvr/ssh/sshd.sh
+upload $SYSCTL $ROOTPATH/etc/sysctl.conf
+upload $ZSN $ROOTPATH/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
+mkdir-p $ROOTPATH/opt/vyatta/etc/config/scripts/
+upload -<<END $VyosPostScript
 #!/bin/bash
 chmod +x $SBIN_DIR/zvrboot
 chmod +x $SBIN_DIR/zvr
@@ -124,19 +148,23 @@ chmod +x $SBIN_DIR/haproxy
 chmod +x $SBIN_DIR/gobetween
 chmod +x /usr/sbin/keepalived
 chmod +x $SBIN_DIR/pimd
+chmod +x $SBIN_DIR/uacctd
 chmod +x /usr/share/healthcheck.sh
 chmod +x /home/vyos/zvr/ssh/sshd.sh
+chmod 644 /etc/sysctl.conf
 chmod +x /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 mkdir -p /home/vyos/zvr
 mkdir -p /home/vyos/zvr/keepalived/script
-chown vyos:users /home/vyos/zvr
+chown vyos:users /home/vyos/ -R
 chown vyos:users $SBIN_DIR/zvr
 chown vyos:users $ZSN_DIR/zsn-agent
 chown vyos:users $SBIN_DIR/haproxy
 chown vyos:users $SBIN_DIR/gobetween
 chown vyos:users $SBIN_DIR/pimd
+chown vyos:users $SBIN_DIR/uacctd
 chown vyos:users /usr/share/healthcheck.sh
 chown vyos:users /home/vyos/zvr/ssh/sshd.sh
+chown root:root /etc/sysctl.conf
 chown vyos:users /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 $SBIN_DIR/zvrboot >/home/vyos/zvr/zvrboot.log 2>&1 < /dev/null &
 # disable distributed routing by default
@@ -147,15 +175,16 @@ END
 download /boot/grub/grub.cfg /tmp/grub.cfg
 ! sed -e 's/^set[[:space:]]\+timeout[[:space:]]*=[[:space:]]*[[:digit:]]\+/set timeout=0/g' -e '/^echo.*Grub menu/,/^fi$/d' /tmp/grub.cfg > /tmp/grub.cfg.new
 upload /tmp/grub.cfg.new /boot/grub/grub.cfg
-download /etc/security/limits.conf /tmp/limits.conf
-! grep -w "root" /tmp/limits.conf  | grep nofile | grep soft || echo "root soft nofile 1000000" >> /tmp/limits.conf
-! grep -w "root" /tmp/limits.conf  | grep nofile | grep hard || echo "root hard nofile 1000000" >> /tmp/limits.conf
-! grep -w "vyos" /tmp/limits.conf  | grep soft || echo "vyos soft nofile 1000000" >> /tmp/limits.conf
-! grep -w "vyos" /tmp/limits.conf  | grep hard || echo "vyos hard nofile 1000000" >> /tmp/limits.conf
-upload /tmp/limits.conf /etc/security/limits.conf
+download $ROOTPATH/etc/security/limits.conf /tmp/limits.conf
+! grep -w "vyos" /tmp/limits.conf | grep nofile | grep soft && sed -i 's/vyos soft nofile [0-9]*/vyos soft nofile 20971520/' /tmp/limits.conf || echo "vyos soft nofile 20971520" >> /tmp/limits.conf
+! grep -w "vyos" /tmp/limits.conf | grep nofile | grep hard && sed -i 's/vyos hard nofile [0-9]*/vyos hard nofile 20971520/' /tmp/limits.conf || echo "vyos hard nofile 20971520" >> /tmp/limits.conf
+! grep -w "root" /tmp/limits.conf | grep nofile | grep soft && sed -i 's/root soft nofile [0-9]*/root soft nofile 20971520/' /tmp/limits.conf || echo "root soft nofile 20971520" >> /tmp/limits.conf
+! grep -w "root" /tmp/limits.conf | grep nofile | grep hard && sed -i 's/root hard nofile [0-9]*/root hard nofile 20971520/' /tmp/limits.conf || echo "root hard nofile 20971520" >> /tmp/limits.conf
+upload /tmp/limits.conf $ROOTPATH/etc/security/limits.conf
 _EOF_
 
 /bin/rm -rf $tmpdir
+/bin/rm -rf /tmp/grub.cfg /tmp/limits.conf /tmp/sysctl.conf
 
 if [ $isVmdk -eq 1 ]; then
     /bin/rm -f "$1"

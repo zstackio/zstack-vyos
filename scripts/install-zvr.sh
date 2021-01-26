@@ -72,4 +72,11 @@ fi
 chown vyos:users $TARGET_ZSN
 chmod +x $TARGET_ZSN
 
+TARGET_UAACTD=/opt/vyatta/sbin/uacctd
+if [[ ! -f $TARGET_UAACTD || $(diff uacctd $TARGET_UAACTD) ]]; then
+    yes | cp -f uacctd $TARGET_UAACTD
+fi
+chown vyos:users $TARGET_UAACTD
+chmod +x $TARGET_UAACTD
+
 exit 0

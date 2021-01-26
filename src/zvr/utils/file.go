@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"path"
@@ -26,6 +25,14 @@ func CreateFileIfNotExists(filePath string, flag int, perm os.FileMode) (*os.Fil
 	return os.OpenFile(filePath, flag, perm)
 }
 
+func DeleteFile(filePath string) error{
+	if err := os.Remove(filePath); err != nil {
+		return err
+	}
+	return nil
+}
+
+
 func PathExists(filepath string) (bool, error) {
 	_, err := os.Stat(filepath)
 	if os.IsNotExist(err) {
@@ -37,6 +44,7 @@ func PathExists(filepath string) (bool, error) {
 	}
 }
 
-func SetFileOwner(fpath, owner, group string) error {
-	return exec.Command("sudo", "/bin/chown", fmt.Sprintf("%s:%s", owner, group), fpath).Run()
+
+func SudoMoveFile(oldpath, newpath string) error {
+	return exec.Command("sudo", "/bin/mv", "-f", oldpath, newpath).Run()
 }

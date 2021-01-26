@@ -1,13 +1,13 @@
 package plugin
 
 import (
-        "zvr/server"
-        "zvr/utils"
         "fmt"
         log "github.com/Sirupsen/logrus"
         "github.com/pkg/errors"
-        "strings"
         "io/ioutil"
+        "strings"
+        "zvr/server"
+        "zvr/utils"
 )
 
 const (
@@ -65,18 +65,30 @@ type getFlowCounterRsp struct {
         Counters []counter `json:"counters"`
 }
 
+type flowConfig struct {
+        Version         int
+        RouterId        string
+        ActiveTimeout   int
+        ExpireInterval  int
+        SampleRate      string
+        CollectorIp     string
+        CollectorPort   int
 
-func configFlowMeter(config flowMeterInfo) (error) {
+        NicsNames       []string
+        NicsNamesStr    string
+}
+
+func configFlowMeterByVyos(config flowMeterInfo) error {
         /*
-       1. if NetworkInfos null, delete flowmeter else
-       2. remove the whole flowmeter configure
-       3. re-configure the flowmeter and commit
+           1. if NetworkInfos null, delete flowmeter else
+           2. remove the whole flowmeter configure
+           3. re-configure the flowmeter and commit
         */
-	deleted := false
+        deleted := false
         tree := server.NewParserFromShowConfiguration().Tree
         if rs := tree.Getf("system flow-accounting"); rs != nil {
                 tree.Deletef("system flow-accounting")
-		deleted = true
+                deleted = true
         }
 
         if config.NetworkInfos != nil && len(config.NetworkInfos) > 0 {
@@ -116,12 +128,63 @@ func configFlowMeter(config flowMeterInfo) (error) {
         }
 
         if rs := tree.Getf("system flow-accounting"); rs != nil {
-                writeFlowHaScript(true)
+                writeFlowHaScriptForVyos(true)
         } else {
-                writeFlowHaScript(false)
+                writeFlowHaScriptForVyos(false)
         }
 
         return nil
+}
+
+func writeFlowHaScriptForVyos(enable bool)  {
+        if !utils.IsHaEnabled() {
+                return
+        }
+
+        var conent string
+        if enable {
+                conent = "sudo flock -xn /tmp/netflow.lock -c \"/opt/vyatta/bin/sudo-users/vyatta-show-acct.pl --action 'restart' 2 > null; sudo rm -f /tmp/netflow.lock\""
+        } else {
+                conent = "echo 'no flow configured'"
+        }
+
+        err := ioutil.WriteFile(VYOSHA_FLOW_SCRIPT, []byte(conent), 0755); utils.PanicOnError(err)
+}
+
+func configFlowMeterByLinuxCommand(config flowMeterInfo) error {
+        cfg := flowConfig {}
+        if config.Ver == V9 {
+                cfg.Version = 9
+        } else {
+                cfg.Version = 5
+        }
+        cfg.RouterId = config.RouterId
+        cfg.ActiveTimeout = config.ActiveTimeout
+        cfg.ExpireInterval = config.ExpireInterval
+        cfg.SampleRate = config.SampleRate
+
+        if config.Collectors != nil && len(config.Collectors) > 0 {
+                cfg.CollectorIp = config.Collectors[0].Server
+                cfg.CollectorPort = config.Collectors[0].Port
+        }
+
+        cfg.NicsNames = []string{}
+        for _, n := range config.NetworkInfos {
+                nic, err := utils.GetNicNameByMac(n.NicMac); utils.PanicOnError(err)
+                cfg.NicsNames = append(cfg.NicsNames, nic)
+        }
+
+        cfg.startPmacctdServers()
+
+        return nil
+}
+
+func configFlowMeter(config flowMeterInfo) error {
+        if utils.Kernel_version == utils.Kernel_3_13_11 {
+                return configFlowMeterByVyos(config)
+        } else {
+                return configFlowMeterByLinuxCommand(config)
+        }
 }
 
 
@@ -203,28 +266,13 @@ func makeEnv() interface{} {
         bash := utils.Bash {
                 Command: "sudo iptables -t raw -C  PREROUTING -j VYATTA_CT_PREROUTING_HOOK",
         }
-        ret, o, _, err := bash.RunWithReturn(); utils.PanicOnError(err)
+        ret, o, _, _ := bash.RunWithReturn()
         log.Debugf(fmt.Sprintf("iptables raw output: %v ", o))
         if ret != 0 {
                 ruleset := strings.Split(rules, "\n")
                 err := utils.AppendIptalbesRuleSet(ruleset,"raw"); utils.PanicOnError(err)
         }
         return nil
-}
-
-func writeFlowHaScript(enable bool)  {
-        if !utils.IsHaEnabled() {
-                return
-        }
-
-        var conent string
-        if enable {
-                conent = "sudo flock -xn /tmp/netflow.lock -c \"/opt/vyatta/bin/sudo-users/vyatta-show-acct.pl --action 'restart' 2 > null; sudo rm -f /tmp/netflow.lock\""
-        } else {
-                conent = "echo 'no flow configured'"
-        }
-
-        err := ioutil.WriteFile(VYOSHA_FLOW_SCRIPT, []byte(conent), 0755); utils.PanicOnError(err)
 }
 
 func init() {

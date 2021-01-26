@@ -2,13 +2,15 @@ package utils
 
 import (
 	"bytes"
-	"text/template"
+	"fmt"
+	"github.com/Sirupsen/logrus"
+	"github.com/pkg/errors"
+	"io/ioutil"
 	"os/exec"
 	"syscall"
-	"fmt"
-	"github.com/pkg/errors"
-	"github.com/Sirupsen/logrus"
-	"io/ioutil"
+	"text/template"
+	"time"
+
 	//"os"
 	"os"
 )
@@ -18,6 +20,7 @@ type Bash struct {
 	PipeFail bool
 	Arguments map[string]string
 	NoLog bool
+	Timeout int
 
 	retCode int
 	stdout string
@@ -45,6 +48,10 @@ func (b *Bash) build() error {
 
 	if b.PipeFail {
 		b.Command = fmt.Sprintf("set -o pipefail; %s", b.Command)
+	}
+
+	if b.Timeout == 0 {
+		b.Timeout = 120
 	}
 
 	return nil
@@ -95,18 +102,32 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 
 	cmd.Stdout = &so
 	cmd.Stderr = &se
+	if err = cmd.Start(); err != nil {
+		return
+	}
 
-	var waitStatus syscall.WaitStatus
-	if err := cmd.Run(); err != nil {
-		if exitError, ok := err.(*exec.ExitError); ok {
-			waitStatus = exitError.Sys().(syscall.WaitStatus)
-			retCode = waitStatus.ExitStatus()
-		} else {
-			panic(errors.Errorf("unable to get return code, %s", err))
-		}
-	} else {
-		waitStatus = cmd.ProcessState.Sys().(syscall.WaitStatus)
-		retCode = waitStatus.ExitStatus()
+	done := make(chan error)
+	go func() { done <- cmd.Wait() }()
+
+	after := time.After(time.Duration(b.Timeout) * time.Second)
+	select {
+		case <-after:
+			cmd.Process.Signal(syscall.SIGTERM)
+			err = fmt.Errorf("bash command %s timeout in 120 sec", b.Command)
+			retCode = -1
+		case err = <-done:
+			var waitStatus syscall.WaitStatus
+			if err != nil {
+				if exitError, ok := err.(*exec.ExitError); ok {
+					waitStatus = exitError.Sys().(syscall.WaitStatus)
+					retCode = waitStatus.ExitStatus()
+				} else {
+					panic(errors.Errorf("unable to get return code, %s", err))
+				}
+			} else {
+				waitStatus = cmd.ProcessState.Sys().(syscall.WaitStatus)
+				retCode = waitStatus.ExitStatus()
+			}
 	}
 
 	stdout = string(so.Bytes())
@@ -121,6 +142,7 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 			"return code": fmt.Sprintf("%v", retCode),
 			"stdout": stdout,
 			"stderr": stderr,
+			"err": fmt.Sprintf("%v", err),
 		}).Debugf("shell done: %s", b.Command)
 	}
 

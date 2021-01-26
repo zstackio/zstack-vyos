@@ -30,9 +30,10 @@ const (
 	REFRESH_LB_LOG_LEVEL_PATH = "/lb/log/level"
 	DELETE_LB_PATH = "/lb/delete"
 	CREATE_CERTIFICATE_PATH = "/certificate/create"
-
+	DELETE_CERTIFICATE_PATH   = "/certificate/delete"
 	LB_ROOT_DIR = "/home/vyos/zvr/lb/"
 	LB_CONF_DIR = "/home/vyos/zvr/lb/conf/"
+	LB_PID_DIR = "/home/vyos/zvr/lb/pid/"
 	CERTIFICATE_ROOT_DIR = "/home/vyos/zvr/certificate/"
 	LB_SOCKET_DIR = "/home/vyos/zvr/lb/sock/"
 
@@ -43,7 +44,15 @@ const (
 	LISTENER_MAP_SIZE = 128
 	//reserve some sockets for haproxy if specify the parameter "ulimit-n"
 	RESERVE_SOCK_COUNT = 100
-	MAX_SOCK_COUNT = 1048576
+	MAX_SOCK_COUNT = 20971520
+
+	LB_LOCAL_ICMP_FIREWALL_RULE_NUMBER = 2000
+	HAPROXY_VERSION_1_6_9 = "1.6.9"
+	HAPROXY_VERSION_2_1_0 = "2.1.0"
+)
+
+var (
+	haproxyVersion = HAPROXY_VERSION_1_6_9
 )
 
 type lbInfo struct {
@@ -64,6 +73,10 @@ type certificateInfo struct {
 	Certificate string `json:"certificate"`
 }
 
+type deleteCertificateCmd struct {
+	Uuid string `json:"uuid"`
+}
+
 type Listener interface {
 	createListenerServiceConfigure(lb lbInfo)  ( err error)
 	checkIfListenerServiceUpdate(origChecksum string, currChecksum string) ( bool, error)
@@ -73,8 +86,9 @@ type Listener interface {
 	postActionListenerServiceStart() ( err error)
 	stopListenerService() ( err error)
 	postActionListenerServiceStop() (ret int, err error)
-        getLbCounters(listenerUuid string) ([]*LbCounter, int)
+	getLbCounters(listenerUuid string) ([]*LbCounter, int)
 	getIptablesRule()([]utils.IptablesRule, string)
+	getLbInfo() (lb lbInfo)
 }
 
 // the listener implemented with HaProxy
@@ -84,6 +98,7 @@ type HaproxyListener struct {
 	pidPath	string
 	sockPath string
 	firewallDes string
+	firewallLocalICMPDes string
 	maxConnect string
 	maxSession int   //same to maxConnect
 	aclPath string
@@ -95,6 +110,7 @@ type GBListener struct {
 	confPath string
 	pidPath	string
 	firewallDes string
+	firewallLocalICMPDes string
 	apiPort string // restapi binding port range from 50000-60000
 	maxConnect string
 	maxSession int   //same to maxConnect
@@ -149,6 +165,7 @@ func getListener(lb lbInfo) Listener {
 	sockPath := makeLbSocketPath(lb)
 	aclPath := makeLbAclConfFilePath(lb)
 	des := makeLbFirewallRuleDescription(lb)
+	localICMPDes := makeLbFirewallLocalICMPRuleDescription(lb)
 
 	switch lb.Mode {
 	case "udp":
@@ -157,9 +174,9 @@ func getListener(lb lbInfo) Listener {
 			log.Errorf("there is no free port for rest api for listener: %v \n", lb.ListenerUuid)
 			return nil
 		}
-		return &GBListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, apiPort:port, aclPath:aclPath}
+		return &GBListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, firewallLocalICMPDes:localICMPDes, apiPort:port, aclPath:aclPath}
 	case "tcp", "https", "http":
-		return &HaproxyListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, sockPath:sockPath, aclPath:aclPath}
+		return &HaproxyListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, firewallLocalICMPDes:localICMPDes, sockPath:sockPath, aclPath:aclPath}
 	default:
 		utils.PanicOnError(fmt.Errorf("No such listener %v", lb.Mode))
 	}
@@ -241,61 +258,70 @@ func getListenerMaxCocurrenceSocket(maxConnect string) (string) {
 
 func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo)  (err error) {
 	conf := `global
-maxconn {{.MaxConnection}}
-log 127.0.0.1 local1
-user vyos
-group users
-daemon
-stats socket {{.SocketPath}} user vyos
-ulimit-n {{.ulimit}}
+    maxconn {{.MaxConnection}}
+    log 127.0.0.1 local1
+    #user vyos
+    #group users
+    uid {{.uid}}
+    gid {{.gid}}
+    daemon
+    #stats socket {{.SocketPath}} user vyos
+    stats socket {{.SocketPath}} gid {{.gid}} uid {{.uid}}
+    ulimit-n {{.ulimit}}
+{{if eq .HaproxyVersion "1.6.9"}}
+    nbproc {{.Nbprocess}}
+{{else}}
+    nbthread {{.Nbprocess}}
+{{end}}
 defaults
-log global
-option dontlognull
-option http-server-close
+    log global
+	option dontlognull
+	option {{.HttpMode}}
 
 listen {{.ListenerUuid}}
 {{if eq .Mode "https"}}
-mode http
+    mode http
 {{else}}
-mode {{.Mode}}
+    mode {{.Mode}}
 {{end}}
 {{if ne .Mode "tcp"}}
-option forwardfor
+    option forwardfor
 {{end}}
-timeout client {{.ConnectionIdleTimeout}}s
-timeout server {{.ConnectionIdleTimeout}}s
-timeout connect 60s
+    timeout client {{.ConnectionIdleTimeout}}s
+    timeout server {{.ConnectionIdleTimeout}}s
+    timeout connect 60s
 {{- if eq .AccessControlStatus "enable" }}
-#acl status: {{.AccessControlStatus}} ip entty md5: {{.AclEntryMd5}}
-acl {{.ListenerUuid}} src -f {{.AclConfPath}}
+    #acl status: {{.AccessControlStatus}} ip entty md5: {{.AclEntryMd5}}
+    acl {{.ListenerUuid}} src -f {{.AclConfPath}}
 {{- if eq .AclType "black" }}
-tcp-request connection reject if {{.ListenerUuid}}
+    tcp-request connection reject if {{.ListenerUuid}}
 {{- else }}
-tcp-request connection reject unless {{.ListenerUuid}}
+    tcp-request connection reject unless {{.ListenerUuid}}
 {{- end }}
 {{- end }}
 
-balance {{.BalancerAlgorithm}}
+    balance {{.BalancerAlgorithm}}
 {{- if eq .Mode "https"}}
-bind {{.Vip}}:{{.LoadBalancerPort}} ssl crt {{.CertificatePath}}
+    bind {{.Vip}}:{{.LoadBalancerPort}} ssl crt {{.CertificatePath}}
 {{- else}}
-bind {{.Vip}}:{{.LoadBalancerPort}}
+    bind {{.Vip}}:{{.LoadBalancerPort}}
 {{end}}
 {{- if eq .HealthCheckProtocol "http" }}
-option httpchk {{$.HttpChkMethod}} {{$.HttpChkUri}}
+    option httpchk {{$.HttpChkMethod}} {{$.HttpChkUri}}
 {{- if ne .HttpChkExpect "http_2xx" }}
-http-check expect rstatus {{$.HttpChkExpect}}
+    http-check expect rstatus {{$.HttpChkExpect}}
 {{- end }}
 {{- end }}
 {{- if eq .BalancerAlgorithm "static-rr" }}
 {{- range $ip, $weight := $.Weight }}
-server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} weight {{$weight}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
+    server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} weight {{$weight}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
 {{- end }}
 {{else}}
 {{- range $index, $ip := $.NicIps }}
-server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
+    server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
 {{- end }}
-{{- end }}`
+{{- end }}
+`
 
 	var buf, acl_buf bytes.Buffer
 	var m map[string]interface{}
@@ -326,7 +352,30 @@ server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {
 		m["AclConfPath"] = this.aclPath
 		m["AclEntryMd5"] =  md5.Sum([]byte(m["AclEntry"].(string)))
 	}
-	log.Debugf("lb aclstatus:%v type: %v entry: %v ", m["AccessControlStatus"].(string), m["AclType"], m["AclEntry"])
+	if _, exist := m["Nbprocess"]; !exist {
+		m["Nbprocess"] = "1"
+	}
+	m["HaproxyVersion"] = haproxyVersion
+
+        if _, exist := m["HttpMode"]; !exist{
+		m["HttpMode"] = "http-server-close"
+        }
+
+	bash := utils.Bash{
+		Command: fmt.Sprintf("sudo id -u vyos"),
+	}
+	_, result, _, _ := bash.RunWithReturn();
+	result = strings.Replace(result, "\n", "", -1)
+	_, er := strconv.Atoi(result);utils.PanicOnError(er)
+	m["uid"] = result
+
+	b := utils.Bash{
+		Command: fmt.Sprintf("sudo id -g vyos"),
+	}
+	_, re, _, _ := b.RunWithReturn();
+	re = strings.Replace(re, "\n", "", -1)
+	_, e := strconv.Atoi(re);utils.PanicOnError(e)
+	m["gid"] = re
 
 	err = utils.MkdirForFile(this.aclPath, 0755); utils.PanicOnError(err)
 	acl_buf.WriteString(strings.Join(ipRange2Cidrs(strings.Split(m["AclEntry"].(string), ",")),"\n"))
@@ -466,6 +515,13 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 		)
 	}
 
+	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallLocalICMPDes); r == nil {
+		tree.SetFirewallWithRuleNumber(nicname, "local", LB_LOCAL_ICMP_FIREWALL_RULE_NUMBER,
+			fmt.Sprintf("description %v", this.firewallLocalICMPDes),
+			"protocol icmp",
+			"action accept")
+	}
+
 	dropRuleDes := fmt.Sprintf("lb-%v-%s-drop", this.lb.LbUuid, this.lb.ListenerUuid)
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", dropRuleDes); r != nil {
 		r.Delete()
@@ -503,6 +559,9 @@ func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error
 		if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r != nil {
 			r.Delete()
 		}
+		if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallLocalICMPDes); (r != nil) && (getListenerCountInLB(this.lb) == 0) {
+			r.Delete()
+		}
 		cleanInternalFirewallRule(tree, this.firewallDes)
 		tree.Apply(false)
 	}
@@ -528,6 +587,11 @@ func (this *HaproxyListener) getIptablesRule()([]utils.IptablesRule, string) {
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
 	return []utils.IptablesRule{utils.NewLoadBalancerIptablesRule(utils.TCP, this.lb.Vip, this.lb.LoadBalancerPort,
 		utils.RETURN, utils.LbRuleComment + this.lb.ListenerUuid, nil)}, nicname
+}
+
+func (this *HaproxyListener) getLbInfo() (lb lbInfo) {
+	lb = this.lb
+	return
 }
 
 func (this *GBListener) adaptListenerParameter(m map[string]interface{}) (map[string]interface{}, error) {
@@ -737,10 +801,17 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 			fmt.Sprintf("protocol udp"),
 			"action accept",
 		)
-
-		tree.AttachFirewallToInterface(nicname, "local")
-		tree.Apply(false)
 	}
+
+	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallLocalICMPDes); r == nil {
+		tree.SetFirewallWithRuleNumber(nicname, "local", LB_LOCAL_ICMP_FIREWALL_RULE_NUMBER,
+			fmt.Sprintf("description %v", this.firewallLocalICMPDes),
+			"protocol icmp",
+			"action accept")
+	}
+
+	tree.AttachFirewallToInterface(nicname, "local")
+	tree.Apply(false)
 	return nil
 }
 
@@ -751,6 +822,11 @@ func (this *GBListener) getIptablesRule()([]utils.IptablesRule, string) {
 		utils.NewLoadBalancerIptablesRule(utils.TCP, "", dport, utils.ACCEPT, utils.LbRuleComment + this.lb.ListenerUuid, nil),
 		utils.NewLoadBalancerIptablesRule(utils.UDP, this.lb.Vip, this.lb.LoadBalancerPort, utils.ACCEPT, utils.LbRuleComment + this.lb.ListenerUuid, nil)},
 		nicname
+}
+
+func (this *GBListener) getLbInfo() (lb lbInfo) {
+	lb = this.lb
+	return
 }
 
 func (this *GBListener) stopListenerService() ( err error) {
@@ -778,6 +854,9 @@ func (this *GBListener) postActionListenerServiceStop() (ret int, err error) {
 			r.Delete()
 			r = tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes)
 		}
+		if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallLocalICMPDes); (r != nil) && (getListenerCountInLB(this.lb) == 0) {
+			r.Delete()
+		}
 		cleanInternalFirewallRule(tree, this.firewallDes)
 		tree.Apply(false)
 	}
@@ -797,7 +876,10 @@ func makeLbAclConfFilePath(lb lbInfo) string {
 }
 
 func makeLbPidFilePath(lb lbInfo) string {
-	return filepath.Join(LB_ROOT_DIR, "pid", fmt.Sprintf("lb-%s-listener-%s.pid", lb.LbUuid, lb.ListenerUuid))
+	pidPath := filepath.Join(LB_ROOT_DIR, "pid", fmt.Sprintf("lb-%s-listener-%s.pid", lb.LbUuid, lb.ListenerUuid))
+	fd, _ := utils.CreateFileIfNotExists(pidPath, os.O_WRONLY | os.O_APPEND, 0666)
+	fd.Close()
+	return pidPath
 }
 
 func makeLbConfFilePath(lb lbInfo) string {
@@ -822,6 +904,10 @@ type deleteLbCmd struct {
 
 func makeLbFirewallRuleDescription(lb lbInfo) string {
 	return fmt.Sprintf("LB-%v-%v", lb.LbUuid, lb.ListenerUuid)
+}
+
+func makeLbFirewallLocalICMPRuleDescription(lb lbInfo) string {
+	return fmt.Sprintf("LBICMP-%v", lb.LbUuid)
 }
 
 func setLb(lb lbInfo) {
@@ -914,12 +1000,7 @@ local1.%s     /var/log/haproxy.log`, strings.ToLower(level))
 	_, err = lb_log_file.Write([]byte(conf))
 	utils.PanicOnError(err)
 
-	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/haproxy.conf; sudo /etc/init.d/rsyslog restart",
-			lb_log_file.Name()),
-	}
-	err = bash.Run()
-	utils.PanicOnError(err)
+	utils.SudoMoveFile(lb_log_file.Name(), "/etc/rsyslog.d/haproxy.conf")
 }
 
 func refreshLogLevel(ctx *server.CommandContext) interface{} {
@@ -1025,13 +1106,42 @@ func createCertificate(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
+func deleteCertificate(ctx *server.CommandContext) interface{} {
+	cmd := &deleteCertificateCmd{}
+	ctx.GetCommand(cmd)
+
+	certificatePath := makeCertificatePath(cmd.Uuid)
+	if e, _ := utils.PathExists(certificatePath); !e {
+		return nil
+	}
+
+	if err := utils.DeleteFile(certificatePath); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+
 func init() {
 	os.Mkdir(LB_ROOT_DIR, os.ModePerm)
 	os.Mkdir(LB_CONF_DIR, os.ModePerm)
+	os.Mkdir(LB_PID_DIR, os.ModePerm)
+	os.Chmod(LB_PID_DIR, os.ModePerm)
 	os.Mkdir(LB_SOCKET_DIR, os.ModePerm | os.ModeSocket)
 	LbListeners = make(map[string]interface{}, LISTENER_MAP_SIZE)
 	enableLbLog()
 	RegisterPrometheusCollector(NewLbPrometheusCollector())
+
+	bash := utils.Bash{
+		Command: fmt.Sprintf("/opt/vyatta/sbin/haproxy -ver | grep version"),
+	}
+
+	if ret, out, _, err := bash.RunWithReturn(); ret == 0 && err == nil {
+		if strings.Contains(out, HAPROXY_VERSION_2_1_0) {
+			haproxyVersion = HAPROXY_VERSION_2_1_0
+		}
+	}
 }
 
 type loadBalancerCollector struct {
@@ -1046,6 +1156,7 @@ type loadBalancerCollector struct {
 }
 
 const (
+	LB_UUID = "LbUuid"
 	LB_LISTENER_UUID = "ListenerUuid"
 	LB_LISTENER_BACKEND_IP = "NicIpAddress"
 )
@@ -1055,43 +1166,43 @@ func NewLbPrometheusCollector() MetricCollector {
 		statusEntry: prom.NewDesc(
 			"zstack_lb_status",
 			"Backend server health status",
-			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
 		),
 		curSessionNumEntry: prom.NewDesc(
 			"zstack_lb_cur_session_num",
 			"Backend server active session number",
-			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
 		),
 		inByteEntry: prom.NewDesc(
 			"zstack_lb_in_bytes",
 			"Backend server traffic in bytes",
-			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
 		),
 		outByteEntry: prom.NewDesc(
 			"zstack_lb_out_bytes",
 			"Backend server traffic in bytes",
-			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
 		),
 		curSessionUsageEntry: prom.NewDesc(
 			"zstack_lb_cur_session_usage",
 			"Backend server active session ratio of max session",
-			[]string{LB_LISTENER_UUID}, nil,
+			[]string{LB_LISTENER_UUID, LB_UUID}, nil,
 		),
 
 		refusedSessionNumEntry: prom.NewDesc(
 			"zstack_lb_refused_session_num",
 			"Backend server refused session number",
-			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
 		),
 		totalSessionNumEntry: prom.NewDesc(
 			"zstack_lb_total_session_num",
 			"Backend server total session number",
-			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
 		),
 		concurrentSessionUsageEntry: prom.NewDesc(
 			"zstack_lb_concurrent_session_num",
 			"Backend server session number including active and waiting state session",
-			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP}, nil,
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
 		),
 		//vipUUIds: make(map[string]string),
 	}
@@ -1120,9 +1231,11 @@ func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
 
 		var maxSessionNum, sessionNum uint64
 		sessionNum = 0
+		lbUuid := ""
 		switch listener.(type) {
 		case *GBListener:
 			gbListener, _ := listener.(*GBListener)
+			lbUuid = gbListener.lb.LbUuid
 			counters, num = gbListener.getLbCounters(listenerUuid)
 			maxSessionNum = (uint64)(gbListener.maxSession)
 			/* get total count */
@@ -1132,6 +1245,7 @@ func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
 			break
 		case *HaproxyListener:
 			haproxyListener, _ := listener.(*HaproxyListener)
+			lbUuid = haproxyListener.lb.LbUuid
 			counters, num = haproxyListener.getLbCounters(listenerUuid)
 			maxSessionNum = (uint64)(haproxyListener.maxSession)
 			/* get total count */
@@ -1147,16 +1261,16 @@ func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
 
 		for i := 0; i < num; i++ {
 			cnt := counters[i]
-			ch <- prom.MustNewConstMetric(c.statusEntry, prom.GaugeValue, float64(cnt.status), cnt.listenerUuid, cnt.ip)
-			ch <- prom.MustNewConstMetric(c.inByteEntry, prom.GaugeValue, float64(cnt.bytesIn), cnt.listenerUuid, cnt.ip)
-			ch <- prom.MustNewConstMetric(c.outByteEntry, prom.GaugeValue, float64(cnt.bytesOut), cnt.listenerUuid, cnt.ip)
-			ch <- prom.MustNewConstMetric(c.curSessionNumEntry, prom.GaugeValue, float64(cnt.sessionNumber), cnt.listenerUuid, cnt.ip)
-			ch <- prom.MustNewConstMetric(c.refusedSessionNumEntry, prom.GaugeValue, float64(cnt.refusedSessionNumber), cnt.listenerUuid, cnt.ip)
-			ch <- prom.MustNewConstMetric(c.totalSessionNumEntry, prom.GaugeValue, float64(cnt.totalSessionNumber), cnt.listenerUuid, cnt.ip)
-			ch <- prom.MustNewConstMetric(c.concurrentSessionUsageEntry, prom.GaugeValue, float64(cnt.concurrentSessionNumber), cnt.listenerUuid, cnt.ip)
+			ch <- prom.MustNewConstMetric(c.statusEntry, prom.GaugeValue, float64(cnt.status), cnt.listenerUuid, cnt.ip, lbUuid)
+			ch <- prom.MustNewConstMetric(c.inByteEntry, prom.GaugeValue, float64(cnt.bytesIn), cnt.listenerUuid, cnt.ip, lbUuid)
+			ch <- prom.MustNewConstMetric(c.outByteEntry, prom.GaugeValue, float64(cnt.bytesOut), cnt.listenerUuid, cnt.ip, lbUuid)
+			ch <- prom.MustNewConstMetric(c.curSessionNumEntry, prom.GaugeValue, float64(cnt.sessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
+			ch <- prom.MustNewConstMetric(c.refusedSessionNumEntry, prom.GaugeValue, float64(cnt.refusedSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
+			ch <- prom.MustNewConstMetric(c.totalSessionNumEntry, prom.GaugeValue, float64(cnt.totalSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
+			ch <- prom.MustNewConstMetric(c.concurrentSessionUsageEntry, prom.GaugeValue, float64(cnt.concurrentSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
 		}
 
-		ch <- prom.MustNewConstMetric(c.curSessionUsageEntry, prom.GaugeValue, float64(sessionNum * 100 /maxSessionNum), listenerUuid)
+		ch <- prom.MustNewConstMetric(c.curSessionUsageEntry, prom.GaugeValue, float64(sessionNum * 100 /maxSessionNum), listenerUuid, lbUuid)
 	}
 
 	return nil
@@ -1253,6 +1367,28 @@ var goBetweenClient = &http.Client{
 	Timeout: time.Second * 5,
 }
 
+func getListenerCountInLB(lb lbInfo) (counter int) {
+	counter = 0;
+	for _, listener := range LbListeners {
+		var lbtmp lbInfo
+		switch v := listener.(type) {
+		case *HaproxyListener:
+			lbtmp = v.getLbInfo()
+			break
+		case *GBListener:
+			lbtmp = v.getLbInfo()
+			break
+		default:
+			continue
+		}
+		if lb.LbUuid == lbtmp.LbUuid {
+			counter++
+		}
+	}
+	log.Debugf("lb-%s contains %d listener", lb.LbUuid, counter)
+	return
+}
+
 func getGoBetweenStat(port string, server string )  (*GoBetweenServerStat, error){
 	resp, err := goBetweenClient.Get(fmt.Sprintf("http://127.0.0.1:%s/servers/%s/stats", port, server))
 	if err != nil {
@@ -1285,13 +1421,13 @@ func (this *GBListener) getLbCounters(listenerUuid string) ([]*LbCounter, int) {
 		counter := LbCounter{}
 		counter.listenerUuid = listenerUuid
 		counter.ip = stat.Host
-		if (stat.Stats.Live) {
+		if stat.Stats.Live {
 			counter.status = 1
 		} else {
 			counter.status = 0
 		}
-                counter.bytesIn = stat.Stats.Tx //the direction of LB is different from backend direction
-                counter.bytesOut = stat.Stats.Rx
+		counter.bytesIn = stat.Stats.Tx //the direction of LB is different from backend direction
+		counter.bytesOut = stat.Stats.Rx
 		counter.sessionNumber = stat.Stats.Active_connections
 		counter.refusedSessionNumber = stat.Stats.Refused_connections
 		counter.totalSessionNumber = stat.Stats.Total_connections
@@ -1343,13 +1479,9 @@ notifempty
 missingok
 }`
 	_, err = auth_rotatoe_file.Write([]byte(auth_rotate_conf)); utils.PanicOnError(err)
-
-	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo mv %s /etc/rsyslog.d/haproxy.conf; sudo mv %s /etc/logrotate.d/haproxy; sudo mv %s /etc/logrotate.d/auth; sudo /etc/init.d/rsyslog restart",
-			lb_log_file.Name(), lb_log_rotatoe_file.Name(), auth_rotatoe_file.Name()),
-	}
-	err = bash.Run();utils.PanicOnError(err)
-
+	utils.SudoMoveFile(lb_log_file.Name(), "/etc/rsyslog.d/haproxy.conf")
+	utils.SudoMoveFile(lb_log_rotatoe_file.Name(), "/etc/logrotate.d/haproxy")
+	utils.SudoMoveFile(auth_rotatoe_file.Name(), "/etc/logrotate.d/auth")
 }
 
 func LbEntryPoint() {
@@ -1357,4 +1489,5 @@ func LbEntryPoint() {
 	server.RegisterAsyncCommandHandler(REFRESH_LB_LOG_LEVEL_PATH, server.VyosLock(refreshLogLevel))
 	server.RegisterAsyncCommandHandler(DELETE_LB_PATH, server.VyosLock(deleteLb))
 	server.RegisterAsyncCommandHandler(CREATE_CERTIFICATE_PATH, server.VyosLock(createCertificate))
+	server.RegisterAsyncCommandHandler(DELETE_CERTIFICATE_PATH, server.VyosLock(deleteCertificate))
 }

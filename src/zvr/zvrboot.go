@@ -93,8 +93,8 @@ func parseEsxBootInfo() {
 		}
 
 		err = utils.MkdirForFile(BOOTSTRAP_INFO_CACHE, 0666); utils.PanicOnError(err)
-		err = os.Rename(TMP_LOCATION_FOR_ESX, BOOTSTRAP_INFO_CACHE); utils.PanicOnError(err)
-		err = os.Chmod(BOOTSTRAP_INFO_CACHE, 0777); utils.PanicOnError(err)
+		err = ioutil.WriteFile(BOOTSTRAP_INFO_CACHE, content, 0777); utils.PanicOnError(err)
+		os.Remove(TMP_LOCATION_FOR_ESX)
 		return true
 	}, time.Duration(300)*time.Second, time.Duration(1)*time.Second)
 }
@@ -164,7 +164,7 @@ func configureVyos() {
 		panic(errors.New("no field 'managementNic' in bootstrap info"))
 	}
 
-	haStatus := "NoHa"
+	haStatus := utils.NOHA
 	if v, ok := bootstrapInfo["haStatus"]; ok {
 		haStatus = v.(string)
 	}
@@ -352,12 +352,11 @@ func configureVyos() {
 			tree.SetfWithoutCheckExisting("interfaces ethernet %s address %s", nic.name, fmt.Sprintf("%s/%d", nic.ip6, nic.prefixLength))
 		}
 		tree.Setf("interfaces ethernet %s duplex auto", nic.name)
-		tree.Setf("interfaces ethernet %s smp_affinity auto", nic.name)
+		tree.SetNicSmpAffinity(nic.name, "auto")
 		tree.Setf("interfaces ethernet %s speed auto", nic.name)
 		if nic.mtu != 0 {
-			b := utils.NewBash()
-			b.Command = fmt.Sprintf("ip link set mtu %d dev '%s'", nic.mtu, nic.name)
-			b.Run()
+			tree.Setf("interfaces ethernet %s speed auto", nic.name)
+			tree.SetNicMtu(nic.name, nic.mtu)
 		}
 
 		if nic.isDefaultRoute {
@@ -370,9 +369,7 @@ func configureVyos() {
 		}
 
 		if nic.l2type != "" {
-			b := utils.NewBash()
-			b.Command = fmt.Sprintf("ip link set dev %s alias '%s'", nic.name, makeAlias(nic))
-			b.Run()
+			tree.Setf("interfaces ethernet %s description '%s'", nic.name, makeAlias(nic))
 		}
 
 		if haStatus != utils.NOHA && nic.name != "eth0" {
@@ -520,7 +517,7 @@ func configureVyos() {
 
 	tree.Apply(true)
 
-	if strings.EqualFold(haStatus,"NOHA") {
+	if strings.EqualFold(haStatus,utils.NOHA) {
 		checkIpDuplicate()
 	}
 
@@ -575,7 +572,7 @@ func configureVyos() {
 
 func startZvr()  {
 	b := utils.Bash{
-		Command: "sudo mount -t tmpfs -o size=64M tmpfs /tmp; bash -x /etc/init.d/zstack-virtualrouteragent restart >> /tmp/agentRestart.log 2>&1",
+		Command: "bash -x /etc/init.d/zstack-virtualrouteragent restart >> /tmp/agentRestart.log 2>&1",
 	}
 	b.Run()
 	b.PanicIfError()
@@ -594,6 +591,7 @@ func main() {
 		waitVirtioPortOnline()
 		parseKvmBootInfo()
 	}
+	utils.InitVyosVersion()
 	configureVyos()
 	startZvr()
 	log.Debugf("successfully configured the sysmtem and bootstrap the zstack virtual router agents")

@@ -940,3 +940,22 @@ func (t *VyosConfigTree) String() string {
 
 	return strings.Join(strs, "\n")
 }
+
+func (t *VyosConfigTree) SetNicSmpAffinity(nicName, val string)  {
+	if utils.Vyos_version == utils.VYOS_1_2 {
+		t.Setf("interfaces ethernet %s smp-affinity %s", nicName, val)
+	} else {
+		t.Setf("interfaces ethernet %s smp_affinity %s", nicName, val)
+	}
+}
+
+func (t *VyosConfigTree) SetNicMtu(nicName string, mtu int)  {
+	/* in vyos 1.2.0, mtu can not set before other nic configure are finished */
+	if utils.Vyos_version == utils.VYOS_1_2 {
+		t.Setf("interfaces ethernet %s mtu %d", nicName, mtu)
+	} else {
+		b := utils.NewBash()
+		b.Command = fmt.Sprintf("ip link set mtu %d dev '%s'", mtu, nicName)
+		b.Run()
+	}
+}
