@@ -52,3 +52,7 @@ func SudoMoveFile(oldpath, newpath string) error {
 func SetFileOwner(fpath, owner, group string) error {
 	return exec.Command("sudo", "/bin/chown", fmt.Sprintf("%s:%s", owner, group), fpath).Run()
 }
+
+func Truncate(name string, size int64) error {
+	return os.Truncate(name, size)
+}
