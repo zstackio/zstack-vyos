@@ -85,17 +85,16 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 	var cmd *exec.Cmd
 
 	if len(b.Command) > 1024* 4 {
-		content := []byte(b.Command)
-		tmpfile, err := ioutil.TempFile("/home/vyos", "zvrcommand"); PanicOnError(err)
-		err = tmpfile.Chmod(0777); PanicOnError(err)
-		_, err = tmpfile.Write(content); PanicOnError(err)
-		err = tmpfile.Close(); PanicOnError(err)
-		cmd = exec.Command("bash", "-c", tmpfile.Name())
-		//ioutil.WriteFile(tmpfile.Name(), content, 0777)
-		//path := "/home/vyos/zvrcommand"
-		//ioutil.WriteFile(path, content, 0777)
-		//cmd = exec.Command("bash", "-c", path)
-		defer os.Remove(tmpfile.Name())
+		func() {
+			content := []byte(b.Command)
+			tmpfile, err := ioutil.TempFile("/home/vyos", "zvrcommand"); PanicOnError(err)
+			defer os.Remove(tmpfile.Name())
+
+			err = tmpfile.Chmod(0660); PanicOnError(err)
+			_, err = tmpfile.Write(content); PanicOnError(err)
+			err = tmpfile.Close(); PanicOnError(err)
+			cmd = exec.Command("bash", "-c", tmpfile.Name())
+	        }()
 	} else {
 		cmd = exec.Command("bash", "-c", b.Command)
 	}

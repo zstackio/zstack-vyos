@@ -226,7 +226,7 @@ global_defs {
 }
 
 vrrp_script monitor_zvr {
-       script "/bin/ps aux | /bin/grep '/opt/vyatta/sbin/zvr' | /bin/grep -v grep > /dev/null"        # cheaper than pidof
+       script "/usr/bin/pgrep -u vyos -f /opt/vyatta/sbin/zvr > /dev/null"        # cheaper than pidof
        interval 2                      # check every 2 seconds
        fall 2                          # require 2 failures for KO
        rise 2                          # require 2 successes for OK
