@@ -156,8 +156,15 @@ func configureNic(ctx *server.CommandContext) interface{} {
 				return nil
 			}
 		}, 5, 1); utils.PanicOnError(err)
+		err = utils.Retry(func() error {
+			bash := utils.Bash{
+				Command: fmt.Sprintf("sudo /sbin/ethtool %s", nicname),
+			}
+			_, _, _, e := bash.RunWithReturn()
+			return e
+		}, 30, 1); utils.PanicOnError(err)
 		if nic.Ip != "" {
-			cidr, err := utils.NetmaskToCIDR(nic.Netmask);
+			cidr, err := utils.NetmaskToCIDR(nic.Netmask)
 			utils.PanicOnError(err)
 			addr := fmt.Sprintf("%v/%v", nic.Ip, cidr)
 			tree.Setf("interfaces ethernet %s address %v", nicname, addr)
