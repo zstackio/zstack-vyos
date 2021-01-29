@@ -46,11 +46,14 @@ const (
 	KeepalivedConfigPath         = "/home/vyos/zvr/keepalived/conf/"
 	KeepalivedSciptPath          = "/home/vyos/zvr/keepalived/script/"
 	KeepalivedConfigFile         = "/home/vyos/zvr/keepalived/conf/keepalived.conf"
+	ConntrackdConfigFile         = "/home/vyos/zvr/keepalived/conf/conntrackd.conf"
+	ConntrackdBinaryFile         = "/usr/sbin/conntrackd"
 	KeepalivedPidFile            = "/var/run/keepalived.pid"
 	KeepalivedBinaryFile         = "/usr/sbin/keepalived"
 	KeepalivedScriptMasterDoGARP = "/home/vyos/zvr/keepalived/script/garp.sh"
 	KeepalivedScriptNotifyMaster = "/home/vyos/zvr/keepalived/script/notifyMaster"
 	KeepalivedScriptNotifyBackup = "/home/vyos/zvr/keepalived/script/notifyBackup"
+	ConntrackScriptPrimaryBackup = "/home/vyos/zvr/keepalived/script/primary-backup.sh"
 )
 
 type KeepalivedNotify struct {
@@ -108,6 +111,9 @@ sudo ip link set up dev {{$name}} || true
 #add default route
 (/bin/bash /home/vyos/zvr/keepalived/script/defaultroute.sh) &
 
+#sync conntrackd
+(/bin/bash /home/vyos/zvr/keepalived/script/primary-backup.sh primary) &
+
 #notify Mn node
 (curl -H "Content-Type: application/json" -H "commandpath: /vpc/hastatus" -X POST -d '{"virtualRouterUuid": "{{.VrUuid}}", "haStatus":"Master"}' {{.CallBackUrl}}) &
 
@@ -121,6 +127,8 @@ port=7272
 peerIp=$(echo $(grep -A1 -w unicast_peer /home/vyos/zvr/keepalived/conf/keepalived.conf | tail -1))
 test x"$2" != x"" && port=$2
 test x"$peerIp" != x"" && curl -X POST -H "User-Agent: curl/7.2.5" --connect-timeout 3 http://"$peerIp:$port"/keepalived/garp
+
+/bin/bash /home/vyos/zvr/keepalived/script/primary-backup.sh "$1"
 
 {{ range .MgmtVipPairs }}
 sudo ip add del {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
@@ -202,6 +210,8 @@ func (k *KeepalivedNotify) CreateMasterScript () error {
 }
 
 func (k *KeepalivedNotify) CreateBackupScript () error {
+	err := ioutil.WriteFile(ConntrackScriptPrimaryBackup, []byte(primaryBackupScript), 0750); utils.PanicOnError(err)
+
 	tmpl, err := template.New("backup.conf").Parse(tKeepalivedNotifyBackup); utils.PanicOnError(err)
 	if err != nil {
 		return err
@@ -241,6 +251,55 @@ func NewKeepalivedConf(hearbeatNic, LocalIp, PeerIp string, MonitorIps []string,
 
 	return kc
 }
+
+const tConntrackdConf = `# This file is auto-generated, edit with caution!
+Sync {
+    Mode FTFW {
+        DisableExternalCache Off
+        CommitTimeout 1800
+        PurgeTimeout 5
+    }
+
+    UDP {
+        IPv4_address {{.LocalIp}}
+        IPv4_Destination_Address {{.PeerIp}}
+        Port 3780
+        Interface {{.HeartBeatNic}}
+        SndSocketBuffer 1249280
+        RcvSocketBuffer 1249280
+        Checksum on
+    }
+}
+
+General {
+    Nice -20
+    HashSize 1421312
+    HashLimit 45481984  # 2 * nf_conntrack_max
+    LogFile off
+    Syslog off
+    LockFile /var/lock/conntrack.lock
+    UNIX {
+        Path /var/run/conntrackd.ctl
+        Backlog 20
+    }
+    NetlinkBufferSize 2097152
+    NetlinkBufferSizeMaxGrowth 8388608
+    Filter From Userspace {
+        Protocol Accept {
+            TCP
+            SCTP
+            DCCP
+            # UDP
+            # ICMP # This requires a Linux kernel >= 2.6.31
+        }
+        Address Ignore {
+            IPv4_address 127.0.0.1 # loopback
+            IPv4_address {{.LocalIp}}
+            IPv4_address {{.PeerIp}}
+        }
+    }
+}
+`
 
 const tKeepalivedConf = `# This file is auto-generated, edit with caution!
 global_defs {
@@ -292,7 +351,7 @@ vrrp_instance vyos-ha {
 }
 `
 
-func (k *KeepalivedConf) BuildConf() (error) {
+func (k *KeepalivedConf) BuildConf() error {
 	tmpl, err := template.New("keepalived.conf").Parse(tKeepalivedConf); utils.PanicOnError(err)
 
 	var buf bytes.Buffer
@@ -300,7 +359,11 @@ func (k *KeepalivedConf) BuildConf() (error) {
 
 	err = ioutil.WriteFile(KeepalivedConfigFile, buf.Bytes(), 0644); utils.PanicOnError(err)
 
-	return nil
+	// generate conntrackd.conf
+        buf.Reset()
+	tmpl, err = template.New("conntrackd.conf").Parse(tConntrackdConf); utils.PanicOnError(err)
+	err = tmpl.Execute(&buf, k); utils.PanicOnError(err)
+	return ioutil.WriteFile(ConntrackdConfigFile, buf.Bytes(), 0644)
 }
 
 func (k *KeepalivedConf) RestartKeepalived() (error) {
@@ -347,6 +410,18 @@ missingok
 	utils.SudoMoveFile(log_rotate_file.Name(), "/etc/logrotate.d/keepalived")
 }
 
+func checkConntrackdRunning() {
+	if getConntrackdPid() != PID_ERROR {
+		return
+	}
+
+	bash := utils.Bash{
+		Command: fmt.Sprintf("sudo %s -C %s -d", ConntrackdBinaryFile, ConntrackdConfigFile),
+	}
+
+	bash.RunWithReturn()
+}
+
 func checkKeepalivedRunning()  {
 	pid := getKeepalivedPid()
 	if pid == PID_ERROR {
@@ -391,6 +466,23 @@ func getKeepalivedPid() (string) {
 
 	pids := strings.Fields(out)
 	return pids[len(pids)-1]
+}
+
+
+var conntrackdPID int
+
+func getConntrackdPid() int {
+	if conntrackdPID > 0 && utils.ProcessExists(conntrackdPID) == nil {
+		return conntrackdPID
+	}
+
+	if pid, err := utils.FindFirstPID(ConntrackdBinaryFile); err != nil {
+		log.Debugf("%s", err)
+		return PID_ERROR
+	} else {
+		conntrackdPID = pid
+		return pid
+	}
 }
 
 /* true master, false backup */

@@ -87,6 +87,7 @@ const (
 	ManagementComment = "Management-rules"
 	OSPFComment = "OSPF-rules"
 	VRRPComment = "VRRP-rules"
+	CTHAComment = "CTHA-rules"
 	PIMDComment = "PIMD-rules"
 	PolicyRouteComment = "Zs-Pr-Rules"
 	PolicyRouteChainPrefix = "zs-rt-"

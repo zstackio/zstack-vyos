@@ -49,6 +49,9 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 		rule := utils.NewIptablesRule("vrrp", cmd.PeerIp, "", 0, 0, nil, utils.ACCEPT, utils.VRRPComment)
 		utils.InsertFireWallRule(heartbeatNicNme, rule, utils.LOCAL)
 
+		rule = utils.NewIptablesRule("udp", cmd.PeerIp, "", 0, 3780, nil, utils.ACCEPT, utils.CTHAComment)
+		utils.InsertFireWallRule(heartbeatNicNme, rule, utils.LOCAL)
+
 		rule = utils.NewNatIptablesRule("vrrp", "", "", 0, 0, nil, utils.RETURN, utils.VRRPComment, "", 0)
 		utils.InsertNatRule(rule, utils.POSTROUTING)
 	} else {
@@ -229,6 +232,7 @@ func keepAlivedCheckTask()  {
 		case <-ticker.C:
 		        if utils.IsHaEnabled() {
 				checkKeepalivedRunning()
+				checkConntrackdRunning()
 			}
 		}
 	}
