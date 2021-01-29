@@ -148,7 +148,7 @@ func NewKeepalivedNotifyConf(vyosHaVips, mgmtVips []nicVipPair) *KeepalivedNotif
 			nicNames = append(nicNames, nic.Name)
 
 			bash := utils.Bash{
-				Command: fmt.Sprintf("sudo ip -4 -o a show dev %s primary | awk {'print $4'} | head -1 | cut -f1 -d '/'", nic.Name),
+				Command: fmt.Sprintf("sudo ip -4 -o a show dev %s primary | awk '{print $4; exit}' | cut -f1 -d '/'", nic.Name),
 			}
 			ret, o, _, err := bash.RunWithReturn()
 			if err != nil || ret != 0 {
@@ -196,11 +196,7 @@ func (k *KeepalivedNotify) CreateMasterScript () error {
 
 	err = k.generateGarpScript(); utils.PanicOnError(err)
 
-	/* add log */
-	bash := utils.Bash{
-		Command: fmt.Sprintf("cat %s", KeepalivedScriptNotifyMaster),
-	}
-	bash.Run()
+	log.Debugf("%s: %s", KeepalivedScriptNotifyMaster, buf.String())
 
 	return nil
 }
@@ -216,11 +212,7 @@ func (k *KeepalivedNotify) CreateBackupScript () error {
 
 	err = ioutil.WriteFile(KeepalivedScriptNotifyBackup, buf.Bytes(), 0755); utils.PanicOnError(err)
 
-	/* add log */
-	bash := utils.Bash{
-		Command: fmt.Sprintf("cat %s", KeepalivedScriptNotifyBackup),
-	}
-	bash.Run()
+	log.Debugf("%s: %s", KeepalivedScriptNotifyBackup, buf.String())
 
 	return nil
 }
@@ -409,7 +401,8 @@ func getKeepAlivedStatus() KeepAlivedStatus {
 	}
 
 	bash := utils.Bash{
-		Command: fmt.Sprintf("timeout 1 sudo kill -USR1 %s; grep 'State' /tmp/keepalived.data  | awk -F '=' '{print $2}'",
+		// There is race between generating keepalived.data and reading its content.
+		Command: fmt.Sprintf("timeout 1 sudo kill -USR1 %s; sleep 0.1; awk -F '=' '/State/{print $2}' /tmp/keepalived.data",
 			pid),
 		NoLog: true,
 	}
@@ -420,13 +413,14 @@ func getKeepAlivedStatus() KeepAlivedStatus {
 		return KeepAlivedStatus_Unknown
 	}
 
-	if strings.Contains(o, "MASTER") {
+	switch strings.TrimSpace(o) {
+	case "MASTER":
 		return KeepAlivedStatus_Master
-	} else if strings.Contains(o, "BACKUP"){
+	case "BACKUP":
 		return KeepAlivedStatus_Backup
-	} else if strings.Contains(o, "FAULT"){
+	case "FAULT":
 		return KeepAlivedStatus_Backup
-	} else {
+	default:
 		return KeepAlivedStatus_Unknown
 	}
 
@@ -454,7 +448,7 @@ func KeepalivedEntryPoint() {
 
 var keepAlivedStatus KeepAlivedStatus
 
-func init()  {
+func init() {
 	os.Mkdir(KeepalivedRootPath, os.ModePerm)
 	os.Mkdir(KeepalivedConfigPath, os.ModePerm)
 	os.Mkdir(KeepalivedSciptPath, os.ModePerm)
