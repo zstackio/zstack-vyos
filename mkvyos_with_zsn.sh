@@ -109,6 +109,7 @@ ZSN=$tmpdir/zsn-crontab.sh
 SBIN_DIR=/opt/vyatta/sbin
 VERSION=`date +%Y%m%d`
 ZVR_VERSION=$tmpdir/version
+GOPRLIMIT=$tmpdir/goprlimit
 
 bash -c "$3"
 ZSN_DIR=/usr/local/zstack/zsn-agent/bin
@@ -129,6 +130,7 @@ upload $tmpdir/zstack-network-agent $ROOTPATH/etc/init.d/zstack-network-agent
 upload $HAPROXY $ROOTPATH$SBIN_DIR/haproxy
 upload $GOBETWEEN $ROOTPATH$SBIN_DIR/gobetween
 upload $KEEPALIVED $ROOTPATH/usr/sbin/keepalived
+upload $GOPRLIMIT $ROOTPATH$SBIN_DIR/goprlimit
 mkdir-p $ROOTPATH/home/vyos/zvr/keepalived/script
 upload $PIMD $ROOTPATH/$SBIN_DIR/pimd
 upload $UACCTD $ROOTPATH$SBIN_DIR/uacctd
@@ -151,6 +153,7 @@ chmod +x /etc/init.d/zstack-network-agent
 chmod +x $SBIN_DIR/haproxy
 chmod +x $SBIN_DIR/gobetween
 chmod +x /usr/sbin/keepalived
+chmod +x $SBIN_DIR/goprlimit
 chmod +x $SBIN_DIR/pimd
 chmod +x $SBIN_DIR/uacctd
 chmod +x /usr/share/healthcheck.sh
@@ -184,7 +187,7 @@ upload /tmp/grub.cfg.new /boot/grub/grub.cfg
 download $ROOTPATH/etc/security/limits.conf /tmp/limits.conf
 ! grep -w "vyos" /tmp/limits.conf | grep nofile | grep soft && sed -i 's/vyos soft nofile [0-9]*/vyos soft nofile 20971520/' /tmp/limits.conf || echo "vyos soft nofile 20971520" >> /tmp/limits.conf
 ! grep -w "vyos" /tmp/limits.conf | grep nofile | grep hard && sed -i 's/vyos hard nofile [0-9]*/vyos hard nofile 20971520/' /tmp/limits.conf || echo "vyos hard nofile 20971520" >> /tmp/limits.conf
-! grep -w "root" /tmp/limits.conf | grep nofile | grep soft && sed -i 's/root soft nofile [0-9]*/root soft nofile 20971520/' /tmp/limits.conf || echo "root soft nofile 20971520" >> /tmp/limits.conf
+#! grep -w "root" /tmp/limits.conf | grep nofile | grep soft && sed -i 's/root soft nofile [0-9]*/root soft nofile 20971520/' /tmp/limits.conf || echo "root soft nofile 20971520" >> /tmp/limits.conf
 ! grep -w "root" /tmp/limits.conf | grep nofile | grep hard && sed -i 's/root hard nofile [0-9]*/root hard nofile 20971520/' /tmp/limits.conf || echo "root hard nofile 20971520" >> /tmp/limits.conf
 upload /tmp/limits.conf $ROOTPATH/etc/security/limits.conf
 _EOF_

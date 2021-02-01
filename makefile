@@ -50,6 +50,7 @@ package: clean zvr zvrboot
 	cp -f scripts/zvrboot_aarch64 $(PKG_ZVRBOOT_DIR)
 	cp -f $(TARGET_DIR)/zvrboot $(PKG_ZVRBOOT_DIR)
 	cp -f scripts/version $(TARGET_DIR)
+	cp -f scripts/goprlimit $(PKG_ZVR_DIR)
 	$(GO) run package.go -conf package-config.json
 
 tar: zvr zvrboot
@@ -76,5 +77,6 @@ tar: zvr zvrboot
 	cp -f scripts/zsn-crontab.sh $(PKG_TAR_DIR)
 	cp -f scripts/pimd_aarch64 $(PKG_TAR_DIR)
 	cp -f $(TARGET_DIR)/zvrboot $(PKG_TAR_DIR)
+	cp -f scripts/goprlimit $(PKG_TAR_DIR)
 	tar czf $(TARGET_DIR)/zvr.tar.gz -C $(PKG_TAR_DIR) .
 

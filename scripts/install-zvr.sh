@@ -93,4 +93,10 @@ fi
 chown vyos:users $TARGET_UAACTD
 chmod +x $TARGET_UAACTD
 
+TARGET_GOPRLIMIT=/opt/vyatta/sbin/goprlimit
+diff goprlimit $TARGET_GOPRLIMIT
+if [ $? -ne 0 ]; then
+    yes | cp -f goprlimit $TARGET_GOPRLIMIT
+fi
+
 exit 0
