@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"crypto/md5"
+	"runtime"
 )
 
 const (
@@ -705,6 +706,51 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 	return err
 }
 
+func setPidRLimit() error {	
+	bash := utils.Bash{
+		Command: fmt.Sprintf("sudo pidof gobetween"),
+	}
+
+	_, out, _, err := bash.RunWithReturn(); 
+	if err != nil{
+		return err;
+	}
+
+	out = strings.Replace(out, "\n", "", -1)
+	pids := strings.Fields(out)
+
+	for _, pid := range pids{
+		_, err = strconv.Atoi(pid)
+		if err != nil{
+			log.Debugf("pid %s is not correct",pid)
+			return err
+		}
+
+		bash = utils.Bash{
+			Command: fmt.Sprintf("sudo cat /proc/%s/limits | grep 'Max open files' | awk -F ' ' '{print $5}' ",pid),
+		}
+
+		_, hlimit, _, er := bash.RunWithReturn(); 
+		if er != nil{
+			log.Debugf("cat not get pid %s hard limit",pid)
+			return er;
+		}
+		hlimit = strings.Replace(hlimit, "\n", "", -1)
+		bash := utils.Bash{
+			Command: fmt.Sprintf("sudo /opt/vyatta/sbin/goprlimit -p %s -s %s",
+				pid, hlimit),
+		}
+	
+		ret, out, _, e := bash.RunWithReturn();
+		log.Debugf("%d %s",ret, out)
+		if e != nil{
+			return e
+		}
+	}
+	return nil
+}
+
+
 func (this *GBListener) startListenerService() (  int,  error) {
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo /opt/vyatta/sbin/gobetween -c %s >/dev/null 2>&1&echo $! >%s",
@@ -713,6 +759,10 @@ func (this *GBListener) startListenerService() (  int,  error) {
 
 	ret, out, _, err := bash.RunWithReturn(); bash.PanicIfError()
 	log.Debugf("%d %s",ret, out)
+	if runtime.GOARCH == "amd64"{
+		err = setPidRLimit()
+	}
+
 	return ret, err
 }
 
