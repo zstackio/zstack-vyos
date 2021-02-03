@@ -275,7 +275,7 @@ func syncSnatHandler(ctx *server.CommandContext) interface{} {
 	if utils.IsSkipVyosIptables() {
 		syncSnatByIptables(cmd.Snats, cmd.Enable)
 	} else {
-		update := applySnatRules(cmd.Snats, true)
+		update := applySnatRules(cmd.Snats, cmd.Enable)
 		if update && len(cmd.Snats) > 0{
 			/* after snat is enabled, delete connections which is not snat */
 			t := utils.ConnectionTrackTuple{IsNat:false, IsDst: true, Ip: cmd.Snats[0].PublicIp, Protocol: "",
