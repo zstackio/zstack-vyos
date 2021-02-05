@@ -24,6 +24,7 @@ func loadPlugins()  {
 	plugin.VipEntryPoint()
 	plugin.EipEntryPoint()
 	plugin.LbEntryPoint()
+	plugin.KeepalivedEntryPoint()
 	plugin.IPsecEntryPoint()
 	plugin.ConfigureNicEntryPoint()
 	plugin.RouteEntryPoint()
