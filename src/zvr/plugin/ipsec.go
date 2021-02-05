@@ -604,14 +604,14 @@ func writeIpsecHaScript(enable bool)  {
 		return
 	}
 
-	var conent string
 	if enable {
-		conent = "sudo ipsec restart"
+		srcFile := "/home/vyos/zvr/keepalived/temp/ipsec.sh"
+		_,er := utils.CopyFile(srcFile,VYOSHA_IPSEC_SCRIPT);utils.PanicOnError(er)
 	} else {
-		conent = "echo 'no ipsec configured'"
+		conent := "echo 'no ipsec configured'"
+		err := ioutil.WriteFile(VYOSHA_IPSEC_SCRIPT, []byte(conent), 0755); utils.PanicOnError(err)
 	}
 
-	err := ioutil.WriteFile(VYOSHA_IPSEC_SCRIPT, []byte(conent), 0755); utils.PanicOnError(err)
 }
 
 func restartIPSecVpnTimer()  {
