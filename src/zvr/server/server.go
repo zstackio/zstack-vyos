@@ -50,7 +50,7 @@ type HttpInterceptor func(http.HandlerFunc) http.HandlerFunc
 var (
 	commandHandlers map[string]*commandHandlerWrap = make(map[string]*commandHandlerWrap)
 	rawHandlers map[string]http.HandlerFunc = make(map[string]http.HandlerFunc)
-	commandOptions Options
+	CommandOptions Options
 	CALLBACK_IP = ""
 	CURRENT_CALLBACK_IP = ""
 )
@@ -62,7 +62,7 @@ const (
 
 
 func SetOptions(o Options) {
-	commandOptions = o
+	CommandOptions = o
 }
 
 func RegisterSyncCommandHandler(path string, chandler CommandHandler)  {
@@ -279,9 +279,9 @@ func dispatch(w http.ResponseWriter, req *http.Request) {
 
 func startServer() {
 	server := &http.Server{
-		Addr: fmt.Sprintf("%v:%v", commandOptions.Ip, commandOptions.Port),
-		ReadTimeout: time.Duration(commandOptions.ReadTimeout) * time.Second,
-		WriteTimeout: time.Duration(commandOptions.WriteTimeout) * time.Second,
+		Addr: fmt.Sprintf("%v:%v", CommandOptions.Ip, CommandOptions.Port),
+		ReadTimeout: time.Duration(CommandOptions.ReadTimeout) * time.Second,
+		WriteTimeout: time.Duration(CommandOptions.WriteTimeout) * time.Second,
 		Handler: dispatcher(dispatch),
 	}
 

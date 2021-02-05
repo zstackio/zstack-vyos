@@ -2,12 +2,14 @@ package plugin
 
 import (
 	"zvr/utils"
+	"zvr/server"
 	"io/ioutil"
 	"fmt"
 	"bytes"
 	"html/template"
 	"os"
 	"strings"
+	"sync/atomic"
 	log "github.com/Sirupsen/logrus"
 	"os/exec"
 )
@@ -20,6 +22,10 @@ const (
 )
 
 const PID_ERROR  = "-1"
+
+const (
+	KEEPALIVED_GARP_PATH = "/keepalived/garp"
+)
 
 func (s KeepAlivedStatus) string() string {
 	switch s {
@@ -42,6 +48,7 @@ const (
 	KeepalivedConfigFile         = "/home/vyos/zvr/keepalived/conf/keepalived.conf"
 	KeepalivedPidFile            = "/var/run/keepalived.pid"
 	KeepalivedBinaryFile         = "/usr/sbin/keepalived"
+	KeepalivedScriptMasterDoGARP = "/home/vyos/zvr/keepalived/script/garp.sh"
 	KeepalivedScriptNotifyMaster = "/home/vyos/zvr/keepalived/script/notifyMaster"
 	KeepalivedScriptNotifyBackup = "/home/vyos/zvr/keepalived/script/notifyBackup"
 )
@@ -58,6 +65,18 @@ type KeepalivedNotify struct {
 	CallBackUrl      string
 }
 
+const tSendGratiousARP = `#!/bin/sh
+# This file is auto-generated, DO NOT EDIT! DO NOT EDIT!! DO NOT EDIT!!!
+logger "Sending gratious ARP" || true
+
+{{ range .VyosHaVipPairs }}
+(sudo arping -q -A -c 3 -I {{.NicName}} {{.Vip}}) &
+{{ end }}
+{{ range .NicIps }}
+(sudo arping -q -A -c 3 -I {{.NicName}} {{.Vip}}) &
+{{ end }}
+`
+
 const tKeepalivedNotifyMaster = `#!/bin/sh
 # This file is auto-generated, DO NOT EDIT! DO NOT EDIT!! DO NOT EDIT!!!
 {{ range .MgmtVipPairs }}
@@ -67,12 +86,9 @@ sudo ip add add {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 {{ range $index, $name := .NicNames }}
 sudo ip link set up dev {{$name}} || true
 {{ end }}
-{{ range .VyosHaVipPairs }}
-(sudo arping -q -A -c 3 -I {{.NicName}} {{.Vip}}) &
-{{ end }}
-{{ range .NicIps }}
-(sudo arping -q -A -c 3 -I {{.NicName}} {{.Vip}}) &
-{{ end }}
+
+#send Gratuitous ARP
+(/bin/bash /home/vyos/zvr/keepalived/script/garp.sh) &
 
 #restart ipsec process
 (/bin/bash /home/vyos/zvr/keepalived/script/ipsec.sh) &
@@ -93,7 +109,7 @@ sudo ip link set up dev {{$name}} || true
 (/bin/bash /home/vyos/zvr/keepalived/script/defaultroute.sh) &
 
 #notify Mn node
-(sudo curl -H "Content-Type: application/json" -H "commandpath: /vpc/hastatus" -X POST -d '{"virtualRouterUuid": "{{.VrUuid}}", "haStatus":"Master"}' {{.CallBackUrl}}) &
+(curl -H "Content-Type: application/json" -H "commandpath: /vpc/hastatus" -X POST -d '{"virtualRouterUuid": "{{.VrUuid}}", "haStatus":"Master"}' {{.CallBackUrl}}) &
 
 #this is for debug
 ip add
@@ -101,6 +117,11 @@ ip add
 
 const tKeepalivedNotifyBackup = `#!/bin/sh
 # This file is auto-generated, DO NOT EDIT! DO NOT EDIT!! DO NOT EDIT!!!
+port=7272
+peerIp=$(echo $(grep -A1 -w unicast_peer /home/vyos/zvr/keepalived/conf/keepalived.conf | tail -1))
+test x"$2" != x"" && port=$2
+test x"$peerIp" != x"" && curl -X POST -H "User-Agent: curl/7.2.5" --connect-timeout 3 http://"$peerIp:$port"/keepalived/garp
+
 {{ range .MgmtVipPairs }}
 sudo ip add del {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 {{ end }}
@@ -109,7 +130,7 @@ sudo ip add del {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
 sudo ip link set down dev {{$name}} || true
 {{ end }}
 #notify Mn node
-(sudo curl -H "Content-Type: application/json" -H "commandpath: /vpc/hastatus" -X POST -d '{"virtualRouterUuid": "{{.VrUuid}}", "haStatus":"Backup"}' {{.CallBackUrl}}) &
+(curl -H "Content-Type: application/json" -H "commandpath: /vpc/hastatus" -X POST -d '{"virtualRouterUuid": "{{.VrUuid}}", "haStatus":"Backup"}' {{.CallBackUrl}}) &
 #this is for debug
 ip add
 `
@@ -156,6 +177,15 @@ func NewKeepalivedNotifyConf(vyosHaVips, mgmtVips []nicVipPair) *KeepalivedNotif
 	return knc
 }
 
+func (k* KeepalivedNotify) generateGarpScript () error {
+	tmpl, err := template.New("garp.sh").Parse(tSendGratiousARP); utils.PanicOnError(err)
+
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, k); utils.PanicOnError(err)
+
+	return ioutil.WriteFile(KeepalivedScriptMasterDoGARP, buf.Bytes(), 0755)
+}
+
 func (k *KeepalivedNotify) CreateMasterScript () error {
 	tmpl, err := template.New("master.conf").Parse(tKeepalivedNotifyMaster); utils.PanicOnError(err)
 
@@ -163,6 +193,8 @@ func (k *KeepalivedNotify) CreateMasterScript () error {
 	err = tmpl.Execute(&buf, k); utils.PanicOnError(err)
 
 	err = ioutil.WriteFile(KeepalivedScriptNotifyMaster, buf.Bytes(), 0755); utils.PanicOnError(err)
+
+	err = k.generateGarpScript(); utils.PanicOnError(err)
 
 	/* add log */
 	bash := utils.Bash{
@@ -337,7 +369,7 @@ func callStatusChangeScripts()  {
 		}
 	} else if keepAlivedStatus == KeepAlivedStatus_Backup {
 		bash = utils.Bash{
-			Command: fmt.Sprintf("cat %s; %s BACKUP", KeepalivedScriptNotifyBackup, KeepalivedScriptNotifyBackup),
+			Command: fmt.Sprintf("cat %s; %s BACKUP %d", KeepalivedScriptNotifyBackup, KeepalivedScriptNotifyBackup, server.CommandOptions.Port),
 		}
 	}
 	bash.RunWithReturn();
@@ -391,6 +423,26 @@ func getKeepAlivedStatus() KeepAlivedStatus {
 		return KeepAlivedStatus_Unknown
 	}
 
+}
+
+var garp_counter uint32
+
+func garpHandler(ctx *server.CommandContext) interface{} {
+	if atomic.AddUint32(&garp_counter, 1) > 1 {
+		return nil // garp in progress
+	}
+
+	go func() {
+		err := exec.Command("sudo", "/bin/sh", KeepalivedScriptMasterDoGARP).Run()
+		log.Debugf("master garp: %s", err)
+		atomic.StoreUint32(&garp_counter, 0)
+	}()
+
+	return nil
+}
+
+func KeepalivedEntryPoint() {
+	server.RegisterSyncCommandHandler(KEEPALIVED_GARP_PATH, garpHandler)
 }
 
 var keepAlivedStatus KeepAlivedStatus
