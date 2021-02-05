@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"io"
 )
 
 func MkdirForFile(filepath string, perm os.FileMode) error {
@@ -55,4 +56,18 @@ func SetFileOwner(fpath, owner, group string) error {
 
 func Truncate(name string, size int64) error {
 	return os.Truncate(name, size)
+}
+
+func CopyFile(srcFile,destFile string)(int64,error){
+    srcfile,err := os.Open(srcFile)
+    if err != nil{
+        return 0,err
+    }
+    dstfile,err := os.OpenFile(destFile,os.O_WRONLY|os.O_CREATE,os.ModePerm)
+    if err != nil{
+        return 0,err
+    }
+    defer srcfile.Close()
+    defer dstfile.Close()
+    return io.Copy(dstfile,srcfile)
 }
