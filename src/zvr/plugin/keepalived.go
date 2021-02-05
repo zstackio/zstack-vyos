@@ -340,7 +340,7 @@ func callStatusChangeScripts()  {
 			Command: fmt.Sprintf("cat %s; %s BACKUP", KeepalivedScriptNotifyBackup, KeepalivedScriptNotifyBackup),
 		}
 	}
-	bash.RunWithReturn();
+	bash.RunWithReturn()
 }
 
 func getKeepalivedPid() (string) {

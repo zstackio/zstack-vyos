@@ -114,6 +114,12 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 		go keepAlivedCheckTask()
 	}
 
+	err = utils.Retry(func() error {
+		if IsMaster() || IsBackup() {
+			return nil
+		}
+		return fmt.Errorf("keepalvied master election not finished")
+	}, 5, uint(cmd.Keepalive)); utils.PanicOnError(err)
 	return nil
 }
 
@@ -123,6 +129,14 @@ func IsMaster() bool {
 	}
 
 	return keepAlivedStatus == KeepAlivedStatus_Master
+}
+
+func IsBackup() bool {
+	if !utils.IsHaEnabled() {
+		return true
+	}
+
+	return keepAlivedStatus == KeepAlivedStatus_Backup
 }
 
 type haStatusCallback struct {
