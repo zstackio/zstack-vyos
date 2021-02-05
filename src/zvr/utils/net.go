@@ -296,7 +296,7 @@ func CheckMgmtCidrContainsIp(ip string, mgmtNic map[string]interface{}) bool {
 
 func GetPrivteInterface() []string  {
 	bash := Bash{
-		Command: fmt.Sprintf("ip link | grep -B 2 'category:Private' | grep '<BROADCAST,MULTICAST' | awk -F ':' '{print $2}'"),
+		Command: fmt.Sprintf("sudo ip link | grep -B 2 'category:Private' | grep '<BROADCAST,MULTICAST' | awk -F ':' '{print $2}'"),
 	}
 	ret, o, _, err := bash.RunWithReturn()
 	if err != nil {
