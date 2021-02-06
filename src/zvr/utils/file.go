@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"io"
 )
 
 func MkdirForFile(filepath string, perm os.FileMode) error {
@@ -47,4 +48,19 @@ func PathExists(filepath string) (bool, error) {
 
 func SudoMoveFile(oldpath, newpath string) error {
 	return exec.Command("sudo", "/bin/mv", "-f", oldpath, newpath).Run()
+}
+
+
+func CopyFile(srcFile,destFile string)(int64,error){
+    srcfile,err := os.Open(srcFile)
+    if err != nil{
+        return 0,err
+    }
+    dstfile,err := os.OpenFile(destFile,os.O_WRONLY|os.O_CREATE,os.ModePerm)
+    if err != nil{
+        return 0,err
+    }
+    defer srcfile.Close()
+    defer dstfile.Close()
+    return io.Copy(dstfile,srcfile)
 }

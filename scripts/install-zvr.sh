@@ -79,4 +79,13 @@ fi
 chown vyos:users $TARGET_UAACTD
 chmod +x $TARGET_UAACTD
 
+TAGET_TEMP_SCRIPT=/home/vyos/zvr/keepalived/temp/ipsec.sh
+if [[ ! -f $TAGET_TEMP_SCRIPT || $(diff ipsec.sh $TAGET_TEMP_SCRIPT) ]]; then
+    yes | mkdir -p `dirname $TAGET_TEMP_SCRIPT`
+    yes | cp -f ipsec.sh $TAGET_TEMP_SCRIPT
+fi
+chown vyos:users $TAGET_TEMP_SCRIPT
+chmod +x $TAGET_TEMP_SCRIPT
+
+
 exit 0
