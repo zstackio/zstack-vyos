@@ -87,5 +87,9 @@ fi
 chown vyos:users $TAGET_TEMP_SCRIPT
 chmod +x $TAGET_TEMP_SCRIPT
 
+TARGET_SYSCONF=/etc/sysctl.conf
+sudo cp -f sysctl.conf $TARGET_SYSCONF
+sudo chmod 644 $TARGET_SYSCONF
+sudo chown root:root $TARGET_SYSCONF
 
 exit 0
