@@ -674,39 +674,50 @@ func setVip(ctx *server.CommandContext) interface{} {
 		}
 	}
 
-	for _, vip := range cmd.Vips {
-		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac); utils.PanicOnError(err)
-		cidr, err := utils.NetmaskToCIDR(vip.Netmask); utils.PanicOnError(err)
-		addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
-		if n := tree.Getf("interfaces ethernet %s address %v", nicname, addr); n == nil {
-			tree.SetfWithoutCheckExisting("interfaces ethernet %s address %v", nicname, addr)
+	var cmds []string
+	if !utils.IsHaEnabled() {
+		for _, vip := range cmd.Vips {
+			nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac);
+			utils.PanicOnError(err)
+			cidr, err := utils.NetmaskToCIDR(vip.Netmask);
+			utils.PanicOnError(err)
+			addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
+			if n := tree.Getf("interfaces ethernet %s address %v", nicname, addr); n == nil {
+				tree.SetfWithoutCheckExisting("interfaces ethernet %s address %v", nicname, addr)
+			}
+		}
+	} else {
+		for _, vip := range cmd.Vips {
+			nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac);
+			utils.PanicOnError(err)
+			cidr, err := utils.NetmaskToCIDR(vip.Netmask);
+			utils.PanicOnError(err)
+			addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
+
+			/* vip on mgt nic will not configure in vyos config */
+			if utils.IsInManagementCidr(vip.Ip) {
+				if n := tree.Getf("interfaces ethernet %s address %v", nicname, addr); n != nil {
+					/* delete old config if existed */
+					n.Delete()
+				}
+				if IsMaster() {
+					cmd := fmt.Sprintf("sudo ip address add %s dev %s", addr, nicname)
+					cmds = append(cmds, cmd)
+				}
+			} else {
+				if n := tree.Getf("interfaces ethernet %s address %v", nicname, addr); n == nil {
+					tree.SetfWithoutCheckExisting("interfaces ethernet %s address %v", nicname, addr)
+				}
+			}
 		}
 	}
 
 	tree.Apply(false)
-
-	/* delete ip address from backup router */
-	if utils.IsHaEnabled() && !IsMaster() {
-		var cmds []string
-		for _, vip := range cmd.Vips {
-			if !utils.IsInManagementCidr(vip.Ip) {
-				continue
-			}
-			nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
-			utils.PanicOnError(err)
-			cidr, err := utils.NetmaskToCIDR(vip.Netmask)
-			utils.PanicOnError(err)
-			addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
-			cmd := fmt.Sprintf("sudo ip address del %s dev %s", addr, nicname)
-			cmds = append(cmds, cmd)
+	if len(cmds) > 0 {
+		bash := utils.Bash{
+			Command: strings.Join(cmds, ";"),
 		}
-
-		if len(cmds) > 0 {
-			bash := utils.Bash{
-				Command: strings.Join(cmds, ";"),
-			}
-			bash.Run()
-		}
+		bash.Run()
 	}
 
 	/* ad default qos for vip traffic counter */
