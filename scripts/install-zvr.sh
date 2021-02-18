@@ -99,4 +99,9 @@ if [ $? -ne 0 ]; then
     yes | cp -f goprlimit $TARGET_GOPRLIMIT
 fi
 
+TARGET_SYSCONF=/etc/sysctl.conf
+sudo cp -f sysctl.conf $TARGET_SYSCONF
+sudo chmod 644 $TARGET_SYSCONF
+sudo chown root:root $TARGET_SYSCONF
+
 exit 0
