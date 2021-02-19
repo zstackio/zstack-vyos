@@ -56,17 +56,38 @@ var (
 	haproxyVersion = HAPROXY_VERSION_1_6_9
 )
 
+const (
+	TLS_CIPHER_POLICY_DEFAULT = "tls_cipher_policy_default"
+	TLS_CIPHER_POLICY_1_0 = "tls_cipher_policy_1_0"
+	TLS_CIPHER_POLICY_1_1 = "tls_cipher_policy_1_1"
+	TLS_CIPHER_POLICY_1_2 = "tls_cipher_policy_1_2"
+	TLS_CIPHER_POLICY_1_2_STRICT = "tls_cipher_policy_1_2_strict"
+	TLS_CIPHER_POLICY_1_2_STRICT_WITH_1_3 = "tls_cipher_policy_1_2_strict_with_1_3"
+
+	LBSecurityPolicyConfiguration = `
+    ssl-default-bind-ciphers %s
+    ssl-default-bind-options %s
+	`
+)
+
+const(
+	LBSecurityPolicyCommonCiphers = "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA:ECDHE-RSA-AES256-SHA"
+	LBSecurityPolicy1_2_3CommonCiphers = "AES128-GCM-SHA256:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA"
+	LBSecurityPolicystrict3OnlyCiphers = "TLS_AES_256_GCM_SHA384:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA"
+)
+
 type lbInfo struct {
-	LbUuid string `json:"lbUuid"`
-	ListenerUuid string `json:"listenerUuid"`
-	Vip string `json:"vip"`
-	PublicNic string `json:"publicNic"`
-	NicIps []string `json:"nicIps"`
-	InstancePort int `json:"instancePort"`
-	LoadBalancerPort int `json:"loadBalancerPort"`
-	Mode string `json:"mode"`
-	Parameters []string `json:"parameters"`
-	CertificateUuid string `json:"certificateUuid"`
+	LbUuid             string   `json:"lbUuid"`
+	ListenerUuid       string   `json:"listenerUuid"`
+	Vip                string   `json:"vip"`
+	PublicNic          string   `json:"publicNic"`
+	NicIps             []string `json:"nicIps"`
+	InstancePort       int      `json:"instancePort"`
+	LoadBalancerPort   int      `json:"loadBalancerPort"`
+	Mode               string   `json:"mode"`
+	Parameters         []string `json:"parameters"`
+	CertificateUuid    string   `json:"certificateUuid"`
+	SecurityPolicyType string   `json:"securityPolicyType"`
 }
 
 type certificateInfo struct {
@@ -240,6 +261,19 @@ func parseListenerPrameter(lb lbInfo) (map[string]interface{}, error) {
 			m[strings.Title(k)] = v
 		}
 	}
+
+	if lb.SecurityPolicyType == TLS_CIPHER_POLICY_1_0{
+		m["SecurityOptions"] = fmt.Sprintf(LBSecurityPolicyConfiguration, LBSecurityPolicyCommonCiphers+":"+LBSecurityPolicy1_2_3CommonCiphers, "no-sslv3 no-tlsv13 no-tls-tickets")
+	} else if lb.SecurityPolicyType == TLS_CIPHER_POLICY_1_1{
+		m["SecurityOptions"] =  fmt.Sprintf(LBSecurityPolicyConfiguration, LBSecurityPolicyCommonCiphers+":"+LBSecurityPolicy1_2_3CommonCiphers,"no-sslv3 no-tlsv10 no-tlsv13 no-tls-tickets")
+	} else if lb.SecurityPolicyType == TLS_CIPHER_POLICY_1_2{
+		m["SecurityOptions"] =  fmt.Sprintf(LBSecurityPolicyConfiguration, LBSecurityPolicyCommonCiphers+":"+LBSecurityPolicy1_2_3CommonCiphers,"no-sslv3 no-tlsv10 no-tlsv11 no-tlsv13 no-tls-tickets")
+	} else if lb.SecurityPolicyType == TLS_CIPHER_POLICY_1_2_STRICT{
+		m["SecurityOptions"] =  fmt.Sprintf(LBSecurityPolicyConfiguration, LBSecurityPolicyCommonCiphers,"no-sslv3 no-tlsv10 no-tlsv11 no-tlsv13 no-tls-tickets")
+	} else if lb.SecurityPolicyType == TLS_CIPHER_POLICY_1_2_STRICT_WITH_1_3{
+		m["SecurityOptions"] =  fmt.Sprintf(LBSecurityPolicyConfiguration, LBSecurityPolicyCommonCiphers+":"+LBSecurityPolicystrict3OnlyCiphers,"no-sslv3 no-tlsv10 no-tlsv11 no-tlsv12 no-tls-tickets")
+	}
+
 	m["CertificatePath"] = makeCertificatePath(lb.CertificateUuid)
 	m["SocketPath"] = makeLbSocketPath(lb)
 	m["Weight"] = weight
@@ -274,6 +308,7 @@ func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo)  (err err
 {{else}}
     nbthread {{.Nbprocess}}
 {{end}}
+	{{.SecurityOptions}}
 defaults
     log global
 	option dontlognull
