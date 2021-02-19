@@ -80,14 +80,59 @@ type ospfProtocol struct {
 	AreaInfos []areaInfo
 	NetworkInfos []networkInfo
 	Tree *server.VyosConfigTree
+	CurrentArea map[string][]string
+	CurrentOspfIntfs []string
+	ToBeDeletedOspfIntfs []string
+}
+
+func (ospf *ospfProtocol) getCurrentConfig()  {
+	ospf.CurrentArea = make(map[string][]string)
+	ospf.CurrentOspfIntfs = []string{}
+	ospf.ToBeDeletedOspfIntfs = []string{}
+	anode := ospf.Tree.Getf("protocols ospf area")
+	if anode != nil {
+		for _, areaId := range anode.ChildNodeKeys() {
+			nnode := ospf.Tree.Getf("protocols ospf area %s network", areaId)
+			if nnode != nil {
+				ospf.CurrentArea[areaId] = nnode.ChildNodeKeys()
+			} else {
+				ospf.CurrentArea[areaId] = []string{}
+			}
+		}
+	}
+
+	if nics, nicErr := utils.GetAllNics(); nicErr == nil {
+		for _, nic := range nics {
+			onode := ospf.Tree.Getf("interfaces ethernet %s ip ospf", nic.Name)
+			if onode != nil {
+				ospf.CurrentOspfIntfs = append(ospf.CurrentOspfIntfs, nic.Name)
+			}
+		}
+	}
+
+	newOspfIntf := map[string]string{}
+	for _, n := range ospf.NetworkInfos {
+		nic, _ := utils.GetNicNameByMac(n.NicMac)
+		newOspfIntf[nic] = nic
+	}
+	for _, nic := range ospf.CurrentOspfIntfs {
+		if _, ok := newOspfIntf[nic]; !ok {
+			ospf.ToBeDeletedOspfIntfs = append(ospf.ToBeDeletedOspfIntfs, nic)
+		}
+	}
 }
 
 func (this *ospfProtocol) init(tree *server.VyosConfigTree)  ( err error) {
 	err = nil
-	this.Tree = tree;
+	this.Tree = tree
 	/* clear all the configure of OSPF
 	*/
-	this.Tree.Deletef("protocols ospf");
+	this.getCurrentConfig()
+	if len(this.AreaInfos) > 0 {
+		return
+	}
+
+	this.Tree.Deletef("protocols ospf")
 	if nics, nicErr := utils.GetAllNics(); nicErr == nil {
 		for _, nic := range nics {
 			this.Tree.Deletef("interfaces ethernet %s ip ospf", nic.Name)
@@ -103,7 +148,7 @@ func (this *ospfProtocol) init(tree *server.VyosConfigTree)  ( err error) {
 			}
 		}
 	}
-	return err;
+	return err
 }
 
 func (this *ospfProtocol) setRouterId()  ( err error) {
@@ -119,6 +164,21 @@ func (this *ospfProtocol) setArea()  ( err error) {
 	if this.Tree == nil {
 		panic(fmt.Errorf("missing initial.."))
 	}
+
+	for areaId, _ := range this.CurrentArea {
+		deleted := true
+		for _, info := range this.AreaInfos {
+			if info.AreaId == areaId {
+				deleted = false
+				break
+			}
+		}
+
+		if deleted {
+			this.Tree.Deletef("protocols ospf area %s", areaId)
+		}
+	}
+
 	for _, info := range this.AreaInfos {
 		if info.AreaType == Standard {
 			this.Tree.Setf("protocols ospf area %s area-type %s", info.AreaId, "normal")
@@ -137,15 +197,31 @@ func (this *ospfProtocol) setArea()  ( err error) {
 	return nil;
 }
 
-func (this *ospfProtocol) setNetwork()  ( error) {
+func (this *ospfProtocol) setNetwork() error {
 	if this.Tree == nil {
 		return (fmt.Errorf("missing initial.."))
 	}
 
 	for _, info := range this.AreaInfos {
+		if oldNetworks, ok := this.CurrentArea[info.AreaId]; ok {
+			for _, on := range oldNetworks {
+				deleted := true
+				for _, n := range this.NetworkInfos {
+					if n.Network == on {
+						deleted = false
+						break
+					}
+				}
+
+				if deleted {
+					this.Tree.Deletef("protocols ospf area %s network %s", info.AreaId, on)
+				}
+			}
+		}
+
 		for _, n := range this.NetworkInfos {
 			if n.AreaId != info.AreaId {
-				continue;
+				continue
 			}
 			/*
 			ZSTAC-19018, modify network 192.168.48.1/24 to 192.168.48.0/24
@@ -189,10 +265,24 @@ func (this *ospfProtocol) setNetwork()  ( error) {
 				}
 				keyID, password := info.AuthParam[:pos], info.AuthParam[pos+1:]
 				this.Tree.SetfWithoutCheckExisting("interfaces ethernet %s ip ospf authentication md5 key-id %s md5-key %s", nic, keyID, password)
+			} else {
+				this.Tree.SetfWithoutCheckExisting("interfaces ethernet %s ip ospf", nic)
 			}
 
 		}
 	}
+
+	for _, deletedNic := range this.ToBeDeletedOspfIntfs {
+		this.Tree.Deletef("interfaces ethernet %s ip ospf", deletedNic)
+		if r := this.Tree.FindFirewallRuleByDescription(deletedNic, "in", FIREWALL_DESCRIPTION); r != nil {
+			r.Delete()
+		}
+
+		if r := this.Tree.FindFirewallRuleByDescription(deletedNic, "local", FIREWALL_DESCRIPTION); r != nil {
+			r.Delete()
+		}
+	}
+
 	return nil
 }
 
