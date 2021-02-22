@@ -16,9 +16,10 @@ const (
 	LOCAL
 	PREROUTING
 	POSTROUTING
+	MANGLE_PREROUTING
 )
 
-func (this Chain) string() string {
+func (this Chain) String() string {
 	switch this {
 	case IN:
 		return ".zs.in"
@@ -28,12 +29,14 @@ func (this Chain) string() string {
 		return "zs.dnat"
 	case POSTROUTING:
 		return "zs.snat"
+	case MANGLE_PREROUTING:
+		return "PREROUTING"
 	default:
 		return ".unkonwn"
 	}
 }
 func getChainName(nic string, ch Chain) string {
-	return nic + ch.string()
+	return nic + ch.String()
 }
 
 const (
@@ -51,6 +54,10 @@ const (
 	DNAT = "DNAT"
 	SNAT = "SNAT"
 	DROP = "DROP"
+	MARK = "MARK"
+	CONNMARK = "CONNMARK"
+	CONNMARK_RESTORE = "CONNMARK_RESTORE"
+	OTHER = "OTHER"
 )
 
 const (
@@ -67,6 +74,7 @@ const (
 const (
 	FirewallTable = "filter"
 	NatTable = "nat"
+	MangleTable = "mangle"
 	DefaultTopRuleComment = "Default-rules-top" /* must be at top of firewall */
 	DefaultBottomRuleComment = "Default-rules-bottom" /* must be at bottom of firewall */
 	PortFordingRuleComment = "PF-rules-for-"
@@ -80,6 +88,9 @@ const (
 	OSPFComment = "OSPF-rules"
 	VRRPComment = "VRRP-rules"
 	PIMDComment = "PIMD-rules"
+	PolicyRouteComment = "Zs-Pr-Rules"
+	PolicyRouteChainPrefix = "zs-rt-"
+	PolicyRouteRuleChainPrefix = "zs-rule-"
 )
 
 var rulesPriority = map[string]int{
@@ -109,7 +120,20 @@ const (
 func commentCompare(comment1, comment2 string) int {
 	c1 := strings.Split(comment1, "for")
 	c2 := strings.Split(comment2, "for")
-	return rulesPriority[c1[0]] - rulesPriority[c2[0]];
+	return rulesPriority[c1[0]] - rulesPriority[c2[0]]
+}
+
+type IptablesChain struct {
+	chainName         string
+	defaultAction     string
+}
+
+func (c *IptablesChain)  String () string{
+	return fmt.Sprintf(":%s %s", c.chainName, c.defaultAction)
+}
+
+func NewIpTablesChain(name string) IptablesChain {
+	return IptablesChain{chainName:name, defaultAction: "-"}
 }
 
 type IptablesRule struct {
@@ -124,11 +148,14 @@ type IptablesRule struct {
 	comment           string
 	inNic, outNic     string
 	tcpflags          []string
+	mark              int
+	markNoMatch       bool
 
 	/* action operation */
 	action            string
 	natTranslationIp          string
 	natTranslationPort   int
+	targetMark                 int
 }
 
 func NewNatIptablesRule(proto string, src, dest string, srcPort, destPort int,
@@ -171,8 +198,19 @@ func NewSnatIptablesRule(excludeSrc, excludeDest bool, src, dest, outNic, action
 		outNic: outNic, inNic: "", tcpflags:nil, natTranslationIp: natTranslationIp, natTranslationPort:natTranslationPort}
 }
 
+func NewMangleIptablesRule(chainName, proto string, src, dest string, srcPort, destPort int, mark, targetMark int, markNoMatch bool,
+	states []string, action string,  comment string, inNic, outNic string) IptablesRule {
+	return IptablesRule{proto: proto, src: src, dest: dest, srcPort: srcPort,
+		destPort:destPort, states: states, action:action, comment:comment,
+		outNic: outNic, inNic: inNic, tcpflags:nil, mark:mark, targetMark:targetMark, markNoMatch: markNoMatch, chainName:chainName}
+}
+
 func (iptableRule IptablesRule)string() []string  {
 	rules := []string{}
+	if iptableRule.chainName != "" {
+		rules = append(rules, "-A " + iptableRule.chainName)
+	}
+
 	if iptableRule.src != "" {
 		if iptableRule.excludeSrc {
 			rules = append(rules, "! -s " + iptableRule.src)
@@ -187,6 +225,10 @@ func (iptableRule IptablesRule)string() []string  {
 		} else {
 			rules = append(rules, "-d " + iptableRule.dest)
 		}
+	}
+
+	if iptableRule.inNic != "" {
+		rules = append(rules, "-i " + iptableRule.inNic)
 	}
 
 	if iptableRule.outNic != "" {
@@ -212,6 +254,12 @@ func (iptableRule IptablesRule)string() []string  {
 		rules = append(rules, "-m state --state " + strings.Join(iptableRule.states, ","))
 	}
 
+	if iptableRule.markNoMatch {
+		rules = append(rules, fmt.Sprintf("-m mark ! --mark %d ", iptableRule.mark))
+	} else if iptableRule.mark != 0 {
+		rules = append(rules, fmt.Sprintf("-m mark --mark %d ", iptableRule.mark))
+	}
+
 	switch iptableRule.action {
 	case REJECT:
 		rules = append(rules, "-j REJECT --reject-with icmp-port-unreachable")
@@ -223,6 +271,12 @@ func (iptableRule IptablesRule)string() []string  {
 		}
 	case SNAT:
 		rules = append(rules, fmt.Sprintf("-j SNAT --to-source %s", iptableRule.natTranslationIp))
+	case MARK:
+		rules = append(rules, fmt.Sprintf("-j MARK --set-mark %d", iptableRule.targetMark))
+	case CONNMARK:
+		rules = append(rules, fmt.Sprintf("-j CONNMARK --set-mark %d", iptableRule.targetMark))
+	case CONNMARK_RESTORE:
+		rules = append(rules, fmt.Sprintf("-j CONNMARK --restore-mark"))
 	default:
 		rules = append(rules, "-j " + iptableRule.action)
 	}
@@ -332,23 +386,23 @@ func InsertFireWallRule(nic string, rule IptablesRule, ch Chain)  error {
 }
 
 /*
-func GenerateNatRule(rule IptablesRule, ch Chain) string  {
-	rules := strings.Join(rule.string(), " ")
-	return fmt.Sprintf("-A %s %s", ch.string(), rules)
+func GenerateNatRule(rule IptablesRule, ch Chain) String  {
+	rules := strings.Join(rule.String(), " ")
+	return fmt.Sprintf("-A %s %s", ch.String(), rules)
 }*/
 
 /* ipsec rules must at the head of all postrouting rules
   ipsec rules use InsertNatRule, other rules use append */
 func InsertNatRule(rule IptablesRule, ch Chain)  error {
 	rules := strings.Join(rule.string(), " ")
-	if exist, _ := isExist(NatTable, ch.string(), rules); exist {
+	if exist, _ := isExist(NatTable, ch.String(), rules); exist {
 		log.Debugf("iptables %s %s already existed", NatTable, rules)
 		return nil
 	}
 
-	olds, err := listRule(NatTable, ch.string())
+	olds, err := listRule(NatTable, ch.String())
 	if err != nil {
-		PanicOnError(fmt.Errorf("list iptables in %s faild %s", ch.string(), err.Error()))
+		PanicOnError(fmt.Errorf("list iptables in %s faild %s", ch.String(), err.Error()))
 		return err
 	}
 
@@ -367,7 +421,7 @@ func InsertNatRule(rule IptablesRule, ch Chain)  error {
 		num++;
 	}
 
-	rules = fmt.Sprintf("sudo iptables -t %s -I %s %d %s", NatTable, ch.string(), num, rules)
+	rules = fmt.Sprintf("sudo iptables -t %s -I %s %d %s", NatTable, ch.String(), num, rules)
 	cmd := Bash{
 		Command: rules,
 	}
@@ -388,12 +442,12 @@ func InsertNatRule(rule IptablesRule, ch Chain)  error {
 }
 
 func DeleteDNatRuleByComment(comment string) error {
-	deleteIptablesRuleByComment(NatTable, PREROUTING.string(), comment)
+	deleteIptablesRuleByComment(NatTable, PREROUTING.String(), comment)
 	return nil
 }
 
 func DeleteSNatRuleByComment(comment string) error {
-	deleteIptablesRuleByComment(NatTable, POSTROUTING.string(), comment)
+	deleteIptablesRuleByComment(NatTable, POSTROUTING.String(), comment)
 	return nil
 }
 
@@ -445,7 +499,7 @@ func DestroyNicFirewall(nic string)  {
 
 	chainName = getChainName(nic, IN)
 	rules, err = listRule(FirewallTable, chainName)
-	if (err == nil && len(rules) > 0) {
+	if err == nil && len(rules) > 0 {
 		for _, rule := range rules {
 			deleteIptablesRule(FirewallTable, rule)
 		}
@@ -490,12 +544,12 @@ func InitNatRule()  {
 	cmd.Run();
 
 	ch := PREROUTING
-	if err := newChain(NatTable, "PREROUTING", ch.string(),  ""); err != nil {
+	if err := newChain(NatTable, "PREROUTING", ch.String(),  ""); err != nil {
 		return
 	}
 
 	ch = POSTROUTING
-	if err := newChain(NatTable, "POSTROUTING", ch.string(),  ""); err != nil {
+	if err := newChain(NatTable, "POSTROUTING", ch.String(),  ""); err != nil {
 		return
 	}
 }
@@ -788,9 +842,9 @@ func getNatRuleSet() ([]string, []string, []string, error) {
 			continue
 		}
 
-		if fields[1] == PREROUTING.string(){
+		if fields[1] == PREROUTING.String(){
 			dnat = append(dnat, r)
-		} else if fields[1] == POSTROUTING.string() {
+		} else if fields[1] == POSTROUTING.String() {
 			snat = append(snat, r)
 		} else {
 			other = append(other, r)
@@ -838,7 +892,7 @@ func getFirewallRuleSet() ([]string, map[string][]string, error) {
 			continue
 		}
 
-		if strings.Contains(fields[1], IN.string()) || strings.Contains(fields[1], LOCAL.string()) {
+		if strings.Contains(fields[1], IN.String()) || strings.Contains(fields[1], LOCAL.String()) {
 			zsRules[fields[1]] = append(zsRules[fields[1]], r)
 		} else {
 			other = append(other, r)
@@ -945,7 +999,7 @@ func restoreIptablesRulesSet(ruleSet []string, tableName string) error  {
 		Command: cmds,
 	}
 
-	_,_,_,err = cmd.RunWithReturn();
+	_,_,_,err = cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("%s failed %s", cmds, err.Error())
 		return err
@@ -979,8 +1033,8 @@ func SyncNatRule(snatRules, dnatRules []IptablesRule, comment string) error {
 	dnat = removeRules(dnat, comment)
 
 	/* #3 */
-	dnat = insertRuleIntoBuffer(dnat, dnatRules, comment, PREROUTING.string())
-	snat = insertRuleIntoBuffer(snat, snatRules, comment, POSTROUTING.string())
+	dnat = insertRuleIntoBuffer(dnat, dnatRules, comment, PREROUTING.String())
+	snat = insertRuleIntoBuffer(snat, snatRules, comment, POSTROUTING.String())
 
 	/* $4, last 2 in other is "
 		COMMIT
@@ -1089,4 +1143,84 @@ func SyncLocalAndInFirewallRule(rulesMap, localRulesMap map[string][]IptablesRul
 	temp = append(temp, other[len(other) -2:]...)
 
 	return restoreIptablesRulesSet(temp, FirewallTable)
+}
+
+func getMangleRuleSet() ([]IptablesChain, []string, error) {
+	cmds := fmt.Sprintf("sudo iptables-save -t %s", MangleTable)
+	cmd := Bash{
+		Command: cmds,
+		NoLog: true,
+	}
+
+	ret,o,_,err := cmd.RunWithReturn()
+	if err != nil {
+		log.Debugf("%s failed %s", cmds, err.Error())
+		return nil, nil, err
+	}
+
+	if ret != 0 {
+		log.Debugf("%s failed ret = %d", cmds, ret)
+		return nil, nil, errors.Errorf("%s failed ret = %d", cmds, ret)
+	}
+	rules := strings.Split(o, "\n")
+
+
+	// strip trailing newline
+	if len(rules) > 0 && rules[len(rules)-1] == "" {
+		rules = rules[:len(rules)-1]
+	}
+
+	var zsRules []string
+	var chains []IptablesChain
+	for _, r := range rules {
+		if r[0] == ':' {
+			/* chain */
+			items := strings.Fields(r)
+			chains = append(chains, IptablesChain{chainName: items[0][1:], defaultAction: items[1]})
+		} else if r[0:1] == "-A" {
+			/* rule */
+			zsRules = append(zsRules, r)
+		}
+	}
+
+	return chains, zsRules, nil
+}
+
+func SyncMangleTables(chains []IptablesChain, rules []IptablesRule, comments string) error {
+	currChains, currRules, _ := getMangleRuleSet()
+
+	var newChains []IptablesChain
+	for _, ch := range currChains {
+		if strings.Contains(ch.chainName, PolicyRouteChainPrefix) || strings.Contains(ch.chainName, PolicyRouteRuleChainPrefix) {
+			continue
+		}
+		newChains = append(newChains, ch)
+	}
+
+	for _, ch := range chains {
+		newChains = append(newChains, ch)
+	}
+
+	var newRules []string
+	for _, r := range currRules {
+		if strings.Contains(r, comments) {
+			continue
+		}
+		newRules = append(newRules, r)
+	}
+
+	for _, r := range rules {
+		newRules = append(newRules, strings.Join(r.string(), " "))
+	}
+
+	temp := []string{"*mangle"}
+	for _, ch := range newChains {
+		temp = append(temp, ch.String())
+	}
+	for _, r := range newRules {
+		temp = append(temp, r)
+	}
+	temp = append(temp, "COMMIT\n")
+
+	return restoreIptablesRulesSet(temp, MangleTable)
 }
