@@ -318,11 +318,18 @@ func (k *KeepalivedConf) RestartKeepalived() (error) {
             -D, --log-detail             Detailed log messages
             -S, --log-facility=[0-7]     Set syslog facility to LOG_LOCAL[0-7]
         */
-	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo pkill -9 keepalived; sudo %s -D -S 2 -f %s", KeepalivedBinaryFile, KeepalivedConfigFile),
+	pid := getKeepalivedPid()
+	if pid == PID_ERROR {
+		bash := utils.Bash{
+			Command: fmt.Sprintf("sudo pkill -9 keepalived; sudo %s -D -S 2 -f %s -p %s", KeepalivedBinaryFile, KeepalivedConfigFile, KeepalivedPidFile),
+		}
+		bash.RunWithReturn(); bash.PanicIfError()
+	} else {
+		bash := utils.Bash{
+			Command: fmt.Sprintf("sudo kill -HUP %s", pid),
+		}
+		bash.RunWithReturn(); bash.PanicIfError()
 	}
-
-	bash.RunWithReturn(); bash.PanicIfError()
 
 	return nil
 }
@@ -352,7 +359,7 @@ func checkKeepalivedRunning()  {
 	pid := getKeepalivedPid()
 	if pid == PID_ERROR {
 		bash := utils.Bash{
-			Command: fmt.Sprintf("sudo pkill -9 keepalived; sudo %s -D -S 2 -f %s", KeepalivedBinaryFile, KeepalivedConfigFile),
+			Command: fmt.Sprintf("sudo pkill -9 keepalived; sudo %s -D -S 2 -f %s -p %s", KeepalivedBinaryFile, KeepalivedConfigFile, KeepalivedPidFile),
 		}
 
 		bash.RunWithReturn()
