@@ -390,10 +390,32 @@ listen {{.ListenerUuid}}
 }
 
 func (this *HaproxyListener) startListenerService() ( ret int, err error) {
+	pids := []string{}
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -N %s -f %s -p %s -sf $(cat %s)",
-			this.maxConnect, this.confPath, this.pidPath, this.pidPath),
+		Command: fmt.Sprintf("ps aux | grep %s | grep -v grep | awk '{print $2}'", this.confPath),
 	}
+	ret, o, _, err := bash.RunWithReturn()
+	if ret == 0 && err == nil {
+		o = strings.TrimSpace(o)
+		for _, pid := range strings.Split(o, "\n") {
+			if pid != "" {
+				pids = append(pids, pid)
+			}
+		}
+	}
+
+	if len(pids) > 0 {
+		bash = utils.Bash{
+			Command: fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -N %s -f %s -p %s -sf %s",
+				this.maxConnect, this.confPath, this.pidPath, strings.Join(pids, " ")),
+		}
+	} else {
+		bash = utils.Bash{
+			Command: fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -N %s -f %s -p %s",
+				this.maxConnect, this.confPath, this.pidPath),
+		}
+	}
+
 
 	ret, _, _, err = bash.RunWithReturn(); bash.PanicIfError()
 	return ret, err
