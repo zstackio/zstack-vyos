@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	log "github.com/Sirupsen/logrus"
 	"html/template"
 	"zvr/server"
 	"zvr/utils"
@@ -71,9 +72,10 @@ func stopPimd()  {
 		utils.KillProcess(pid)
 	}
 
+	utils.Truncate(PIMD_CONF_PATH, 0)
 }
 
-func updatePimdConf(cmd *enablePimdCmd)  error {
+func updatePimdConf(cmd *enablePimdCmd)  bool {
 	bash := utils.Bash{
 		Command: fmt.Sprintf("mkdir -p %s", PIMD_CONF_DIR),
 		NoLog: true,
@@ -94,12 +96,16 @@ rp-address {{.RpAddress}} {{.GroupAddress}}
 	var buf bytes.Buffer
 	var m map[string]interface{}
 
+	oldChecksum, _ := getFileChecksum(PIMD_CONF_PATH)
 	tmpl, err := template.New("conf").Parse(conf); utils.PanicOnError(err)
 	m = structs.Map(cmd)
 	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
 	err = ioutil.WriteFile(PIMD_CONF_PATH, buf.Bytes(), 0755); utils.PanicOnError(err)
+	newChecksum, _ := getFileChecksum(PIMD_CONF_PATH)
 
-	return err
+	log.Debugf("pimd config file: %s, old checksum:%s, new checksum:%s", PIMD_CONF_PATH, oldChecksum, newChecksum)
+
+	return strings.EqualFold(oldChecksum, newChecksum)
 }
 
 func (pimd *pimdAddNic) AddNic(nic string)  error {
@@ -230,8 +236,10 @@ func enablePimdHandler(ctx *server.CommandContext) interface{} {
 	}
 
 	/* generate pimd.conf */
-	updatePimdConf(cmd)
-	restartPimd()
+	if !updatePimdConf(cmd) {
+		/* restart pimd only config changed */
+		restartPimd()
+	}
 
 	pimdEnable = true
 

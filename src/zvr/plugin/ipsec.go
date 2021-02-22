@@ -1,13 +1,15 @@
 package plugin
 
 import (
-	"zvr/server"
-	"zvr/utils"
 	"fmt"
-	"strings"
-	"time"
 	log "github.com/Sirupsen/logrus"
 	"io/ioutil"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+	"zvr/server"
+	"zvr/utils"
 )
 
 const(
@@ -23,7 +25,8 @@ const(
 	/* because strongswan 4.5.2 rekey will fail with aliyun ipsec vpn,
 	  a work around method is to restart the vpn before the rekey happened */
 	IPSecIkeRekeyInterval = 86400 /*  24 * 3600 seconds */
-	IPSecRestartInterval = IPSecIkeRekeyInterval - 600 /* restart the vpn 10 mins before rekey */
+	IPSecIkeRekeyIntervalMargin = 600 /* restart the vpn 10 mins before rekey */
+	IPSecRestartInterval = IPSecIkeRekeyInterval - IPSecIkeRekeyIntervalMargin
 )
 
 var AutoRestartVpn = false
@@ -165,7 +168,7 @@ func isVpnAllPeersUp()  bool {
 	*/
 func restartVpnAfterConfig() {
 	if isVpnAllPeersUp() {
-		go restartIPSecVpnTimer()
+		restartIPSecVpnTimer()
 		return
 	}
 
@@ -186,7 +189,7 @@ func restartVpnAfterConfig() {
 		return fmt.Errorf("there is some ipsec peer is not up")
 	}, 3, 20)
 
-	go restartIPSecVpnTimer()
+	restartIPSecVpnTimer()
 	if err != nil {
 		log.Warn(fmt.Sprintf("setup ip sec tunnel failed: %s", err))
 	}
@@ -290,11 +293,21 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 	tree.Setf("vpn ipsec site-to-site peer %s local-address %s", info.PeerAddress, info.Vip)
 
 	tunnelNo := 1
+	sort.Strings(info.LocalCidrs)
+	sort.Strings(info.PeerCidrs)
 	for _, localCidr := range info.LocalCidrs {
 		for _, remoteCidr := range info.PeerCidrs {
 			tree.Setf("vpn ipsec site-to-site peer %v tunnel %v local prefix %v", info.PeerAddress, tunnelNo, localCidr)
 			tree.Setf("vpn ipsec site-to-site peer %v tunnel %v remote prefix %v", info.PeerAddress, tunnelNo, remoteCidr)
 			tunnelNo++
+		}
+	}
+	tunnels := tree.Getf("vpn ipsec site-to-site peer %v tunnel", info.PeerAddress)
+	/* if local cidr or remote cidr decrease, delete old config */
+	for _, t := range tunnels.Children(){
+		num, _ := strconv.Atoi(t.Name())
+		if num >= tunnelNo {
+			tree.Deletef("vpn ipsec site-to-site peer %v tunnel %s", info.PeerAddress, t.Name())
 		}
 	}
 
@@ -438,12 +451,10 @@ func syncIPsecConnection(ctx *server.CommandContext) interface{} {
 
 	vyos := server.NewParserFromShowConfiguration()
 	tree := vyos.Tree
-
 	ipsecMap = make(map[string]ipsecInfo, IPSecInfoMaxSize)
 
 	for _, info := range cmd.Infos {
 		ipsecMap[info.Uuid] = info
-		deleteIPsec(tree, info)
 		createIPsec(tree, info)
 	}
 
@@ -614,6 +625,35 @@ func writeIpsecHaScript(enable bool)  {
 
 }
 
+func getIkeUptime(peer string) int {
+	/*
+	* $ /opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl --show-ike-sa-peer=10.86.5.142
+	Peer ID / IP                            Local ID / IP
+	------------                            -------------
+	10.86.5.142                             10.86.5.144
+
+	    State  Encrypt  Hash    D-H Grp  NAT-T  A-Time  L-Time
+	    -----  -------  ----    -------  -----  ------  ------
+	    up     3des     sha1    2        no     5400    86400
+	*/
+	bash := utils.Bash {
+		Command: fmt.Sprintf("/opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl --show-ike-sa-peer=%s | grep -A 2 A-Time | grep up", peer),
+	}
+	ret, o, _, err := bash.RunWithReturn()
+	if ret != 0 || err != nil{
+		return 0
+	}
+
+	var atime, ltime int
+	var state, encrypt, hash, dhGrp, nat string
+	o = strings.TrimSpace(o)
+	len, err := fmt.Sscanf(o, "%s %s %s %s %s %d %d", &state, &encrypt, &hash, &dhGrp, &nat, &atime, &ltime)
+	if err != nil || len < 7 {
+		return 0
+	}
+	return ltime - atime
+}
+
 func restartIPSecVpnTimer()  {
 	if AutoRestartThreadCreated {
 		return
@@ -621,7 +661,22 @@ func restartIPSecVpnTimer()  {
 
 	AutoRestartThreadCreated = true
 
-	restartTicker := time.NewTicker(time.Second * IPSecRestartInterval)
+	peers := getIPsecPeers()
+	ikeUpTime := 0
+	for _, peer := range peers {
+		t := getIkeUptime(peer)
+		if t > ikeUpTime {
+			ikeUpTime = t
+		}
+	}
+
+	log.Debugf("ike uptime %d", ikeUpTime)
+	interval := ikeUpTime - IPSecIkeRekeyIntervalMargin
+	if interval <= 0 {
+		interval = 1
+	}
+
+	restartTicker := time.NewTicker(time.Duration(interval) * time.Second)
 	go func() {
 		for {
 			select {
@@ -639,6 +694,8 @@ func restartIPSecVpnTimer()  {
 					_, _, _, err := bash.RunWithReturn()
 					return err
 				}, 3, 60)
+
+				restartTicker = time.NewTicker(time.Second * IPSecRestartInterval)
 			}
 		}
 	} ()

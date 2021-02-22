@@ -50,7 +50,6 @@ func SudoMoveFile(oldpath, newpath string) error {
 	return exec.Command("sudo", "/bin/mv", "-f", oldpath, newpath).Run()
 }
 
-
 func CopyFile(srcFile,destFile string)(int64,error){
     srcfile,err := os.Open(srcFile)
     if err != nil{
@@ -63,4 +62,8 @@ func CopyFile(srcFile,destFile string)(int64,error){
     defer srcfile.Close()
     defer dstfile.Close()
     return io.Copy(dstfile,srcfile)
+}
+
+func Truncate(name string, size int64) error {
+	return os.Truncate(name, size)
 }

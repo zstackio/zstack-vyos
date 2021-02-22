@@ -1,11 +1,12 @@
 package plugin
 
 import (
+	"fmt"
+	log "github.com/Sirupsen/logrus"
+	"github.com/pkg/errors"
+	"strconv"
 	"zvr/server"
 	"zvr/utils"
-	"fmt"
-	"strings"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -35,22 +36,57 @@ func syncRoutes(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
-func setRoutes(infos []routeInfo) {
-	tree := server.NewParserFromShowConfiguration().Tree
-	if rs := tree.Get("protocols static route"); rs != nil {
-		for _, r := range rs.Children() {
-			if strings.Contains(r.Name(),"0.0.0.0/0") {
-				continue
+func getCurrentStaticRoutes(tree *server.VyosConfigTree) (routes []routeInfo) {
+	var infos []routeInfo
+	rnode := tree.Get("protocols static route")
+	for _, r := range rnode.Children() {
+		nhop := r.Get("next-hop")
+		if nhop != nil {
+			for _, n := range nhop.Children() {
+				dis := n.GetChildrenValue("distance")
+				distance, _ := strconv.Atoi(dis)
+				var info = routeInfo{Destination:r.Name(), Target: n.Name(), Distance: distance}
+				infos = append(infos, info)
 			}
-			r.Delete()
+		}
+
+		bh := r.Get("blackhole")
+		if bh != nil {
+			dis := bh.GetChildrenValue("distance")
+			distance, _ := strconv.Atoi(dis)
+			var info = routeInfo{Destination:r.Name(), Target: "", Distance: distance}
+			infos = append(infos, info)
 		}
 	}
+	return infos
+}
 
+func setRoutes(infos []routeInfo) {
+	tree := server.NewParserFromShowConfiguration().Tree
+	oldStaticRoutes := getCurrentStaticRoutes(tree)
+	log.Debugf("old static routes: %+v", oldStaticRoutes)
 	for _, route := range infos {
 		if route.Target == "" {
 			tree.Setf("protocols static route %s blackhole distance %d", route.Destination, route.Distance)
 		} else {
 			tree.Setf("protocols static route %s next-hop %s distance %d", route.Destination, route.Target, route.Distance)
+		}
+	}
+
+	for _, o := range oldStaticRoutes {
+		if o.Destination == "0.0.0.0/0" {
+			continue
+		}
+		delete := true
+		for _, r := range infos {
+			if r.Destination == o.Destination && r.Target == o.Target {
+				delete = false
+				break
+			}
+		}
+		if delete {
+			log.Debugf("delete old route: %+v", o)
+			tree.Deletef("protocols static route %s", o.Destination)
 		}
 	}
 
