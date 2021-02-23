@@ -607,6 +607,12 @@ type vipInfo struct {
 	VipUuid string `json:"vipUuid"`
 }
 
+type nicIpInfo struct {
+	Ip string `json:"ip"`
+	Netmask string `json:"netmask"`
+	OwnerEthernetMac string `json:"ownerEthernetMac"`
+}
+
 type vipQosSettings struct {
 	Vip                          string `json:"vip"`
 	PublicNic                    string `json:"publicNic"`
@@ -619,8 +625,9 @@ type vipQosSettings struct {
 }
 
 type setVipCmd struct {
-	Rebuild bool `json:"rebuild"`
+	SyncVip bool `json:"syncVip"`
 	Vips []vipInfo `json:"vips"`
+	NicIps []nicIpInfo  `json:"nicIps"`
 }
 
 type removeVipCmd struct {
@@ -645,48 +652,43 @@ func (a vipQosSettingsArray) Len() int           { return len(a) }
 func (a vipQosSettingsArray) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a vipQosSettingsArray) Less(i, j int) bool { return a[i].Port > a[j].Port }
 
-func getVyosNicVips(tree *server.VyosConfigTree, nicName string) map[string]string {
-	ipMap := map[string]string{}
+func getVyosNicVips(tree *server.VyosConfigTree, nicName string) []string {
+	var ips []string
 	ipNode := tree.Getf("interfaces ethernet %s address", nicName)
-
-	i := 0
-	for _, ip := range ipNode.ChildNodeKeys() {
-		/* first ip is nic Ip, skip it */
-		if i == 0 {
-			i++
-			continue
-		}
-		ipMap[ip] = ip
+	if ipNode == nil {
+		return ips
 	}
-	return ipMap
+	
+	for _, key := range ipNode.ChildNodeKeys() {
+		ip := strings.Split(key, "/")[0]
+		if utils.IsIpv4Address(ip) {
+			ips = append(ips, key)
+		}
+	}
+	return ips
 }
 
-func getLinuxNicVips(nicName string) map[string]string {
-	ipMap := map[string]string{}
+func getLinuxNicVips(nicName string) []string {
+	var linuxIps []string
 
 	bash := utils.Bash{
-		Command: fmt.Sprintf("ip -4 add show dev %s | grep -w inet | awk '{print $2}' | awk -F '/' '{print $1}'", nicName),
+		Command: fmt.Sprintf("ip -4 add show dev %s | grep -w inet | awk '{print $2}'", nicName),
 	}
 	ret, o, _, err := bash.RunWithReturn()
 	if ret != 0 || err != nil {
-		return ipMap
+		return linuxIps
 	}
 
 	o = strings.TrimSpace(o)
 	ips := strings.Split(o, "\n")
-	i := 0
-	for _, ip := range ips {
-		/* first ip is nic Ip, skip it */
-		if i == 0 {
-			i++
-			continue
-		}
-		if ip != "" {
-			ipMap[ip] = ip
+	for _, key := range ips {
+		ip := strings.Split(key, "/")[0]
+		if ip != "" && utils.IsIpv4Address(ip) {
+			linuxIps = append(linuxIps, key)
 		}
 
 	}
-	return ipMap
+	return linuxIps
 }
 
 func setVip(ctx *server.CommandContext) interface{} {
@@ -695,44 +697,65 @@ func setVip(ctx *server.CommandContext) interface{} {
 
 	tree := server.NewParserFromShowConfiguration().Tree
 
-	/* to fix jira http://jira.zstack.io/browse/ZSTAC-24945, it's possible that the vips has been configured before,
-	 * we need to delete it first */
-	if cmd.Rebuild {
-		/* Rebuild is true only sync vip to vpc router, not add vip to vpc router */
+	/* when mn syncvip, we will check whether nic ip is first ip in vyos nic configure and in linux nic configure
+	 * if not, delete all nic vyos config and linux config, and reconfigure all ips */
+	if cmd.SyncVip {
 		var cmds []string
-		vyosNicVipMap := map[string]map[string]string{}
-		LinuxNicVipMap := map[string]map[string]string{}
-		for _, vip := range cmd.Vips {
-			nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
-			if _, ok := vyosNicVipMap[nicname]; !ok {
-				vyosNicVipMap[nicname] = getVyosNicVips(tree, nicname)
+		for _, nicIp := range cmd.NicIps {
+			nicname, err := utils.GetNicNameByMac(nicIp.OwnerEthernetMac);utils.PanicOnError(err)
+			vyosNicIps := getVyosNicVips(tree, nicname)
+
+			/*
+			if len(vyosNicIps) > 0 {
+				for _, oldVyosIp := range vyosNicIps {
+					exist := false
+					items := strings.Split(oldVyosIp, "/")
+					for _, vip := range cmd.Vips {
+						if items[0] == vip.Ip {
+							exist = true
+							break
+						}
+					}
+
+					if items[0] == nicIp.Ip {
+						exist = true
+					}
+
+					if !exist {
+						tree.Deletef("interfaces ethernet %s address %v", nicname, oldVyosIp)
+					}
+				}
+			} else {
+				log.Errorf("get vyos interfaces ip for nic %s failed", nicname)
+			}*/
+
+			linuxNicIps := getLinuxNicVips(nicname)
+			cidr, err := utils.NetmaskToCIDR(nicIp.Netmask);utils.PanicOnError(err)
+			addr := fmt.Sprintf("%v/%v", nicIp.Ip, cidr)
+			if len(linuxNicIps) == 0 || linuxNicIps[0] != addr {
+				/* nicIp is not the first ip, reconfigured linux nic */
+				if len(linuxNicIps) > 0 {
+					for _, linuxIp := range linuxNicIps {
+						cmd := fmt.Sprintf("sudo ip address del %s dev %s", linuxIp, nicname)
+						cmds = append(cmds, cmd)
+					}
+					cmd := fmt.Sprintf("sudo ip address add %s dev %s", addr, nicname)
+					cmds = append(cmds, cmd)
+				}
+
+				/* reconfigured vyos */
+				if len(vyosNicIps) > 0 {
+					for _, oldVyosIp := range vyosNicIps {
+						tree.Deletef("interfaces ethernet %s address %v", nicname, oldVyosIp)
+					}
+				}
+				if n := tree.Getf("interfaces ethernet %s address %v", nicname, addr); n == nil {
+					tree.SetfWithoutCheckExisting("interfaces ethernet %s address %v", nicname, addr)
+				}
 			}
-			delete(vyosNicVipMap[nicname], vip.Ip)
-			if _, ok := LinuxNicVipMap[nicname]; !ok {
-				LinuxNicVipMap[nicname] = getLinuxNicVips(nicname)
-			}
-			delete(LinuxNicVipMap[nicname], vip.Ip)
-			cidr, err := utils.NetmaskToCIDR(vip.Netmask)
-			utils.PanicOnError(err)
-			addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
-			tree.Deletef("interfaces ethernet %s address %v", nicname, addr)
-			cmd := fmt.Sprintf("sudo ip address del %s dev %s", addr, nicname)
-			cmds = append(cmds, cmd)
 		}
 
-		for nicname, vips := range vyosNicVipMap {
-			for ip, _ := range vips {
-				tree.Deletef("interfaces ethernet %s address %v", nicname, ip)
-			}
-		}
 		tree.Apply(false)
-
-		for nicname, vips := range LinuxNicVipMap {
-			for ip, _ := range vips {
-				cmd := fmt.Sprintf("sudo ip address del %s dev %s", ip, nicname)
-				cmds = append(cmds, cmd)
-			}
-		}
 
 		if len(cmds) > 0 {
 			bash := utils.Bash{
@@ -740,15 +763,15 @@ func setVip(ctx *server.CommandContext) interface{} {
 			}
 			bash.Run()
 		}
+
+		tree = server.NewParserFromShowConfiguration().Tree
 	}
 
 	var cmds []string
 	if !utils.IsHaEnabled() {
 		for _, vip := range cmd.Vips {
-			nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac);
-			utils.PanicOnError(err)
-			cidr, err := utils.NetmaskToCIDR(vip.Netmask)
-			utils.PanicOnError(err)
+			nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac);utils.PanicOnError(err)
+			cidr, err := utils.NetmaskToCIDR(vip.Netmask); utils.PanicOnError(err)
 			addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
 			if n := tree.Getf("interfaces ethernet %s address %v", nicname, addr); n == nil {
 				tree.SetfWithoutCheckExisting("interfaces ethernet %s address %v", nicname, addr)
@@ -756,10 +779,8 @@ func setVip(ctx *server.CommandContext) interface{} {
 		}
 	} else {
 		for _, vip := range cmd.Vips {
-			nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac);
-			utils.PanicOnError(err)
-			cidr, err := utils.NetmaskToCIDR(vip.Netmask);
-			utils.PanicOnError(err)
+			nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac);utils.PanicOnError(err)
+			cidr, err := utils.NetmaskToCIDR(vip.Netmask);utils.PanicOnError(err)
 			addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
 
 			/* vip on mgt nic will not configure in vyos config */
