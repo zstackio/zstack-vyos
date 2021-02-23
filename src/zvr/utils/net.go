@@ -432,3 +432,12 @@ func AddIp6DefaultRoute(gw6, dev string)  {
 	}
 	_, _, _, err = bash.RunWithReturn(); PanicOnError(err)
 }
+
+func IsIpv4Address(address string) bool {
+	ip := net.ParseIP(address)
+	if ip == nil {
+		return false
+	}
+
+	return strings.Contains(address, ".")
+}
