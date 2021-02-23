@@ -433,7 +433,6 @@ func AddIp6DefaultRoute(gw6, dev string)  {
 	_, _, _, err = bash.RunWithReturn(); PanicOnError(err)
 }
 
-
 func DelIp4DefaultRoute() error {
 	bash := Bash{
 		Command: fmt.Sprintf("ip -4 r | grep default | awk '{print $3}'"),
@@ -470,4 +469,13 @@ func AddIp4DefaultRoute(gw4, dev string)  {
 		Command: strings.Join(cmds, ";"),
 	}
 	_, _, _, err = bash.RunWithReturn(); PanicOnError(err)
+}
+
+func IsIpv4Address(address string) bool {
+	ip := net.ParseIP(address)
+	if ip == nil {
+		return false
+	}
+
+	return strings.Contains(address, ".")
 }
