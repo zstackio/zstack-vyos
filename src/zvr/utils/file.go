@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path"
@@ -62,6 +63,10 @@ func CopyFile(srcFile,destFile string)(int64,error){
     defer srcfile.Close()
     defer dstfile.Close()
     return io.Copy(dstfile,srcfile)
+}
+
+func SetFileOwner(fpath, owner, group string) error {
+	return exec.Command("sudo", "/bin/chown", fmt.Sprintf("%s:%s", owner, group), fpath).Run()
 }
 
 func Truncate(name string, size int64) error {

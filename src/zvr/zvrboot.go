@@ -355,7 +355,6 @@ func configureVyos() {
 		tree.SetNicSmpAffinity(nic.name, "auto")
 		tree.Setf("interfaces ethernet %s speed auto", nic.name)
 		if nic.mtu != 0 {
-			tree.Setf("interfaces ethernet %s speed auto", nic.name)
 			tree.SetNicMtu(nic.name, nic.mtu)
 		}
 
