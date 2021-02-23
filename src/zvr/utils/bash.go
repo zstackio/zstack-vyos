@@ -83,13 +83,12 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 
 	var so, se bytes.Buffer
 	var cmd *exec.Cmd
+	tmpfile, err := ioutil.TempFile("/home/vyos", "zvrcommand"); PanicOnError(err)
+	defer os.Remove(tmpfile.Name())
 
 	if len(b.Command) > 1024* 4 {
 		func() {
 			content := []byte(b.Command)
-			tmpfile, err := ioutil.TempFile("/home/vyos", "zvrcommand"); PanicOnError(err)
-			defer os.Remove(tmpfile.Name())
-
 			err = tmpfile.Chmod(0660); PanicOnError(err)
 			_, err = tmpfile.Write(content); PanicOnError(err)
 			err = tmpfile.Close(); PanicOnError(err)
