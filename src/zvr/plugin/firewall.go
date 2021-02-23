@@ -525,7 +525,6 @@ func deleteOldRules(tree *server.VyosConfigTree) {
 			}
 		}
 	}
-	tree.Apply(false)
 }
 
 func updateRuleSet(ctx *server.CommandContext) interface{} {
