@@ -2,8 +2,10 @@ package utils
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"strconv"
+	"syscall"
 	"time"
 )
 
@@ -16,14 +18,12 @@ func FindFirstPIDByPSExtern(non_sudo bool, cmdline...string) (int, error) {
 
 	cmds := []string {"ps aux"}
 	for _, c := range cmdline {
-		cmds = append(cmds, fmt.Sprintf("grep '%s'", c))
+		cmds = append(cmds, fmt.Sprintf("grep '%s'", "[" + c[0:1] + "]" + c[1:]))
 	}
 	if non_sudo {
 		cmds = append(cmds, "grep -v ' sudo '")
 	}
-	cmds = append(cmds, "grep -v grep")
-	cmds = append(cmds, "head -n1")
-	cmds = append(cmds, "awk '{print $2}'")
+	cmds = append(cmds, "awk '{print $2; exit}'")
 
 	b := Bash{
 		Command: strings.Join(cmds, " | "),
@@ -55,12 +55,8 @@ func KillProcess1(pid int, waitTime uint) error {
 	b.Run()
 
 	check := func() bool {
-		b := Bash{
-			Command: fmt.Sprintf("ps -p %v", pid),
-		}
-
-		ret, _, _, _ := b.RunWithReturn()
-		return ret != 0
+		// return true if process not exists
+		return ProcessExists(pid) != nil
 	}
 
 	if check() {
@@ -69,10 +65,29 @@ func KillProcess1(pid int, waitTime uint) error {
 
 	return LoopRunUntilSuccessOrTimeout(func() bool {
 		b := Bash{
-			Command: fmt.Sprintf("kill -9 %v", pid),
+			Command: fmt.Sprintf("sudo kill -9 %v", pid),
 		}
 		b.Run()
 
 		return check()
 	}, time.Duration(waitTime) * time.Second, time.Duration(500) * time.Millisecond)
+}
+
+
+func ProcessExists(pid int) error {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return err
+	}
+
+	if err = process.Signal(syscall.Signal(0)); err == nil {
+		return nil
+	}
+
+	if err == syscall.EPERM {
+		return nil
+	}
+
+	return err
+
 }
