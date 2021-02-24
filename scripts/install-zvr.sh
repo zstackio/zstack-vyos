@@ -99,4 +99,19 @@ if [ $? -ne 0 ]; then
     yes | cp -f goprlimit $TARGET_GOPRLIMIT
 fi
 
+TARGET_SYSCONF=/etc/sysctl.conf
+sudo cp -f sysctl.conf $TARGET_SYSCONF
+sudo chmod 644 $TARGET_SYSCONF
+sudo chown root:root $TARGET_SYSCONF
+
+TARGET_CONNTRACKD_CONF=/etc/conntrackd/conntrackd.conf
+sudo cp -f conntrackd.conf $TARGET_CONNTRACKD_CONF
+sudo chmod 644 $TARGET_CONNTRACKD_CONF
+sudo chown root:root $TARGET_CONNTRACKD_CONF
+
+dpkg -l dnsmasq
+if [ $? -ne 0 -a x"$ARCH" = x"aarch64" ];then
+    rm -rf /etc/dnsmasq.conf
+    sudo dpkg -i dnsmasq_pkg/*
+fi
 exit 0

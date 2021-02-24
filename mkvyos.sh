@@ -94,6 +94,7 @@ SSHD=$tmpdir/sshd.sh
 ZVRMONITOR=$tmpdir/zvr-monitor.sh
 CPUMONITOR=$tmpdir/cpu-monitor
 SYSCTL=$tmpdir/sysctl.conf
+CONNTRACKD=$tmpdir/conntrackd.conf
 ZSN=$tmpdir/zsn-crontab.sh
 SBIN_DIR=/opt/vyatta/sbin
 VERSION=`date +%Y%m%d`
@@ -122,6 +123,7 @@ upload $SSHD $ROOTPATH/home/vyos/zvr/ssh/sshd.sh
 upload $ZVRMONITOR $ROOTPATH/home/vyos/zvr/ssh/zvr-monitor.sh
 upload $CPUMONITOR $ROOTPATH/etc/logrotate.d/cpu-monitor
 upload $SYSCTL $ROOTPATH/etc/sysctl.conf
+upload $CONNTRACKD $ROOTPATH/etc/conntrackd/conntrackd.conf
 upload $ZSN $ROOTPATH/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 mkdir-p $ROOTPATH/opt/vyatta/etc/config/scripts/
 upload -<<END $VyosPostScript
@@ -139,6 +141,7 @@ chmod +x /usr/share/healthcheck.sh
 chmod +x /home/vyos/zvr/ssh/sshd.sh
 chmod +x /home/vyos/zvr/ssh/zvr-monitor.sh
 chmod 644 /etc/sysctl.conf
+chmod 644 /etc/conntrackd/conntrackd.conf
 chmod +x /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 
 mkdir -p /home/vyos/zvr/keepalived/script/
@@ -152,6 +155,7 @@ chown vyos:users /usr/share/healthcheck.sh
 chown vyos:users /home/vyos/zvr/ssh/sshd.sh
 chown vyos:users /home/vyos/zvr/ssh/zvr-monitor.sh
 chown root:root /etc/sysctl.conf
+chown root:root /etc/conntrackd/conntrackd.conf
 chown vyos:users /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 $SBIN_DIR/zvrboot >/home/vyos/zvr/zvrboot.log 2>&1 < /dev/null &
 exit 0
