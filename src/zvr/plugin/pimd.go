@@ -58,7 +58,6 @@ type pimdAddNic struct {}
 var pimdEnable bool
 
 func init()  {
-	pimdEnable = false
 	RegisterAddNicCallback(&pimdAddNic{})
 }
 

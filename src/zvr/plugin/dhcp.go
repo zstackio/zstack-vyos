@@ -86,8 +86,20 @@ type DhcpServerStruct struct {
 }
 
 /* all dhcp server, key is vrNicMac */
-var DhcpServerEntries map[string]*DhcpServerStruct
-var DEFAULT_HOSTS []string
+var (
+	DhcpServerEntries = make(map[string]*DhcpServerStruct)
+	DEFAULT_HOSTS     = []string {
+		"127.0.0.1 localhost",
+		"::1     ip6-localhost ip6-loopback",
+		"fe00::0 ip6-localnet",
+		"ff00::0 ip6-mcastprefix",
+		"ff02::1 ip6-allnodes",
+		"ff02::2 ip6-allrouters",
+		"ff02::3 ip6-allhosts",
+		"127.0.1.1	  vyos	 #vyatta entry",
+	}
+)
+
 
 func getDhcpServerPath(nicName string) (pid, conf, lease, tempConf string) {
 	pid = fmt.Sprintf("%s/%s/%s.pid", DHCPD_PATH, nicName, nicName)
@@ -613,16 +625,6 @@ missingok
 
 func init() {
 	os.Mkdir(DHCPD_PATH, os.ModePerm)
-	DEFAULT_HOSTS = []string{
-		"127.0.0.1 localhost",
-		"::1     ip6-localhost ip6-loopback",
-		"fe00::0 ip6-localnet",
-		"ff00::0 ip6-mcastprefix",
-		"ff02::1 ip6-allnodes",
-		"ff02::2 ip6-allrouters",
-		"ff02::3 ip6-allhosts",
-		"127.0.1.1	  vyos	 #vyatta entry"}
-	DhcpServerEntries = make(map[string]*DhcpServerStruct)
 	enableDhcpLog()
 }
 

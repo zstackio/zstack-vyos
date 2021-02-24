@@ -1151,7 +1151,6 @@ func init() {
 	os.Mkdir(LB_PID_DIR, os.ModePerm)
 	os.Chmod(LB_PID_DIR, os.ModePerm)
 	os.Mkdir(LB_SOCKET_DIR, os.ModePerm | os.ModeSocket)
-	LbListeners = make(map[string]interface{}, LISTENER_MAP_SIZE)
 	enableLbLog()
 	RegisterPrometheusCollector(NewLbPrometheusCollector())
 
@@ -1384,7 +1383,7 @@ type GoBetweenServerStat struct {
 }
 
 /* map to store: <listenerUuid, GBListerner> pair or  or <listenerUuid, HaProxyListener> */
-var LbListeners map[string]interface{}
+var LbListeners     = make(map[string]interface{}, LISTENER_MAP_SIZE)
 var goBetweenClient = &http.Client{
 	Timeout: time.Second * 5,
 }

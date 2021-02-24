@@ -31,8 +31,10 @@ type setVpcDnsCmd struct {
 	NicMac []string `json:"nicMac"`
 }
 
-var dnsServers map[string]string
-var nicNames map[string]string
+var (
+	dnsServers = map[string]string{}
+	nicNames   = map[string]string{}
+)
 
 func makeDnsFirewallRuleDescription(nicname string) string {
 	return fmt.Sprintf("DNS-for-%s", nicname)
@@ -186,11 +188,6 @@ func addDnsNic(nicName string)  {
 	} else {
 		log.Debugf("dns nic [%s] already added", nicName)
 	}
-}
-
-func init()  {
-	dnsServers = map[string]string{}
-	nicNames = map[string]string{}
 }
 
 func DnsEntryPoint() {

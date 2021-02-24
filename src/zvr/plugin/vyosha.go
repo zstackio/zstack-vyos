@@ -324,9 +324,8 @@ func InitHaNicState()  {
 	b.PanicIfError()
 }
 
-var haVipPairs  vyosNicVipPairs
-func init() {
-	haVipPairs.pairs = []nicVipPair{}
+var haVipPairs = vyosNicVipPairs {
+	pairs: []nicVipPair{},
 }
 
 func VyosHaEntryPoint() {
