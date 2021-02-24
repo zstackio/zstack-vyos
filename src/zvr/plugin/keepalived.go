@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	log "github.com/Sirupsen/logrus"
 	"os/exec"
+	"time"
 )
 
 type KeepAlivedStatus int
@@ -366,7 +367,7 @@ func (k *KeepalivedConf) BuildConf() error {
 	return ioutil.WriteFile(ConntrackdConfigFile, buf.Bytes(), 0644)
 }
 
-func (k *KeepalivedConf) RestartKeepalived() (error) {
+func doRestartKeepalived(reloadExisting bool) error {
 	/* # ./keepalived -h
 	    Usage: ./keepalived [OPTION...]
             -f, --use-file=FILE          Use the specified configuration file
@@ -378,15 +379,26 @@ func (k *KeepalivedConf) RestartKeepalived() (error) {
 		bash := utils.Bash{
 			Command: fmt.Sprintf("sudo pkill -9 keepalived; sudo %s -D -S 2 -f %s -p %s", KeepalivedBinaryFile, KeepalivedConfigFile, KeepalivedPidFile),
 		}
-		bash.RunWithReturn(); bash.PanicIfError()
-	} else {
+		return bash.Run()
+	}
+
+	if reloadExisting {
 		bash := utils.Bash{
 			Command: fmt.Sprintf("sudo kill -HUP %d", pid),
 		}
-		bash.RunWithReturn(); bash.PanicIfError()
+		return bash.Run()
 	}
 
-	return nil
+	bash := utils.Bash{
+		Command: fmt.Sprintf("kill -TERM %d; %s -D -S 2 -f %s -p %s", pid, KeepalivedBinaryFile, KeepalivedConfigFile, KeepalivedPidFile),
+		Sudo: true,
+	}
+	return bash.Run()
+}
+
+func (k *KeepalivedConf) RestartKeepalived() {
+	err := doRestartKeepalived(true)
+	utils.PanicOnError(err)
 }
 
 func enableKeepalivedLog() {
@@ -530,13 +542,24 @@ func garpHandler(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
+const _zvr_shm = "/dev/shm/zvr.log"
+
 func KeepalivedEntryPoint() {
+	utils.RegisterDiskFullHandler(func (e error) {
+		if IsMaster() {
+			s := time.Now().Format(time.RFC3339) + " " + e.Error() + "\n"
+			ioutil.WriteFile(_zvr_shm, []byte(s), 0640)
+			doRestartKeepalived(false)
+		}
+	})
+
 	server.RegisterSyncCommandHandler(KEEPALIVED_GARP_PATH, garpHandler)
 }
 
 var keepAlivedStatus KeepAlivedStatus
 
 func init() {
+	os.Remove(_zvr_shm)
 	os.Mkdir(KeepalivedRootPath, os.ModePerm)
 	os.Mkdir(KeepalivedConfigPath, os.ModePerm)
 	os.Mkdir(KeepalivedSciptPath, os.ModePerm)
