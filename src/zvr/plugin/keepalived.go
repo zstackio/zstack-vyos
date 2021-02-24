@@ -21,7 +21,7 @@ const (
 	KeepAlivedStatus_Backup
 )
 
-const PID_ERROR  = "-1"
+const PID_ERROR  = -1
 
 const (
 	KEEPALIVED_GARP_PATH = "/keepalived/garp"
@@ -381,7 +381,7 @@ func (k *KeepalivedConf) RestartKeepalived() (error) {
 		bash.RunWithReturn(); bash.PanicIfError()
 	} else {
 		bash := utils.Bash{
-			Command: fmt.Sprintf("sudo kill -HUP %s", pid),
+			Command: fmt.Sprintf("sudo kill -HUP %d", pid),
 		}
 		bash.RunWithReturn(); bash.PanicIfError()
 	}
@@ -449,23 +449,20 @@ func callStatusChangeScripts()  {
 	bash.RunWithReturn()
 }
 
-func getKeepalivedPid() (string) {
-	stdout, err := exec.Command("pidof", "-x", KeepalivedBinaryFile).Output()
-	if err != nil {
-		log.Debugf("get keepalived pid failed %v", err)
-		return PID_ERROR
+var keepalivedPID int
+
+func getKeepalivedPid() int {
+	if keepalivedPID > 0 && utils.ProcessExists(keepalivedPID) == nil {
+		return keepalivedPID
 	}
 
-	/* when keepalived is running, the output will be: 3657, 3656, 3655
-	   when keepalived not runing, the output will be empty */
-	out := strings.TrimSpace(string(stdout))
-	if out == "" {
-		log.Debugf("keepalived is not running")
+	if pid, err := utils.FindFirstPID(KeepalivedBinaryFile); err != nil {
+		log.Debugf("%s", err)
 		return PID_ERROR
+	} else {
+		keepalivedPID = pid
+		return pid
 	}
-
-	pids := strings.Fields(out)
-	return pids[len(pids)-1]
 }
 
 
@@ -494,7 +491,7 @@ func getKeepAlivedStatus() KeepAlivedStatus {
 
 	bash := utils.Bash{
 		// There is race between generating keepalived.data and reading its content.
-		Command: fmt.Sprintf("timeout 1 sudo kill -USR1 %s; sleep 0.1; awk -F '=' '/State/{print $2}' /tmp/keepalived.data",
+		Command: fmt.Sprintf("timeout 1 sudo kill -USR1 %d; sleep 0.1; awk -F '=' '/State/{print $2}' /tmp/keepalived.data",
 			pid),
 		NoLog: true,
 	}
@@ -515,7 +512,6 @@ func getKeepAlivedStatus() KeepAlivedStatus {
 	default:
 		return KeepAlivedStatus_Unknown
 	}
-
 }
 
 var garp_counter uint32

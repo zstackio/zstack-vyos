@@ -3,6 +3,8 @@ package utils
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"sort"
 	"strings"
 	"strconv"
 	"syscall"
@@ -43,6 +45,32 @@ func FindFirstPIDByPSExtern(non_sudo bool, cmdline...string) (int, error) {
 	return strconv.Atoi(o)
 }
 
+// FindFirstPID always returns the smallest pid.
+func FindFirstPID(program string) (int, error) {
+	stdout, err := exec.Command("pidof", program).Output()
+	if err != nil {
+		return -1, fmt.Errorf("get %s pid failed %v", program, err)
+	}
+
+	out := strings.TrimSpace(string(stdout))
+	if out == "" {
+		return -1, fmt.Errorf("%s is not running", program)
+	}
+
+	// return the smallest pid
+	pids := strings.Fields(out)
+	nums := make([]int, len(pids))
+	for idx, pid := range pids {
+		if n, err := strconv.Atoi(pid); err != nil {
+			return -1, fmt.Errorf("unexpected %s pid: %s", program, out)
+		} else {
+			nums[idx] = n
+		}
+	}
+
+	sort.Ints(nums)
+	return nums[0], nil
+}
 
 func KillProcess(pid int) error {
 	return KillProcess1(pid, 15)
