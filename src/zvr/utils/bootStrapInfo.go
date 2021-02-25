@@ -19,6 +19,9 @@ const  (
 	NOHA = "NoHa"
 	HAMASTER = "Master"
 	HABACKUP = "Backup"
+
+	APPLIANCETYPE_SLB = "SLB"
+	APPLIANCETYPE_VPC = "vpcvrouter"
 )
 
 var bootstrapInfo map[string]interface{} = make(map[string]interface{})
@@ -38,6 +41,11 @@ func GetMgmtInfoFromBootInfo() map[string]interface{} {
 }
 
 func IsSkipVyosIptables() bool {
+	if IsSLB() {
+		/* SLB use iptables replace vyos firewall */
+		return true
+	}
+
 	SkipVyosIptables, ok := bootstrapInfo["SkipVyosIptables"].(bool)
 	if !ok {
 		return false
@@ -158,4 +166,9 @@ func WriteDefaultHaScript(defaultNic *Nic)  {
 	}
 
 	err = ioutil.WriteFile(VYOSHA_DEFAULT_ROUTE_SCRIPT, []byte(conent), 0755); PanicOnError(err)
+}
+
+func IsSLB() bool {
+	applianceType := bootstrapInfo["applianceVmSubType"].(string)
+	return applianceType == APPLIANCETYPE_SLB
 }
