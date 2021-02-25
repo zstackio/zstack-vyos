@@ -128,7 +128,7 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 		if IsMaster() || IsBackup() {
 			return nil
 		}
-		return fmt.Errorf("keepalvied master election not finished")
+		return fmt.Errorf("keepalived master election not finished")
 	}, 5, uint(cmd.Keepalive)); utils.PanicOnError(err)
 	return nil
 }

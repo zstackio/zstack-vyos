@@ -75,7 +75,8 @@ func (check *networkHealthCheck)healthCheck() (status HealthStatus) {
 
 func (check *fsHealthCheck)healthCheck() (status HealthStatus) {
 	bash := utils.Bash{
-		Command: "sudo mount|grep -w ro | grep -v loop0 | grep -v tmpfs",
+		Command: "mount | grep -w ro | grep -v ^/dev/loop | grep -vw tmpfs",
+		NoLog: true,
 	}
 	status = HealthStatus{Healthy:true, HealthDetail:""}
 	if ret, output, _, err := bash.RunWithReturn(); err == nil && ret == 0 {
