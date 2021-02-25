@@ -87,5 +87,14 @@ fi
 chown vyos:users $TAGET_TEMP_SCRIPT
 chmod +x $TAGET_TEMP_SCRIPT
 
+TARGET_SYSCONF=/etc/sysctl.conf
+sudo cp -f sysctl.conf $TARGET_SYSCONF
+sudo chmod 644 $TARGET_SYSCONF
+sudo chown root:root $TARGET_SYSCONF
+
+TARGET_CONNTRACKD_CONF=/etc/conntrackd/conntrackd.conf
+sudo cp -f conntrackd.conf $TARGET_CONNTRACKD_CONF
+sudo chmod 644 $TARGET_CONNTRACKD_CONF
+sudo chown root:root $TARGET_CONNTRACKD_CONF
 
 exit 0
