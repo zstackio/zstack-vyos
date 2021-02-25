@@ -89,7 +89,7 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 	if len(b.Command) > 1024* 4 {
 		func() {
 			content := []byte(b.Command)
-			err = tmpfile.Chmod(0660); PanicOnError(err)
+			err = tmpfile.Chmod(0777); PanicOnError(err)
 			_, err = tmpfile.Write(content); PanicOnError(err)
 			err = tmpfile.Close(); PanicOnError(err)
 			cmd = exec.Command("bash", "-c", tmpfile.Name())
