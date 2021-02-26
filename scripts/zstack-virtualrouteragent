@@ -23,19 +23,19 @@ LOG_DIR=`dirname $LOGFILE`; mkdir -p $LOG_DIR
 
 # ETH0_IP=`ip route | grep eth0 | awk '{printf $9}'`
 # for ZSTAC-19196 zhanyong.miao
-ETH0_IP=`ip -4 -o a show dev eth0 primary | awk {'print $4'} | head -1 | cut -f1 -d '/'`
+ETH0_IP=`ip -4 -o a show dev eth0 primary | awk '{print $4; exit}' | cut -f1 -d '/'`
 if [ x$ETH0_IP == "x" ]; then
    err_exit "unable to get the IP of eth0"
 fi
 
 get_pid() {
-    pgrep zvr
+    echo $(pgrep -x zvr)
 }
 
 check_status() {
     pid=$(get_pid)
 
-    if [ x$pid = x"" ]; then
+    if [ x"$pid" = x"" ]; then
         # stopped
         return 1
     else
@@ -58,14 +58,8 @@ server_status() {
 }
 
 do_start() {
-    old_pid=$1
-    if [ x$old_pid != x"" ]; then
-        # kill hanged daemon
-        kill -9 $old_pid
-    fi
-
     chown -R vyos:users $HOMDIR
-    echo "$(date '+%Y-%m-%d %H:%M:%S') start start zstack virtual router " >>$BOOTLOG
+    echo "$(date '+%Y-%m-%d %H:%M:%S') start zstack virtual router " >>$BOOTLOG
     su - vyos -c "nohup $SERVER -ip $ETH0_IP -logfile $LOGFILE >>$BOOTLOG 2>&1 < /dev/null &"
 
     sleep 1
@@ -78,7 +72,7 @@ do_start() {
         if [ "$c"=="1" ]
         then
             echo "failed, retrying the $retry time"
-            echo "$(date '+%Y-%m-%d %H:%M:%S') start start zstack virtual router failed, retrying the $retry time " >>$BOOTLOG
+            echo "$(date '+%Y-%m-%d %H:%M:%S') start zstack virtual router failed, retrying the $retry time " >>$BOOTLOG
             su - vyos -c "nohup $SERVER -ip $ETH0_IP -logfile $LOGFILE >>$BOOTLOG 2>&1 < /dev/null &"
             sleep $(( retry++ ))
         else
@@ -99,14 +93,14 @@ start_server() {
         echo "zstack virtual router agent [PID:$pid] is running already"
         echo "$(date '+%Y-%m-%d %H:%M:%S') zstack virtual router agent [PID:$pid] is running already " >>$BOOTLOG
     elif [ $ret -eq 1 ]; then
-        do_start ""
+        do_start
     fi
 }
 
 do_stop() {
     pid=$(get_pid)
     echo "$(date '+%Y-%m-%d %H:%M:%S') stop virtual router agent  pid: $pid" >>$BOOTLOG
-    if [ x$pid != x"" ]; then
+    if [ x"$pid" != x"" ]; then
         kill -SIGINT $pid
         sleep 1
         kill -SIGTERM $pid 2> /dev/null
@@ -132,10 +126,30 @@ stop_server() {
 
 }
 
+restart_server() {
+    pid=$(get_pid)
+    if [ x"$pid" == x"" ]; then
+        start_server
+        return
+    fi
+
+    # generate tmp guard script
+    TMP=$SERVER.guard.$$
+    trap "rm -f $TMP 2>/dev/null" EXIT
+    echo "sleep 3" > $TMP
+    sudo -u vyos bash $TMP &
+    disown $!
+
+    stop_server
+    start_server
+}
+
 CMD="$1"
 case "$CMD" in
     start) start_server ;;
     stop) stop_server ;;
     status) server_status ;;
-    restart) stop_server; start_server;;
+    restart) restart_server ;;
 esac
+
+# vim: et ai ts=4 sw=4
