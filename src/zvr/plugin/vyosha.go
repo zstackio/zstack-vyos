@@ -4,6 +4,7 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"io/ioutil"
+	"strconv"
 	"strings"
 	"time"
 	"zvr/server"
@@ -56,9 +57,15 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 			tree.SetFirewallOnInterface(heartbeatNicNme, "local",
 				"action accept",
 				fmt.Sprintf("description %v", des),
-				fmt.Sprintf("source address %v", cmd.PeerIp),
+				fmt.Sprintf("source address %s", cmd.PeerIp),
 				fmt.Sprintf("protocol vrrp"),
 			)
+		} else {
+			rulenum, _ := strconv.Atoi(fr.Name())
+			sourceNode := fr.Getf("source address")
+			if sourceNode == nil || sourceNode.Name() != cmd.PeerIp{
+				tree.SetFirewallWithRuleNumber(heartbeatNicNme, "local", rulenum, fmt.Sprintf("source address %s", cmd.PeerIp))
+			}
 		}
 
 		if r := tree.FindSnatRuleDescription(des); r == nil {
