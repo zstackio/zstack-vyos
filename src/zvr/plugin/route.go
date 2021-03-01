@@ -78,15 +78,39 @@ func setRoutes(infos []routeInfo) {
 			continue
 		}
 		delete := true
+		sameNexthop := false
+		samePrefix := false
 		for _, r := range infos {
+			if r.Destination == o.Destination {
+				samePrefix = true
+			}
 			if r.Destination == o.Destination && r.Target == o.Target {
+				sameNexthop = true
+			}
+			if r.Destination == o.Destination && r.Target == o.Target && r.Distance == o.Distance {
 				delete = false
 				break
 			}
 		}
 		if delete {
-			log.Debugf("delete old route: %+v", o)
-			tree.Deletef("protocols static route %s", o.Destination)
+			log.Debugf("delete old route: %+v, sameNexthop: %+v, sameprefix: %+v", o, sameNexthop, samePrefix)
+			if o.Target == "" {
+				if sameNexthop {
+					tree.Deletef("protocols static route %s blackhole distance %d ", o.Destination, o.Distance)
+				} else if samePrefix {
+					tree.Deletef("protocols static route %s blackhole", o.Destination)
+				} else {
+					tree.Deletef("protocols static route %s", o.Destination)
+				}
+			} else {
+				if sameNexthop {
+					tree.Deletef("protocols static route %s next-hop %s distance %d", o.Destination, o.Target, o.Distance)
+				} else if samePrefix{
+					tree.Deletef("protocols static route %s next-hop %s", o.Destination, o.Target)
+				} else {
+					tree.Deletef("protocols static route %s", o.Destination)
+				}
+			}
 		}
 	}
 
