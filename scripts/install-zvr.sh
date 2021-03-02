@@ -93,7 +93,6 @@ fi
 chown vyos:users $TARGET_UAACTD
 chmod +x $TARGET_UAACTD
 
-<<<<<<< HEAD
 TARGET_GOPRLIMIT=/opt/vyatta/sbin/goprlimit
 diff goprlimit $TARGET_GOPRLIMIT
 if [ $? -ne 0 ]; then
