@@ -123,6 +123,7 @@ upload $SSHD $ROOTPATH/home/vyos/zvr/ssh/sshd.sh
 upload $ZVRMONITOR $ROOTPATH/home/vyos/zvr/ssh/zvr-monitor.sh
 upload $CPUMONITOR $ROOTPATH/etc/logrotate.d/cpu-monitor
 upload $SYSCTL $ROOTPATH/etc/sysctl.conf
+mkdir-p $ROOTPATH/etc/conntrackd
 upload $CONNTRACKD $ROOTPATH/etc/conntrackd/conntrackd.conf
 upload $ZSN $ROOTPATH/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 mkdir-p $ROOTPATH/opt/vyatta/etc/config/scripts/
