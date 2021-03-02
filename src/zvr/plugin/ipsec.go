@@ -182,7 +182,7 @@ func restartVpnAfterConfig() {
 		}
 
 		bash := utils.Bash{
-			Command: "sudo ipsec restart",
+			Command: "pidof starter; if [ $? -eq 0 ]; then sudo ipsec reload; else sudo ipsec restart; fi",
 		}
 		bash.Run()
 
@@ -688,7 +688,7 @@ func restartIPSecVpnTimer()  {
 				log.Debugf("restart vpn process because config flag: AutoRestartVpn ")
 				utils.Retry(func() error {
 					bash := utils.Bash{
-						Command: "sudo ipsec restart",
+						Command: "pidof starter; if [ $? -eq 0 ]; then sudo ipsec reload; else sudo ipsec restart; fi",
 						NoLog: false,
 					}
 					_, _, _, err := bash.RunWithReturn()
