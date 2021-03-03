@@ -1,6 +1,12 @@
 IPSEC_PLUTO_PID=/var/run/pluto.pid
 IPSEC_CHARON_PID=/var/run/charon.pid
 
+pidof starter
+if [ $? -eq 0 ]; then
+  sudo ipsec reload
+  exit 0
+fi
+
 sudo ipsec stop
 
 if [ -e $IPSEC_PLUTO_PID ]
