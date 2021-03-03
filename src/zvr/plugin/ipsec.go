@@ -182,7 +182,7 @@ func restartVpnAfterConfig() {
 		}
 
 		bash := utils.Bash{
-			Command: "sudo ipsec restart",
+			Command: "pidof starter; if [ $? -eq 0 ]; then sudo ipsec reload; else sudo ipsec restart; fi",
 		}
 		bash.Run()
 
@@ -615,14 +615,14 @@ func writeIpsecHaScript(enable bool)  {
 		return
 	}
 
-	var conent string
 	if enable {
-		conent = "sudo ipsec restart"
+		srcFile := "/home/vyos/zvr/keepalived/temp/ipsec.sh"
+		_,er := utils.CopyFile(srcFile,VYOSHA_IPSEC_SCRIPT);utils.PanicOnError(er)
 	} else {
-		conent = "echo 'no ipsec configured'"
+		conent := "echo 'no ipsec configured'"
+		err := ioutil.WriteFile(VYOSHA_IPSEC_SCRIPT, []byte(conent), 0755); utils.PanicOnError(err)
 	}
 
-	err := ioutil.WriteFile(VYOSHA_IPSEC_SCRIPT, []byte(conent), 0755); utils.PanicOnError(err)
 }
 
 func getIkeUptime(peer string) int {
@@ -688,7 +688,7 @@ func restartIPSecVpnTimer()  {
 				log.Debugf("restart vpn process because config flag: AutoRestartVpn ")
 				utils.Retry(func() error {
 					bash := utils.Bash{
-						Command: "sudo ipsec restart",
+						Command: "pidof starter; if [ $? -eq 0 ]; then sudo ipsec reload; else sudo ipsec restart; fi",
 						NoLog: false,
 					}
 					_, _, _, err := bash.RunWithReturn()

@@ -114,4 +114,13 @@ if [ $? -ne 0 -a x"$ARCH" = x"aarch64" ];then
     rm -rf /etc/dnsmasq.conf
     sudo dpkg -i dnsmasq_pkg/*
 fi
+
+TAGET_TEMP_SCRIPT=/home/vyos/zvr/keepalived/temp/ipsec.sh
+if [[ ! -f $TAGET_TEMP_SCRIPT || $(diff ipsec.sh $TAGET_TEMP_SCRIPT) ]]; then
+    yes | mkdir -p `dirname $TAGET_TEMP_SCRIPT`
+    yes | cp -f ipsec.sh $TAGET_TEMP_SCRIPT
+fi
+chown vyos:users $TAGET_TEMP_SCRIPT
+chmod +x $TAGET_TEMP_SCRIPT
+
 exit 0
