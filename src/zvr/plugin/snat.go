@@ -264,6 +264,9 @@ func setSnatStateHandler(ctx *server.CommandContext) interface{} {
 	if cmd.Enable {
 		return setNetworkServiceRsp{ServiceStatus:"enable"}
 	} else {
+		t := utils.ConnectionTrackTuple{IsNat:true, IsDst: false, Ip: cmd.Snats[0].PublicIp, Protocol: "",
+			PortStart: 0, PortEnd: 0}
+		t.CleanConnTrackConnection()
 		return setNetworkServiceRsp{ServiceStatus:"disable"}
 	}
 }
