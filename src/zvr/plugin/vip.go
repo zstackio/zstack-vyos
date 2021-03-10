@@ -809,25 +809,27 @@ func setVip(ctx *server.CommandContext) interface{} {
 		bash.Run()
 	}
 
-	/* ad default qos for vip traffic counter */
-	for _, vip := range cmd.Vips {
-		publicInterface, err := utils.GetNicNameByMac(vip.OwnerEthernetMac); utils.PanicOnError(err)
-		ingressrule := qosRule{ip: vip.Ip, port: 0, bandwidth: MAX_BINDWIDTH, vipUuid: vip.VipUuid}
-		if biRule, ok := totalQosRules[publicInterface]; ok {
-			if biRule[INGRESS].InterfaceQosRuleFind(ingressrule) == nil {
+	/* add default qos for vip traffic counter */
+	if utils.IsConfigTcForVipQos() {
+		for _, vip := range cmd.Vips {
+			publicInterface, err := utils.GetNicNameByMac(vip.OwnerEthernetMac); utils.PanicOnError(err)
+			ingressrule := qosRule{ip: vip.Ip, port: 0, bandwidth: MAX_BINDWIDTH, vipUuid: vip.VipUuid}
+			if biRule, ok := totalQosRules[publicInterface]; ok {
+				if biRule[INGRESS].InterfaceQosRuleFind(ingressrule) == nil {
+					addQosRule(publicInterface, INGRESS, ingressrule)
+				}
+			} else {
 				addQosRule(publicInterface, INGRESS, ingressrule)
 			}
-		} else {
-			addQosRule(publicInterface, INGRESS, ingressrule)
-		}
-
-		egressrule := qosRule{ip: vip.Ip, port: 0, bandwidth: MAX_BINDWIDTH, vipUuid: vip.VipUuid}
-		if biRule, ok := totalQosRules[publicInterface]; ok {
-			if biRule[EGRESS].InterfaceQosRuleFind(egressrule) == nil {
+			
+			egressrule := qosRule{ip: vip.Ip, port: 0, bandwidth: MAX_BINDWIDTH, vipUuid: vip.VipUuid}
+			if biRule, ok := totalQosRules[publicInterface]; ok {
+				if biRule[EGRESS].InterfaceQosRuleFind(egressrule) == nil {
+					addQosRule(publicInterface, EGRESS, egressrule)
+				}
+			} else {
 				addQosRule(publicInterface, EGRESS, egressrule)
 			}
-		} else {
-			addQosRule(publicInterface, EGRESS, egressrule)
 		}
 	}
 

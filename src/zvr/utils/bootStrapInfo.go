@@ -46,6 +46,15 @@ func IsSkipVyosIptables() bool {
 	return SkipVyosIptables
 }
 
+func IsConfigTcForVipQos() bool {
+	ConfigTcForVipQos, ok := bootstrapInfo["ConfigTcForVipQos"].(bool)
+	if !ok {
+		return false
+	}
+	
+	return ConfigTcForVipQos
+}
+
 func InitBootStrapInfo() {
 	content, err := ioutil.ReadFile(BOOTSTRAP_INFO_CACHE); PanicOnError(err)
 	if len(content) == 0 {
