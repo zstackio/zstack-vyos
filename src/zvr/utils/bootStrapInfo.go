@@ -49,7 +49,8 @@ func IsSkipVyosIptables() bool {
 func IsConfigTcForVipQos() bool {
 	ConfigTcForVipQos, ok := bootstrapInfo["ConfigTcForVipQos"].(bool)
 	if !ok {
-		return false
+		/* for upgraded vpc, there is no ConfigTcForVipQos in bootstrapinfo before it reboot */
+		return true
 	}
 	
 	return ConfigTcForVipQos
