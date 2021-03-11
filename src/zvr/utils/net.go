@@ -479,3 +479,7 @@ func IsIpv4Address(address string) bool {
 
 	return strings.Contains(address, ".")
 }
+
+func IsMgtNic(name string) bool {
+	return name == "eth0"
+}

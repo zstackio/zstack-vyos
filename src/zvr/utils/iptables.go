@@ -83,6 +83,7 @@ const (
 	EipRuleComment = "EIP-rules-for-"
 	IpsecRuleComment = "IPSEC-rules-for-"         /* must be at top of postrouting of nat */
 	LbRuleComment = "LB-rules-for-"
+	LbSynRuleComment = "LB-SYN-rules-for-"
 	SNATComment = "SNAT-rules-for-"
 	ManagementComment = "Management-rules"
 	OSPFComment = "OSPF-rules"
@@ -103,7 +104,8 @@ var rulesPriority = map[string]int{
 "PIMD-rules":           620,
 "IPSEC-rules-": 	600,
 "PF-rules-":    	500,
-"LB-rules-":            400,
+"LB-rules-":            450,
+"LB-SYN-rules-":            400,
 "EIP-rules-":           300,
 "SNAT-rules-":          200,
 "Default-rules-bottom": 100,
@@ -619,7 +621,7 @@ func initNicFirewallDefaultRules(nic string, ip string, pubNic bool, defaultActi
 		return err
 	}
 
-	if (pubNic) {
+	if IsMgtNic(nic) {
 		rule = getDefaultIptablesRule()
 		rule.dest = ip + "/32"
 		rule.proto = TCP
