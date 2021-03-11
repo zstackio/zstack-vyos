@@ -185,11 +185,6 @@ func initHandler(ctx *server.CommandContext) interface{} {
 		tree.Set(fmt.Sprintf("system task-scheduler task ssh executable path '%s'", utils.Cronjob_file_ssh))
 	}
 
-	if tree.Get("system task-scheduler task zsn") == nil {
-		tree.Set("system task-scheduler task zsn interval 1")
-		tree.Set(fmt.Sprintf("system task-scheduler task zsn executable path '%s'", utils.Cronjob_file_zsn))
-	}
-
 	if tree.Get("system task-scheduler task zvr-monitor") == nil {
 		tree.Set("system task-scheduler task zvr-monitor interval 1")
 		tree.Set(fmt.Sprintf("system task-scheduler task zvr-monitor executable path '%s'", utils.Cronjob_file_zvrMonitor))
