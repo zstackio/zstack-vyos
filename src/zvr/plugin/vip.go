@@ -842,7 +842,7 @@ func setVip(ctx *server.CommandContext) interface{} {
 	}
 
 	if utils.IsHaEnabled(){
-		addHaNicVipPair(vyosVips, IsMaster())
+		addHaNicVipPair(vyosVips, false)
 	}
 
 	/* this is for debug, will be deleted */
