@@ -105,17 +105,29 @@ func setDistributedRouting(ctx *server.CommandContext) interface{} {
 	var r string
 	var z zsnAgent
 	t := &zsnsetDistributedRoutingRsp{}
-
+	
+	tree := server.NewParserFromShowConfiguration().Tree
+	
 	fd, _ := utils.CreateFileIfNotExists(zsn_state_file, os.O_WRONLY | os.O_TRUNC, os.ModePerm)
 	fd.Truncate(0)
 	if cmd.Enabled {
 		r = z.enable()
 		fd.Write([]byte(ZSN_STATE_FILE_ENABLE))
+		
+		if node := tree.Get("system task-scheduler task zsn interval 1"); node == nil {
+			/* create a cronjob to check zsn */
+			tree.Set("system task-scheduler task zsn interval 1")
+			tree.Set(fmt.Sprintf("system task-scheduler task zsn executable path '%s'", utils.Cronjob_file_zsn))
+		}
 	} else {
 		r = z.disable()
 		fd.Write([]byte(ZSN_STATE_FILE_DISABLE))
+		
+		tree.Delete("system task-scheduler task zsn")
 	}
 	fd.Close()
+	
+	tree.Apply(false)
 
 	err := json.Unmarshal([]byte(r), &t)
 	if  err != nil {
@@ -131,7 +143,7 @@ func setDistributedRouting(ctx *server.CommandContext) interface{} {
 }
 
 func ZsnEntryPoint()  {
-	server.RegisterAsyncCommandHandler(ZSN_SET_DR_PATH, setDistributedRouting)
+	server.RegisterAsyncCommandHandler(ZSN_SET_DR_PATH, server.VyosLock(setDistributedRouting))
 	server.RegisterAsyncCommandHandler(ZSN_STATUS_PATH, getStatus)
 	server.RegisterAsyncCommandHandler(ZSN_CONNECTION_PATH, getConnections)
 }
