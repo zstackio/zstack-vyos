@@ -32,7 +32,8 @@ func getKernelVersion() float64 {
 func setConntrackTable(buckets int, max int) {
 
 	bash := &utils.Bash{
-		Command: fmt.Sprintf("sudo bash -c 'cat %s'", CONNTRACK_MAX_PATH),
+		Command: fmt.Sprintf("cat %s", CONNTRACK_MAX_PATH),
+		Sudo: true,
 	}
 
 	_, currentSize, _, err := bash.RunWithReturn()
@@ -55,7 +56,8 @@ func setConntrackTable(buckets int, max int) {
 	}
 
 	b := &utils.Bash{
-		Command: fmt.Sprintf("sudo bash -c 'echo %d > %s && echo %d > %s'", buckets, bucketsPath, max, CONNTRACK_MAX_PATH),
+		Command: fmt.Sprintf("echo %d > %s && echo %d > %s", buckets, bucketsPath, max, CONNTRACK_MAX_PATH),
+		Sudo: true,
 	}
 
 	b.Run()

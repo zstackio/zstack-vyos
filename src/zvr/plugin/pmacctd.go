@@ -54,7 +54,8 @@ func (fc *flowConfig) startPmacctdServers()  {
         fc.setupFlowIpTables(true)
         if !fc.buildPmacctdConf(){
             bash := utils.Bash{
-                Command: fmt.Sprintf("sudo pkill -9 uacctd; sudo %s -f %s -d", uacctd_bin_file, uacctd_conf_file),
+                Command: fmt.Sprintf("pkill -9 uacctd; %s -f %s -d", uacctd_bin_file, uacctd_conf_file),
+                Sudo: true,
             }
             bash.Run()
             writeFlowHaScript(true)
@@ -64,7 +65,8 @@ func (fc *flowConfig) startPmacctdServers()  {
     } else {
         fc.setupFlowIpTables(false)
         bash := utils.Bash{
-            Command: fmt.Sprintf("sudo echo -n \"\" > %s; sudo pkill -9 uacctd", uacctd_conf_file),
+            Command: fmt.Sprintf("truncate -s 0 %s; pkill -9 uacctd", uacctd_conf_file),
+            Sudo: true,
         }
         bash.Run()
         writeFlowHaScript(false)
@@ -126,7 +128,7 @@ func writeFlowHaScript(enable bool)  {
     if enable {
         conent = fmt.Sprintf("sudo pkill -9 uacctd; sudo %s -f %s", uacctd_bin_file, uacctd_conf_file)
     } else {
-        conent = fmt.Sprintf("sudo echo -n \"\" > %s; sudo pkill -9 uacctd", uacctd_conf_file)
+        conent = fmt.Sprintf("sudo truncate -s 0 %s; sudo pkill -9 uacctd", uacctd_conf_file)
     }
 
     err := ioutil.WriteFile(VYOSHA_FLOW_SCRIPT, []byte(conent), 0755); utils.PanicOnError(err)

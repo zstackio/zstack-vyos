@@ -21,6 +21,7 @@ type Bash struct {
 	Arguments map[string]string
 	NoLog bool
 	Timeout int
+	Sudo bool
 
 	retCode int
 	stdout string
@@ -86,16 +87,23 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 	tmpfile, err := ioutil.TempFile("/home/vyos", "zvrcommand"); PanicOnError(err)
 	defer os.Remove(tmpfile.Name())
 
+	cmdstr := b.Command
+
 	if len(b.Command) > 1024* 4 {
 		func() {
 			content := []byte(b.Command)
-			err = tmpfile.Chmod(0777); PanicOnError(err)
+			err = tmpfile.Chmod(0775); PanicOnError(err)
 			_, err = tmpfile.Write(content); PanicOnError(err)
 			err = tmpfile.Close(); PanicOnError(err)
 			cmd = exec.Command("bash", "-c", tmpfile.Name())
+		        cmdstr = tmpfile.Name()
 	        }()
+	}
+
+	if b.Sudo {
+		cmd = exec.Command("sudo", "bash", "-c", cmdstr)
 	} else {
-		cmd = exec.Command("bash", "-c", b.Command)
+		cmd = exec.Command("bash", "-c", cmdstr)
 	}
 
 	cmd.Stdout = &so
