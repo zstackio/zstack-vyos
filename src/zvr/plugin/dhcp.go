@@ -129,7 +129,7 @@ sudo pkill -9 dhcpd3
 {{ range .DhcpServers }}
 sudo touch {{.LeaseFile}}
 sudo chmod 666 {{.LeaseFile}}
-sudo echo -n "" > {{.LeaseFile}}
+sudo truncate -s 0 {{.LeaseFile}}
 sudo rm -f {{.PidFile}}
 sudo cp {{.TempConf}} {{.ConfFile}}
 sudo /usr/sbin/dhcpd3 -pf {{.PidFile}} -cf {{.ConfFile}} -lf {{.LeaseFile}}
@@ -140,7 +140,7 @@ sudo pkill -9 dhcpd
 {{ range .DhcpServers }}
 sudo touch {{.LeaseFile}}
 sudo chmod 666 {{.LeaseFile}}
-sudo echo -n "" > {{.LeaseFile}}
+sudo truncate -s 0 {{.LeaseFile}}
 sudo rm -f {{.PidFile}}
 sudo cp {{.TempConf}} {{.ConfFile}}
 sudo /usr/sbin/dhcpd -pf {{.PidFile}} -cf {{.ConfFile}} -lf {{.LeaseFile}}
@@ -295,24 +295,25 @@ EOF`, omApiPort, hostName, entry.Mac, entry.Ip, group),
 }
 
 func stopAllDhcpServers() {
+	var progname string
+
 	if utils.Vyos_version == utils.VYOS_1_1_7 {
-		bash := &utils.Bash{
-			Command: fmt.Sprintf("sudo pkill -9 dhcpd3; rm -rf %s/*", DHCPD_PATH),
-		}
-		bash.Run()
-	} else{
-		bash := &utils.Bash{
-			Command: fmt.Sprintf("sudo pkill -9 dhcpd; rm -rf %s/*", DHCPD_PATH),
-		}
-		bash.Run()
+		progname = "dhcpd3"
+	} else {
+		progname = "dhcpd"
 	}
-	
-	
+
+	bash := &utils.Bash{
+		Command: fmt.Sprintf("pkill -9 %s; rm -rf %s/*", progname, DHCPD_PATH),
+		Sudo: true,
+	}
+	bash.Run()
 }
 
 func stopDhcpServer(pidFile, confFile, leaseFile  string) {
 	b := &utils.Bash{
-		Command: fmt.Sprintf("sudo kill -9 $(cat %s); echo \"\" > %s; echo \"\" > %s", pidFile, confFile, leaseFile),
+		Command: fmt.Sprintf("kill -9 $(cat %s); truncate -s 0 %s; truncate -s 0 %s", pidFile, confFile, leaseFile),
+		Sudo: true,
 	}
 	b.Run()
 }

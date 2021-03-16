@@ -1,11 +1,13 @@
 package utils
 
 import (
-	"testing"
 	"fmt"
+	"io/ioutil"
+	"strings"
+	"testing"
 )
 
-func TestBash(t *testing.T)  {
+func TestBash(t *testing.T) {
 	b := NewBash()
 	b.Command = "ls"
 	b.Run()
@@ -28,7 +30,7 @@ func TestBash(t *testing.T)  {
 
 	b = NewBash()
 	b.Command = "ls {{.File}}"
-	b.Arguments = map[string]string {
+	b.Arguments = map[string]string{
 		"File": "b",
 	}
 
@@ -37,4 +39,34 @@ func TestBash(t *testing.T)  {
 		t.Fatal("the command should fail")
 	}
 	fmt.Printf("%v, %v, %v", ret, so, se)
+}
+
+func TestSudo(t *testing.T) {
+	b := NewBash()
+	f := "/tmp/gotest.log"
+	b.Command = "echo hi; echo again; echo hello > {{.File}}"
+	b.Sudo = true
+	b.Arguments = map[string]string{
+		"File": f,
+	}
+	_, o, _, err := b.RunWithReturn()
+	if err != nil {
+		t.Fatal("command failed", err)
+	}
+
+	if !strings.Contains(o, "hi") || !strings.Contains(o, "again") || strings.Contains(o, "hello") {
+		t.Fatal("unexpected output:", o)
+	}
+
+	b2 := &Bash{Command: "rm -f " + f, Sudo: true}
+	defer b2.Run()
+
+	buf, err := ioutil.ReadFile(f)
+	if err != nil {
+		t.Fatal("file not exists", err)
+	}
+
+	if !strings.Contains(string(buf), "hello") {
+		t.Fatal("unexpected content:", string(buf))
+	}
 }
