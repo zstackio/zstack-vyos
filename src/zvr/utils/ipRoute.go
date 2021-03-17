@@ -233,7 +233,9 @@ func SyncRouteEntries(currTables []ZStackRouteTable, entryMap map[int][]ZStackRo
 	if len(newCmds) == 0 {
 		return nil
 	}
-
+	
+	writePolicyRouteHaScript(entryMap)
+	
 	bash := Bash {
 		Command: strings.Join(newCmds, ";"),
 	}
@@ -246,7 +248,7 @@ func SyncRouteEntries(currTables []ZStackRouteTable, entryMap map[int][]ZStackRo
 		return fmt.Errorf("sync ip route: %s, error: %s, ret: %d", strings.Join(newCmds, ";"), e, ret)
 	}
 
-	return writePolicyRouteHaScript(entryMap)
+	return nil
 }
 
 func writePolicyRouteHaScript(entryMap map[int][]ZStackRouteEntry) error {
