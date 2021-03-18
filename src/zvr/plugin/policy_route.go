@@ -243,7 +243,9 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd)  {
 	}
 	err := utils.SyncZStackRouteTables(rts);utils.PanicOnError(err)
 	err = utils.SyncZStackIpRules(currRules, ipRules);utils.PanicOnError(err)
-	err = utils.SyncRouteEntries(currTables, entriesMap);utils.PanicOnError(err)
+	if err = utils.SyncRouteEntries(currTables, entriesMap); err != nil && IsMaster() {
+		utils.PanicOnError(err)
+	}
 	err = utils.SyncMangleTables(chains, rules, utils.PolicyRouteComment);utils.PanicOnError(err)
 }
 
