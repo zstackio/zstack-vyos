@@ -169,6 +169,9 @@ func WriteDefaultHaScript(defaultNic *Nic)  {
 }
 
 func IsSLB() bool {
-	applianceType := bootstrapInfo["applianceVmSubType"].(string)
-	return applianceType == APPLIANCETYPE_SLB
+	applianceType, found := bootstrapInfo["applianceVmSubType"]
+	if !found {
+		return false
+	}
+	return applianceType.(string) == APPLIANCETYPE_SLB
 }
