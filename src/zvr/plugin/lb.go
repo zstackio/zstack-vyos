@@ -727,14 +727,47 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 	return err
 }
 
-func (this *GBListener) startListenerService() (  int,  error) {
+func startGobetween(confpath, pidpath string) (int, error) {
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo /opt/vyatta/sbin/gobetween -c %s >/dev/null 2>&1&echo $! >%s",
-			this.confPath, this.pidPath),
+		Command: fmt.Sprintf("/opt/vyatta/sbin/gobetween -c %s >/dev/null 2>&1&echo $! >%s", confpath, pidpath),
+		Sudo:    true,
 	}
 
-	ret, out, _, err := bash.RunWithReturn(); bash.PanicIfError()
+	ret, out, _, err := bash.RunWithReturn()
 	log.Debugf("%d %s",ret, out)
+	return ret, err
+}
+
+func (this *GBListener) startListenerService() (int,  error) {
+	ret, err := startGobetween(this.confPath, this.pidPath)
+	if err != nil {
+		return ret, err
+	}
+
+	pid, err := utils.ReadPidFromFile(this.pidPath)
+	if err != nil { // ignore error
+		log.Warnf("failed to get gobetween pid: %s", err)
+		return ret, nil
+	}
+
+	pm := utils.NewPidMon(pid, func() int {
+		_, err := startGobetween(this.confPath, this.pidPath)
+		if err != nil {
+			log.Warnf("failed to respawn gobetween: %s", err)
+			return -1
+		}
+
+		buf, err := utils.ReadPidFromFile(this.pidPath)
+		if err != nil {
+			log.Warnf("failed to read gobetween pid: %s", err)
+			return -1
+		}
+
+		pid, _ := strconv.Atoi(strings.TrimSpace(string(buf)))
+		return pid
+	})
+	pm.Start()
+
 	return ret, err
 }
 
