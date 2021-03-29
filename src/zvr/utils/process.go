@@ -2,21 +2,24 @@ package utils
 
 import (
 	"fmt"
-	"strings"
+	"io/ioutil"
+	"os"
 	"strconv"
+	"strings"
+	"syscall"
 	"time"
 )
 
-func FindFirstPIDByPS(cmdline...string) (int, error) {
+func FindFirstPIDByPS(cmdline ...string) (int, error) {
 	return FindFirstPIDByPSExtern(false, cmdline...)
 }
 
-func FindFirstPIDByPSExtern(non_sudo bool, cmdline...string) (int, error) {
+func FindFirstPIDByPSExtern(non_sudo bool, cmdline ...string) (int, error) {
 	Assert(cmdline != nil, "cmdline must have one parameter at least")
 
-	cmds := []string {"ps aux"}
+	cmds := []string{"ps aux"}
 	for _, c := range cmdline {
-		cmds = append(cmds, fmt.Sprintf("grep '%s'", c))
+		cmds = append(cmds, fmt.Sprintf("grep '%s'", "["+c[0:1]+"]"+c[1:]))
 	}
 	if non_sudo {
 		cmds = append(cmds, "grep -v ' sudo '")
@@ -27,7 +30,7 @@ func FindFirstPIDByPSExtern(non_sudo bool, cmdline...string) (int, error) {
 
 	b := Bash{
 		Command: strings.Join(cmds, " | "),
-		NoLog: true,
+		NoLog:   true,
 	}
 
 	ret, o, _, err := b.RunWithReturn()
@@ -74,5 +77,32 @@ func KillProcess1(pid int, waitTime uint) error {
 		b.Run()
 
 		return check()
-	}, time.Duration(waitTime) * time.Second, time.Duration(500) * time.Millisecond)
+	}, time.Duration(waitTime)*time.Second, time.Duration(500)*time.Millisecond)
+}
+
+func ProcessExists(pid int) error {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return err
+	}
+
+	if err = process.Signal(syscall.Signal(0)); err == nil {
+		return nil
+	}
+
+	if err == syscall.EPERM {
+		return nil
+	}
+
+	return err
+
+}
+
+func ReadPidFromFile(pidfile string) (int, error) {
+	buf, err := ioutil.ReadFile(pidfile)
+	if err != nil {
+		return -1, err
+	}
+
+	return strconv.Atoi(strings.TrimSpace(string(buf)))
 }
