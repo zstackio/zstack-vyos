@@ -124,7 +124,7 @@ func configureZvrFirewall() {
 }
 
 func main()  {
-	restartRsyslog()
+	go restartRsyslog()
 	parseCommandOptions()
 	utils.InitLog(options.LogFile, false)
 	utils.InitBootStrapInfo()
