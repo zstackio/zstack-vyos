@@ -27,6 +27,8 @@ const(
 	IPSecIkeRekeyInterval = 86400 /*  24 * 3600 seconds */
 	IPSecIkeRekeyIntervalMargin = 600 /* restart the vpn 10 mins before rekey */
 	IPSecRestartInterval = IPSecIkeRekeyInterval - IPSecIkeRekeyIntervalMargin
+	
+	ipsecAddressGroup = "ipsec-group"
 )
 
 var AutoRestartVpn = false
@@ -37,6 +39,7 @@ type ipsecInfo struct {
 	State string `json:"state"`
 	LocalCidrs []string `json:"localCidrs"`
 	PeerAddress string `json:"peerAddress"`
+	RemoteId string `json:"remoteId"`
 	AuthMode string `json:"authMode"`
 	AuthKey string `json:"authKey"`
 	Vip string `json:"vip"`
@@ -215,16 +218,16 @@ func syncIpSecRulesByIptables()  {
 			continue
 		}
 
-		rule := utils.NewIptablesRule(utils.UDP,  "", "", 0, 500, nil, utils.RETURN, utils.IpsecRuleComment)
+		rule := utils.NewIptablesRule(utils.UDP,  info.PeerAddress, "", 0, 500, nil, utils.RETURN, utils.IpsecRuleComment)
 		localfilterRules[nicname] = append(localfilterRules[nicname], rule)
 
-		rule = utils.NewIptablesRule(utils.UDP,  "", "", 0, 4500, nil, utils.RETURN, utils.IpsecRuleComment)
+		rule = utils.NewIptablesRule(utils.UDP,  info.PeerAddress, "", 0, 4500, nil, utils.RETURN, utils.IpsecRuleComment)
 		localfilterRules[nicname] = append(localfilterRules[nicname], rule)
 
-		rule = utils.NewIptablesRule(utils.ESP,  "", "", 0, 0, nil, utils.RETURN, utils.IpsecRuleComment)
+		rule = utils.NewIptablesRule(utils.ESP,  info.PeerAddress, "", 0, 0, nil, utils.RETURN, utils.IpsecRuleComment)
 		localfilterRules[nicname] = append(localfilterRules[nicname], rule)
 
-		rule = utils.NewIptablesRule(utils.AH,  "", "", 0, 0, nil, utils.RETURN, utils.IpsecRuleComment)
+		rule = utils.NewIptablesRule(utils.AH,  info.PeerAddress, "", 0, 0, nil, utils.RETURN, utils.IpsecRuleComment)
 		localfilterRules[nicname] = append(localfilterRules[nicname], rule)
 	}
 
@@ -287,6 +290,10 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 	utils.Assertf(info.AuthMode == "psk", "vyos plugin only supports authMode 'psk', %s is not supported yet", info.AuthMode)
 	tree.Setf("vpn ipsec site-to-site peer %s authentication mode pre-shared-secret", info.PeerAddress)
 	tree.Setf("vpn ipsec site-to-site peer %s authentication pre-shared-secret %s", info.PeerAddress, info.AuthKey)
+	tree.Setf("vpn ipsec site-to-site peer %s authentication id", info.Vip)
+	if info.RemoteId != "" {
+		tree.Setf("vpn ipsec site-to-site peer %s authentication remote-id", info.RemoteId)
+	}
 	tree.Setf("vpn ipsec site-to-site peer %s default-esp-group %s", info.PeerAddress, info.Uuid)
 	tree.Setf("vpn ipsec site-to-site peer %s ike-group %s", info.PeerAddress, info.Uuid)
 
@@ -314,12 +321,16 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 	if utils.IsSkipVyosIptables() {
 		return
 	}
-
+	
+	//create eipaddress group
+	tree.SetGroup("address", ipsecAddressGroup, info.PeerAddress)
+	
 	// configure firewall
 	des := "ipsec-500-udp"
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
 		tree.SetFirewallOnInterface(nicname, "local",
 			"destination port 500",
+			fmt.Sprintf("source group address-group %s", ipsecAddressGroup),
 			fmt.Sprintf("description %s", des),
 			"protocol udp",
 			"action accept",
@@ -330,6 +341,7 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
 		tree.SetFirewallOnInterface(nicname, "local",
 			"destination port 4500",
+			fmt.Sprintf("source group address-group %s", ipsecAddressGroup),
 			fmt.Sprintf("description %s", des),
 			"protocol udp",
 			"action accept",
@@ -340,6 +352,7 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
 		tree.SetFirewallOnInterface(nicname, "local",
 			fmt.Sprintf("description %s", des),
+			fmt.Sprintf("source group address-group %s", ipsecAddressGroup),
 			"protocol esp",
 			"action accept",
 		)
@@ -349,6 +362,7 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
 		tree.SetFirewallOnInterface(nicname, "local",
 			fmt.Sprintf("description %s", des),
+			fmt.Sprintf("source group address-group %s", ipsecAddressGroup),
 			"protocol ah",
 			"action accept",
 		)
@@ -532,6 +546,10 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 	/* in sync ipsec, we don't know what is localcidr, remotecidr is missing
 	 * so use reg expression to delete all rules
 	 */
+	if r := tree.FindGroupByNameValue(info.PeerAddress, ipsecAddressGroup, "address"); r != nil {
+		r.Delete()
+	}
+	
 	des := fmt.Sprintf("^ipsec-%s-", info.Uuid)
 	for {
 		if r := tree.FindSnatRuleDescriptionRegex(des, utils.StringRegCompareFn); r != nil {
