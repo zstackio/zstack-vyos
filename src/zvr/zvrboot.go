@@ -414,7 +414,7 @@ func configureVyos() {
 	applianceType := bootstrapInfo["applianceVmSubType"].(string)
 	log.Debugf("applianceType %+v", applianceType)
 
-	if SkipVyosIptables || applianceType == utils.APPLIANCETYPE_SLB {
+	if SkipVyosIptables {
 		for _, nic := range nics {
 			var err error
 			setNic(nic)

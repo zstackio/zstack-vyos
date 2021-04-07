@@ -41,11 +41,6 @@ func GetMgmtInfoFromBootInfo() map[string]interface{} {
 }
 
 func IsSkipVyosIptables() bool {
-	if IsSLB() {
-		/* SLB use iptables replace vyos firewall */
-		return true
-	}
-
 	SkipVyosIptables, ok := bootstrapInfo["SkipVyosIptables"].(bool)
 	if !ok {
 		return false
