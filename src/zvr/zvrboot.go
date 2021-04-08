@@ -411,7 +411,12 @@ func configureVyos() {
 	}
 	log.Debugf("bootstrapInfo %+v", bootstrapInfo)
 	log.Debugf("SkipVyosIptables %+v", SkipVyosIptables)
-	applianceType := bootstrapInfo["applianceVmSubType"].(string)
+
+	applianceTypeTmp, found := bootstrapInfo["applianceVmSubType"]
+	if !found {
+	    applianceTypeTmp = "None"
+	}
+	applianceType := applianceTypeTmp.(string)
 	log.Debugf("applianceType %+v", applianceType)
 
 	if SkipVyosIptables || applianceType == utils.APPLIANCETYPE_SLB {
