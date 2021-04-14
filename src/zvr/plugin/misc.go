@@ -53,6 +53,11 @@ type pingRsp struct {
 	HealthDetail string `json:"healthDetail"`
 }
 
+type testRsp struct {
+    Success bool `json:"success"`
+    ZvrVersion string `json:"zvrVersion"`
+}
+
 type configureNtpCmd struct {
 	TimeServers []string `json:"timeServers"`
 }
@@ -225,7 +230,7 @@ func echoHandler(ctx *server.CommandContext) interface{} {
 }
 
 func testHandler(ctx *server.CommandContext) interface{} {
-	return nil
+    return testRsp{ZvrVersion: string(VERSION), Success:true}
 }
 
 func configureNtpHandle(ctx *server.CommandContext) interface{}{

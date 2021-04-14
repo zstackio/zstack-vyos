@@ -72,6 +72,14 @@ fi
 chown vyos:users $TARGET_ZVRMONITOR
 chmod +x $TARGET_ZVRMONITOR
 
+TARGET_ZVRREBOOT=/home/vyos/zvr/ssh/zvr-reboot.sh
+if [[ ! -f $TARGET_ZVRREBOOT || $(diff zvr-reboot.sh $TARGET_ZVRREBOOT) ]]; then
+    yes | mkdir -p `dirname $TARGET_ZVRREBOOT`
+    yes | cp -f zvr-reboot.sh $TARGET_ZVRREBOOT
+fi
+chown vyos:users $TARGET_ZVRREBOOTR
+chmod +x $TARGET_ZVRREBOOT
+
 TARGET_CPUMONITOR=/etc/logrotate.d/cpu-monitor
 if [[ ! -f $TARGET_CPUMONITOR || $(diff cpu-monitor $TARGET_CPUMONITOR) ]]; then
     yes | mkdir -p `dirname $TARGET_CPUMONITOR`
