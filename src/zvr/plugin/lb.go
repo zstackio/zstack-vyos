@@ -902,42 +902,31 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 	return err
 }
 
-func setPidRLimit() error {	
-	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo pidof gobetween"),
-	}
-
-	_, out, _, err := bash.RunWithReturn(); 
-	if err != nil{
-		return err;
-	}
-
-	out = strings.Replace(out, "\n", "", -1)
-	pids := strings.Fields(out)
-
+func setPidRLimit(pids []string) error {
+	
 	for _, pid := range pids{
-		_, err = strconv.Atoi(pid)
+		_, err := strconv.Atoi(pid)
 		if err != nil{
 			log.Debugf("pid %s is not correct",pid)
 			return err
 		}
 
-		bash = utils.Bash{
+		bash := utils.Bash{
 			Command: fmt.Sprintf("sudo cat /proc/%s/limits | grep 'Max open files' | awk -F ' ' '{print $5}' ",pid),
 		}
 
-		_, hlimit, _, er := bash.RunWithReturn(); 
+		_, hlimit, _, er := bash.RunWithReturn()
 		if er != nil{
 			log.Debugf("cat not get pid %s hard limit",pid)
-			return er;
+			return er
 		}
 		hlimit = strings.Replace(hlimit, "\n", "", -1)
-		bash := utils.Bash{
+		bash = utils.Bash{
 			Command: fmt.Sprintf("sudo /opt/vyatta/sbin/goprlimit -p %s -s %s",
 				pid, hlimit),
 		}
 	
-		ret, out, _, e := bash.RunWithReturn();
+		ret, out, _, e := bash.RunWithReturn()
 		log.Debugf("%d %s",ret, out)
 		if e != nil{
 			return e
@@ -948,17 +937,37 @@ func setPidRLimit() error {
 
 func startGobetween(confpath, pidpath string) (int, error) {
 	bash := utils.Bash{
-		Command: fmt.Sprintf("/opt/vyatta/sbin/gobetween -c %s >/dev/null 2>&1&echo $! >%s", confpath, pidpath),
+		Command: fmt.Sprintf("(/opt/vyatta/sbin/gobetween -c %s >/dev/null 2>&1)&", confpath),
 		Sudo:    true,
 	}
 
 	ret, out, _, err := bash.RunWithReturn()
 	log.Debugf("%d %s",ret, out)
-	if runtime.GOARCH == "amd64"{
-		err = setPidRLimit()
+	if ret != 0 || err != nil {
+		log.Debugf("start gobetween faild: ret: %d, err: %v, %s", ret, err, out)
+		return ret, err
 	}
-
-	return ret, err
+	
+	/* get gobetween pid */
+	bash = utils.Bash{
+		Command: fmt.Sprintf("ps aux | grep %s | grep -v grep | grep -v bash | awk '{print $2}'", confpath),
+		Sudo:    true,
+	}
+	
+	ret, out, _, err = bash.RunWithReturn()
+	if ret != 0 || err != nil {
+		log.Debugf("get gobetween pid failed: ret: %d, err: %v, %s", ret, err, out)
+		return ret, err
+	}
+	
+	out = strings.TrimSpace(out)
+	err = ioutil.WriteFile(pidpath, []byte(out), 0755); utils.PanicOnError(err)
+	
+	if runtime.GOARCH == "amd64"{
+		setPidRLimit([]string{out})
+	}
+	
+	return 0, nil
 }
 
 func (this *GBListener) startListenerService() (int,  error) {
@@ -966,13 +975,13 @@ func (this *GBListener) startListenerService() (int,  error) {
 	if err != nil {
 		return ret, err
 	}
-
+	
 	pid, err := utils.ReadPidFromFile(this.pidPath)
 	if err != nil { // ignore error
 		log.Warnf("failed to get gobetween pid: %s", err)
 		return ret, nil
 	}
-
+	
 	pm := utils.NewPidMon(pid, func() int {
 		_, err := startGobetween(this.confPath, this.pidPath)
 		if err != nil {
