@@ -527,6 +527,9 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 	dropComment := makeDropRuleComments(this.lb)
 	if utils.IsSkipVyosIptables() {
 		utils.DeleteFirewallRuleByComment(nicname, dropComment)
+		for _, pname := range utils.GetPrivteInterface() {
+			utils.DeleteFirewallRuleByComment(pname, dropComment)
+		}
 		return nil
 	}
 
