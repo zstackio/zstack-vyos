@@ -391,20 +391,9 @@ listen {{.ListenerUuid}}
 }
 
 func (this *HaproxyListener) startListenerService() ( ret int, err error) {
-	pids := []string{}
-	bash := utils.Bash{
-		Command: fmt.Sprintf("ps aux | grep %s | grep -v grep | awk '{print $2}'", this.confPath),
-	}
-	ret, o, _, err := bash.RunWithReturn()
-	if ret == 0 && err == nil {
-		o = strings.TrimSpace(o)
-		for _, pid := range strings.Split(o, "\n") {
-			if pid != "" {
-				pids = append(pids, pid)
-			}
-		}
-	}
-
+	pids := this.getPids()
+	
+	var bash utils.Bash
 	if len(pids) > 0 {
 		bash = utils.Bash{
 			Command: fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -N %s -f %s -p %s -sf %s",
@@ -570,13 +559,32 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 	return nil
 }
 
+func (this *HaproxyListener) getPids() []string {
+	pids := []string{}
+	bash := utils.Bash{
+		Command: fmt.Sprintf("ps aux | grep %s | grep -v grep | awk '{print $2}'", this.confPath),
+	}
+	ret, o, _, err := bash.RunWithReturn()
+	if ret == 0 && err == nil {
+		o = strings.TrimSpace(o)
+		for _, pid := range strings.Split(o, "\n") {
+			if pid != "" {
+				pids = append(pids, pid)
+			}
+		}
+	}
+	
+	return pids
+}
+
 func (this *HaproxyListener) stopListenerService() ( err error) {
-	//miao zhanyong the udp lb configured by gobetween, there is no pid configure in the shell cmd line
-	pid, err := utils.FindFirstPIDByPS(this.confPath, this.pidPath)
-	//log.Debugf("lb %s pid: %v result:%v", this.confPath, pid, err)
-	if pid > 0 {
-		err = utils.KillProcess(pid); utils.PanicOnError(err)
-	} else if (pid == -1) {
+	pids := this.getPids()
+	if len(pids) > 0 {
+		for _, pid := range pids {
+			p, err := strconv.Atoi(pid); utils.PanicOnError(err)
+			err = utils.KillProcess(p); utils.PanicOnError(err)
+		}
+	} else {
 		err = nil
 	}
 
