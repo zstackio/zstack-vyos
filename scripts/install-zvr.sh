@@ -77,7 +77,7 @@ if [[ ! -f $TARGET_ZVRREBOOT || $(diff zvr-reboot.sh $TARGET_ZVRREBOOT) ]]; then
     yes | mkdir -p `dirname $TARGET_ZVRREBOOT`
     yes | cp -f zvr-reboot.sh $TARGET_ZVRREBOOT
 fi
-chown vyos:users $TARGET_ZVRREBOOTR
+chown vyos:users $TARGET_ZVRREBOOT
 chmod +x $TARGET_ZVRREBOOT
 
 TARGET_CPUMONITOR=/etc/logrotate.d/cpu-monitor
