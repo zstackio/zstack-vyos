@@ -106,7 +106,7 @@ func (e ZStackRouteEntry) isEqual(b ZStackRouteEntry) bool {
 }
 
 func (e ZStackRouteEntry) addCommand() string {
-	if e.NicName == "" {
+	if e.NextHopIp != "" {
 		if e.Distance != 0 {
 			return fmt.Sprintf("sudo ip route add %s metric %d via %s table %d",
 				e.DestinationCidr, e.Distance, e.NextHopIp, e.TableId)
@@ -114,14 +114,17 @@ func (e ZStackRouteEntry) addCommand() string {
 			return fmt.Sprintf("sudo ip route add %s via %s table %d",
 				e.DestinationCidr, e.NextHopIp, e.TableId)
 		}
-	} else {
+	} else if e.NicName != "" {
 		return fmt.Sprintf("sudo ip route add %s dev %s table %d",
 			e.DestinationCidr, e.NicName, e.TableId)
+	}else{
+		log.Debugf("can not add route entry,because nexthopIp or nicName is null")
+		return ""
 	}
 }
 
 func (e ZStackRouteEntry) deleteCommand() string {
-	if e.NicName == "" {
+	if e.NextHopIp != "" {
 		if e.Distance != 0 {
 			return fmt.Sprintf("sudo ip route del %s metric %d via %s table %d",
 				e.DestinationCidr, e.Distance, e.NextHopIp, e.TableId)
@@ -129,10 +132,14 @@ func (e ZStackRouteEntry) deleteCommand() string {
 			return fmt.Sprintf("sudo ip route del %s via %s table %d",
 				e.DestinationCidr, e.NextHopIp, e.TableId)
 		}
-	} else {
+	} else if e.NicName != "" {
 		return fmt.Sprintf("sudo ip route del %s dev %s table %d",
 			e.DestinationCidr, e.NicName, e.TableId)
+	} else {
+		log.Debugf("can not del route entry,because nexthopIp or nicName is null")
+		return ""
 	}
+
 }
 
 func getCurrentRouteEntries(tableId int) []ZStackRouteEntry {
