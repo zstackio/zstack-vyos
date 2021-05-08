@@ -186,18 +186,18 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd)  {
 	var rules []utils.IptablesRule
 	if len(cmd.RuleSets) > 0 {
 		rules = append(rules, utils.NewMangleIptablesRule(utils.MANGLE_PREROUTING.String(), "", "", "", 0, 0,
-			0, 0, false, nil, utils.CONNMARK_RESTORE, utils.PolicyRouteComment, "", ""))
+			0, 0, utils.IPTABLES_MARK_UNSET, nil, utils.CONNMARK_RESTORE, utils.PolicyRouteComment, "", ""))
 		rules = append(rules, utils.NewMangleIptablesRule(utils.MANGLE_PREROUTING.String(), "", "", "", 0, 0,
-			0, 0, true, nil, utils.ACCEPT, utils.PolicyRouteComment, "", ""))
+			0, 0, utils.IPTABLES_MARK_NOT_MATCH, nil, utils.ACCEPT, utils.PolicyRouteComment, "", ""))
 	}
 
 	for _, table := range cmd.TableNumbers {
 		chainName := getPolicyRouteTableChainName(table)
 		chains = append(chains, utils.NewIpTablesChain(chainName))
 		rules = append(rules, utils.NewMangleIptablesRule(chainName, "", "", "", 0, 0,
-			table, table, false,nil, utils.MARK, utils.PolicyRouteComment, "", ""))
+			0, table, utils.IPTABLES_MARK_MATCH,nil, utils.MARK, utils.PolicyRouteComment, "", ""))
 		rules = append(rules, utils.NewMangleIptablesRule(chainName, "", "", "", 0, 0,
-			0, table, false,nil, utils.CONNMARK, utils.PolicyRouteComment, "", ""))
+			0, table, utils.IPTABLES_MARK_UNSET,nil, utils.CONNMARK, utils.PolicyRouteComment, "", ""))
 	}
 
 	systemRuleSetMap := map[string]bool{}
@@ -210,12 +210,12 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd)  {
 		nicname, err := utils.GetNicNameByMac(ref.Mac);utils.PanicOnError(err)
 		chainName := getPolicyRouteSetChainName(ref.RuleSetName)
 		rules = append(rules, utils.NewMangleIptablesRule(utils.MANGLE_PREROUTING.String(), "", "", "", 0, 0,
-			0, 0, false, nil, chainName, utils.PolicyRouteComment, nicname, ""))
+			0, 0, utils.IPTABLES_MARK_UNSET, nil, chainName, utils.PolicyRouteComment, nicname, ""))
 		if systemRuleSetMap[ref.RuleSetName] {
 			items := strings.Split(ref.RuleSetName, "-")
 			routeTableChainName := getPolicyRouteTableChainNameByString(items[len(items) -1])
 			rules = append(rules, utils.NewMangleIptablesRule(chainName, "", "", "", 0, 0,
-				0, 0, false, nil, routeTableChainName, utils.PolicyRouteComment, "", ""))
+				0, 0, utils.IPTABLES_MARK_UNSET, nil, routeTableChainName, utils.PolicyRouteComment, "", ""))
 		}
 	}
 
@@ -239,7 +239,7 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd)  {
 			destPort, _ = strconv.Atoi(rule.DestPort)
 		}
 		rules = append(rules, utils.NewMangleIptablesRule(chainName, rule.Protocol, rule.SourceIp , rule.DestIp, sourcePort, destPort,
-			0, 0, false, nil, getPolicyRouteTableChainName(rule.TableNumber), utils.PolicyRouteComment, "", ""))
+			0, 0, utils.IPTABLES_MARK_UNSET, nil, getPolicyRouteTableChainName(rule.TableNumber), utils.PolicyRouteComment, "", ""))
 	}
 	err := utils.SyncZStackRouteTables(rts);utils.PanicOnError(err)
 	err = utils.SyncZStackIpRules(currRules, ipRules);utils.PanicOnError(err)

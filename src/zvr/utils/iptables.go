@@ -116,6 +116,13 @@ const (
 	Predefined_forward_chain = "VYATTA_PRE_FW_FWD_HOOK"
 )
 
+type MARK_MATACH_TYPE int
+const (
+	IPTABLES_MARK_UNSET MARK_MATACH_TYPE = iota
+	IPTABLES_MARK_MATCH
+	IPTABLES_MARK_NOT_MATCH
+)
+
 /* iptables of same kind are group together, the order is
    Default-rules-top > management-rules > Dns-rules > DHCP-rules > Ipsec-rules-for > Pf-rules-for >
    LB-rules-for > Eip-rules-for > SNAT-rules-for-> Default-rules-bottom*/
@@ -151,7 +158,7 @@ type IptablesRule struct {
 	inNic, outNic     string
 	tcpflags          []string
 	mark              int
-	markNoMatch       bool
+	markNoMatch       MARK_MATACH_TYPE
 
 	/* action operation */
 	action            string
@@ -200,7 +207,7 @@ func NewSnatIptablesRule(excludeSrc, excludeDest bool, src, dest, outNic, action
 		outNic: outNic, inNic: "", tcpflags:nil, natTranslationIp: natTranslationIp, natTranslationPort:natTranslationPort}
 }
 
-func NewMangleIptablesRule(chainName, proto string, src, dest string, srcPort, destPort int, mark, targetMark int, markNoMatch bool,
+func NewMangleIptablesRule(chainName, proto string, src, dest string, srcPort, destPort int, mark, targetMark int, markNoMatch MARK_MATACH_TYPE,
 	states []string, action string,  comment string, inNic, outNic string) IptablesRule {
 	return IptablesRule{proto: proto, src: src, dest: dest, srcPort: srcPort,
 		destPort:destPort, states: states, action:action, comment:comment,
@@ -256,9 +263,9 @@ func (iptableRule IptablesRule)string() []string  {
 		rules = append(rules, "-m state --state " + strings.Join(iptableRule.states, ","))
 	}
 
-	if iptableRule.markNoMatch {
+	if iptableRule.markNoMatch == IPTABLES_MARK_NOT_MATCH {
 		rules = append(rules, fmt.Sprintf("-m mark ! --mark %d ", iptableRule.mark))
-	} else if iptableRule.mark != 0 {
+	} else if iptableRule.markNoMatch == IPTABLES_MARK_MATCH {
 		rules = append(rules, fmt.Sprintf("-m mark --mark %d ", iptableRule.mark))
 	}
 
