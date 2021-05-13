@@ -298,9 +298,9 @@ func stopAllDhcpServers() {
 	bash.Run()
 }
 
-func stopDhcpServer(pidFile, confFile, leaseFile  string) {
+func stopDhcpServer(pidFile  string) {
 	b := &utils.Bash{
-		Command: fmt.Sprintf("kill -9 $(cat %s); truncate -s 0 %s; truncate -s 0 %s", pidFile, confFile, leaseFile),
+		Command: fmt.Sprintf("kill -9 $(cat %s)", pidFile),
 		Sudo: true,
 	}
 	b.Run()
@@ -337,8 +337,8 @@ func startDhcpServerCmd(ctx *server.CommandContext) interface{} {
 	server := cmd.DhcpServers[0]
 	nicname, err := utils.GetNicNameByMac(server.NicMac)
 	utils.PanicOnError(err)
-	pidFile, confFile, leaseFile, _ := getDhcpServerPath(nicname)
-	stopDhcpServer(pidFile, confFile, leaseFile)
+	pidFile, _, _, _ := getDhcpServerPath(nicname)
+	stopDhcpServer(pidFile)
 	startDhcpServer(server)
 
 	writeDhcpScriptFile()
@@ -353,8 +353,8 @@ func stopDhcpServerCmd(ctx *server.CommandContext) interface{} {
 	server := cmd.DhcpServers[0]
 	nicname, err := utils.GetNicNameByMac(server.NicMac)
 	utils.PanicOnError(err)
-	pidFile, confFile, leaseFile, _ := getDhcpServerPath(nicname)
-	stopDhcpServer(pidFile, confFile, leaseFile)
+	pidFile, _, _, _ := getDhcpServerPath(nicname)
+	stopDhcpServer(pidFile)
 
 	delete(DhcpServerEntries, server.NicMac)
 
@@ -499,8 +499,10 @@ func startDhcpServer(dhcp dhcpServer) {
 	utils.PanicOnError(err)
 	pidFile, conFile, leaseFile, _ := getDhcpServerPath(nicname)
 	/* lease file must be created first */
-	utils.CreateFileIfNotExists(leaseFile, os.O_WRONLY|os.O_APPEND, 0666)
+	utils.CreateFileIfNotExists(leaseFile, os.O_WRONLY|os.O_APPEND, os.ModePerm)
 	os.Truncate(leaseFile, 0)
+	utils.CreateFileIfNotExists(conFile, os.O_WRONLY|os.O_APPEND, os.ModePerm)
+	os.Truncate(conFile, 0)
 	os.Remove(pidFile)
 
 	hostNameMap := make(map[string]string)
