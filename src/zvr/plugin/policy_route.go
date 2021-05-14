@@ -49,6 +49,7 @@ type syncPolicyRouteCmd struct {
 	TableNumbers []int `json:"tableNumbers"`
 	Routes []policyRouteInfo `json:"routes"`
 	Refs []policyRuleSetNicRef `json:"refs"`
+	MarkConntrack bool `json:"markConntrack"`
 }
 
 /*
@@ -184,7 +185,8 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd)  {
 
 	var chains []utils.IptablesChain
 	var rules []utils.IptablesRule
-	if len(cmd.RuleSets) > 0 {
+	
+	if len(cmd.RuleSets) > 0 && cmd.MarkConntrack {
 		rules = append(rules, utils.NewMangleIptablesRule(utils.MANGLE_PREROUTING.String(), "", "", "", 0, 0,
 			0, 0, utils.IPTABLES_MARK_UNSET, nil, utils.CONNMARK_RESTORE, utils.PolicyRouteComment, "", ""))
 		rules = append(rules, utils.NewMangleIptablesRule(utils.MANGLE_PREROUTING.String(), "", "", "", 0, 0,
@@ -196,8 +198,10 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd)  {
 		chains = append(chains, utils.NewIpTablesChain(chainName))
 		rules = append(rules, utils.NewMangleIptablesRule(chainName, "", "", "", 0, 0,
 			0, table, utils.IPTABLES_MARK_MATCH,nil, utils.MARK, utils.PolicyRouteComment, "", ""))
-		rules = append(rules, utils.NewMangleIptablesRule(chainName, "", "", "", 0, 0,
-			0, table, utils.IPTABLES_MARK_UNSET,nil, utils.CONNMARK, utils.PolicyRouteComment, "", ""))
+		if cmd.MarkConntrack {
+			rules = append(rules, utils.NewMangleIptablesRule(chainName, "", "", "", 0, 0,
+				0, table, utils.IPTABLES_MARK_UNSET, nil, utils.CONNMARK, utils.PolicyRouteComment, "", ""))
+		}
 	}
 
 	systemRuleSetMap := map[string]bool{}
