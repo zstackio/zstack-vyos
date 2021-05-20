@@ -1,11 +1,11 @@
 package plugin
 
 import (
-	"zvr/server"
 	"fmt"
-	"zvr/utils"
-	"strings"
 	log "github.com/Sirupsen/logrus"
+	"strings"
+	"zvr/server"
+	"zvr/utils"
 )
 
 const (
@@ -289,8 +289,18 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 	if r := tree.FindFirewallRuleByDescription(nicname, "in", des); r != nil {
 		r.Delete()
 	}
-
-	if eip.NeedCleanGuestIp {
+	
+	cleanAddressGroup := true
+	rules := tree.Get("nat destination rule")
+	for _, r := range rules.Children() {
+		guestIp := r.Get("translation address")
+		if guestIp.Value() == eip.GuestIp {
+			cleanAddressGroup =false
+			break
+		}
+	}
+	
+	if cleanAddressGroup {
 		if r := tree.FindGroupByNameValue(eip.GuestIp, eipAddressGroup, "address"); r != nil {
 			r.Delete()
 		}
