@@ -76,6 +76,25 @@ const(
 	LBSecurityPolicystrict3OnlyCiphers = "TLS_AES_256_GCM_SHA384:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA"
 )
 
+type backendServerInfo struct{
+	Ip string `json:"ip"`
+	Weight int `json:"weight`
+}
+
+type serverGroupInfo struct {
+	Name string `json:"name"`
+	ServerGroupUuid string `json:"serverGroupUuid"`
+	BackendServers []backendServerInfo `json:"backendServers"`
+	IsDefault bool `json:"isDefault"`
+}
+
+type redirectRuleInfo struct {
+	RedirectRuleUuid string `json:"redirectRuleUuid"`
+	AclUuid string `json:"aclUuid"`
+	RedirectRule string `json:"redirectRule"`
+	ServerGroupUuid string `json:"serverGroupUuid"`
+}
+
 type lbInfo struct {
 	LbUuid             string   `json:"lbUuid"`
 	ListenerUuid       string   `json:"listenerUuid"`
@@ -88,7 +107,10 @@ type lbInfo struct {
 	Parameters         []string `json:"parameters"`
 	CertificateUuid    string   `json:"certificateUuid"`
 	SecurityPolicyType string   `json:"securityPolicyType"`
+	ServerGroups       []serverGroupInfo `json:"serverGroups"`
+	RedirectRules      []redirectRuleInfo `json:"redirectRules"`
 }
+
 
 type certificateInfo struct {
 	Uuid string `json:"uuid"`
@@ -277,6 +299,52 @@ func parseListenerPrameter(lb lbInfo) (map[string]interface{}, error) {
 	m["CertificatePath"] = makeCertificatePath(lb.CertificateUuid)
 	m["SocketPath"] = makeLbSocketPath(lb)
 	m["Weight"] = weight
+
+	var combinedServerGroups []serverGroupInfo
+	var isAclRedirect bool
+	var defaultServerGroup serverGroupInfo
+
+
+	if ( lb.RedirectRules != nil ) && (len(lb.RedirectRules) > 0 ) && ( (lb.Mode == "http" ) || (lb.Mode == "https"))  {
+		isAclRedirect = true
+		m["IsAclRedirect"] = "enable"
+	} else {
+		m["IsAclRedirect"] = "disable"
+	}
+
+	if isAclRedirect {
+		m["RedirectRules"] = lb.RedirectRules
+		for _, sGroup := range lb.ServerGroups{
+			if sGroup.IsDefault {
+				defaultServerGroup.BackendServers = append(defaultServerGroup.BackendServers, sGroup.BackendServers...)
+			} else {
+				combinedServerGroups = append(combinedServerGroups,sGroup)
+			}
+		}
+	} else {
+		for _, sGroup := range lb.ServerGroups {
+			defaultServerGroup.BackendServers = append(defaultServerGroup.BackendServers, sGroup.BackendServers...)
+		}
+	}
+
+	if len(defaultServerGroup.BackendServers) > 0 {
+		defaultServerGroup.Name = "defaultServerGroup"
+		defaultServerGroup.ServerGroupUuid = "default-" + lb.ListenerUuid 
+		defaultServerGroup.IsDefault = true
+		log.Debugf("defaultServerGroupUuid change to %s", defaultServerGroup.ServerGroupUuid)
+		m["DefaultServerGroupUuid"] = defaultServerGroup.ServerGroupUuid 
+		combinedServerGroups = append(combinedServerGroups,defaultServerGroup)
+	} else {
+		m["DefaultServerGroupUuid"] = ""
+		log.Debugf("defaultServerGroupUuid is null")
+	}
+
+	if len(combinedServerGroups) > 0  {
+		m["ServerGroups"] = combinedServerGroups
+	} else {
+		m["ServerGroups"] = []serverGroupInfo{}
+	}
+
 	return m, nil
 }
 
@@ -292,7 +360,7 @@ func getListenerMaxCocurrenceSocket(maxConnect string) (string) {
 }
 
 func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo)  (err error) {
-	conf := `global
+        conf := `global
     maxconn {{.MaxConnection}}
     log 127.0.0.1 local1
     #user vyos
@@ -311,57 +379,92 @@ func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo)  (err err
 	{{.SecurityOptions}}
 defaults
     log global
-	option dontlognull
-	option {{.HttpMode}}
+    option dontlognull
+    option {{.HttpMode}}
 
-listen {{.ListenerUuid}}
-{{if eq .Mode "https"}}
+
+frontend {{.ListenerUuid}}
+{{- if eq .Mode "https"}}
     mode http
-{{else}}
+{{- else}}
     mode {{.Mode}}
-{{end}}
+{{- end }}
 {{if ne .Mode "tcp"}}
     option forwardfor
 {{end}}
+
+{{- if eq .Mode "https"}}
+    bind {{.Vip}}:{{.LoadBalancerPort}} ssl crt {{.CertificatePath}}
+{{- else }}
+    bind {{.Vip}}:{{.LoadBalancerPort}}
+{{ end }}
     timeout client {{.ConnectionIdleTimeout}}s
-    timeout server {{.ConnectionIdleTimeout}}s
-    timeout connect 60s
+
+
 {{- if eq .AccessControlStatus "enable" }}
+{{- if eq .AclType "black" "white" }}
     #acl status: {{.AccessControlStatus}} ip entty md5: {{.AclEntryMd5}}
     acl {{.ListenerUuid}} src -f {{.AclConfPath}}
-{{- if eq .AclType "black" }}
+{{- end }}
+{{- if eq .AclType "black"}}
     tcp-request connection reject if {{.ListenerUuid}}
-{{- else }}
+{{- end }}
+{{- if eq .AclType "white" }}
     tcp-request connection reject unless {{.ListenerUuid}}
+{{- end }}
+
+{{- end}}
+
+
+{{- if eq .IsAclRedirect "enable" }}
+{{with .RedirectRules }}
+{{- range . }}
+    acl {{.RedirectRuleUuid}} {{ .RedirectRule }}
+    use_backend {{ .ServerGroupUuid }} if {{.RedirectRuleUuid }}
 {{- end }}
 {{- end }}
 
-    balance {{.BalancerAlgorithm}}
-{{- if eq .Mode "https"}}
-    bind {{.Vip}}:{{.LoadBalancerPort}} ssl crt {{.CertificatePath}}
+{{- end }}
+
+{{- if ne .DefaultServerGroupUuid "" }}
+    default_backend {{ .DefaultServerGroupUuid }}
+{{ end }}
+
+{{- with .ServerGroups }}
+{{- range . }}
+backend {{ .ServerGroupUuid}}
+
+{{- if eq $.Mode "https"}}
+    mode http
 {{- else}}
-    bind {{.Vip}}:{{.LoadBalancerPort}}
-{{end}}
-{{- if eq .HealthCheckProtocol "http" }}
+    mode {{ $.Mode}}
+{{- end }}	
+    balance {{ $.BalancerAlgorithm}}
+    timeout server {{$.ConnectionIdleTimeout}}s
+    timeout connect 60s
+
+{{- if eq $.HealthCheckProtocol "http" }}
     option httpchk {{$.HttpChkMethod}} {{$.HttpChkUri}}
-{{- if ne .HttpChkExpect "http_2xx" }}
+{{- if ne $.HttpChkExpect "http_2xx" }}
     http-check expect rstatus {{$.HttpChkExpect}}
 {{- end }}
 {{- end }}
-{{- if eq .BalancerAlgorithm "static-rr" }}
-{{- range $ip, $weight := $.Weight }}
-    server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} weight {{$weight}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
+
+{{- with .BackendServers }}
+{{- range . }}
+{{- if eq $.BalancerAlgorithm "static-rr" }}
+    server nic-{{.Ip}} {{.Ip}}:{{$.InstancePort}} weight {{.Weight}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
+{{- else }}
+    server nic-{{.Ip}} {{.Ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
 {{- end }}
-{{else}}
-{{- range $index, $ip := $.NicIps }}
-    server nic-{{$ip}} {{$ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
+{{- end }}
+{{- end }}
+			
 {{- end }}
 {{- end }}
 `
-
 	var buf, acl_buf bytes.Buffer
 	var m map[string]interface{}
-
 	tmpl, err := template.New("conf").Parse(conf); utils.PanicOnError(err)
 	m, err = parseListenerPrameter(lb);utils.PanicOnError(err)
 	this.maxConnect = m["MaxConnection"].(string)
@@ -416,7 +519,6 @@ listen {{.ListenerUuid}}
 	err = utils.MkdirForFile(this.aclPath, 0755); utils.PanicOnError(err)
 	acl_buf.WriteString(strings.Join(ipRange2Cidrs(strings.Split(m["AclEntry"].(string), ",")),"\n"))
 	err = ioutil.WriteFile(this.aclPath, acl_buf.Bytes(), 0755); utils.PanicOnError(err)
-
 	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
 	err = utils.MkdirForFile(this.pidPath, 0755); utils.PanicOnError(err)
 	err = utils.MkdirForFile(this.confPath, 0755); utils.PanicOnError(err)
@@ -1102,7 +1204,6 @@ func setLb(lb lbInfo) {
 	if  listener == nil {
 		return
 	}
-
 	checksum, err := getFileChecksum(makeLbConfFilePath(lb))
 	if err != nil {
 		log.Errorf("get listener checksum fail %v \n", lb.ListenerUuid)
@@ -1202,7 +1303,6 @@ func refreshLogLevel(ctx *server.CommandContext) interface{} {
 func refreshLb(ctx *server.CommandContext) interface{} {
 	cmd := &refreshLbCmd{}
 	ctx.GetCommand(cmd)
-
 	for _, lb := range cmd.Lbs {
 		if len(lb.NicIps) == 0 {
 			delLb(lb)
