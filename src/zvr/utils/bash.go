@@ -35,14 +35,14 @@ func (b *Bash) build() error {
 
 	if b.Sudo {
 		cmds := strings.Split(b.Command, ";")
-		if len(cmds) > 1 {
+		if len(cmds) >= 1 {
 			for i, cmd := range cmds {
 				cmds[i] = "sudo " + cmd
 			}
 			b.Command = strings.Join(cmds, ";")
 		}
 	}
-	if (b.Arguments != nil) {
+	if b.Arguments != nil {
 		tmpl, err := template.New("script").Parse(b.Command)
 		if err != nil {
 			return err
