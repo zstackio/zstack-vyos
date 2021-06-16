@@ -7,7 +7,6 @@ import (
 	"github.com/pkg/errors"
 	"io/ioutil"
 	"os/exec"
-	"strings"
 	"syscall"
 	"text/template"
 	"time"
@@ -33,16 +32,7 @@ type Bash struct {
 func (b *Bash) build() error {
 	Assert(b.Command != "", "Command cannot be emptry string")
 
-	if b.Sudo {
-		cmds := strings.Split(b.Command, ";")
-		if len(cmds) >= 1 {
-			for i, cmd := range cmds {
-				cmds[i] = "sudo " + cmd
-			}
-			b.Command = strings.Join(cmds, ";")
-		}
-	}
-	if b.Arguments != nil {
+	if (b.Arguments != nil) {
 		tmpl, err := template.New("script").Parse(b.Command)
 		if err != nil {
 			return err
@@ -106,11 +96,16 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 			_, err = tmpfile.Write(content); PanicOnError(err)
 			err = tmpfile.Close(); PanicOnError(err)
 			cmd = exec.Command("bash", "-c", tmpfile.Name())
+		        cmdstr = tmpfile.Name()
 	        }()
+	}
+
+	if b.Sudo {
+		cmd = exec.Command("sudo", "bash", "-c", cmdstr)
 	} else {
 		cmd = exec.Command("bash", "-c", cmdstr)
 	}
-	
+
 	cmd.Stdout = &so
 	cmd.Stderr = &se
 	if err = cmd.Start(); err != nil {
