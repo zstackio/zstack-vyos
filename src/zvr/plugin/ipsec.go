@@ -184,10 +184,17 @@ func restartVpnAfterConfig() {
 			return nil
 		}
 
-		bash := utils.Bash{
-			Command: "pidof starter; if [ $? -eq 0 ]; then sudo ipsec reload; else sudo ipsec restart; fi",
+		if utils.Vyos_version == utils.VYOS_1_1_7  && len(getIPsecPeers()) >= 2 {
+			bash := utils.Bash{
+				Command: "sudo ipsec restart",
+			}
+			bash.Run()
+		}else{
+			b := utils.Bash{
+				Command: "pidof starter; if [ $? -eq 0 ]; then sudo ipsec reload; else sudo ipsec restart; fi",
+			}
+			b.Run()
 		}
-		bash.Run()
 
 		return fmt.Errorf("there is some ipsec peer is not up")
 	}, 3, 20)
