@@ -416,9 +416,12 @@ func (this *HaproxyListener) startListenerService() ( ret int, err error) {
 				this.maxConnect, this.confPath, this.pidPath),
 		}
 	}
-
-
-	ret, _, _, err = bash.RunWithReturn(); bash.PanicIfError()
+	var stderr string
+	var stdout string
+	ret, stdout, stderr,err = bash.RunWithReturn()
+	if err!= nil {
+	    return ret, errors.New(fmt.Sprintf("shell failure[command: %v, return code: %v, stdout: %v, stderr: %v", bash.Command, ret, stdout, stderr))
+	}
 	return ret, err
 }
 
@@ -1044,6 +1047,7 @@ func setLb(lb lbInfo) {
 	if ret, err := listener.startListenerService(); ret != 0 || err != nil {
 		log.Errorf("start listener fail %v \n", lb.ListenerUuid)
 		listener.rollbackPreActionListenerServiceStart()
+		utils.PanicOnError(err)
 		return
 	}
 
