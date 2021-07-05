@@ -250,7 +250,7 @@ func keepAlivedCheckTask() {
 		case <-ticker.C:
 			if utils.IsHaEnabled() {
 				checkKeepalivedRunning()
-				checkConntrackdRunning()
+				//checkConntrackdRunning()
 			}
 		}
 	}
