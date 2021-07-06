@@ -54,6 +54,7 @@ const (
 
 var (
 	haproxyVersion = HAPROXY_VERSION_1_6_9
+	gobetweenListeners map[string]*GBListener
 )
 
 const (
@@ -159,6 +160,7 @@ type GBListener struct {
 	maxConnect string
 	maxSession int   //same to maxConnect
 	aclPath string
+	pm      *utils.PidMon
 }
 
 func getGBApiPort(confPath string, pidPath string) (port string) {
@@ -902,42 +904,38 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 	return err
 }
 
-func setPidRLimit(pids []string) error {
-	
-	for _, pid := range pids{
-		_, err := strconv.Atoi(pid)
-		if err != nil{
-			log.Debugf("pid %s is not correct",pid)
-			return err
-		}
-
+func setPidRLimit(confpath string) error {
+	if pid, err := utils.FindFirstPIDByPS(confpath); pid > 0 {
 		bash := utils.Bash{
-			Command: fmt.Sprintf("sudo cat /proc/%s/limits | grep 'Max open files' | awk -F ' ' '{print $5}' ",pid),
+			Command: fmt.Sprintf("sudo cat /proc/%d/limits | grep 'Max open files' | awk -F ' ' '{print $5}' ",pid),
 		}
-
+		
 		_, hlimit, _, er := bash.RunWithReturn()
 		if er != nil{
-			log.Debugf("cat not get pid %s hard limit",pid)
+			log.Debugf("cat not get pid %d hard limit", pid)
 			return er
 		}
 		hlimit = strings.Replace(hlimit, "\n", "", -1)
 		bash = utils.Bash{
-			Command: fmt.Sprintf("sudo /opt/vyatta/sbin/goprlimit -p %s -s %s",
+			Command: fmt.Sprintf("sudo /opt/vyatta/sbin/goprlimit -p %d -s %s",
 				pid, hlimit),
 		}
-	
+		
 		ret, out, _, e := bash.RunWithReturn()
 		log.Debugf("%d %s",ret, out)
 		if e != nil{
 			return e
 		}
+		
+		return nil
+	} else {
+		return err
 	}
-	return nil
 }
 
 func startGobetween(confpath, pidpath string) (int, error) {
 	bash := utils.Bash{
-		Command: fmt.Sprintf("(/opt/vyatta/sbin/gobetween -c %s >/dev/null 2>&1)&", confpath),
+		Command: fmt.Sprintf("/opt/vyatta/sbin/gobetween -c %s >/dev/null 2>&1&echo $! >%s; cat %s", confpath, pidpath, pidpath),
 		Sudo:    true,
 	}
 
@@ -948,26 +946,52 @@ func startGobetween(confpath, pidpath string) (int, error) {
 		return ret, err
 	}
 	
-	/* get gobetween pid */
-	bash = utils.Bash{
-		Command: fmt.Sprintf("ps aux | grep %s | grep -v grep | grep -v bash | awk '{print $2}'", confpath),
-		Sudo:    true,
-	}
-	
-	ret, out, _, err = bash.RunWithReturn()
-	if ret != 0 || err != nil {
-		log.Debugf("get gobetween pid failed: ret: %d, err: %v, %s", ret, err, out)
-		return ret, err
-	}
-	
-	out = strings.TrimSpace(out)
-	err = ioutil.WriteFile(pidpath, []byte(out), 0755); utils.PanicOnError(err)
-	
 	if runtime.GOARCH == "amd64"{
-		setPidRLimit([]string{out})
+		setPidRLimit(confpath)
 	}
 	
 	return 0, nil
+}
+
+func (this *GBListener) startPidMonitor()  {
+	if _, ok := gobetweenListeners[this.lb.ListenerUuid]; !ok {
+		if pid, err := utils.FindFirstPIDByPS(this.confPath); pid > 0 {
+			this.pm = utils.NewPidMon(pid, func() int {
+				log.Warnf("start gobetween in PidMon for %s", this.lb.ListenerUuid)
+				_, err := startGobetween(this.confPath, this.pidPath)
+				if err != nil {
+					log.Warnf("failed to respawn gobetween: %s", err)
+					return -1
+				}
+				
+				pid, err := utils.FindFirstPIDByPS(this.confPath)
+				if err != nil {
+					log.Warnf("failed to read gobetween pid: %s", err)
+					return -1
+				}
+				
+				return pid
+			})
+			log.Debugf("created gobetween PidMon for %s", this.lb.ListenerUuid)
+			gobetweenListeners[this.lb.ListenerUuid] = this
+			this.pm.Start()
+		} else {
+			log.Warnf("failed to get gobetween pid: %s", err)
+			return
+		}
+	} else {
+		log.Debugf("gobetween PidMon for %s already created", this.lb.ListenerUuid)
+	}
+}
+
+func (this *GBListener) stopPidMonitor()  {
+	if lb, ok := gobetweenListeners[this.lb.ListenerUuid]; ok {
+		log.Warnf("stop gobetween PidMon for %s", this.lb.ListenerUuid)
+		lb.pm.Stop()
+		delete(gobetweenListeners, this.lb.ListenerUuid)
+	} else {
+		log.Warnf("gobetween PidMon for %s not created", this.lb.ListenerUuid)
+	}
 }
 
 func (this *GBListener) startListenerService() (int,  error) {
@@ -976,29 +1000,7 @@ func (this *GBListener) startListenerService() (int,  error) {
 		return ret, err
 	}
 	
-	pid, err := utils.ReadPidFromFile(this.pidPath)
-	if err != nil { // ignore error
-		log.Warnf("failed to get gobetween pid: %s", err)
-		return ret, nil
-	}
-	
-	pm := utils.NewPidMon(pid, func() int {
-		_, err := startGobetween(this.confPath, this.pidPath)
-		if err != nil {
-			log.Warnf("failed to respawn gobetween: %s", err)
-			return -1
-		}
-
-		buf, err := utils.ReadPidFromFile(this.pidPath)
-		if err != nil {
-			log.Warnf("failed to read gobetween pid: %s", err)
-			return -1
-		}
-
-		pid, _ := strconv.Atoi(strings.TrimSpace(string(buf)))
-		return pid
-	})
-	pm.Start()
+	this.startPidMonitor()
 
 	return ret, err
 }
@@ -1022,19 +1024,17 @@ func getFileChecksum(file string) (checksum string, err error) {
 }
 
 func (this *GBListener) checkIfListenerServiceUpdate(origChecksum string, currChecksum string) ( bool, error) {
-	var err error = nil
-	for {
-		if pid, _:= utils.FindFirstPIDByPS( this.confPath); pid > 0 {
-			if strings.EqualFold(origChecksum, currChecksum) {
-				return false, err
-			}
-			log.Debugf("lb %s pid: %v orig: %v curr: %v", this.confPath, pid, origChecksum, currChecksum)
-			err = utils.KillProcess(pid); utils.PanicOnError(err)
-		} else {
-			break
+	var err error
+	err = nil
+	if pid, _:= utils.FindFirstPIDByPS( this.confPath); pid > 0 {
+		if strings.EqualFold(origChecksum, currChecksum) {
+			this.startPidMonitor()
+			return false, nil
 		}
+		log.Debugf("lb %s pid: %v orig: %v curr: %v", this.confPath, pid, origChecksum, currChecksum)
+		err = utils.KillProcess(pid)
 	}
-
+	
 	return true, err
 }
 
@@ -1127,9 +1127,11 @@ func (this *GBListener) stopListenerService() ( err error) {
 	pid, err := utils.FindFirstPIDByPS(this.confPath)
 	//log.Debugf("lb %s pid: %v result:%v", this.confPath, pid, err)
 	err = nil
+	this.stopPidMonitor()
+	
 	if pid > 0 {
 		err = utils.KillProcess(pid); utils.PanicOnError(err)
-	} else if (pid == -1) {
+	} else if pid == -1 {
 		err = nil
 	}
 
@@ -1786,6 +1788,10 @@ missingok
 	utils.SudoMoveFile(lb_log_file.Name(), "/etc/rsyslog.d/haproxy.conf")
 	utils.SudoMoveFile(lb_log_rotatoe_file.Name(), "/etc/logrotate.d/haproxy")
 	utils.SudoMoveFile(auth_rotatoe_file.Name(), "/etc/logrotate.d/auth")
+}
+
+func init()  {
+	gobetweenListeners = map[string]*GBListener{}
 }
 
 func LbEntryPoint() {

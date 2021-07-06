@@ -30,10 +30,15 @@ func (pm *PidMon) Start() error {
 	go func() {
 		for pm.ok {
 			time.Sleep(pm.interval)
+			/* maybe pid monitor is stopped after sleep */
+			if !pm.ok {
+				return
+			}
+			
 			if ProcessExists(pm.pid) == nil {
 				continue
 			}
-
+			
 			if n := pm.onPidMissing(); n > 0 {
 				pm.pid = n
 			}
