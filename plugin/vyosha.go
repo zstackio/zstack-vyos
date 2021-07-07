@@ -331,10 +331,17 @@ func InitHaNicState() {
 		return
 	}
 
-	/* if ha is enable, shutdown all interface except eth0 */
-	cmds := []string{}
-	cmds = append(cmds, fmt.Sprintf("sudo sysctl -w net.ipv4.ip_nonlocal_bind=1"))
+	/* disable conntrackd at current time */
 	b := utils.Bash{
+		Command: "pkill -9 conntrackd",
+		Sudo: true,
+	}
+	b.Run()
+	
+	/* if ha is enable, shutdown all interface except eth0 */
+	var cmds []string
+	cmds = append(cmds, fmt.Sprintf("sudo sysctl -w net.ipv4.ip_nonlocal_bind=1"))
+	b = utils.Bash{
 		Command: strings.Join(cmds, "\n"),
 	}
 
