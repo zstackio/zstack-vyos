@@ -23,6 +23,8 @@ check_version() {
             su - vyos -c "echo $(date '+%Y-%m-%d %H:%M:%S') the running zvr version is $current_version and management node zvr version is $zvr_version, no need restart zstack virtual router >> $LOGFILE"
             result="success"
         fi
+    elif [[ "$ret" =~ "no plugin registered the path" ]]; then ##old version image, there is no test command in zvr
+        result="restart"
     else
         result="failed"
     fi
