@@ -996,7 +996,7 @@ func (this *GBListener) stopPidMonitor()  {
 
 func (this *GBListener) startListenerService() (int,  error) {
 	ret, err := startGobetween(this.confPath, this.pidPath)
-	if err != nil {
+	if err != nil || ret != 0{
 		return ret, err
 	}
 	
@@ -1242,7 +1242,7 @@ func setLb(lb lbInfo) {
 	}
 
 	if err := listener.postActionListenerServiceStart(); err != nil {
-		utils.PanicOnError(err);
+		utils.PanicOnError(err)
 	}
 }
 
