@@ -2,15 +2,16 @@ package utils
 
 import (
 	"fmt"
-	"strings"
 	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
 	"io/ioutil"
 	"os"
 	"sort"
+	"strings"
 )
 
 type Chain int
+
 const (
 	IN Chain = iota
 	LOCAL
@@ -40,31 +41,31 @@ func getChainName(nic string, ch Chain) string {
 }
 
 const (
-	TCP = "tcp"
-	UDP = "udp"
+	TCP  = "tcp"
+	UDP  = "udp"
 	ICMP = "icmp"
-	ESP = "esp"
-	AH = "ah"
+	ESP  = "esp"
+	AH   = "ah"
 )
 
 const (
-	ACCEPT = "ACCEPT"
-	RETURN = "RETURN"
-	REJECT = "REJECT"
-	DNAT = "DNAT"
-	SNAT = "SNAT"
-	DROP = "DROP"
-	MARK = "MARK"
-	CONNMARK = "CONNMARK"
+	ACCEPT           = "ACCEPT"
+	RETURN           = "RETURN"
+	REJECT           = "REJECT"
+	DNAT             = "DNAT"
+	SNAT             = "SNAT"
+	DROP             = "DROP"
+	MARK             = "MARK"
+	CONNMARK         = "CONNMARK"
 	CONNMARK_RESTORE = "CONNMARK_RESTORE"
-	OTHER = "OTHER"
+	OTHER            = "OTHER"
 )
 
 const (
-	NEW = "NEW"
-	RELATED = "RELATED"
+	NEW         = "NEW"
+	RELATED     = "RELATED"
 	ESTABLISHED = "ESTABLISHED"
-	INVALID = "INVALID"
+	INVALID     = "INVALID"
 )
 
 const (
@@ -72,51 +73,53 @@ const (
 )
 
 const (
-	FirewallTable = "filter"
-	NatTable = "nat"
-	MangleTable = "mangle"
-	DefaultTopRuleComment = "Default-rules-top" /* must be at top of firewall */
-	DefaultBottomRuleComment = "Default-rules-bottom" /* must be at bottom of firewall */
-	PortFordingRuleComment = "PF-rules-for-"
-	DnsRuleComment = "DNS-rules"
-	DHCPRuleComment = "DHCP-rules"
-	EipRuleComment = "EIP-rules-for-"
-	IpsecRuleComment = "IPSEC-rules-for-"         /* must be at top of postrouting of nat */
-	LbRuleComment = "LB-rules-for-"
-	LbSynRuleComment = "LB-SYN-rules-for-"
-	SNATComment = "SNAT-rules-for-"
-	ManagementComment = "Management-rules"
-	OSPFComment = "OSPF-rules"
-	VRRPComment = "VRRP-rules"
-	PIMDComment = "PIMD-rules"
-	PolicyRouteComment = "Zs-Pr-Rules"
-	PolicyRouteChainPrefix = "zs-rt-"
+	FirewallTable              = "filter"
+	NatTable                   = "nat"
+	MangleTable                = "mangle"
+	DefaultTopRuleComment      = "Default-rules-top"    /* must be at top of firewall */
+	DefaultBottomRuleComment   = "Default-rules-bottom" /* must be at bottom of firewall */
+	PortFordingRuleComment     = "PF-rules-for-"
+	DnsRuleComment             = "DNS-rules"
+	DHCPRuleComment            = "DHCP-rules"
+	EipRuleComment             = "EIP-rules-for-"
+	IpsecRuleComment           = "IPSEC-rules-for-" /* must be at top of postrouting of nat */
+	LbRuleComment              = "LB-rules-for-"
+	LbSynRuleComment           = "LB-SYN-rules-for-"
+	SNATComment                = "SNAT-rules-for-"
+	ManagementComment          = "Management-rules"
+	OSPFComment                = "OSPF-rules"
+	VRRPComment                = "VRRP-rules"
+	CTHAComment                = "CTHA-rules"
+	PIMDComment                = "PIMD-rules"
+	PolicyRouteComment         = "Zs-Pr-Rules"
+	PolicyRouteChainPrefix     = "zs-rt-"
 	PolicyRouteRuleChainPrefix = "zs-rule-"
 )
 
 var rulesPriority = map[string]int{
-"Default-rules-top": 	1000,
-"Management-rules": 	900,
-"VRRP-rules": 	        890,
-"DNS-rules":        	800,
-"DHCP-rules":        	700,
-"OSPF-rules":           690,
-"PIMD-rules":           620,
-"IPSEC-rules-": 	600,
-"PF-rules-":    	500,
-"LB-rules-":            450,
-"LB-SYN-rules-":            400,
-"EIP-rules-":           300,
-"SNAT-rules-":          200,
-"Default-rules-bottom": 100,
+	"Default-rules-top":    1000,
+	"Management-rules":     900,
+	"VRRP-rules":           890,
+	"DNS-rules":            800,
+	"DHCP-rules":           700,
+	"OSPF-rules":           690,
+	"PIMD-rules":           620,
+	"IPSEC-rules-":         600,
+	"PF-rules-":            500,
+	"LB-rules-":            450,
+	"LB-SYN-rules-":        400,
+	"EIP-rules-":           300,
+	"SNAT-rules-":          200,
+	"Default-rules-bottom": 100,
 }
 
 const (
-	Predefined_local_chain = "VYATTA_PRE_FW_IN_HOOK"
+	Predefined_local_chain   = "VYATTA_PRE_FW_IN_HOOK"
 	Predefined_forward_chain = "VYATTA_PRE_FW_FWD_HOOK"
 )
 
 type MARK_MATACH_TYPE int
+
 const (
 	IPTABLES_MARK_UNSET MARK_MATACH_TYPE = iota
 	IPTABLES_MARK_MATCH
@@ -133,134 +136,134 @@ func commentCompare(comment1, comment2 string) int {
 }
 
 type IptablesChain struct {
-	chainName         string
-	defaultAction     string
+	chainName     string
+	defaultAction string
 }
 
-func (c *IptablesChain)  String () string{
+func (c *IptablesChain) String() string {
 	return fmt.Sprintf(":%s %s", c.chainName, c.defaultAction)
 }
 
 func NewIpTablesChain(name string) IptablesChain {
-	return IptablesChain{chainName:name, defaultAction: "-"}
+	return IptablesChain{chainName: name, defaultAction: "-"}
 }
 
 type IptablesRule struct {
-	chainName         string
+	chainName string
 
 	/* match condition */
-	proto             string
-	src, dest         string
+	proto                   string
+	src, dest               string
 	excludeSrc, excludeDest bool
-	srcPort, destPort int
-	states            []string
-	comment           string
-	inNic, outNic     string
-	tcpflags          []string
-	mark              int
-	markNoMatch       MARK_MATACH_TYPE
+	srcPort, destPort       int
+	states                  []string
+	comment                 string
+	inNic, outNic           string
+	tcpflags                []string
+	mark                    int
+	markNoMatch             MARK_MATACH_TYPE
 
 	/* action operation */
-	action            string
-	natTranslationIp          string
-	natTranslationPort   int
-	targetMark                 int
+	action             string
+	natTranslationIp   string
+	natTranslationPort int
+	targetMark         int
 }
 
 func NewNatIptablesRule(proto string, src, dest string, srcPort, destPort int,
-states []string, action string,  comment string, natTranslationIp string, natTranslationPort int) IptablesRule {
+	states []string, action string, comment string, natTranslationIp string, natTranslationPort int) IptablesRule {
 	return IptablesRule{proto: proto, src: src, dest: dest, srcPort: srcPort,
-		destPort:destPort, states: states, action:action, comment:comment,
-		outNic: "", inNic: "", tcpflags:nil, natTranslationIp: natTranslationIp, natTranslationPort:natTranslationPort}
+		destPort: destPort, states: states, action: action, comment: comment,
+		outNic: "", inNic: "", tcpflags: nil, natTranslationIp: natTranslationIp, natTranslationPort: natTranslationPort}
 }
 
 func NewIptablesRule(proto string, src, dest string, srcPort, destPort int,
-           states []string, action string,  comment string) IptablesRule {
+	states []string, action string, comment string) IptablesRule {
 	return IptablesRule{proto: proto, src: src, dest: dest, srcPort: srcPort,
-		destPort:destPort, states: states, action:action, comment:comment,
-		outNic: "", inNic: "", tcpflags:nil}
+		destPort: destPort, states: states, action: action, comment: comment,
+		outNic: "", inNic: "", tcpflags: nil}
 }
 
-func NewEipNatRule(src, dest string, action string,  comment string, outNic string, natTranslationIp string, natTranslationPort int) IptablesRule {
+func NewEipNatRule(src, dest string, action string, comment string, outNic string, natTranslationIp string, natTranslationPort int) IptablesRule {
 	return IptablesRule{proto: "", src: src, dest: dest, srcPort: 0,
-		destPort:0, states: nil, action:action, comment:comment,
-		outNic: outNic, inNic: "", tcpflags:nil, natTranslationIp: natTranslationIp, natTranslationPort:natTranslationPort}
+		destPort: 0, states: nil, action: action, comment: comment,
+		outNic: outNic, inNic: "", tcpflags: nil, natTranslationIp: natTranslationIp, natTranslationPort: natTranslationPort}
 }
 
 func NewIpsecsIptablesRule(proto string, src, dest string, srcPort, destPort int,
-states []string, action string,  comment string, inNic, outNic string) IptablesRule {
+	states []string, action string, comment string, inNic, outNic string) IptablesRule {
 	return IptablesRule{proto: proto, src: src, dest: dest, srcPort: srcPort,
-		destPort:destPort, states: states, action:action, comment:comment,
+		destPort: destPort, states: states, action: action, comment: comment,
 		outNic: outNic, inNic: inNic, tcpflags: nil}
 }
 
 func NewLoadBalancerIptablesRule(proto string, dest string, destPort int, action string,
-        comment string, tcpflags []string) IptablesRule {
+	comment string, tcpflags []string) IptablesRule {
 	return IptablesRule{proto: proto, src: "", dest: dest, srcPort: 0,
-		destPort:destPort, states: nil, action:action, comment:comment,
-		outNic: "", inNic: "", tcpflags:tcpflags}
+		destPort: destPort, states: nil, action: action, comment: comment,
+		outNic: "", inNic: "", tcpflags: tcpflags}
 }
 
 func NewSnatIptablesRule(excludeSrc, excludeDest bool, src, dest, outNic, action, comment string, natTranslationIp string, natTranslationPort int) IptablesRule {
 	return IptablesRule{proto: "", src: src, dest: dest, excludeSrc: excludeSrc, excludeDest: excludeDest, srcPort: 0,
-		destPort:0, states: nil, action:action, comment:comment,
-		outNic: outNic, inNic: "", tcpflags:nil, natTranslationIp: natTranslationIp, natTranslationPort:natTranslationPort}
+		destPort: 0, states: nil, action: action, comment: comment,
+		outNic: outNic, inNic: "", tcpflags: nil, natTranslationIp: natTranslationIp, natTranslationPort: natTranslationPort}
 }
 
 func NewMangleIptablesRule(chainName, proto string, src, dest string, srcPort, destPort int, mark, targetMark int, markNoMatch MARK_MATACH_TYPE,
-	states []string, action string,  comment string, inNic, outNic string) IptablesRule {
+	states []string, action string, comment string, inNic, outNic string) IptablesRule {
 	return IptablesRule{proto: proto, src: src, dest: dest, srcPort: srcPort,
-		destPort:destPort, states: states, action:action, comment:comment,
-		outNic: outNic, inNic: inNic, tcpflags:nil, mark:mark, targetMark:targetMark, markNoMatch: markNoMatch, chainName:chainName}
+		destPort: destPort, states: states, action: action, comment: comment,
+		outNic: outNic, inNic: inNic, tcpflags: nil, mark: mark, targetMark: targetMark, markNoMatch: markNoMatch, chainName: chainName}
 }
 
-func (iptableRule IptablesRule)string() []string  {
+func (iptableRule IptablesRule) string() []string {
 	rules := []string{}
 	if iptableRule.chainName != "" {
-		rules = append(rules, "-A " + iptableRule.chainName)
+		rules = append(rules, "-A "+iptableRule.chainName)
 	}
 
 	if iptableRule.src != "" {
 		if iptableRule.excludeSrc {
-			rules = append(rules, "! -s " + iptableRule.src)
+			rules = append(rules, "! -s "+iptableRule.src)
 		} else {
-			rules = append(rules, "-s " + iptableRule.src)
+			rules = append(rules, "-s "+iptableRule.src)
 		}
 	}
 
 	if iptableRule.dest != "" {
 		if iptableRule.excludeDest {
-			rules = append(rules, "! -d " + iptableRule.dest)
+			rules = append(rules, "! -d "+iptableRule.dest)
 		} else {
-			rules = append(rules, "-d " + iptableRule.dest)
+			rules = append(rules, "-d "+iptableRule.dest)
 		}
 	}
 
 	if iptableRule.inNic != "" {
-		rules = append(rules, "-i " + iptableRule.inNic)
+		rules = append(rules, "-i "+iptableRule.inNic)
 	}
 
 	if iptableRule.outNic != "" {
-		rules = append(rules, "-o " + iptableRule.outNic)
+		rules = append(rules, "-o "+iptableRule.outNic)
 	}
 
 	if iptableRule.proto != "" {
-		rules = append(rules, "-p " + iptableRule.proto)
+		rules = append(rules, "-p "+iptableRule.proto)
 		if iptableRule.srcPort != 0 {
-			rules = append(rules, "-m " + iptableRule.proto)
+			rules = append(rules, "-m "+iptableRule.proto)
 			rules = append(rules, fmt.Sprintf("--sport %d ", iptableRule.srcPort))
 		}
 
 		if iptableRule.destPort != 0 {
-			rules = append(rules, "-m " + iptableRule.proto)
+			rules = append(rules, "-m "+iptableRule.proto)
 			rules = append(rules, fmt.Sprintf("--dport %d ", iptableRule.destPort))
 		}
 	}
 
-	rules = append(rules, "-m comment --comment " + iptableRule.comment)
+	rules = append(rules, "-m comment --comment "+iptableRule.comment)
 
 	if iptableRule.states != nil {
-		rules = append(rules, "-m state --state " + strings.Join(iptableRule.states, ","))
+		rules = append(rules, "-m state --state "+strings.Join(iptableRule.states, ","))
 	}
 
 	if iptableRule.markNoMatch == IPTABLES_MARK_NOT_MATCH {
@@ -287,7 +290,7 @@ func (iptableRule IptablesRule)string() []string  {
 	case CONNMARK_RESTORE:
 		rules = append(rules, fmt.Sprintf("-j CONNMARK --restore-mark"))
 	default:
-		rules = append(rules, "-j " + iptableRule.action)
+		rules = append(rules, "-j "+iptableRule.action)
 	}
 
 	return rules
@@ -310,10 +313,10 @@ func SetDefaultRule(nic string, defaultAction string) error {
 	}
 
 	rule = getDefaultIptablesRule()
-	rule.states = []string {NEW}
+	rule.states = []string{NEW}
 	rule.action = RETURN
 	rule.comment = DefaultBottomRuleComment
-	if err := InsertFireWallRule(nic, rule, IN); err != nil{
+	if err := InsertFireWallRule(nic, rule, IN); err != nil {
 		return err
 	}
 
@@ -346,7 +349,7 @@ func getCommentsFromRule(rule string) string {
 	return strings.Trim(comment, "\"")
 }
 
-func InsertFireWallRule(nic string, rule IptablesRule, ch Chain)  error {
+func InsertFireWallRule(nic string, rule IptablesRule, ch Chain) error {
 	rules := strings.Join(rule.string(), " ")
 	chainName := getChainName(nic, ch)
 	if exist, _ := isExist(FirewallTable, chainName, rules); exist {
@@ -372,7 +375,7 @@ func InsertFireWallRule(nic string, rule IptablesRule, ch Chain)  error {
 		if commentCompare(comment, rule.comment) < 0 {
 			break
 		}
-		num++;
+		num++
 	}
 
 	rules = fmt.Sprintf("sudo iptables -t %s -I %s %d %s", FirewallTable, chainName, num, rules)
@@ -380,7 +383,7 @@ func InsertFireWallRule(nic string, rule IptablesRule, ch Chain)  error {
 		Command: rules,
 	}
 
-	ret,_,_,err := cmd.RunWithReturn();
+	ret, _, _, err := cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("%s failed %s", rules, err.Error())
 		return err
@@ -401,8 +404,8 @@ func GenerateNatRule(rule IptablesRule, ch Chain) String  {
 }*/
 
 /* ipsec rules must at the head of all postrouting rules
-  ipsec rules use InsertNatRule, other rules use append */
-func InsertNatRule(rule IptablesRule, ch Chain)  error {
+ipsec rules use InsertNatRule, other rules use append */
+func InsertNatRule(rule IptablesRule, ch Chain) error {
 	rules := strings.Join(rule.string(), " ")
 	if exist, _ := isExist(NatTable, ch.String(), rules); exist {
 		log.Debugf("iptables %s %s already existed", NatTable, rules)
@@ -427,7 +430,7 @@ func InsertNatRule(rule IptablesRule, ch Chain)  error {
 		if commentCompare(comment, rule.comment) < 0 {
 			break
 		}
-		num++;
+		num++
 	}
 
 	rules = fmt.Sprintf("sudo iptables -t %s -I %s %d %s", NatTable, ch.String(), num, rules)
@@ -435,7 +438,7 @@ func InsertNatRule(rule IptablesRule, ch Chain)  error {
 		Command: rules,
 	}
 
-	ret,_,_,err := cmd.RunWithReturn();
+	ret, _, _, err := cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("%s failed %s", rules, err.Error())
 		return err
@@ -460,7 +463,7 @@ func DeleteSNatRuleByComment(comment string) error {
 	return nil
 }
 
-func DeleteLocalFirewallRuleByComment(nic string, comment string) error  {
+func DeleteLocalFirewallRuleByComment(nic string, comment string) error {
 	chainName := getChainName(nic, LOCAL)
 	deleteIptablesRuleByComment(FirewallTable, chainName, comment)
 	return nil
@@ -476,17 +479,17 @@ func DeleteFirewallRuleByComment(nic string, comment string) error {
 	return nil
 }
 
-func getDefaultIptablesRule() IptablesRule  {
-	return IptablesRule {proto: "", src: "", dest: "", srcPort: 0, destPort: 0,
-		states:nil, action: RETURN, comment:DefaultBottomRuleComment, inNic:"", outNic:""}
+func getDefaultIptablesRule() IptablesRule {
+	return IptablesRule{proto: "", src: "", dest: "", srcPort: 0, destPort: 0,
+		states: nil, action: RETURN, comment: DefaultBottomRuleComment, inNic: "", outNic: ""}
 }
 
-func DestroyNicFirewall(nic string)  {
+func DestroyNicFirewall(nic string) {
 	var rules []string
 	var err error
 	chainName := getChainName(nic, LOCAL)
 	rules, err = listRule(FirewallTable, chainName)
-	if (err == nil && len(rules) > 0) {
+	if err == nil && len(rules) > 0 {
 		for _, rule := range rules {
 			deleteIptablesRule(FirewallTable, rule)
 		}
@@ -496,7 +499,7 @@ func DestroyNicFirewall(nic string)  {
 		Command: r,
 	}
 
-	ret,_,_,err := cmd.RunWithReturn();
+	ret, _, _, err := cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("%s failed %s", r, err.Error())
 	}
@@ -504,7 +507,6 @@ func DestroyNicFirewall(nic string)  {
 	if ret != 0 {
 		log.Debugf("%s failed ret = %d", r, ret)
 	}
-
 
 	chainName = getChainName(nic, IN)
 	rules, err = listRule(FirewallTable, chainName)
@@ -518,7 +520,7 @@ func DestroyNicFirewall(nic string)  {
 		Command: r,
 	}
 
-	ret,_,_,err = cmd.RunWithReturn();
+	ret, _, _, err = cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("%s failed %s", r, err.Error())
 	}
@@ -528,8 +530,8 @@ func DestroyNicFirewall(nic string)  {
 	}
 }
 
-func InitNicFirewall(nic string, ip string, pubNic bool, defaultAction string)  error {
-	if err := initNicFireWallChain(nic); (err != nil) {
+func InitNicFirewall(nic string, ip string, pubNic bool, defaultAction string) error {
+	if err := initNicFireWallChain(nic); err != nil {
 		log.Debugf("initNicFireWallChain failed %s", err.Error())
 		return err
 	}
@@ -537,7 +539,7 @@ func InitNicFirewall(nic string, ip string, pubNic bool, defaultAction string)  
 	return initNicFirewallDefaultRules(nic, ip, pubNic, defaultAction)
 }
 
-func InitNatRule()  {
+func InitNatRule() {
 	if !IsSkipVyosIptables() {
 		return
 	}
@@ -546,19 +548,19 @@ func InitNatRule()  {
 	cmd := Bash{
 		Command: "sudo iptables -t raw -C PREROUTING -j NOTRACK && sudo iptables -t raw -D PREROUTING -j NOTRACK;" +
 			"sudo iptables -t raw -C OUTPUT -j NOTRACK && sudo iptables -t raw -D OUTPUT -j NOTRACK;" +
-			"sudo iptables -t raw -A PREROUTING -p vrrp -j NOTRACK;" +  // do not track VRRP
+			"sudo iptables -t raw -A PREROUTING -p vrrp -j NOTRACK;" + // do not track VRRP
 			"sudo iptables -t raw -A OUTPUT -p vrrp -j NOTRACK",
 	}
 
-	cmd.Run();
+	cmd.Run()
 
 	ch := PREROUTING
-	if err := newChain(NatTable, "PREROUTING", ch.String(),  ""); err != nil {
+	if err := newChain(NatTable, "PREROUTING", ch.String(), ""); err != nil {
 		return
 	}
 
 	ch = POSTROUTING
-	if err := newChain(NatTable, "POSTROUTING", ch.String(),  ""); err != nil {
+	if err := newChain(NatTable, "POSTROUTING", ch.String(), ""); err != nil {
 		return
 	}
 }
@@ -595,10 +597,10 @@ func initNicFirewallDefaultRules(nic string, ip string, pubNic bool, defaultActi
 	DeleteFirewallRuleByComment(nic, DefaultBottomRuleComment)
 
 	rule = getDefaultIptablesRule()
-	rule.states = []string {NEW}
+	rule.states = []string{NEW}
 	rule.action = RETURN
 	rule.comment = DefaultBottomRuleComment
-	if err := InsertFireWallRule(nic, rule, IN); err != nil{
+	if err := InsertFireWallRule(nic, rule, IN); err != nil {
 		return err
 	}
 
@@ -612,7 +614,7 @@ func initNicFirewallDefaultRules(nic string, ip string, pubNic bool, defaultActi
 	/* add rules for INPUT chain */
 	rule = getDefaultIptablesRule()
 	rule.dest = ip + "/32"
-	rule.states = []string {RELATED, ESTABLISHED}
+	rule.states = []string{RELATED, ESTABLISHED}
 	rule.action = RETURN
 	rule.comment = DefaultTopRuleComment
 	if err := InsertFireWallRule(nic, rule, LOCAL); err != nil {
@@ -677,7 +679,7 @@ func deleteIptablesRule(tableName, rule string) error {
 		Command: r,
 	}
 
-	ret,_,_,err := cmd.RunWithReturn();
+	ret, _, _, err := cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("%s failed %s", r, err.Error())
 		return err
@@ -691,7 +693,7 @@ func deleteIptablesRule(tableName, rule string) error {
 	return nil
 }
 
-func deleteIptablesRuleByComment(tableName, chainName, comment string)  error {
+func deleteIptablesRuleByComment(tableName, chainName, comment string) error {
 	rules, _ := listRule(tableName, chainName)
 	for _, rule := range rules {
 		if strings.Contains(rule, comment) {
@@ -701,7 +703,7 @@ func deleteIptablesRuleByComment(tableName, chainName, comment string)  error {
 				Command: r,
 			}
 
-			ret,_,_,err := cmd.RunWithReturn();
+			ret, _, _, err := cmd.RunWithReturn()
 			if err != nil {
 				log.Debugf("%s failed %s", r, err.Error())
 			}
@@ -715,13 +717,13 @@ func deleteIptablesRuleByComment(tableName, chainName, comment string)  error {
 	return nil
 }
 
-func isExist(tableName, chainName string, rulespec ...string) (bool, error)  {
+func isExist(tableName, chainName string, rulespec ...string) (bool, error) {
 	rule := strings.Join(rulespec, " ")
 	cmd := Bash{
 		Command: fmt.Sprintf("sudo iptables -t %s -C %s %s", tableName, chainName, rule),
 	}
 
-	ret,_,_,err := cmd.RunWithReturn();
+	ret, _, _, err := cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("iptables table: %s chain: %s check %s failed %s", tableName, chainName, rule, err.Error())
 		return false, err
@@ -735,9 +737,9 @@ func isExist(tableName, chainName string, rulespec ...string) (bool, error)  {
 	return true, nil
 }
 
-func initNicFireWallChain(nic string)  error{
+func initNicFireWallChain(nic string) error {
 	chainName := getChainName(nic, LOCAL)
-	if err := newChain(FirewallTable, Predefined_local_chain, chainName,  nic); err != nil {
+	if err := newChain(FirewallTable, Predefined_local_chain, chainName, nic); err != nil {
 		return err
 	}
 
@@ -755,15 +757,15 @@ func newChain(tableName, parentChain, chainName, nicName string) error {
 		Command: rule,
 	}
 
-	ret,_,_,err := cmd.RunWithReturn();
+	ret, _, _, err := cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("%s failed %s", rule, err.Error())
 		return err
 	}
 
 	if ret != 0 {
-		log.Debugf("%s failed ret = %d",rule, ret)
-		return errors.Errorf("%s failed ret = %d",rule, ret)
+		log.Debugf("%s failed ret = %d", rule, ret)
+		return errors.Errorf("%s failed ret = %d", rule, ret)
 	}
 
 	if nicName == "" {
@@ -776,7 +778,7 @@ func newChain(tableName, parentChain, chainName, nicName string) error {
 		Command: rule,
 	}
 
-	ret,_,_,err = cmd.RunWithReturn();
+	ret, _, _, err = cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("%s failed %s", rule, err.Error())
 		return err
@@ -790,14 +792,14 @@ func newChain(tableName, parentChain, chainName, nicName string) error {
 	return nil
 }
 
-func listRule(tableName, chainName string) ([]string, error){
+func listRule(tableName, chainName string) ([]string, error) {
 	rule := fmt.Sprintf("sudo iptables -t %s -S %s", tableName, chainName)
 	cmd := Bash{
 		Command: rule,
-		NoLog: true,
+		NoLog:   true,
 	}
 
-	ret,o,_,err := cmd.RunWithReturn();
+	ret, o, _, err := cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("%s failed %s", rule, err.Error())
 		return nil, err
@@ -821,10 +823,10 @@ func getNatRuleSet() ([]string, []string, []string, error) {
 	cmds := fmt.Sprintf("sudo iptables-save -t nat")
 	cmd := Bash{
 		Command: cmds,
-		NoLog: true,
+		NoLog:   true,
 	}
 
-	ret,o,_,err := cmd.RunWithReturn();
+	ret, o, _, err := cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("%s failed %s", cmds, err.Error())
 		return nil, nil, nil, err
@@ -851,7 +853,7 @@ func getNatRuleSet() ([]string, []string, []string, error) {
 			continue
 		}
 
-		if fields[1] == PREROUTING.String(){
+		if fields[1] == PREROUTING.String() {
 			dnat = append(dnat, r)
 		} else if fields[1] == POSTROUTING.String() {
 			snat = append(snat, r)
@@ -867,10 +869,10 @@ func getFirewallRuleSet() ([]string, map[string][]string, error) {
 	cmds := fmt.Sprintf("sudo iptables-save -t filter")
 	cmd := Bash{
 		Command: cmds,
-		NoLog: true,
+		NoLog:   true,
 	}
 
-	ret,o,_,err := cmd.RunWithReturn();
+	ret, o, _, err := cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("%s failed %s", cmds, err.Error())
 		return nil, nil, err
@@ -915,10 +917,10 @@ func getRuleSet(table string) ([]string, error) {
 	cmds := fmt.Sprintf("sudo iptables-save -t %s", table)
 	cmd := Bash{
 		Command: cmds,
-		NoLog: true,
+		NoLog:   true,
 	}
 
-	ret,o,_,err := cmd.RunWithReturn();
+	ret, o, _, err := cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("%s failed %s", cmds, err.Error())
 		return nil, err
@@ -935,23 +937,22 @@ func getRuleSet(table string) ([]string, error) {
 		rules = rules[:len(rules)-1]
 	}
 
-
 	return rules, nil
 }
 
-func AppendIptalbesRuleSet(ruleset []string, table string) (error) {
+func AppendIptalbesRuleSet(ruleset []string, table string) error {
 	if len(ruleset) == 0 {
 		return nil
 	}
 
 	if rules, err := getRuleSet(table); err == nil {
 		temp := []string{}
-		temp = append(temp, rules[:len(rules) -2]...)
+		temp = append(temp, rules[:len(rules)-2]...)
 		temp = append(temp, ruleset...)
-		temp = append(temp, rules[len(rules) -2:]...)
+		temp = append(temp, rules[len(rules)-2:]...)
 		return restoreIptablesRulesSet(temp, table)
 	} else {
-		return err;
+		return err
 	}
 }
 
@@ -981,7 +982,7 @@ func insertRuleIntoBuffer(ruleset []string, rules []IptablesRule, comment, chain
 	return temp
 }
 
-func restoreIptablesRulesSet(ruleSet []string, tableName string) error  {
+func restoreIptablesRulesSet(ruleSet []string, tableName string) error {
 	tmpFile, err := ioutil.TempFile(os.TempDir(), "iptable-restore")
 	if err != nil {
 		log.Debugf("create iptable-restore temp file failed %s", err.Error())
@@ -1008,7 +1009,7 @@ func restoreIptablesRulesSet(ruleSet []string, tableName string) error  {
 		Command: cmds,
 	}
 
-	_,_,_,err = cmd.RunWithReturn()
+	_, _, _, err = cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("%s failed %s", cmds, err.Error())
 		return err
@@ -1046,11 +1047,11 @@ func SyncNatRule(snatRules, dnatRules []IptablesRule, comment string) error {
 	snat = insertRuleIntoBuffer(snat, snatRules, comment, POSTROUTING.String())
 
 	/* $4, last 2 in other is "
-		COMMIT
-		# Completed on Wed Mar 13 19:37:47 2019
+	COMMIT
+	# Completed on Wed Mar 13 19:37:47 2019
 	*/
 	temp := []string{}
-	temp = append(temp, other[:len(other) -2]...)
+	temp = append(temp, other[:len(other)-2]...)
 	temp = append(temp, dnat...)
 	temp = append(temp, snat...)
 	temp = append(temp, other[len(other)-2:]...)
@@ -1082,8 +1083,8 @@ func SyncFirewallRule(rulesMap map[string][]IptablesRule, comment string, ch Cha
 	}
 
 	/* $4, last 2 in other is "
-		COMMIT
-		# Completed on Wed Mar 13 19:37:47 2019
+	COMMIT
+	# Completed on Wed Mar 13 19:37:47 2019
 	*/
 	chainNames := []string{}
 	for chainName, _ := range filtersMap {
@@ -1092,11 +1093,11 @@ func SyncFirewallRule(rulesMap map[string][]IptablesRule, comment string, ch Cha
 	sort.Strings(chainNames)
 
 	temp := []string{}
-	temp = append(temp, other[:len(other) -2]...)
+	temp = append(temp, other[:len(other)-2]...)
 	for _, name := range chainNames {
 		temp = append(temp, filtersMap[name]...)
 	}
-	temp = append(temp, other[len(other) -2:]...)
+	temp = append(temp, other[len(other)-2:]...)
 
 	return restoreIptablesRulesSet(temp, FirewallTable)
 }
@@ -1135,8 +1136,8 @@ func SyncLocalAndInFirewallRule(rulesMap, localRulesMap map[string][]IptablesRul
 	}
 
 	/* $4, last 2 in other is "
-		COMMIT
-		# Completed on Wed Mar 13 19:37:47 2019
+	COMMIT
+	# Completed on Wed Mar 13 19:37:47 2019
 	*/
 	chainNames := []string{}
 	for chainName, _ := range filtersMap {
@@ -1145,11 +1146,11 @@ func SyncLocalAndInFirewallRule(rulesMap, localRulesMap map[string][]IptablesRul
 	sort.Strings(chainNames)
 
 	temp := []string{}
-	temp = append(temp, other[:len(other) -2]...)
+	temp = append(temp, other[:len(other)-2]...)
 	for _, name := range chainNames {
 		temp = append(temp, filtersMap[name]...)
 	}
-	temp = append(temp, other[len(other) -2:]...)
+	temp = append(temp, other[len(other)-2:]...)
 
 	return restoreIptablesRulesSet(temp, FirewallTable)
 }
@@ -1158,10 +1159,10 @@ func getMangleRuleSet() ([]IptablesChain, []string, error) {
 	cmds := fmt.Sprintf("sudo iptables-save -t %s", MangleTable)
 	cmd := Bash{
 		Command: cmds,
-		NoLog: true,
+		NoLog:   true,
 	}
 
-	ret,o,_,err := cmd.RunWithReturn()
+	ret, o, _, err := cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("%s failed %s", cmds, err.Error())
 		return nil, nil, err
@@ -1172,7 +1173,6 @@ func getMangleRuleSet() ([]IptablesChain, []string, error) {
 		return nil, nil, errors.Errorf("%s failed ret = %d", cmds, ret)
 	}
 	rules := strings.Split(o, "\n")
-
 
 	// strip trailing newline
 	if len(rules) > 0 && rules[len(rules)-1] == "" {

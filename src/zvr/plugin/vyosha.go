@@ -16,26 +16,26 @@ const (
 )
 
 type setVyosHaCmd struct {
-	Keepalive int  `json:"keepalive"`
-	HeartbeatNic string `json:"heartbeatNic"`
-	LocalIp string `json:"localIp"`
-	PeerIp string `json:"peerIp"`
-	Monitors []string `json:"monitors"`
-	Vips []macVipPair `json:"vips"`
-	CallbackUrl string `json:"callbackUrl"`
+	Keepalive    int          `json:"keepalive"`
+	HeartbeatNic string       `json:"heartbeatNic"`
+	LocalIp      string       `json:"localIp"`
+	PeerIp       string       `json:"peerIp"`
+	Monitors     []string     `json:"monitors"`
+	Vips         []macVipPair `json:"vips"`
+	CallbackUrl  string       `json:"callbackUrl"`
 }
 
 type macVipPair struct {
-	NicMac string     	`json:"nicMac"`
-	NicVip     string  	`json:"nicVip"`
-	Netmask     string  	`json:"netmask"`
-	Category     string  	`json:"category"`
+	NicMac   string `json:"nicMac"`
+	NicVip   string `json:"nicVip"`
+	Netmask  string `json:"netmask"`
+	Category string `json:"category"`
 }
 
 var (
-	haStatusCallbackUrl = ""
+	haStatusCallbackUrl      = ""
 	getKeepAlivedStatusStart = false
-	keepAlivedCheckStart = false
+	keepAlivedCheckStart     = false
 )
 
 func setVyosHaHandler(ctx *server.CommandContext) interface{} {
@@ -47,6 +47,9 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 	tree := server.NewParserFromShowConfiguration().Tree
 	if utils.IsSkipVyosIptables() {
 		rule := utils.NewIptablesRule("vrrp", cmd.PeerIp, "", 0, 0, nil, utils.ACCEPT, utils.VRRPComment)
+		utils.InsertFireWallRule(heartbeatNicNme, rule, utils.LOCAL)
+
+		rule = utils.NewIptablesRule("udp", cmd.PeerIp, "", 0, 3780, nil, utils.ACCEPT, utils.CTHAComment)
 		utils.InsertFireWallRule(heartbeatNicNme, rule, utils.LOCAL)
 
 		rule = utils.NewNatIptablesRule("vrrp", "", "", 0, 0, nil, utils.RETURN, utils.VRRPComment, "", 0)
@@ -63,7 +66,7 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 		} else {
 			rulenum, _ := strconv.Atoi(fr.Name())
 			sourceNode := fr.Getf("source address")
-			if sourceNode == nil || sourceNode.Name() != cmd.PeerIp{
+			if sourceNode == nil || sourceNode.Name() != cmd.PeerIp {
 				tree.SetFirewallWithRuleNumber(heartbeatNicNme, "local", rulenum, fmt.Sprintf("source address %s", cmd.PeerIp))
 			}
 		}
@@ -77,7 +80,7 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 			if f := tree.FindFirstNotExcludeSNATRule(1); num != 1 && num > f {
 				/* there has not been run here never */
 				utils.LogError(fmt.Errorf("there is SNAT rule number unexcepted, rule:%v %v",
-					tree.Getf("nat source rule %v", num),  tree.Getf("nat source rule %v", f)))
+					tree.Getf("nat source rule %v", num), tree.Getf("nat source rule %v", f)))
 				tree.SwapSnatRule(num, f)
 				num = f
 			}
@@ -87,9 +90,11 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 
 	pairs := []nicVipPair{}
 	for _, p := range cmd.Vips {
-		nicname, err := utils.GetNicNameByMac(p.NicMac); utils.PanicOnError(err)
-		cidr, err := utils.NetmaskToCIDR(p.Netmask); utils.PanicOnError(err)
-		pairs = append(pairs, nicVipPair{NicName: nicname, Vip: p.NicVip, Prefix:cidr})
+		nicname, err := utils.GetNicNameByMac(p.NicMac)
+		utils.PanicOnError(err)
+		cidr, err := utils.NetmaskToCIDR(p.Netmask)
+		utils.PanicOnError(err)
+		pairs = append(pairs, nicVipPair{NicName: nicname, Vip: p.NicVip, Prefix: cidr})
 
 		addSecondaryIpFirewall(nicname, p.NicVip, tree)
 	}
@@ -103,10 +108,12 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 	if cmd.PeerIp == "" {
 		cmd.PeerIp = cmd.LocalIp
 	}
-	checksum, err := getFileChecksum(KeepalivedConfigFile);utils.PanicOnError(err)
+	checksum, err := getFileChecksum(KeepalivedConfigFile)
+	utils.PanicOnError(err)
 	keepalivedConf := NewKeepalivedConf(heartbeatNicNme, cmd.LocalIp, cmd.PeerIp, cmd.Monitors, cmd.Keepalive)
 	keepalivedConf.BuildConf()
-	newCheckSum, err := getFileChecksum(KeepalivedConfigFile);utils.PanicOnError(err)
+	newCheckSum, err := getFileChecksum(KeepalivedConfigFile)
+	utils.PanicOnError(err)
 	if newCheckSum != checksum {
 		keepalivedConf.RestartKeepalived()
 	} else {
@@ -125,8 +132,9 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 		if IsMaster() || IsBackup() {
 			return nil
 		}
-		return fmt.Errorf("keepalvied master election not finished")
-	}, 5, uint(cmd.Keepalive)); utils.PanicOnError(err)
+		return fmt.Errorf("keepalived master election not finished")
+	}, 5, uint(cmd.Keepalive))
+	utils.PanicOnError(err)
 	return nil
 }
 
@@ -147,8 +155,8 @@ func IsBackup() bool {
 }
 
 type haStatusCallback struct {
-	VirtualRouterUuid string     	`json:"virtualRouterUuid"`
-	HaStatus     string  	`json:"haStatus"`
+	VirtualRouterUuid string `json:"virtualRouterUuid"`
+	HaStatus          string `json:"haStatus"`
 }
 
 /*
@@ -183,22 +191,22 @@ func NonManagementUpNics() []string {
 	return upNics
 }
 
-func getKeepAlivedStatusTask()  {
+func getKeepAlivedStatusTask() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
-	defer func() {getKeepAlivedStatusStart = false; log.Errorf("!!!!!!!!!keepalived status check task exited")}()
+	defer func() { getKeepAlivedStatusStart = false; log.Errorf("!!!!!!!!!keepalived status check task exited") }()
 
 	getKeepAlivedStatusStart = true
-	for  {
+	for {
 		select {
 		case <-ticker.C:
-		        if utils.IsHaEnabled() {
+			if utils.IsHaEnabled() {
 				newHaStatus := getKeepAlivedStatus()
 				if newHaStatus == KeepAlivedStatus_Unknown || newHaStatus == keepAlivedStatus {
 					/* sometime keepalived is in backup state, but nic is up,
 					   we need to call notify script to correct it */
 
-					if newHaStatus == KeepAlivedStatus_Backup{
+					if newHaStatus == KeepAlivedStatus_Backup {
 						upNics := NonManagementUpNics()
 						if len(upNics) > 0 {
 							log.Warnf("nic %s is up when keepalived state is backup", upNics)
@@ -209,8 +217,8 @@ func getKeepAlivedStatusTask()  {
 				}
 
 				/* there is a situation when zvr write the keepalived notify script,
-		           	at the same time keepalived is changing state,
-		           	so when zvr detect status change, all script again to make sure no missing config */
+				at the same time keepalived is changing state,
+				so when zvr detect status change, all script again to make sure no missing config */
 				keepAlivedStatus = newHaStatus
 				server.VyosLockInterface(callStatusChangeScripts)()
 			}
@@ -218,17 +226,18 @@ func getKeepAlivedStatusTask()  {
 	}
 }
 
-func keepAlivedCheckTask()  {
+func keepAlivedCheckTask() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
-	defer func() {keepAlivedCheckStart = false; log.Errorf("!!!!!!!!!keepalived process check task exited")}()
+	defer func() { keepAlivedCheckStart = false; log.Errorf("!!!!!!!!!keepalived process check task exited") }()
 
 	keepAlivedCheckStart = true
-	for  {
+	for {
 		select {
 		case <-ticker.C:
-		        if utils.IsHaEnabled() {
+			if utils.IsHaEnabled() {
 				checkKeepalivedRunning()
+				checkConntrackdRunning()
 			}
 		}
 	}
@@ -244,7 +253,7 @@ type vyosNicVipPairs struct {
 	pairs []nicVipPair
 }
 
-func generateNotityScripts()  {
+func generateNotityScripts() {
 	/* only vip on management nic will be added in master script and will be deleted in backup script */
 	mgmtVip := []nicVipPair{}
 	for _, p := range haVipPairs.pairs {
@@ -258,7 +267,7 @@ func generateNotityScripts()  {
 	keepalivedNofityConf.CreateBackupScript()
 }
 
-func addHaNicVipPair(pairs []nicVipPair, callscript bool)  {
+func addHaNicVipPair(pairs []nicVipPair, callscript bool) {
 	count := 0
 	for _, p := range pairs {
 		found := false
@@ -270,7 +279,7 @@ func addHaNicVipPair(pairs []nicVipPair, callscript bool)  {
 		}
 
 		if !found {
-			count ++
+			count++
 			haVipPairs.pairs = append(haVipPairs.pairs, p)
 		}
 	}
@@ -282,7 +291,7 @@ func addHaNicVipPair(pairs []nicVipPair, callscript bool)  {
 	}
 }
 
-func removeHaNicVipPair(pairs []nicVipPair)  {
+func removeHaNicVipPair(pairs []nicVipPair) {
 	newPair := []nicVipPair{}
 	for _, p := range haVipPairs.pairs {
 		found := false
@@ -304,7 +313,7 @@ func removeHaNicVipPair(pairs []nicVipPair)  {
 	}
 }
 
-func InitHaNicState()  {
+func InitHaNicState() {
 	if !utils.IsHaEnabled() {
 		return
 	}
@@ -320,9 +329,8 @@ func InitHaNicState()  {
 	b.PanicIfError()
 }
 
-var haVipPairs  vyosNicVipPairs
-func init() {
-	haVipPairs.pairs = []nicVipPair{}
+var haVipPairs = vyosNicVipPairs{
+	pairs: []nicVipPair{},
 }
 
 func VyosHaEntryPoint() {

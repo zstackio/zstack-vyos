@@ -1,22 +1,22 @@
 package utils
 
 import (
-	"fmt"
-	"io/ioutil"
-	log "github.com/Sirupsen/logrus"
 	"encoding/json"
+	"fmt"
+	log "github.com/Sirupsen/logrus"
+	"io/ioutil"
 	"net"
 	"strings"
 )
 
 const (
-	BOOTSTRAP_INFO_CACHE = "/home/vyos/zvr/bootstrap-info.json"
-	DEFAULT_SSH_PORT = 22
+	BOOTSTRAP_INFO_CACHE        = "/home/vyos/zvr/bootstrap-info.json"
+	DEFAULT_SSH_PORT            = 22
 	VYOSHA_DEFAULT_ROUTE_SCRIPT = "/home/vyos/zvr/keepalived/script/defaultroute.sh"
 )
 
-const  (
-	NOHA = "NoHa"
+const (
+	NOHA     = "NoHa"
 	HAMASTER = "Master"
 	HABACKUP = "Backup"
 
@@ -55,12 +55,13 @@ func IsConfigTcForVipQos() bool {
 		/* for upgraded vpc, there is no ConfigTcForVipQos in bootstrapinfo before it reboot */
 		return true
 	}
-	
+
 	return ConfigTcForVipQos
 }
 
 func InitBootStrapInfo() {
-	content, err := ioutil.ReadFile(BOOTSTRAP_INFO_CACHE); PanicOnError(err)
+	content, err := ioutil.ReadFile(BOOTSTRAP_INFO_CACHE)
+	PanicOnError(err)
 	if len(content) == 0 {
 		log.Debugf("no content in %s, can not get mgmt gateway", BOOTSTRAP_INFO_CACHE)
 	}
@@ -80,7 +81,7 @@ func IsHaEnabled() bool {
 	return false
 }
 
-func GetVirtualRouterUuid()  string {
+func GetVirtualRouterUuid() string {
 	if _, ok := bootstrapInfo["uuid"]; ok {
 		return bootstrapInfo["uuid"].(string)
 	}
@@ -126,7 +127,7 @@ func IsInManagementCidr(vipStr string) bool {
 	ip := net.ParseIP(ipStr)
 	netmask := net.IPMask(net.ParseIP(netmaskStr).To4())
 
-	cidr := net.IPNet{IP:ip, Mask:netmask}
+	cidr := net.IPNet{IP: ip, Mask: netmask}
 
 	vip := net.ParseIP(vipStr)
 	return cidr.Contains(vip)
@@ -149,8 +150,9 @@ func GetMnNodeIps() map[string]string {
 	return mnNodeIps
 }
 
-func WriteDefaultHaScript(defaultNic *Nic)  {
-	defaultNicName, err := GetNicNameByMac(defaultNic.Mac); PanicOnError(err)
+func WriteDefaultHaScript(defaultNic *Nic) {
+	defaultNicName, err := GetNicNameByMac(defaultNic.Mac)
+	PanicOnError(err)
 	conent := ""
 	if defaultNic.Gateway != "" {
 		conent += fmt.Sprintln(fmt.Sprintf("ip route add default %s via %s || true", defaultNic.Gateway, defaultNicName))
@@ -160,7 +162,8 @@ func WriteDefaultHaScript(defaultNic *Nic)  {
 		conent += fmt.Sprintln(fmt.Sprintf("ip -6 route add default %s via %s || true", defaultNic.Gateway6, defaultNicName))
 	}
 
-	err = ioutil.WriteFile(VYOSHA_DEFAULT_ROUTE_SCRIPT, []byte(conent), 0755); PanicOnError(err)
+	err = ioutil.WriteFile(VYOSHA_DEFAULT_ROUTE_SCRIPT, []byte(conent), 0755)
+	PanicOnError(err)
 }
 
 func IsSLB() bool {

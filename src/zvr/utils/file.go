@@ -2,10 +2,10 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path"
-	"io"
 )
 
 func MkdirForFile(filepath string, perm os.FileMode) error {
@@ -13,27 +13,26 @@ func MkdirForFile(filepath string, perm os.FileMode) error {
 	return os.MkdirAll(dir, perm)
 }
 
-func CreateFileIfNotExists(filePath string, flag int, perm os.FileMode) (*os.File, error)  {
+func CreateFileIfNotExists(filePath string, flag int, perm os.FileMode) (*os.File, error) {
 	if err := MkdirForFile(filePath, 0666); err != nil {
 		return nil, err
 	}
 
-	if ok, err:= PathExists(filePath); err != nil {
+	if ok, err := PathExists(filePath); err != nil {
 		return nil, err
 	} else if !ok {
-		return os.OpenFile(filePath, os.O_CREATE | flag, perm)
+		return os.OpenFile(filePath, os.O_CREATE|flag, perm)
 	}
 
 	return os.OpenFile(filePath, flag, perm)
 }
 
-func DeleteFile(filePath string) error{
+func DeleteFile(filePath string) error {
 	if err := os.Remove(filePath); err != nil {
 		return err
 	}
 	return nil
 }
-
 
 func PathExists(filepath string) (bool, error) {
 	_, err := os.Stat(filepath)
@@ -41,7 +40,7 @@ func PathExists(filepath string) (bool, error) {
 		return false, nil
 	} else if err != nil {
 		return false, err
-	} else  {
+	} else {
 		return true, nil
 	}
 }
@@ -58,16 +57,16 @@ func Truncate(name string, size int64) error {
 	return os.Truncate(name, size)
 }
 
-func CopyFile(srcFile,destFile string)(int64,error){
-    srcfile,err := os.Open(srcFile)
-    if err != nil{
-        return 0,err
-    }
-    dstfile,err := os.OpenFile(destFile,os.O_WRONLY|os.O_CREATE,os.ModePerm)
-    if err != nil{
-        return 0,err
-    }
-    defer srcfile.Close()
-    defer dstfile.Close()
-    return io.Copy(dstfile,srcfile)
+func CopyFile(srcFile, destFile string) (int64, error) {
+	srcfile, err := os.Open(srcFile)
+	if err != nil {
+		return 0, err
+	}
+	dstfile, err := os.OpenFile(destFile, os.O_WRONLY|os.O_CREATE, os.ModePerm)
+	if err != nil {
+		return 0, err
+	}
+	defer srcfile.Close()
+	defer dstfile.Close()
+	return io.Copy(dstfile, srcfile)
 }

@@ -15,41 +15,41 @@ const (
 
 type policyRuleSetInfo struct {
 	RuleSetName string `json:"ruleSetName"`
-	System bool `json:"system"`
+	System      bool   `json:"system"`
 }
 
 type policyRuleInfo struct {
 	RuleSetName string `json:"ruleSetName"`
-	RuleNumber int `json:"ruleNumber"`
-	DestPort string `json:"destPort"`
-	Protocol string `json:"protocol"`
-	SourcePort string `json:"sourcePort"`
-	SourceIp string `json:"sourceIp"`
-	DestIp string `json:"destIp"`
-	State string `json:"state"`
-	TableNumber int `json:"tableNumber"`
+	RuleNumber  int    `json:"ruleNumber"`
+	DestPort    string `json:"destPort"`
+	Protocol    string `json:"protocol"`
+	SourcePort  string `json:"sourcePort"`
+	SourceIp    string `json:"sourceIp"`
+	DestIp      string `json:"destIp"`
+	State       string `json:"state"`
+	TableNumber int    `json:"tableNumber"`
 }
 
 type policyRouteInfo struct {
-	TableNumber int `json:"tableNumber"`
+	TableNumber     int    `json:"tableNumber"`
 	DestinationCidr string `json:"destinationCidr"`
-	NextHopIp string `json:"nextHopIp"`
-	OutNicMic string `json:"outNicMic"`
-	Distance int `json:"distance"`
+	NextHopIp       string `json:"nextHopIp"`
+	OutNicMic       string `json:"outNicMic"`
+	Distance        int    `json:"distance"`
 }
 
 type policyRuleSetNicRef struct {
 	RuleSetName string `json:"ruleSetName"`
-	Mac string `json:"mac"`
+	Mac         string `json:"mac"`
 }
 
 type syncPolicyRouteCmd struct {
-	RuleSets []policyRuleSetInfo `json:"ruleSets"`
-	Rules []policyRuleInfo `json:"rules"`
-	TableNumbers []int `json:"tableNumbers"`
-	Routes []policyRouteInfo `json:"routes"`
-	Refs []policyRuleSetNicRef `json:"refs"`
-	MarkConntrack bool `json:"markConntrack"`
+	RuleSets      []policyRuleSetInfo   `json:"ruleSets"`
+	Rules         []policyRuleInfo      `json:"rules"`
+	TableNumbers  []int                 `json:"tableNumbers"`
+	Routes        []policyRouteInfo     `json:"routes"`
+	Refs          []policyRuleSetNicRef `json:"refs"`
+	MarkConntrack bool                  `json:"markConntrack"`
 }
 
 /*
@@ -135,15 +135,15 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd) {
 	tree.Apply(false)
 }*/
 
-func getPolicyRouteSetChainName(rulesetName string) string  {
+func getPolicyRouteSetChainName(rulesetName string) string {
 	return fmt.Sprintf("%s%s", utils.PolicyRouteRuleChainPrefix, rulesetName)
 }
 
-func getPolicyRouteTableChainName(tableId int) string  {
+func getPolicyRouteTableChainName(tableId int) string {
 	return fmt.Sprintf("%s%d", utils.PolicyRouteChainPrefix, tableId)
 }
 
-func getPolicyRouteTableChainNameByString(tableId string) string  {
+func getPolicyRouteTableChainNameByString(tableId string) string {
 	return fmt.Sprintf("%s%s", utils.PolicyRouteChainPrefix, tableId)
 }
 
@@ -154,7 +154,7 @@ func syncPolicyRoute(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
-func applyPolicyRoutes(cmd *syncPolicyRouteCmd)  {
+func applyPolicyRoutes(cmd *syncPolicyRouteCmd) {
 	var rts []utils.ZStackRouteTable
 	var ipRules []utils.ZStackIpRule
 	currRules := utils.GetZStackIpRules()
@@ -168,7 +168,8 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd)  {
 	entriesMap := map[int][]utils.ZStackRouteEntry{}
 	for _, route := range cmd.Routes {
 		if route.OutNicMic != "" {
-			nicName, err := utils.GetNicNameByMac(route.OutNicMic); utils.PanicOnError(err)
+			nicName, err := utils.GetNicNameByMac(route.OutNicMic)
+			utils.PanicOnError(err)
 			if _, ok := entriesMap[route.TableNumber]; !ok {
 				entriesMap[route.TableNumber] = []utils.ZStackRouteEntry{}
 			}
@@ -185,7 +186,7 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd)  {
 
 	var chains []utils.IptablesChain
 	var rules []utils.IptablesRule
-	
+
 	if len(cmd.RuleSets) > 0 && cmd.MarkConntrack {
 		rules = append(rules, utils.NewMangleIptablesRule(utils.MANGLE_PREROUTING.String(), "", "", "", 0, 0,
 			0, 0, utils.IPTABLES_MARK_UNSET, nil, utils.CONNMARK_RESTORE, utils.PolicyRouteComment, "", ""))
@@ -197,7 +198,7 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd)  {
 		chainName := getPolicyRouteTableChainName(table)
 		chains = append(chains, utils.NewIpTablesChain(chainName))
 		rules = append(rules, utils.NewMangleIptablesRule(chainName, "", "", "", 0, 0,
-			0, table, utils.IPTABLES_MARK_MATCH,nil, utils.MARK, utils.PolicyRouteComment, "", ""))
+			0, table, utils.IPTABLES_MARK_MATCH, nil, utils.MARK, utils.PolicyRouteComment, "", ""))
 		if cmd.MarkConntrack {
 			rules = append(rules, utils.NewMangleIptablesRule(chainName, "", "", "", 0, 0,
 				0, table, utils.IPTABLES_MARK_UNSET, nil, utils.CONNMARK, utils.PolicyRouteComment, "", ""))
@@ -211,13 +212,14 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd)  {
 	}
 
 	for _, ref := range cmd.Refs {
-		nicname, err := utils.GetNicNameByMac(ref.Mac);utils.PanicOnError(err)
+		nicname, err := utils.GetNicNameByMac(ref.Mac)
+		utils.PanicOnError(err)
 		chainName := getPolicyRouteSetChainName(ref.RuleSetName)
 		rules = append(rules, utils.NewMangleIptablesRule(utils.MANGLE_PREROUTING.String(), "", "", "", 0, 0,
 			0, 0, utils.IPTABLES_MARK_UNSET, nil, chainName, utils.PolicyRouteComment, nicname, ""))
 		if systemRuleSetMap[ref.RuleSetName] {
 			items := strings.Split(ref.RuleSetName, "-")
-			routeTableChainName := getPolicyRouteTableChainNameByString(items[len(items) -1])
+			routeTableChainName := getPolicyRouteTableChainNameByString(items[len(items)-1])
 			rules = append(rules, utils.NewMangleIptablesRule(chainName, "", "", "", 0, 0,
 				0, 0, utils.IPTABLES_MARK_UNSET, nil, routeTableChainName, utils.PolicyRouteComment, "", ""))
 		}
@@ -242,17 +244,20 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd)  {
 		if rule.DestPort != "" {
 			destPort, _ = strconv.Atoi(rule.DestPort)
 		}
-		rules = append(rules, utils.NewMangleIptablesRule(chainName, rule.Protocol, rule.SourceIp , rule.DestIp, sourcePort, destPort,
+		rules = append(rules, utils.NewMangleIptablesRule(chainName, rule.Protocol, rule.SourceIp, rule.DestIp, sourcePort, destPort,
 			0, 0, utils.IPTABLES_MARK_UNSET, nil, getPolicyRouteTableChainName(rule.TableNumber), utils.PolicyRouteComment, "", ""))
 	}
-	err := utils.SyncZStackRouteTables(rts);utils.PanicOnError(err)
-	err = utils.SyncZStackIpRules(currRules, ipRules);utils.PanicOnError(err)
+	err := utils.SyncZStackRouteTables(rts)
+	utils.PanicOnError(err)
+	err = utils.SyncZStackIpRules(currRules, ipRules)
+	utils.PanicOnError(err)
 	if err = utils.SyncRouteEntries(currTables, entriesMap); err != nil && IsMaster() {
 		utils.PanicOnError(err)
 	}
-	err = utils.SyncMangleTables(chains, rules, utils.PolicyRouteComment);utils.PanicOnError(err)
+	err = utils.SyncMangleTables(chains, rules, utils.PolicyRouteComment)
+	utils.PanicOnError(err)
 }
 
-func PolicyRouteEntryPoint()  {
+func PolicyRouteEntryPoint() {
 	server.RegisterAsyncCommandHandler(SYNC_POLICY_ROUTE, server.VyosLock(syncPolicyRoute))
 }

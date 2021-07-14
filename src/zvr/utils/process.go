@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -24,9 +26,7 @@ func FindFirstPIDByPSExtern(non_sudo bool, cmdline ...string) (int, error) {
 	if non_sudo {
 		cmds = append(cmds, "grep -v ' sudo '")
 	}
-	cmds = append(cmds, "grep -v grep")
-	cmds = append(cmds, "head -n1")
-	cmds = append(cmds, "awk '{print $2}'")
+	cmds = append(cmds, "awk '{print $2; exit}'")
 
 	b := Bash{
 		Command: strings.Join(cmds, " | "),
@@ -46,6 +46,32 @@ func FindFirstPIDByPSExtern(non_sudo bool, cmdline ...string) (int, error) {
 	return strconv.Atoi(o)
 }
 
+// FindFirstPID always returns the smallest pid.
+func FindFirstPID(program string) (int, error) {
+	stdout, err := exec.Command("pidof", program).Output()
+	if err != nil {
+		return -1, fmt.Errorf("get %s pid failed %v", program, err)
+	}
+
+	out := strings.TrimSpace(string(stdout))
+	if out == "" {
+		return -1, fmt.Errorf("%s is not running", program)
+	}
+
+	// return the smallest pid
+	pids := strings.Fields(out)
+	nums := make([]int, len(pids))
+	for idx, pid := range pids {
+		if n, err := strconv.Atoi(pid); err != nil {
+			return -1, fmt.Errorf("unexpected %s pid: %s", program, out)
+		} else {
+			nums[idx] = n
+		}
+	}
+
+	sort.Ints(nums)
+	return nums[0], nil
+}
 
 func KillProcess(pid int) error {
 	return KillProcess1(pid, 15)
@@ -58,12 +84,8 @@ func KillProcess1(pid int, waitTime uint) error {
 	b.Run()
 
 	check := func() bool {
-		b := Bash{
-			Command: fmt.Sprintf("ps -p %v", pid),
-		}
-
-		ret, _, _, _ := b.RunWithReturn()
-		return ret != 0
+		// return true if process not exists
+		return ProcessExists(pid) != nil
 	}
 
 	if check() {
@@ -72,7 +94,7 @@ func KillProcess1(pid int, waitTime uint) error {
 
 	return LoopRunUntilSuccessOrTimeout(func() bool {
 		b := Bash{
-			Command: fmt.Sprintf("kill -9 %v", pid),
+			Command: fmt.Sprintf("sudo kill -9 %v", pid),
 		}
 		b.Run()
 

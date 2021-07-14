@@ -2,27 +2,27 @@ package plugin
 
 import (
 	"bytes"
+	"fmt"
+	log "github.com/Sirupsen/logrus"
+	"io/ioutil"
 	"os"
-	"strings"
 	"strconv"
+	"strings"
 	"zvr/server"
 	"zvr/utils"
-	log "github.com/Sirupsen/logrus"
-	"fmt"
-	"io/ioutil"
 )
 
 const (
-	INIT_PATH = "/init"
-	PING_PATH = "/ping"
-	ECHO_PATH = "/echo"
-	TEST_PATH = "/test"
+	INIT_PATH          = "/init"
+	PING_PATH          = "/ping"
+	ECHO_PATH          = "/echo"
+	TEST_PATH          = "/test"
 	CONFIGURE_NTP_PATH = "/configurentp"
 	/* please follow following rule to change the version:
-	  http://confluence.zstack.io/pages/viewpage.action?pageId=34014178 */
-	VERSION_FILE_PATH = "/home/vyos/zvr/version"
+	http://confluence.zstack.io/pages/viewpage.action?pageId=34014178 */
+	VERSION_FILE_PATH          = "/home/vyos/zvr/version"
 	NETWORK_HEALTH_STATUS_PATH = "/home/vyos/zvr/.duplicate"
-	NTP_CONF_DIR = "/home/vyos/zvr/ntp/conf/"
+	NTP_CONF_DIR               = "/home/vyos/zvr/ntp/conf/"
 )
 
 var (
@@ -30,32 +30,32 @@ var (
 )
 
 type InitConfig struct {
-	RestartDnsmasqAfterNumberOfSIGUSER1 int `json:"restartDnsmasqAfterNumberOfSIGUSER1"`
-	Uuid string `json:"uuid"`
-	MgtCidr string `json:"mgtCidr"`
-	LogLevel string `json:"logLevel"`
-	TimeServers []string `json:"timeServers"`
-        Parms map[string]string `json:"parms"`
+	RestartDnsmasqAfterNumberOfSIGUSER1 int               `json:"restartDnsmasqAfterNumberOfSIGUSER1"`
+	Uuid                                string            `json:"uuid"`
+	MgtCidr                             string            `json:"mgtCidr"`
+	LogLevel                            string            `json:"logLevel"`
+	TimeServers                         []string          `json:"timeServers"`
+	Parms                               map[string]string `json:"parms"`
 }
 
 type initRsp struct {
-	Uuid string `json:"uuid"`
-	ZvrVersion string `json:"zvrVersion"`
-	VyosVersion string `json:"vyosVersion"`
+	Uuid          string `json:"uuid"`
+	ZvrVersion    string `json:"zvrVersion"`
+	VyosVersion   string `json:"vyosVersion"`
 	KernelVersion string `json:"kernelVersion"`
 }
 
 type pingRsp struct {
-	Uuid string `json:"uuid"`
-	Version string `json:"version"`
-	HaStatus string `json:"haStatus"`
-	Healthy bool `json:"healthy"`
+	Uuid         string `json:"uuid"`
+	Version      string `json:"version"`
+	HaStatus     string `json:"haStatus"`
+	Healthy      bool   `json:"healthy"`
 	HealthDetail string `json:"healthDetail"`
 }
 
 type testRsp struct {
-    Success bool `json:"success"`
-    ZvrVersion string `json:"zvrVersion"`
+	Success    bool   `json:"success"`
+	ZvrVersion string `json:"zvrVersion"`
 }
 
 type configureNtpCmd struct {
@@ -65,25 +65,27 @@ type configureNtpCmd struct {
 var (
 	initConfig = &InitConfig{}
 )
-type networkHealthCheck struct {}
-type fsHealthCheck struct {}
 
-func (check *networkHealthCheck)healthCheck() (status HealthStatus) {
-	status = HealthStatus{Healthy:true, HealthDetail:""}
+type networkHealthCheck struct{}
+type fsHealthCheck struct{}
+
+func (check *networkHealthCheck) healthCheck() (status HealthStatus) {
+	status = HealthStatus{Healthy: true, HealthDetail: ""}
 	if e, _ := utils.PathExists(NETWORK_HEALTH_STATUS_PATH); e {
 		f, _ := ioutil.ReadFile(NETWORK_HEALTH_STATUS_PATH)
 		status.Healthy = false
-                status.HealthDetail = string(f)
+		status.HealthDetail = string(f)
 	}
 
 	return status
 }
 
-func (check *fsHealthCheck)healthCheck() (status HealthStatus) {
+func (check *fsHealthCheck) healthCheck() (status HealthStatus) {
 	bash := utils.Bash{
-		Command: "sudo mount|grep -w ro | grep -v loop0 | grep -v tmpfs",
+		Command: "mount | grep -w ro | grep -v ^/dev/loop | grep -vw tmpfs",
+		NoLog:   true,
 	}
-	status = HealthStatus{Healthy:true, HealthDetail:""}
+	status = HealthStatus{Healthy: true, HealthDetail: ""}
 	if ret, output, _, err := bash.RunWithReturn(); err == nil && ret == 0 {
 		status.Healthy = false
 		status.HealthDetail = fmt.Sprintf("RO file system: %s", output)
@@ -91,47 +93,47 @@ func (check *fsHealthCheck)healthCheck() (status HealthStatus) {
 	return status
 }
 
-
-func configure(parms map[string]string){
-	if value, exist := parms["ipv4LocalPortRange"];exist {
-		if strings.Count(value,"-") == 1 {
+func configure(parms map[string]string) {
+	if value, exist := parms["ipv4LocalPortRange"]; exist {
+		if strings.Count(value, "-") == 1 {
 			port := strings.Split(value, "-")
-			
-			lowPort,error := strconv.Atoi(port[0])
-			if error != nil{
-				log.Errorf("configure ipv4LocalPortRange fail beacuse %s",error)
-				return 
+
+			lowPort, error := strconv.Atoi(port[0])
+			if error != nil {
+				log.Errorf("configure ipv4LocalPortRange fail beacuse %s", error)
+				return
 			}
 
-			upPort,error := strconv.Atoi(port[1])
-			if error != nil{
-				log.Errorf("configure ipv4LocalPortRange fail beacuse %s",error)
-				return 
+			upPort, error := strconv.Atoi(port[1])
+			if error != nil {
+				log.Errorf("configure ipv4LocalPortRange fail beacuse %s", error)
+				return
 			}
 
-			if (lowPort < 0 || upPort > 65535 || upPort < lowPort) || (lowPort > 0 && lowPort < 1024){
-				log.Errorf("port is not in range [1024,65535],port range %s-%s, ",port[0], port[1])
-				return 
+			if (lowPort < 0 || upPort > 65535 || upPort < lowPort) || (lowPort > 0 && lowPort < 1024) {
+				log.Errorf("port is not in range [1024,65535],port range %s-%s, ", port[0], port[1])
+				return
 			}
-			
+
 			if lowPort == 0 || upPort == 0 {
-				log.Debugf("no need to set ip_local_port_range beacause port contain 0, port range %s-%s, ",port[0], port[1])
-			}else{
+				log.Debugf("no need to set ip_local_port_range beacause port contain 0, port range %s-%s, ", port[0], port[1])
+			} else {
 				bash := utils.Bash{
-					Command: fmt.Sprintf("sudo sysctl -w net.ipv4.ip_local_port_range='%s %s'", port[0],port[1]),
+					Command: fmt.Sprintf("sudo sysctl -w net.ipv4.ip_local_port_range='%s %s'", port[0], port[1]),
 				}
-				bash.Run();bash.PanicIfError()
+				bash.Run()
+				bash.PanicIfError()
 			}
 		}
 	}
 }
 
-func configureNtp(timeServers []string){
-	if timeServers == nil || len(timeServers) == 0{
+func configureNtp(timeServers []string) {
+	if timeServers == nil || len(timeServers) == 0 {
 		return
 	}
 	var conf bytes.Buffer
-	conf.WriteString( `# /etc/ntp.conf, configuration for ntpd; see ntp.conf(5) for help
+	conf.WriteString(`# /etc/ntp.conf, configuration for ntpd; see ntp.conf(5) for help
 # This configuration file is automatically generated by the Vyatta
 # configuration subsystem.  Please do not manually edit it.
 #
@@ -159,25 +161,27 @@ interface listen ::1
 
 `)
 
-	for _,chronyServer := range timeServers {
+	for _, chronyServer := range timeServers {
 		conf.WriteString("server " + chronyServer + "\n")
 	}
 
-
-	ntp_conf_file, err := ioutil.TempFile(NTP_CONF_DIR, "ntpConfig"); utils.PanicOnError(err)
-	_, err = ntp_conf_file.Write(conf.Bytes()); utils.PanicOnError(err)
+	ntp_conf_file, err := ioutil.TempFile(NTP_CONF_DIR, "ntpConfig")
+	utils.PanicOnError(err)
+	_, err = ntp_conf_file.Write(conf.Bytes())
+	utils.PanicOnError(err)
 
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo mv %s /etc/ntp.conf; sudo /etc/init.d/ntp restart",
 			ntp_conf_file.Name()),
 	}
-	err = bash.Run();utils.PanicOnError(err)
+	err = bash.Run()
+	utils.PanicOnError(err)
 }
 func initHandler(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(initConfig)
 	addRouteIfCallbackIpChanged()
 	if initConfig.MgtCidr != "" {
-		mgmtNic:= utils.GetMgmtInfoFromBootInfo()
+		mgmtNic := utils.GetMgmtInfoFromBootInfo()
 		nexthop, _ := utils.GetNexthop(initConfig.MgtCidr)
 		if nexthop != mgmtNic["gateway"].(string) {
 			utils.AddRoute(initConfig.MgtCidr, mgmtNic["gateway"].(string))
@@ -205,7 +209,7 @@ func initHandler(ctx *server.CommandContext) interface{} {
 
 	doRefreshLogLevel(initConfig.LogLevel)
 	configureNtp(initConfig.TimeServers)
-        configure(initConfig.Parms)
+	configure(initConfig.Parms)
 	return initRsp{Uuid: initConfig.Uuid, ZvrVersion: VERSION, VyosVersion: utils.Vyos_version,
 		KernelVersion: utils.Kernel_version}
 }
@@ -222,7 +226,7 @@ func pingHandler(ctx *server.CommandContext) interface{} {
 		haStatus = utils.HABACKUP
 	}
 	return pingRsp{Uuid: initConfig.Uuid, Version: string(VERSION), HaStatus: haStatus,
-		Healthy:healthStatus.Healthy, HealthDetail:healthStatus.HealthDetail }
+		Healthy: healthStatus.Healthy, HealthDetail: healthStatus.HealthDetail}
 }
 
 func echoHandler(ctx *server.CommandContext) interface{} {
@@ -230,10 +234,10 @@ func echoHandler(ctx *server.CommandContext) interface{} {
 }
 
 func testHandler(ctx *server.CommandContext) interface{} {
-    return testRsp{ZvrVersion: string(VERSION), Success:true}
+	return testRsp{ZvrVersion: string(VERSION), Success: true}
 }
 
-func configureNtpHandle(ctx *server.CommandContext) interface{}{
+func configureNtpHandle(ctx *server.CommandContext) interface{} {
 	cmd := &configureNtpCmd{}
 	ctx.GetCommand(cmd)
 
@@ -261,17 +265,19 @@ func addRouteIfCallbackIpChanged() {
 		}
 		// NOTE(WeiW): Since our mgmt nic is always eth0
 		if server.CURRENT_CALLBACK_IP != "" {
-			err := utils.RemoveZStackRoute(server.CURRENT_CALLBACK_IP);
+			err := utils.RemoveZStackRoute(server.CURRENT_CALLBACK_IP)
 			utils.PanicOnError(err)
 		}
 
 		mgmtNic := utils.GetMgmtInfoFromBootInfo()
-		if (mgmtNic == nil || utils.CheckMgmtCidrContainsIp(server.CALLBACK_IP, mgmtNic) == false) {
-			err := utils.SetZStackRoute(server.CALLBACK_IP, "eth0", mgmtNic["gateway"].(string)); utils.PanicOnError(err)
+		if mgmtNic == nil || utils.CheckMgmtCidrContainsIp(server.CALLBACK_IP, mgmtNic) == false {
+			err := utils.SetZStackRoute(server.CALLBACK_IP, "eth0", mgmtNic["gateway"].(string))
+			utils.PanicOnError(err)
 		} else if mgmtNic == nil {
 			log.Debugf("can not get mgmt nic info, skip to configure route")
 		} else if utils.GetNicForRoute(server.CALLBACK_IP) != "eth0" {
-			err := utils.SetZStackRoute(server.CALLBACK_IP, "eth0", ""); utils.PanicOnError(err)
+			err := utils.SetZStackRoute(server.CALLBACK_IP, "eth0", "")
+			utils.PanicOnError(err)
 		} else {
 			log.Debugf("the cidr of vr mgmt contains callback ip, skip to configure route")
 		}
@@ -279,7 +285,7 @@ func addRouteIfCallbackIpChanged() {
 	}
 }
 
-func init ()  {
+func init() {
 	os.MkdirAll(NTP_CONF_DIR, os.ModePerm)
 	ver, err := ioutil.ReadFile(VERSION_FILE_PATH)
 	if err == nil {

@@ -44,13 +44,11 @@ type removeNicCallback interface {
 	RemoveNic(nic string) error
 }
 
-var addNicCallbacks []addNicCallback
-var removeNicCallbacks []removeNicCallback
-
-func init() {
-	addNicCallbacks = make([]addNicCallback, 0)
+var (
+	addNicCallbacks    = make([]addNicCallback, 0)
 	removeNicCallbacks = make([]removeNicCallback, 0)
-}
+)
+
 
 func RegisterAddNicCallback(cb addNicCallback)  {
 	addNicCallbacks = append(addNicCallbacks, cb)

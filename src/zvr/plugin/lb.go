@@ -1,42 +1,42 @@
 package plugin
 
 import (
-	"zvr/server"
-	"html/template"
-	"zvr/utils"
 	"bytes"
-	"github.com/fatih/structs"
-	"strings"
-	"fmt"
-	"path/filepath"
-	"io/ioutil"
-	"strconv"
-	"os"
-	"regexp"
-	prom "github.com/prometheus/client_golang/prometheus"
-	haproxy "github.com/bcicen/go-haproxy"
-	cidrman "github.com/EvilSuperstars/go-cidrman"
-	"sort"
-	log "github.com/Sirupsen/logrus"
-	"net/http"
-	"time"
+	"crypto/md5"
 	"encoding/json"
 	"errors"
-	"crypto/md5"
+	"fmt"
+	cidrman "github.com/EvilSuperstars/go-cidrman"
+	log "github.com/Sirupsen/logrus"
+	haproxy "github.com/bcicen/go-haproxy"
+	"github.com/fatih/structs"
+	prom "github.com/prometheus/client_golang/prometheus"
+	"html/template"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
 	"runtime"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+	"zvr/server"
+	"zvr/utils"
 )
 
 const (
-	REFRESH_LB_PATH = "/lb/refresh"
+	REFRESH_LB_PATH           = "/lb/refresh"
 	REFRESH_LB_LOG_LEVEL_PATH = "/lb/log/level"
-	DELETE_LB_PATH = "/lb/delete"
-	CREATE_CERTIFICATE_PATH = "/certificate/create"
+	DELETE_LB_PATH            = "/lb/delete"
+	CREATE_CERTIFICATE_PATH   = "/certificate/create"
 	DELETE_CERTIFICATE_PATH   = "/certificate/delete"
-	LB_ROOT_DIR = "/home/vyos/zvr/lb/"
-	LB_CONF_DIR = "/home/vyos/zvr/lb/conf/"
-	LB_PID_DIR = "/home/vyos/zvr/lb/pid/"
-	CERTIFICATE_ROOT_DIR = "/home/vyos/zvr/certificate/"
-	LB_SOCKET_DIR = "/home/vyos/zvr/lb/sock/"
+	LB_ROOT_DIR               = "/home/vyos/zvr/lb/"
+	LB_CONF_DIR               = "/home/vyos/zvr/lb/conf/"
+	LB_PID_DIR                = "/home/vyos/zvr/lb/pid/"
+	CERTIFICATE_ROOT_DIR      = "/home/vyos/zvr/certificate/"
+	LB_SOCKET_DIR             = "/home/vyos/zvr/lb/sock/"
 
 	LB_MODE_HTTPS = "https"
 
@@ -45,24 +45,24 @@ const (
 	LISTENER_MAP_SIZE = 128
 	//reserve some sockets for haproxy if specify the parameter "ulimit-n"
 	RESERVE_SOCK_COUNT = 100
-	MAX_SOCK_COUNT = 20971520
+	MAX_SOCK_COUNT     = 20971520
 
 	LB_LOCAL_ICMP_FIREWALL_RULE_NUMBER = 2000
-	HAPROXY_VERSION_1_6_9 = "1.6.9"
-	HAPROXY_VERSION_2_1_0 = "2.1.0"
+	HAPROXY_VERSION_1_6_9              = "1.6.9"
+	HAPROXY_VERSION_2_1_0              = "2.1.0"
 )
 
 var (
-	haproxyVersion = HAPROXY_VERSION_1_6_9
+	haproxyVersion     = HAPROXY_VERSION_1_6_9
 	gobetweenListeners map[string]*GBListener
 )
 
 const (
-	TLS_CIPHER_POLICY_DEFAULT = "tls_cipher_policy_default"
-	TLS_CIPHER_POLICY_1_0 = "tls_cipher_policy_1_0"
-	TLS_CIPHER_POLICY_1_1 = "tls_cipher_policy_1_1"
-	TLS_CIPHER_POLICY_1_2 = "tls_cipher_policy_1_2"
-	TLS_CIPHER_POLICY_1_2_STRICT = "tls_cipher_policy_1_2_strict"
+	TLS_CIPHER_POLICY_DEFAULT             = "tls_cipher_policy_default"
+	TLS_CIPHER_POLICY_1_0                 = "tls_cipher_policy_1_0"
+	TLS_CIPHER_POLICY_1_1                 = "tls_cipher_policy_1_1"
+	TLS_CIPHER_POLICY_1_2                 = "tls_cipher_policy_1_2"
+	TLS_CIPHER_POLICY_1_2_STRICT          = "tls_cipher_policy_1_2_strict"
 	TLS_CIPHER_POLICY_1_2_STRICT_WITH_1_3 = "tls_cipher_policy_1_2_strict_with_1_3"
 
 	LBSecurityPolicyConfiguration = `
@@ -71,50 +71,49 @@ const (
 	`
 )
 
-const(
-	LBSecurityPolicyCommonCiphers = "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA:ECDHE-RSA-AES256-SHA"
+const (
+	LBSecurityPolicyCommonCiphers      = "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA:ECDHE-RSA-AES256-SHA"
 	LBSecurityPolicy1_2_3CommonCiphers = "AES128-GCM-SHA256:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA"
 	LBSecurityPolicystrict3OnlyCiphers = "TLS_AES_256_GCM_SHA384:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA"
 )
 
-type backendServerInfo struct{
-	Ip string `json:"ip"`
-	Weight int `json:"weight`
+type backendServerInfo struct {
+	Ip     string `json:"ip"`
+	Weight int    `json:"weight`
 }
 
 type serverGroupInfo struct {
-	Name string `json:"name"`
-	ServerGroupUuid string `json:"serverGroupUuid"`
-	BackendServers []backendServerInfo `json:"backendServers"`
-	IsDefault bool `json:"isDefault"`
+	Name            string              `json:"name"`
+	ServerGroupUuid string              `json:"serverGroupUuid"`
+	BackendServers  []backendServerInfo `json:"backendServers"`
+	IsDefault       bool                `json:"isDefault"`
 }
 
 type redirectRuleInfo struct {
 	RedirectRuleUuid string `json:"redirectRuleUuid"`
-	AclUuid string `json:"aclUuid"`
-	RedirectRule string `json:"redirectRule"`
-	ServerGroupUuid string `json:"serverGroupUuid"`
+	AclUuid          string `json:"aclUuid"`
+	RedirectRule     string `json:"redirectRule"`
+	ServerGroupUuid  string `json:"serverGroupUuid"`
 }
 
 type lbInfo struct {
-	LbUuid             string   `json:"lbUuid"`
-	ListenerUuid       string   `json:"listenerUuid"`
-	Vip                string   `json:"vip"`
-	PublicNic          string   `json:"publicNic"`
-	NicIps             []string `json:"nicIps"`
-	InstancePort       int      `json:"instancePort"`
-	LoadBalancerPort   int      `json:"loadBalancerPort"`
-	Mode               string   `json:"mode"`
-	Parameters         []string `json:"parameters"`
-	CertificateUuid    string   `json:"certificateUuid"`
-	SecurityPolicyType string   `json:"securityPolicyType"`
-	ServerGroups       []serverGroupInfo `json:"serverGroups"`
+	LbUuid             string             `json:"lbUuid"`
+	ListenerUuid       string             `json:"listenerUuid"`
+	Vip                string             `json:"vip"`
+	PublicNic          string             `json:"publicNic"`
+	NicIps             []string           `json:"nicIps"`
+	InstancePort       int                `json:"instancePort"`
+	LoadBalancerPort   int                `json:"loadBalancerPort"`
+	Mode               string             `json:"mode"`
+	Parameters         []string           `json:"parameters"`
+	CertificateUuid    string             `json:"certificateUuid"`
+	SecurityPolicyType string             `json:"securityPolicyType"`
+	ServerGroups       []serverGroupInfo  `json:"serverGroups"`
 	RedirectRules      []redirectRuleInfo `json:"redirectRules"`
 }
 
-
 type certificateInfo struct {
-	Uuid string `json:"uuid"`
+	Uuid        string `json:"uuid"`
 	Certificate string `json:"certificate"`
 }
 
@@ -123,44 +122,44 @@ type deleteCertificateCmd struct {
 }
 
 type Listener interface {
-	createListenerServiceConfigure(lb lbInfo)  ( err error)
-	checkIfListenerServiceUpdate(origChecksum string, currChecksum string) ( bool, error)
-	preActionListenerServiceStart() ( err error)
-	rollbackPreActionListenerServiceStart() ( err error)
+	createListenerServiceConfigure(lb lbInfo) (err error)
+	checkIfListenerServiceUpdate(origChecksum string, currChecksum string) (bool, error)
+	preActionListenerServiceStart() (err error)
+	rollbackPreActionListenerServiceStart() (err error)
 	startListenerService() (ret int, err error)
-	postActionListenerServiceStart() ( err error)
-	stopListenerService() ( err error)
+	postActionListenerServiceStart() (err error)
+	stopListenerService() (err error)
 	postActionListenerServiceStop() (ret int, err error)
 	getLbCounters(listenerUuid string) ([]*LbCounter, int)
-	getIptablesRule()([]utils.IptablesRule, string)
+	getIptablesRule() ([]utils.IptablesRule, string)
 	getLbInfo() (lb lbInfo)
 }
 
 // the listener implemented with HaProxy
 type HaproxyListener struct {
-	lb lbInfo
-	confPath string
-	pidPath	string
-	sockPath string
-	firewallDes string
+	lb                   lbInfo
+	confPath             string
+	pidPath              string
+	sockPath             string
+	firewallDes          string
 	firewallLocalICMPDes string
-	maxConnect string
-	maxSession int   //same to maxConnect
-	aclPath string
+	maxConnect           string
+	maxSession           int //same to maxConnect
+	aclPath              string
 }
 
 // the listener implemented with gobetween
 type GBListener struct {
-	lb lbInfo
-	confPath string
-	pidPath	string
-	firewallDes string
+	lb                   lbInfo
+	confPath             string
+	pidPath              string
+	firewallDes          string
 	firewallLocalICMPDes string
-	apiPort string // restapi binding port range from 50000-60000
-	maxConnect string
-	maxSession int   //same to maxConnect
-	aclPath string
-	pm      *utils.PidMon
+	apiPort              string // restapi binding port range from 50000-60000
+	maxConnect           string
+	maxSession           int //same to maxConnect
+	aclPath              string
+	pm                   *utils.PidMon
 }
 
 func getGBApiPort(confPath string, pidPath string) (port string) {
@@ -171,7 +170,7 @@ func getGBApiPort(confPath string, pidPath string) (port string) {
 	if ret, out, _, err := bash.RunWithReturn(); ret != 0 || err != nil {
 		bash.PanicIfError()
 	} else {
-		port =""
+		port = ""
 		pid, _ := utils.FindFirstPIDByPSExtern(true, confPath)
 		if pid > 0 {
 			//get current port used
@@ -179,9 +178,9 @@ func getGBApiPort(confPath string, pidPath string) (port string) {
 			for start := 50000; start < 60000; start++ {
 				port = strconv.Itoa(start)
 				//find the record ":port * pid/gobetween"
-				if strings.Contains(out, ":" + port) {
+				if strings.Contains(out, ":"+port) {
 					for _, str := range kv {
-						if strings.Contains(str, ":" + port) && strings.Contains(str, strconv.Itoa(pid) + "/gobetween") {
+						if strings.Contains(str, ":"+port) && strings.Contains(str, strconv.Itoa(pid)+"/gobetween") {
 							//log.Debugf("lb %s pid: %v api port: %v ", confPath, pid, port)
 							return port
 						}
@@ -193,7 +192,7 @@ func getGBApiPort(confPath string, pidPath string) (port string) {
 		}
 
 		for start := 50000; start < 60000; start++ {
-			if !strings.Contains(out, ":" + strconv.Itoa(start)) {
+			if !strings.Contains(out, ":"+strconv.Itoa(start)) {
 				port = strconv.Itoa(start)
 				log.Debugf("lb %s pid: %v api port: %v ", confPath, pid, port)
 				break
@@ -220,9 +219,9 @@ func getListener(lb lbInfo) Listener {
 			log.Errorf("there is no free port for rest api for listener: %v \n", lb.ListenerUuid)
 			return nil
 		}
-		return &GBListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, firewallLocalICMPDes:localICMPDes, apiPort:port, aclPath:aclPath}
+		return &GBListener{lb: lb, confPath: confPath, pidPath: pidPath, firewallDes: des, firewallLocalICMPDes: localICMPDes, apiPort: port, aclPath: aclPath}
 	case "tcp", "https", "http":
-		return &HaproxyListener{lb:lb, confPath: confPath, pidPath:pidPath, firewallDes:des, firewallLocalICMPDes:localICMPDes, sockPath:sockPath, aclPath:aclPath}
+		return &HaproxyListener{lb: lb, confPath: confPath, pidPath: pidPath, firewallDes: des, firewallLocalICMPDes: localICMPDes, sockPath: sockPath, aclPath: aclPath}
 	default:
 		utils.PanicOnError(fmt.Errorf("No such listener %v", lb.Mode))
 	}
@@ -235,7 +234,8 @@ func ipRange2Cidrs(ipEntry []string) []string {
 	for _, e := range ipEntry {
 		if strings.Contains(e, "-") {
 			ips := strings.Split(e, "-")
-			o, err := cidrman.IPRangeToCIDRs(ips[0], ips[1]); utils.PanicOnError(err)
+			o, err := cidrman.IPRangeToCIDRs(ips[0], ips[1])
+			utils.PanicOnError(err)
 			entry = append(entry, o...)
 		} else {
 			entry = append(entry, e)
@@ -272,7 +272,7 @@ func parseListenerPrameter(lb lbInfo) (map[string]interface{}, error) {
 			m["HttpChkMethod"] = mp[0]
 			m["HttpChkUri"] = mp[1]
 			if mp[2] != "http_2xx" {
-				code := map[string]string{"http_2xx":"2","http_3xx":"3","http_4xx":"4","http_5xx":"5",}
+				code := map[string]string{"http_2xx": "2", "http_3xx": "3", "http_4xx": "4", "http_5xx": "5"}
 				expect := "^["
 				for _, o := range strings.Split(mp[2], ",") {
 					expect = expect + code[o]
@@ -286,16 +286,16 @@ func parseListenerPrameter(lb lbInfo) (map[string]interface{}, error) {
 		}
 	}
 
-	if lb.SecurityPolicyType == TLS_CIPHER_POLICY_1_0{
+	if lb.SecurityPolicyType == TLS_CIPHER_POLICY_1_0 {
 		m["SecurityOptions"] = fmt.Sprintf(LBSecurityPolicyConfiguration, LBSecurityPolicyCommonCiphers+":"+LBSecurityPolicy1_2_3CommonCiphers, "no-sslv3 no-tlsv13 no-tls-tickets")
-	} else if lb.SecurityPolicyType == TLS_CIPHER_POLICY_1_1{
-		m["SecurityOptions"] =  fmt.Sprintf(LBSecurityPolicyConfiguration, LBSecurityPolicyCommonCiphers+":"+LBSecurityPolicy1_2_3CommonCiphers,"no-sslv3 no-tlsv10 no-tlsv13 no-tls-tickets")
-	} else if lb.SecurityPolicyType == TLS_CIPHER_POLICY_1_2{
-		m["SecurityOptions"] =  fmt.Sprintf(LBSecurityPolicyConfiguration, LBSecurityPolicyCommonCiphers+":"+LBSecurityPolicy1_2_3CommonCiphers,"no-sslv3 no-tlsv10 no-tlsv11 no-tlsv13 no-tls-tickets")
-	} else if lb.SecurityPolicyType == TLS_CIPHER_POLICY_1_2_STRICT{
-		m["SecurityOptions"] =  fmt.Sprintf(LBSecurityPolicyConfiguration, LBSecurityPolicyCommonCiphers,"no-sslv3 no-tlsv10 no-tlsv11 no-tlsv13 no-tls-tickets")
-	} else if lb.SecurityPolicyType == TLS_CIPHER_POLICY_1_2_STRICT_WITH_1_3{
-		m["SecurityOptions"] =  fmt.Sprintf(LBSecurityPolicyConfiguration, LBSecurityPolicyCommonCiphers+":"+LBSecurityPolicystrict3OnlyCiphers,"no-sslv3 no-tlsv10 no-tlsv11 no-tlsv12 no-tls-tickets")
+	} else if lb.SecurityPolicyType == TLS_CIPHER_POLICY_1_1 {
+		m["SecurityOptions"] = fmt.Sprintf(LBSecurityPolicyConfiguration, LBSecurityPolicyCommonCiphers+":"+LBSecurityPolicy1_2_3CommonCiphers, "no-sslv3 no-tlsv10 no-tlsv13 no-tls-tickets")
+	} else if lb.SecurityPolicyType == TLS_CIPHER_POLICY_1_2 {
+		m["SecurityOptions"] = fmt.Sprintf(LBSecurityPolicyConfiguration, LBSecurityPolicyCommonCiphers+":"+LBSecurityPolicy1_2_3CommonCiphers, "no-sslv3 no-tlsv10 no-tlsv11 no-tlsv13 no-tls-tickets")
+	} else if lb.SecurityPolicyType == TLS_CIPHER_POLICY_1_2_STRICT {
+		m["SecurityOptions"] = fmt.Sprintf(LBSecurityPolicyConfiguration, LBSecurityPolicyCommonCiphers, "no-sslv3 no-tlsv10 no-tlsv11 no-tlsv13 no-tls-tickets")
+	} else if lb.SecurityPolicyType == TLS_CIPHER_POLICY_1_2_STRICT_WITH_1_3 {
+		m["SecurityOptions"] = fmt.Sprintf(LBSecurityPolicyConfiguration, LBSecurityPolicyCommonCiphers+":"+LBSecurityPolicystrict3OnlyCiphers, "no-sslv3 no-tlsv10 no-tlsv11 no-tlsv12 no-tls-tickets")
 	}
 
 	m["CertificatePath"] = makeCertificatePath(lb.CertificateUuid)
@@ -306,8 +306,7 @@ func parseListenerPrameter(lb lbInfo) (map[string]interface{}, error) {
 	var isAclRedirect bool
 	var defaultServerGroup serverGroupInfo
 
-
-	if ( lb.RedirectRules != nil ) && (len(lb.RedirectRules) > 0 ) && ( (lb.Mode == "http" ) || (lb.Mode == "https"))  {
+	if (lb.RedirectRules != nil) && (len(lb.RedirectRules) > 0) && ((lb.Mode == "http") || (lb.Mode == "https")) {
 		isAclRedirect = true
 		m["IsAclRedirect"] = "enable"
 	} else {
@@ -316,11 +315,11 @@ func parseListenerPrameter(lb lbInfo) (map[string]interface{}, error) {
 
 	if isAclRedirect {
 		m["RedirectRules"] = lb.RedirectRules
-		for _, sGroup := range lb.ServerGroups{
+		for _, sGroup := range lb.ServerGroups {
 			if sGroup.IsDefault {
 				defaultServerGroup.BackendServers = append(defaultServerGroup.BackendServers, sGroup.BackendServers...)
 			} else {
-				combinedServerGroups = append(combinedServerGroups,sGroup)
+				combinedServerGroups = append(combinedServerGroups, sGroup)
 			}
 		}
 	} else {
@@ -331,17 +330,17 @@ func parseListenerPrameter(lb lbInfo) (map[string]interface{}, error) {
 
 	if len(defaultServerGroup.BackendServers) > 0 {
 		defaultServerGroup.Name = "defaultServerGroup"
-		defaultServerGroup.ServerGroupUuid = "default-" + lb.ListenerUuid 
+		defaultServerGroup.ServerGroupUuid = "default-" + lb.ListenerUuid
 		defaultServerGroup.IsDefault = true
 		log.Debugf("defaultServerGroupUuid change to %s", defaultServerGroup.ServerGroupUuid)
-		m["DefaultServerGroupUuid"] = defaultServerGroup.ServerGroupUuid 
-		combinedServerGroups = append(combinedServerGroups,defaultServerGroup)
+		m["DefaultServerGroupUuid"] = defaultServerGroup.ServerGroupUuid
+		combinedServerGroups = append(combinedServerGroups, defaultServerGroup)
 	} else {
 		m["DefaultServerGroupUuid"] = ""
 		log.Debugf("defaultServerGroupUuid is null")
 	}
 
-	if len(combinedServerGroups) > 0  {
+	if len(combinedServerGroups) > 0 {
 		m["ServerGroups"] = combinedServerGroups
 	} else {
 		m["ServerGroups"] = []serverGroupInfo{}
@@ -350,8 +349,9 @@ func parseListenerPrameter(lb lbInfo) (map[string]interface{}, error) {
 	return m, nil
 }
 
-func getListenerMaxCocurrenceSocket(maxConnect string) (string) {
-	maxSocket, err := strconv.Atoi(maxConnect); utils.PanicOnError(err)
+func getListenerMaxCocurrenceSocket(maxConnect string) string {
+	maxSocket, err := strconv.Atoi(maxConnect)
+	utils.PanicOnError(err)
 	maxSocket = maxSocket*2 + RESERVE_SOCK_COUNT
 
 	if maxSocket > MAX_SOCK_COUNT {
@@ -361,8 +361,8 @@ func getListenerMaxCocurrenceSocket(maxConnect string) (string) {
 	return strconv.Itoa(maxSocket)
 }
 
-func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo)  (err error) {
-        conf := `global
+func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo) (err error) {
+	conf := `global
     maxconn {{.MaxConnection}}
     log 127.0.0.1 local1
     #user vyos
@@ -467,8 +467,10 @@ backend {{ .ServerGroupUuid}}
 `
 	var buf, acl_buf bytes.Buffer
 	var m map[string]interface{}
-	tmpl, err := template.New("conf").Parse(conf); utils.PanicOnError(err)
-	m, err = parseListenerPrameter(lb);utils.PanicOnError(err)
+	tmpl, err := template.New("conf").Parse(conf)
+	utils.PanicOnError(err)
+	m, err = parseListenerPrameter(lb)
+	utils.PanicOnError(err)
 	this.maxConnect = m["MaxConnection"].(string)
 	this.maxSession, _ = strconv.Atoi(this.maxConnect)
 	if strings.EqualFold(m["BalancerAlgorithm"].(string), "weightroundrobin") {
@@ -491,47 +493,55 @@ backend {{ .ServerGroupUuid}}
 		m["AccessControlStatus"] = "disable"
 	} else {
 		m["AclConfPath"] = this.aclPath
-		m["AclEntryMd5"] =  md5.Sum([]byte(m["AclEntry"].(string)))
+		m["AclEntryMd5"] = md5.Sum([]byte(m["AclEntry"].(string)))
 	}
 	if _, exist := m["Nbprocess"]; !exist {
 		m["Nbprocess"] = "1"
 	}
 	m["HaproxyVersion"] = haproxyVersion
 
-        if _, exist := m["HttpMode"]; !exist{
+	if _, exist := m["HttpMode"]; !exist {
 		m["HttpMode"] = "http-server-close"
-        }
+	}
 
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo id -u vyos"),
 	}
-	_, result, _, _ := bash.RunWithReturn();
+	_, result, _, _ := bash.RunWithReturn()
 	result = strings.Replace(result, "\n", "", -1)
-	_, er := strconv.Atoi(result);utils.PanicOnError(er)
+	_, er := strconv.Atoi(result)
+	utils.PanicOnError(er)
 	m["uid"] = result
 
 	b := utils.Bash{
 		Command: fmt.Sprintf("sudo id -g vyos"),
 	}
-	_, re, _, _ := b.RunWithReturn();
+	_, re, _, _ := b.RunWithReturn()
 	re = strings.Replace(re, "\n", "", -1)
-	_, e := strconv.Atoi(re);utils.PanicOnError(e)
+	_, e := strconv.Atoi(re)
+	utils.PanicOnError(e)
 	m["gid"] = re
 
-	err = utils.MkdirForFile(this.aclPath, 0755); utils.PanicOnError(err)
-	acl_buf.WriteString(strings.Join(ipRange2Cidrs(strings.Split(m["AclEntry"].(string), ",")),"\n"))
-	err = ioutil.WriteFile(this.aclPath, acl_buf.Bytes(), 0755); utils.PanicOnError(err)
-	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
-	err = utils.MkdirForFile(this.pidPath, 0755); utils.PanicOnError(err)
-	err = utils.MkdirForFile(this.confPath, 0755); utils.PanicOnError(err)
-	err = ioutil.WriteFile(this.confPath, buf.Bytes(), 0755); utils.PanicOnError(err)
+	err = utils.MkdirForFile(this.aclPath, 0755)
+	utils.PanicOnError(err)
+	acl_buf.WriteString(strings.Join(ipRange2Cidrs(strings.Split(m["AclEntry"].(string), ",")), "\n"))
+	err = ioutil.WriteFile(this.aclPath, acl_buf.Bytes(), 0755)
+	utils.PanicOnError(err)
+	err = tmpl.Execute(&buf, m)
+	utils.PanicOnError(err)
+	err = utils.MkdirForFile(this.pidPath, 0755)
+	utils.PanicOnError(err)
+	err = utils.MkdirForFile(this.confPath, 0755)
+	utils.PanicOnError(err)
+	err = ioutil.WriteFile(this.confPath, buf.Bytes(), 0755)
+	utils.PanicOnError(err)
 	LbListeners[this.lb.ListenerUuid] = this
 	return err
 }
 
-func (this *HaproxyListener) startListenerService() ( ret int, err error) {
+func (this *HaproxyListener) startListenerService() (ret int, err error) {
 	pids := this.getPids()
-	
+
 	var bash utils.Bash
 	if len(pids) > 0 {
 		bash = utils.Bash{
@@ -546,28 +556,28 @@ func (this *HaproxyListener) startListenerService() ( ret int, err error) {
 	}
 	var stderr string
 	var stdout string
-	ret, stdout, stderr,err = bash.RunWithReturn()
-	if err!= nil {
-	    return ret, errors.New(fmt.Sprintf("shell failure[command: %v, return code: %v, stdout: %v, stderr: %v", bash.Command, ret, stdout, stderr))
+	ret, stdout, stderr, err = bash.RunWithReturn()
+	if err != nil {
+		return ret, errors.New(fmt.Sprintf("shell failure[command: %v, return code: %v, stdout: %v, stderr: %v", bash.Command, ret, stdout, stderr))
 	}
 	return ret, err
 }
 
-
-func (this *HaproxyListener) checkIfListenerServiceUpdate(origChecksum string, currChecksum string) ( bool, error) {
-	pid, err := utils.FindFirstPIDByPS( this.confPath, this.pidPath)
+func (this *HaproxyListener) checkIfListenerServiceUpdate(origChecksum string, currChecksum string) (bool, error) {
+	pid, err := utils.FindFirstPIDByPS(this.confPath, this.pidPath)
 	if pid > 0 {
 		//log.Debugf("lb %s pid: %v orig: %v curr: %v", this.confPath, pid, origChecksum, currChecksum)
 		return strings.EqualFold(origChecksum, currChecksum) == false, nil
-	} else if (pid == -1) {
+	} else if pid == -1 {
 		err = nil
 	}
 	return true, err
 }
 
-func (this *HaproxyListener) preActionListenerServiceStart() ( err error) {
+func (this *HaproxyListener) preActionListenerServiceStart() (err error) {
 	comment := makeDropRuleComments(this.lb)
-	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic); utils.PanicOnError(err)
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic)
+	utils.PanicOnError(err)
 	if utils.IsSkipVyosIptables() {
 		rule, _ := this.getSynIptablesRule()
 		ruleMap := map[string][]utils.IptablesRule{}
@@ -598,9 +608,10 @@ func (this *HaproxyListener) preActionListenerServiceStart() ( err error) {
 	return nil
 }
 
-func (this *HaproxyListener) rollbackPreActionListenerServiceStart() ( err error) {
+func (this *HaproxyListener) rollbackPreActionListenerServiceStart() (err error) {
 	commet := makeDropRuleComments(this.lb)
-	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic)
+	utils.PanicOnError(err)
 	if utils.IsSkipVyosIptables() {
 		utils.DeleteFirewallRuleByComment(nicname, commet)
 		for _, pname := range utils.GetPrivteInterface() {
@@ -653,8 +664,9 @@ func cleanInternalFirewallRule(tree *server.VyosConfigTree, des string) (err err
 /*
 setlb:
 */
-func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
-	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
+func (this *HaproxyListener) postActionListenerServiceStart() (err error) {
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic)
+	utils.PanicOnError(err)
 	dropComment := makeDropRuleComments(this.lb)
 	if utils.IsSkipVyosIptables() {
 		utils.DeleteFirewallRuleByComment(nicname, dropComment)
@@ -715,22 +727,24 @@ func (this *HaproxyListener) getPids() []string {
 			}
 		}
 	}
-	
+
 	return pids
 }
 
-func (this *HaproxyListener) stopListenerService() ( err error) {
+func (this *HaproxyListener) stopListenerService() (err error) {
 	pids := this.getPids()
 	if len(pids) > 0 {
 		for _, pid := range pids {
-			p, err := strconv.Atoi(pid); utils.PanicOnError(err)
-			err = utils.KillProcess(p); utils.PanicOnError(err)
+			p, err := strconv.Atoi(pid)
+			utils.PanicOnError(err)
+			err = utils.KillProcess(p)
+			utils.PanicOnError(err)
 		}
 	} else {
 		err = nil
 	}
 
-	t := utils.ConnectionTrackTuple{IsNat:false, IsDst: true, Ip: this.lb.Vip, Protocol: "tcp",
+	t := utils.ConnectionTrackTuple{IsNat: false, IsDst: true, Ip: this.lb.Vip, Protocol: "tcp",
 		PortStart: this.lb.LoadBalancerPort, PortEnd: this.lb.LoadBalancerPort}
 	t.CleanConnTrackConnection()
 
@@ -740,8 +754,9 @@ func (this *HaproxyListener) stopListenerService() ( err error) {
 func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error) {
 	delete(LbListeners, this.lb.ListenerUuid)
 
-	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
-	if ! utils.IsSkipVyosIptables() {
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic)
+	utils.PanicOnError(err)
+	if !utils.IsSkipVyosIptables() {
 		tree := server.NewParserFromShowConfiguration().Tree
 		if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r != nil {
 			r.Delete()
@@ -754,36 +769,43 @@ func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error
 	}
 
 	if e, _ := utils.PathExists(this.pidPath); e {
-		err = os.Remove(this.pidPath); utils.LogError(err)
+		err = os.Remove(this.pidPath)
+		utils.LogError(err)
 	}
 	if e, _ := utils.PathExists(this.confPath); e {
-		err = os.Remove(this.confPath); utils.LogError(err)
+		err = os.Remove(this.confPath)
+		utils.LogError(err)
 	}
 	if e, _ := utils.PathExists(this.sockPath); e {
-		err = os.Remove(this.sockPath); utils.LogError(err)
+		err = os.Remove(this.sockPath)
+		utils.LogError(err)
 	}
 
 	if e, _ := utils.PathExists(this.aclPath); e {
-		err = os.Remove(this.aclPath); utils.LogError(err)
+		err = os.Remove(this.aclPath)
+		utils.LogError(err)
 	}
 
 	return 0, err
 }
 
-func (this *HaproxyListener) getIptablesRule()([]utils.IptablesRule, string) {
-	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
+func (this *HaproxyListener) getIptablesRule() ([]utils.IptablesRule, string) {
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic)
+	utils.PanicOnError(err)
 	return []utils.IptablesRule{utils.NewLoadBalancerIptablesRule(utils.TCP, this.lb.Vip, this.lb.LoadBalancerPort,
 		utils.RETURN, makeLbFirewallRuleComments(this.lb), nil)}, nicname
 }
 
-func (this *HaproxyListener) getIcmpIptablesRule()([]utils.IptablesRule, string) {
-	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
+func (this *HaproxyListener) getIcmpIptablesRule() ([]utils.IptablesRule, string) {
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic)
+	utils.PanicOnError(err)
 	return []utils.IptablesRule{utils.NewLoadBalancerIptablesRule(utils.ICMP, this.lb.Vip, 0,
 		utils.RETURN, makeLbFirewallRuleComments(this.lb), nil)}, nicname
 }
 
-func (this *HaproxyListener) getSynIptablesRule()([]utils.IptablesRule, string) {
-	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
+func (this *HaproxyListener) getSynIptablesRule() ([]utils.IptablesRule, string) {
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic)
+	utils.PanicOnError(err)
 	return []utils.IptablesRule{utils.NewLoadBalancerIptablesRule(utils.TCP, this.lb.Vip, this.lb.LoadBalancerPort,
 		utils.DROP, makeDropRuleComments(this.lb), []string{utils.SYN})}, nicname
 }
@@ -802,8 +824,8 @@ func (this *GBListener) adaptListenerParameter(m map[string]interface{}) (map[st
 	return m, nil
 }
 
-func (this *GBListener) createListenerServiceConfigure(lb lbInfo)  (err error) {
-		conf := `[api]
+func (this *GBListener) createListenerServiceConfigure(lb lbInfo) (err error) {
+	conf := `[api]
 enabled = true  # true | false
 bind = ":{{.ApiPort}}"  # bind host:port
 [logging]
@@ -870,9 +892,12 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 	var buf bytes.Buffer
 	var m map[string]interface{}
 
-	tmpl, err := template.New("conf").Parse(conf); utils.PanicOnError(err)
-	m, err = parseListenerPrameter(lb);utils.PanicOnError(err)
-	m, err = this.adaptListenerParameter(m);utils.PanicOnError(err)
+	tmpl, err := template.New("conf").Parse(conf)
+	utils.PanicOnError(err)
+	m, err = parseListenerPrameter(lb)
+	utils.PanicOnError(err)
+	m, err = this.adaptListenerParameter(m)
+	utils.PanicOnError(err)
 	m["ApiPort"] = this.apiPort
 	if _, exist := m["AccessControlStatus"]; !exist {
 		m["AccessControlStatus"] = "disable"
@@ -896,10 +921,14 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 	this.maxSession, _ = strconv.Atoi(this.maxConnect)
 	log.Debugf("lb aclstatus:%v type: %v entry: %v ", m["AccessControlStatus"].(string), m["AclType"], m["AclEntry"])
 
-	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
-	err = utils.MkdirForFile(this.pidPath, 0755); utils.PanicOnError(err)
-	err = utils.MkdirForFile(this.confPath, 0755); utils.PanicOnError(err)
-	err = ioutil.WriteFile(this.confPath, buf.Bytes(), 0755); utils.PanicOnError(err)
+	err = tmpl.Execute(&buf, m)
+	utils.PanicOnError(err)
+	err = utils.MkdirForFile(this.pidPath, 0755)
+	utils.PanicOnError(err)
+	err = utils.MkdirForFile(this.confPath, 0755)
+	utils.PanicOnError(err)
+	err = ioutil.WriteFile(this.confPath, buf.Bytes(), 0755)
+	utils.PanicOnError(err)
 	LbListeners[this.lb.ListenerUuid] = this
 	return err
 }
@@ -907,11 +936,11 @@ max_responses = 0    # (required) if > 0 accepts no more responses that max_resp
 func setPidRLimit(confpath string) error {
 	if pid, err := utils.FindFirstPIDByPS(confpath); pid > 0 {
 		bash := utils.Bash{
-			Command: fmt.Sprintf("sudo cat /proc/%d/limits | grep 'Max open files' | awk -F ' ' '{print $5}' ",pid),
+			Command: fmt.Sprintf("sudo cat /proc/%d/limits | grep 'Max open files' | awk -F ' ' '{print $5}' ", pid),
 		}
-		
+
 		_, hlimit, _, er := bash.RunWithReturn()
-		if er != nil{
+		if er != nil {
 			log.Debugf("cat not get pid %d hard limit", pid)
 			return er
 		}
@@ -920,13 +949,13 @@ func setPidRLimit(confpath string) error {
 			Command: fmt.Sprintf("sudo /opt/vyatta/sbin/goprlimit -p %d -s %s",
 				pid, hlimit),
 		}
-		
+
 		ret, out, _, e := bash.RunWithReturn()
-		log.Debugf("%d %s",ret, out)
-		if e != nil{
+		log.Debugf("%d %s", ret, out)
+		if e != nil {
 			return e
 		}
-		
+
 		return nil
 	} else {
 		return err
@@ -940,20 +969,20 @@ func startGobetween(confpath, pidpath string) (int, error) {
 	}
 
 	ret, out, _, err := bash.RunWithReturn()
-	log.Debugf("%d %s",ret, out)
+	log.Debugf("%d %s", ret, out)
 	if ret != 0 || err != nil {
 		log.Debugf("start gobetween faild: ret: %d, err: %v, %s", ret, err, out)
 		return ret, err
 	}
-	
-	if runtime.GOARCH == "amd64"{
+
+	if runtime.GOARCH == "amd64" {
 		setPidRLimit(confpath)
 	}
-	
+
 	return 0, nil
 }
 
-func (this *GBListener) startPidMonitor()  {
+func (this *GBListener) startPidMonitor() {
 	if _, ok := gobetweenListeners[this.lb.ListenerUuid]; !ok {
 		if pid, err := utils.FindFirstPIDByPS(this.confPath); pid > 0 {
 			this.pm = utils.NewPidMon(pid, func() int {
@@ -963,13 +992,13 @@ func (this *GBListener) startPidMonitor()  {
 					log.Warnf("failed to respawn gobetween: %s", err)
 					return -1
 				}
-				
+
 				pid, err := utils.FindFirstPIDByPS(this.confPath)
 				if err != nil {
 					log.Warnf("failed to read gobetween pid: %s", err)
 					return -1
 				}
-				
+
 				return pid
 			})
 			log.Debugf("created gobetween PidMon for %s", this.lb.ListenerUuid)
@@ -984,7 +1013,7 @@ func (this *GBListener) startPidMonitor()  {
 	}
 }
 
-func (this *GBListener) stopPidMonitor()  {
+func (this *GBListener) stopPidMonitor() {
 	if lb, ok := gobetweenListeners[this.lb.ListenerUuid]; ok {
 		log.Warnf("stop gobetween PidMon for %s", this.lb.ListenerUuid)
 		lb.pm.Stop()
@@ -994,12 +1023,12 @@ func (this *GBListener) stopPidMonitor()  {
 	}
 }
 
-func (this *GBListener) startListenerService() (int,  error) {
+func (this *GBListener) startListenerService() (int, error) {
 	ret, err := startGobetween(this.confPath, this.pidPath)
-	if err != nil || ret != 0{
+	if err != nil || ret != 0 {
 		return ret, err
 	}
-	
+
 	this.startPidMonitor()
 
 	return ret, err
@@ -1013,7 +1042,8 @@ func getFileChecksum(file string) (checksum string, err error) {
 		bash := utils.Bash{
 			Command: fmt.Sprintf("md5sum %s |awk '{print $1}'", file),
 		}
-		ret, out, _, err := bash.RunWithReturn();bash.PanicIfError()
+		ret, out, _, err := bash.RunWithReturn()
+		bash.PanicIfError()
 		if ret != 0 || err != nil {
 			return "", err
 		}
@@ -1023,10 +1053,10 @@ func getFileChecksum(file string) (checksum string, err error) {
 	return checksum, nil
 }
 
-func (this *GBListener) checkIfListenerServiceUpdate(origChecksum string, currChecksum string) ( bool, error) {
+func (this *GBListener) checkIfListenerServiceUpdate(origChecksum string, currChecksum string) (bool, error) {
 	var err error
 	err = nil
-	if pid, _:= utils.FindFirstPIDByPS( this.confPath); pid > 0 {
+	if pid, _ := utils.FindFirstPIDByPS(this.confPath); pid > 0 {
 		if strings.EqualFold(origChecksum, currChecksum) {
 			this.startPidMonitor()
 			return false, nil
@@ -1034,18 +1064,18 @@ func (this *GBListener) checkIfListenerServiceUpdate(origChecksum string, currCh
 		log.Debugf("lb %s pid: %v orig: %v curr: %v", this.confPath, pid, origChecksum, currChecksum)
 		err = utils.KillProcess(pid)
 	}
-	
+
 	return true, err
 }
 
-func (this *GBListener) preActionListenerServiceStart() ( err error) {
+func (this *GBListener) preActionListenerServiceStart() (err error) {
 	return nil
 }
-func (this *GBListener) rollbackPreActionListenerServiceStart() ( err error) {
+func (this *GBListener) rollbackPreActionListenerServiceStart() (err error) {
 	return nil
 }
 
-func (this *GBListener) setGBListenerRuleByIptables(nic string)  {
+func (this *GBListener) setGBListenerRuleByIptables(nic string) {
 	dport, _ := strconv.Atoi(this.apiPort)
 	rule := utils.NewLoadBalancerIptablesRule(utils.TCP, "", dport,
 		utils.ACCEPT, makeLbFirewallRuleComments(this.lb), nil)
@@ -1056,18 +1086,20 @@ func (this *GBListener) setGBListenerRuleByIptables(nic string)  {
 	utils.InsertFireWallRule(nic, rule, utils.LOCAL)
 }
 
-func (this *GBListener) getIcmpIptablesRule()([]utils.IptablesRule, string) {
-	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
+func (this *GBListener) getIcmpIptablesRule() ([]utils.IptablesRule, string) {
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic)
+	utils.PanicOnError(err)
 	return []utils.IptablesRule{utils.NewLoadBalancerIptablesRule(utils.ICMP, this.lb.Vip, 0,
 		utils.RETURN, makeLbFirewallRuleComments(this.lb), nil)}, nicname
 }
 
-func (this *GBListener) postActionListenerServiceStart() ( err error) {
+func (this *GBListener) postActionListenerServiceStart() (err error) {
 	if utils.IsSkipVyosIptables() {
 		return nil
 	}
 
-	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic)
+	utils.PanicOnError(err)
 	tree := server.NewParserFromShowConfiguration().Tree
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes); r == nil {
 		/*for lb statistics with restful api*/
@@ -1108,12 +1140,13 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 	return nil
 }
 
-func (this *GBListener) getIptablesRule()([]utils.IptablesRule, string) {
-	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
+func (this *GBListener) getIptablesRule() ([]utils.IptablesRule, string) {
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic)
+	utils.PanicOnError(err)
 	dport, _ := strconv.Atoi(this.apiPort)
-	return []utils.IptablesRule {
-		utils.NewLoadBalancerIptablesRule(utils.TCP, "", dport, utils.ACCEPT, makeLbFirewallRuleComments(this.lb), nil),
-		utils.NewLoadBalancerIptablesRule(utils.UDP, this.lb.Vip, this.lb.LoadBalancerPort, utils.ACCEPT, makeLbFirewallRuleComments(this.lb), nil)},
+	return []utils.IptablesRule{
+			utils.NewLoadBalancerIptablesRule(utils.TCP, "", dport, utils.ACCEPT, makeLbFirewallRuleComments(this.lb), nil),
+			utils.NewLoadBalancerIptablesRule(utils.UDP, this.lb.Vip, this.lb.LoadBalancerPort, utils.ACCEPT, makeLbFirewallRuleComments(this.lb), nil)},
 		nicname
 }
 
@@ -1122,15 +1155,16 @@ func (this *GBListener) getLbInfo() (lb lbInfo) {
 	return
 }
 
-func (this *GBListener) stopListenerService() ( err error) {
+func (this *GBListener) stopListenerService() (err error) {
 	//miao zhanyong the udp lb configured by gobetween, there is no pid configure in the shell cmd line
 	pid, err := utils.FindFirstPIDByPS(this.confPath)
 	//log.Debugf("lb %s pid: %v result:%v", this.confPath, pid, err)
 	err = nil
 	this.stopPidMonitor()
-	
+
 	if pid > 0 {
-		err = utils.KillProcess(pid); utils.PanicOnError(err)
+		err = utils.KillProcess(pid)
+		utils.PanicOnError(err)
 	} else if pid == -1 {
 		err = nil
 	}
@@ -1141,7 +1175,8 @@ func (this *GBListener) stopListenerService() ( err error) {
 func (this *GBListener) postActionListenerServiceStop() (ret int, err error) {
 	delete(LbListeners, this.lb.ListenerUuid)
 
-	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic)
+	utils.PanicOnError(err)
 	if !utils.IsSkipVyosIptables() {
 		tree := server.NewParserFromShowConfiguration().Tree
 		r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallDes)
@@ -1157,12 +1192,14 @@ func (this *GBListener) postActionListenerServiceStop() (ret int, err error) {
 	}
 
 	if e, _ := utils.PathExists(this.pidPath); e {
-		err = os.Remove(this.pidPath); utils.LogError(err)
+		err = os.Remove(this.pidPath)
+		utils.LogError(err)
 	}
 	if e, _ := utils.PathExists(this.confPath); e {
-		err = os.Remove(this.confPath); utils.LogError(err)
+		err = os.Remove(this.confPath)
+		utils.LogError(err)
 	}
-	
+
 	return 0, err
 }
 
@@ -1172,7 +1209,7 @@ func makeLbAclConfFilePath(lb lbInfo) string {
 
 func makeLbPidFilePath(lb lbInfo) string {
 	pidPath := filepath.Join(LB_ROOT_DIR, "pid", fmt.Sprintf("lb-%s-listener-%s.pid", lb.LbUuid, lb.ListenerUuid))
-	fd, _ := utils.CreateFileIfNotExists(pidPath, os.O_WRONLY | os.O_APPEND, 0666)
+	fd, _ := utils.CreateFileIfNotExists(pidPath, os.O_WRONLY|os.O_APPEND, 0666)
 	fd.Close()
 	return pidPath
 }
@@ -1215,7 +1252,7 @@ func makeLbFirewallRuleComments(lb lbInfo) string {
 
 func setLb(lb lbInfo) {
 	listener := getListener(lb)
-	if  listener == nil {
+	if listener == nil {
 		return
 	}
 	checksum, err := getFileChecksum(makeLbConfFilePath(lb))
@@ -1224,15 +1261,18 @@ func setLb(lb lbInfo) {
 		return
 	}
 
-	err = listener.createListenerServiceConfigure(lb); utils.PanicOnError(err)
-	newChecksum, err1 := getFileChecksum(makeLbConfFilePath(lb)); utils.PanicOnError(err1)
+	err = listener.createListenerServiceConfigure(lb)
+	utils.PanicOnError(err)
+	newChecksum, err1 := getFileChecksum(makeLbConfFilePath(lb))
+	utils.PanicOnError(err1)
 	if update, err := listener.checkIfListenerServiceUpdate(checksum, newChecksum); err == nil && !update {
 		log.Debugf("no need refresh the listener: %v\n", lb.ListenerUuid)
 		return
 	}
 	utils.PanicOnError(err)
 
-	err = listener.preActionListenerServiceStart(); utils.PanicOnError(err)
+	err = listener.preActionListenerServiceStart()
+	utils.PanicOnError(err)
 	//time.Sleep(time.Duration(1) * time.Second)
 	if ret, err := listener.startListenerService(); ret != 0 || err != nil {
 		log.Errorf("start listener fail %v \n", lb.ListenerUuid)
@@ -1265,18 +1305,19 @@ func isCertificateUsed(certificateFile string) bool {
 
 	if ret, res, _, err := bash.RunWithReturn(); ret != 0 || err != nil {
 		return false
-	} else if res == ""{
+	} else if res == "" {
 		return false
 	} else {
 		return true
 	}
 }
 
-func removeUnusedCertificate()  {
+func removeUnusedCertificate() {
 	files := getCertificateList()
 	for _, file := range files {
 		if file != "" && !isCertificateUsed(file) {
-			err := os.Remove(file); utils.LogError(err)
+			err := os.Remove(file)
+			utils.LogError(err)
 		}
 	}
 }
@@ -1294,7 +1335,7 @@ notice - 5
 info - 6 (default)
 debug - 7
 */
-func doRefreshLogLevel(level string)  {
+func doRefreshLogLevel(level string) {
 	lb_log_file, err := ioutil.TempFile(LB_CONF_DIR, "rsyslog")
 	utils.PanicOnError(err)
 	conf := fmt.Sprintf(`$ModLoad imudp
@@ -1321,7 +1362,7 @@ func refreshLb(ctx *server.CommandContext) interface{} {
 	for _, lb := range cmd.Lbs {
 		if len(lb.NicIps) == 0 {
 			delLb(lb)
-		} else if (lb.Mode == LB_MODE_HTTPS && lb.CertificateUuid == "") {
+		} else if lb.Mode == LB_MODE_HTTPS && lb.CertificateUuid == "" {
 			delLb(lb)
 		} else {
 			setLb(lb)
@@ -1334,7 +1375,7 @@ func refreshLb(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
-func refreshLbIpTables()  {
+func refreshLbIpTables() {
 	/* reinstall all lb firewalls */
 	if utils.IsSkipVyosIptables() {
 		filterRules := make(map[string][]utils.IptablesRule)
@@ -1365,18 +1406,21 @@ func refreshLbIpTables()  {
 			}
 		}
 
-		err := utils.SyncFirewallRule(filterRules, utils.LbRuleComment, utils.LOCAL); utils.PanicOnError(err)
+		err := utils.SyncFirewallRule(filterRules, utils.LbRuleComment, utils.LOCAL)
+		utils.PanicOnError(err)
 	}
 }
 
 func delLb(lb lbInfo) {
 	listener := getListener(lb)
-	if  listener == nil {
+	if listener == nil {
 		return
 	}
 
-	err := listener.stopListenerService(); utils.PanicOnError(err)
-	_, err = listener.postActionListenerServiceStop(); utils.PanicOnError(err)
+	err := listener.stopListenerService()
+	utils.PanicOnError(err)
+	_, err = listener.postActionListenerServiceStop()
+	utils.PanicOnError(err)
 }
 
 func deleteLb(ctx *server.CommandContext) interface{} {
@@ -1406,8 +1450,10 @@ func createCertificate(ctx *server.CommandContext) interface{} {
 		return nil
 	}
 
-	err := utils.MkdirForFile(certificatePath, 0755); utils.PanicOnError(err)
-	err = ioutil.WriteFile(certificatePath, []byte(certificate.Certificate), 0755); utils.PanicOnError(err)
+	err := utils.MkdirForFile(certificatePath, 0755)
+	utils.PanicOnError(err)
+	err = ioutil.WriteFile(certificatePath, []byte(certificate.Certificate), 0755)
+	utils.PanicOnError(err)
 
 	return nil
 }
@@ -1428,14 +1474,12 @@ func deleteCertificate(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
-
 func init() {
 	os.Mkdir(LB_ROOT_DIR, os.ModePerm)
 	os.Mkdir(LB_CONF_DIR, os.ModePerm)
 	os.Mkdir(LB_PID_DIR, os.ModePerm)
 	os.Chmod(LB_PID_DIR, os.ModePerm)
-	os.Mkdir(LB_SOCKET_DIR, os.ModePerm | os.ModeSocket)
-	LbListeners = make(map[string]interface{}, LISTENER_MAP_SIZE)
+	os.Mkdir(LB_SOCKET_DIR, os.ModePerm|os.ModeSocket)
 	enableLbLog()
 	RegisterPrometheusCollector(NewLbPrometheusCollector())
 
@@ -1451,19 +1495,19 @@ func init() {
 }
 
 type loadBalancerCollector struct {
-	statusEntry *prom.Desc
-	inByteEntry *prom.Desc
-	outByteEntry *prom.Desc
-	curSessionNumEntry *prom.Desc
-	refusedSessionNumEntry *prom.Desc
-	totalSessionNumEntry *prom.Desc
-	curSessionUsageEntry *prom.Desc
+	statusEntry                 *prom.Desc
+	inByteEntry                 *prom.Desc
+	outByteEntry                *prom.Desc
+	curSessionNumEntry          *prom.Desc
+	refusedSessionNumEntry      *prom.Desc
+	totalSessionNumEntry        *prom.Desc
+	curSessionUsageEntry        *prom.Desc
 	concurrentSessionUsageEntry *prom.Desc
 }
 
 const (
-	LB_UUID = "LbUuid"
-	LB_LISTENER_UUID = "ListenerUuid"
+	LB_UUID                = "LbUuid"
+	LB_LISTENER_UUID       = "ListenerUuid"
 	LB_LISTENER_BACKEND_IP = "NicIpAddress"
 )
 
@@ -1576,35 +1620,35 @@ func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
 			ch <- prom.MustNewConstMetric(c.concurrentSessionUsageEntry, prom.GaugeValue, float64(cnt.concurrentSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
 		}
 
-		ch <- prom.MustNewConstMetric(c.curSessionUsageEntry, prom.GaugeValue, float64(sessionNum * 100 /maxSessionNum), listenerUuid, lbUuid)
+		ch <- prom.MustNewConstMetric(c.curSessionUsageEntry, prom.GaugeValue, float64(sessionNum*100/maxSessionNum), listenerUuid, lbUuid)
 	}
 
 	return nil
 }
 
 type LbCounter struct {
-	listenerUuid    string
-	ip              string
-	status          uint64
-	bytesIn         uint64
-	bytesOut        uint64
-	sessionNumber   uint64
-	refusedSessionNumber   uint64
-	totalSessionNumber   uint64
+	listenerUuid            string
+	ip                      string
+	status                  uint64
+	bytesIn                 uint64
+	bytesOut                uint64
+	sessionNumber           uint64
+	refusedSessionNumber    uint64
+	totalSessionNumber      uint64
 	concurrentSessionNumber uint64
 }
 
-func getIpFromLbStat(name string)  string {
+func getIpFromLbStat(name string) string {
 	res := strings.Split(name, "-")
 	return res[1]
 }
 
-func statusFormat(status string) int  {
+func statusFormat(status string) int {
 	switch status {
 	case "UP":
 		return 1
 	/*case "DOWN":
-		return 0*/
+	return 0*/
 	default:
 		return 0
 	}
@@ -1615,18 +1659,18 @@ func (this *HaproxyListener) getLbCounters(listenerUuid string) ([]*LbCounter, i
 	num := 0
 
 	client := &haproxy.HAProxyClient{
-		Addr: "unix://" + this.sockPath,
+		Addr:    "unix://" + this.sockPath,
 		Timeout: 5,
 	}
 
 	stats, err := client.Stats()
-	if (err != nil) {
+	if err != nil {
 		log.Infof("client.Stats failed %v", err)
 		return nil, 0
 	}
 
 	for _, stat := range stats {
-		if m, err := regexp.MatchString(LB_BACKEND_PREFIX_REG, stat.SvName); err != nil || !m  {
+		if m, err := regexp.MatchString(LB_BACKEND_PREFIX_REG, stat.SvName); err != nil || !m {
 			continue
 		}
 
@@ -1647,34 +1691,33 @@ func (this *HaproxyListener) getLbCounters(listenerUuid string) ([]*LbCounter, i
 	return counters, num
 }
 
-
 type GoBetweenServerBackendStat struct {
-	Live bool `json:"live"`
-	Active_connections uint64 `json:"active_connections"`
-	Total_connections uint64 `json:"total_connections"`
+	Live                bool   `json:"live"`
+	Active_connections  uint64 `json:"active_connections"`
+	Total_connections   uint64 `json:"total_connections"`
 	Refused_connections uint64 `json:"refused_connections"`
-	Rx uint64 `json:"rx"`
-	Tx uint64 `json:"tx"`
+	Rx                  uint64 `json:"rx"`
+	Tx                  uint64 `json:"tx"`
 }
 
 type GoBetweenServerBackend struct {
-	Host string `json:"host"`
+	Host  string                     `json:"host"`
 	Stats GoBetweenServerBackendStat `json:"stats"`
 }
 
 type GoBetweenServerStat struct {
-	Active_connections uint64 `json:"active_connections"`
-	Backends []GoBetweenServerBackend `json:"backends"`
+	Active_connections uint64                   `json:"active_connections"`
+	Backends           []GoBetweenServerBackend `json:"backends"`
 }
 
 /* map to store: <listenerUuid, GBListerner> pair or  or <listenerUuid, HaProxyListener> */
-var LbListeners map[string]interface{}
+var LbListeners = make(map[string]interface{}, LISTENER_MAP_SIZE)
 var goBetweenClient = &http.Client{
 	Timeout: time.Second * 5,
 }
 
 func getListenerCountInLB(lb lbInfo) (counter int) {
-	counter = 0;
+	counter = 0
 	for _, listener := range LbListeners {
 		var lbtmp lbInfo
 		switch v := listener.(type) {
@@ -1695,7 +1738,7 @@ func getListenerCountInLB(lb lbInfo) (counter int) {
 	return
 }
 
-func getGoBetweenStat(port string, server string )  (*GoBetweenServerStat, error){
+func getGoBetweenStat(port string, server string) (*GoBetweenServerStat, error) {
 	resp, err := goBetweenClient.Get(fmt.Sprintf("http://127.0.0.1:%s/servers/%s/stats", port, server))
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("get goBetween stats failed because %v", err))
@@ -1746,13 +1789,16 @@ func (this *GBListener) getLbCounters(listenerUuid string) ([]*LbCounter, int) {
 }
 
 func enableLbLog() {
-	lb_log_file, err := ioutil.TempFile(LB_CONF_DIR, "rsyslog"); utils.PanicOnError(err)
+	lb_log_file, err := ioutil.TempFile(LB_CONF_DIR, "rsyslog")
+	utils.PanicOnError(err)
 	conf := `$ModLoad imudp
 $UDPServerRun 514
 local1.info     /var/log/haproxy.log`
-	_, err = lb_log_file.Write([]byte(conf)); utils.PanicOnError(err)
+	_, err = lb_log_file.Write([]byte(conf))
+	utils.PanicOnError(err)
 
-	lb_log_rotatoe_file, err := ioutil.TempFile(LB_CONF_DIR, "rotation"); utils.PanicOnError(err)
+	lb_log_rotatoe_file, err := ioutil.TempFile(LB_CONF_DIR, "rotation")
+	utils.PanicOnError(err)
 	rotate_conf := `/var/log/haproxy.log {
 size 50M
 #daily
@@ -1771,10 +1817,12 @@ copytruncate
 notifempty
 missingok
 }`
-	_, err = lb_log_rotatoe_file.Write([]byte(rotate_conf)); utils.PanicOnError(err)
+	_, err = lb_log_rotatoe_file.Write([]byte(rotate_conf))
+	utils.PanicOnError(err)
 
 	/* add log rotate for /var/log/auth.log */
-	auth_rotatoe_file, err := ioutil.TempFile(LB_CONF_DIR, "auth"); utils.PanicOnError(err)
+	auth_rotatoe_file, err := ioutil.TempFile(LB_CONF_DIR, "auth")
+	utils.PanicOnError(err)
 	auth_rotate_conf := `/var/log/auth.log {
 size 102400k
 daily
@@ -1784,14 +1832,11 @@ copytruncate
 notifempty
 missingok
 }`
-	_, err = auth_rotatoe_file.Write([]byte(auth_rotate_conf)); utils.PanicOnError(err)
+	_, err = auth_rotatoe_file.Write([]byte(auth_rotate_conf))
+	utils.PanicOnError(err)
 	utils.SudoMoveFile(lb_log_file.Name(), "/etc/rsyslog.d/haproxy.conf")
 	utils.SudoMoveFile(lb_log_rotatoe_file.Name(), "/etc/logrotate.d/haproxy")
 	utils.SudoMoveFile(auth_rotatoe_file.Name(), "/etc/logrotate.d/auth")
-}
-
-func init()  {
-	gobetweenListeners = map[string]*GBListener{}
 }
 
 func LbEntryPoint() {
