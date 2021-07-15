@@ -358,9 +358,11 @@ listen {{.ListenerUuid}}
 	}
 	m["HaproxyVersion"] = haproxyVersion
 
-        if _, exist := m["HttpMode"]; !exist{
-		m["HttpMode"] = "http-server-close"
-        }
+	if mode, exist := m["Mode"]; exist && (mode == "http" || mode == "https")  {
+	    if _, exist := m["HttpMode"]; !exist{
+	        m["HttpMode"] = "http-server-close"
+	    }
+	}
 
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo id -u vyos"),
