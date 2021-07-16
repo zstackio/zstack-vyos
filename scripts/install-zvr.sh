@@ -122,6 +122,8 @@ if [ $? -ne 0 -a x"$ARCH" = x"aarch64" ];then
     rm -rf /etc/dnsmasq.conf
     sudo dpkg -i dnsmasq_pkg/*
 fi
+sudo mkdir -p /var/run/dnsmasq/
+sudo chmod 777 /var/run/dnsmasq/
 
 TAGET_TEMP_SCRIPT=/home/vyos/zvr/keepalived/temp/ipsec.sh
 if [[ ! -f $TAGET_TEMP_SCRIPT || $(diff ipsec.sh $TAGET_TEMP_SCRIPT) ]]; then

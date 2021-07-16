@@ -299,6 +299,14 @@ func configureNic(ctx *server.CommandContext) interface{} {
 	tree.Apply(false)
 
 	if IsMaster() {
+		if utils.Vyos_version == utils.VYOS_1_2 {
+			bash := utils.Bash {
+				Command: fmt.Sprintf("ip link set up dev %s", nicname),
+				Sudo: true,
+			}
+			bash.Run()
+		}
+		
 		checkNicIsUp(nicname, true)
 	}
 
