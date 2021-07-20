@@ -46,10 +46,20 @@ type removeNicCallback interface {
 
 var addNicCallbacks []addNicCallback
 var removeNicCallbacks []removeNicCallback
+var nicsMap map[string]utils.Nic
 
 func init() {
 	addNicCallbacks = make([]addNicCallback, 0)
 	removeNicCallbacks = make([]removeNicCallback, 0)
+	nicsMap = make(map[string]utils.Nic, 32)
+}
+
+func getNicIp(nicName string) string {
+	if nic, ok := nicsMap[nicName]; !ok {
+		return ""
+	} else {
+		return nic.Ip
+	}
 }
 
 func RegisterAddNicCallback(cb addNicCallback)  {
@@ -313,6 +323,9 @@ func configureNic(ctx *server.CommandContext) interface{} {
 		for _, cb := range addNicCallbacks {
 			cb.AddNic(nicname)
 		}
+		
+		nicsMap[nicname] = utils.Nic{Name:nicname, Mac: nic.Mac, Ip:nic.Ip, Ip6: nic.Ip6,
+			Gateway:nic.Gateway, Gateway6:nic.Gateway6}
 	}
 
 	/* this is for debug, will be deleted */
@@ -383,6 +396,8 @@ func removeNic(ctx *server.CommandContext) interface{} {
 		for _, cb := range removeNicCallbacks {
 			cb.RemoveNic(nicName)
 		}
+		
+		delete(nicsMap, nicName)
 	}
 
 	/* this is for debug, will be deleted */
@@ -521,6 +536,11 @@ func makeAlias(nic nicInfo) string {
 }
 
 func ConfigureNicEntryPoint()  {
+	nicIps := utils.GetBootStrapNicInfo()
+	for _, nic := range nicIps{
+		nicsMap[nic.Name] = nic
+	}
+	
 	server.RegisterAsyncCommandHandler(VR_CONFIGURE_NIC, server.VyosLock(configureNic))
 	server.RegisterAsyncCommandHandler(VR_REMOVE_NIC_PATH, server.VyosLock(removeNic))
 	server.RegisterAsyncCommandHandler(VR_CONFIGURE_NIC_FIREWALL_DEFAULT_ACTION_PATH, server.VyosLock(configureNicFirewallDefaultAction))

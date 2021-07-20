@@ -90,7 +90,11 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 		nicname, err := utils.GetNicNameByMac(p.NicMac); utils.PanicOnError(err)
 		cidr, err := utils.NetmaskToCIDR(p.Netmask); utils.PanicOnError(err)
 		pairs = append(pairs, nicVipPair{NicName: nicname, Vip: p.NicVip, Prefix:cidr})
-
+		
+		/* if vip is same to nic Ip, there is no need to add firewall again */
+		if nicIp := getNicIp(nicname); nicIp == p.NicVip {
+			continue
+		}
 		addSecondaryIpFirewall(nicname, p.NicVip, tree)
 	}
 
