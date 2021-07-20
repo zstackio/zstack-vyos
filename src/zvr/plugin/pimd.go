@@ -105,7 +105,7 @@ rp-address {{.RpAddress}} {{.GroupAddress}}
 
 	log.Debugf("pimd config file: %s, old checksum:%s, new checksum:%s", PIMD_CONF_PATH, oldChecksum, newChecksum)
 
-	return strings.EqualFold(oldChecksum, newChecksum)
+	return !strings.EqualFold(oldChecksum, newChecksum)
 }
 
 func (pimd *pimdAddNic) AddNic(nic string)  error {
@@ -157,7 +157,7 @@ func (pimd *pimdAddNic) AddNic(nic string)  error {
 		tree.Apply(false)
 	}
 
-	restartPimd()
+	restartPimd(true)
 
 	return nil
 }
@@ -175,13 +175,18 @@ func addPimdFirewallByIptables(nics map[string]utils.Nic)  error{
 	return nil
 }
 
-func restartPimd() {
+func restartPimd(force bool) {
 	pid, err := utils.FindFirstPIDByPSExtern(true, PIMD_BINARY_PATH)
 	if err == nil && pid != 0 {
+		/* if pimd is running, restart it if force restart */
+		if !force {
+			return
+		}
+		
 		utils.KillProcess(pid)
 	}
 
-	bash := utils.Bash{
+	bash := utils.Bash {
 		Command: fmt.Sprintf("sudo %s -c %s", PIMD_BINARY_PATH, PIMD_CONF_PATH),
 	}
 
@@ -236,10 +241,8 @@ func enablePimdHandler(ctx *server.CommandContext) interface{} {
 	}
 
 	/* generate pimd.conf */
-	if !updatePimdConf(cmd) {
-		/* restart pimd only config changed */
-		restartPimd()
-	}
+	changed := updatePimdConf(cmd)
+	restartPimd(changed)
 
 	pimdEnable = true
 

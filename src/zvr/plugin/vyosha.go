@@ -112,9 +112,10 @@ func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 	keepalivedConf.BuildConf()
 	newCheckSum, err := getFileChecksum(KeepalivedConfigFile);utils.PanicOnError(err)
 	if newCheckSum != checksum {
-		keepalivedConf.RestartKeepalived()
+		keepalivedConf.RestartKeepalived(true)
 	} else {
 		log.Debugf("keepalived configure file unchanged")
+		keepalivedConf.RestartKeepalived(false)
 	}
 
 	if !getKeepAlivedStatusStart {

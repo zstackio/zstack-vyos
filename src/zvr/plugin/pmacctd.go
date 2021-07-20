@@ -6,6 +6,7 @@ import (
     log "github.com/Sirupsen/logrus"
     "html/template"
     "io/ioutil"
+    "os/exec"
     "strings"
     "zvr/utils"
 )
@@ -46,13 +47,14 @@ func (fc *flowConfig) buildPmacctdConf() bool {
     log.Debugf("netflow old config file checksum %s, new config file checksum %s", checksum, checksumTemp)
     utils.SudoMoveFile(uacctd_conf_tmp_file, uacctd_conf_file)
 
-    return strings.Compare(checksumTemp, checksum) == 0
+    return strings.Compare(checksumTemp, checksum) != 0
 }
 
 func (fc *flowConfig) startPmacctdServers()  {
     if len(fc.NicsNames) > 0 && fc.CollectorIp != "" {
         fc.setupFlowIpTables(true)
-        if !fc.buildPmacctdConf(){
+        changed := fc.buildPmacctdConf()
+        if changed {
             bash := utils.Bash{
                 Command: fmt.Sprintf("pkill -9 uacctd; %s -f %s -d", uacctd_bin_file, uacctd_conf_file),
                 Sudo: true,
@@ -61,6 +63,13 @@ func (fc *flowConfig) startPmacctdServers()  {
             writeFlowHaScript(true)
         } else {
             log.Debugf("netflow config file not changed")
+            if pid := getUacctdPid(); pid == PID_ERROR {
+                bash := utils.Bash{
+                    Command: fmt.Sprintf("%s -f %s -d", uacctd_bin_file, uacctd_conf_file),
+                    Sudo: true,
+                }
+                bash.Run()
+            }
         }
     } else {
         fc.setupFlowIpTables(false)
@@ -132,6 +141,25 @@ func writeFlowHaScript(enable bool)  {
     }
 
     err := ioutil.WriteFile(VYOSHA_FLOW_SCRIPT, []byte(conent), 0755); utils.PanicOnError(err)
+}
+
+func getUacctdPid() (string) {
+    stdout, err := exec.Command("pidof", "-x", uacctd_bin_file).Output()
+    if err != nil {
+        log.Debugf("get uacctd pid failed %v", err)
+        return PID_ERROR
+    }
+    
+    /* when uacctd is running, the output will be: 3657, 3656, 3655
+       when uacctd not runing, the output will be empty */
+    out := strings.TrimSpace(string(stdout))
+    if out == "" {
+        log.Debugf("keepalived is not running")
+        return PID_ERROR
+    }
+    
+    pids := strings.Fields(out)
+    return pids[len(pids)-1]
 }
 
 func init()  {

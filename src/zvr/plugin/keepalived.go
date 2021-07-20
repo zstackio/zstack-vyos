@@ -311,7 +311,7 @@ func (k *KeepalivedConf) BuildConf() (error) {
 	return nil
 }
 
-func (k *KeepalivedConf) RestartKeepalived() (error) {
+func (k *KeepalivedConf) RestartKeepalived(force bool) (error) {
 	/* # ./keepalived -h
 	    Usage: ./keepalived [OPTION...]
             -f, --use-file=FILE          Use the specified configuration file
@@ -325,6 +325,11 @@ func (k *KeepalivedConf) RestartKeepalived() (error) {
 		}
 		bash.RunWithReturn(); bash.PanicIfError()
 	} else {
+		/* keepalived is running, restart it only if force restart */
+		if !force {
+			return nil
+		}
+		
 		bash := utils.Bash{
 			Command: fmt.Sprintf("sudo kill -HUP %s", pid),
 		}
