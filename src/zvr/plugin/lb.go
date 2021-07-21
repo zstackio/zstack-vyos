@@ -382,7 +382,9 @@ func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo)  (err err
 defaults
     log global
     option dontlognull
+{{- if eq .Mode "https" "http"}}
     option {{.HttpMode}}
+{{end}}
 
 
 frontend {{.ListenerUuid}}
