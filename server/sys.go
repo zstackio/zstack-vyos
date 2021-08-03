@@ -43,7 +43,9 @@ func FindNicNameByMac(mac string) (string, bool) {
 }
 
 func RunVyosScriptAsUserVyos(command string) {
-	template := `export vyatta_sbindir=/opt/vyatta/sbin
+	template := `#!/bin/vbash
+export vyatta_sbindir=/opt/vyatta/sbin
+source /opt/vyatta/etc/functions/script-template
 %s
 SET=${vyatta_sbindir}/my_set
 DELETE=${vyatta_sbindir}/my_delete
@@ -96,19 +98,15 @@ export vyos_conf_scripts_dir=/usr/libexec/vyos/conf_mode`
 	tmpfile.Close()
 	logrus.Debugf("[Configure VYOS]: %s\n", command)
 	bash := utils.Bash{
-		Command: fmt.Sprintf(`chown vyos:users %s; chmod +x %s; su - vyos -c %v`, tmpfile.Name(), tmpfile.Name(), tmpfile.Name()),
+		Command: fmt.Sprintf(`chown vyos:users %s; chmod +x %s; sudo su - vyos -c %v`, tmpfile.Name(), tmpfile.Name(), tmpfile.Name()),
 	}
 	bash.Run()
 	bash.PanicIfError()
 }
 
 func RunVyosScript(command string, args map[string]string) {
-	env_1_2 := `export vyos_libexec_dir=/usr/libexec/vyos
-export vyos_validators_dir=/usr/libexec/vyos/validators
-export vyos_conf_scripts_dir=/usr/libexec/vyos/conf_mode`
-	env_1_1_7 := ``
-
-	template := `export vyatta_sbindir=/opt/vyatta/sbin
+	template := `#!/bin/vbash
+source /opt/vyatta/etc/functions/script-template
 %s
 SET=${vyatta_sbindir}/my_set
 DELETE=${vyatta_sbindir}/my_delete
@@ -143,6 +141,11 @@ if [ $? -ne 0 ]; then
 fi
 
 `
+	env_1_2 := `export vyos_libexec_dir=/usr/libexec/vyos
+export vyos_validators_dir=/usr/libexec/vyos/validators
+export vyos_conf_scripts_dir=/usr/libexec/vyos/conf_mode`
+	env_1_1_7 := ``
+
 	env := env_1_2
 	if utils.Vyos_version == utils.VYOS_1_1_7 {
 		env = env_1_1_7
@@ -171,7 +174,7 @@ func VyosLock(fn CommandHandler) CommandHandler {
 	}
 }
 
-func VyosLockInterface(fn func()) (func()) {
+func VyosLockInterface(fn func()) func() {
 	return func()  {
 		vyosScriptLock.Lock()
 		defer vyosScriptLock.Unlock()

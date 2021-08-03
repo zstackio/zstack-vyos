@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	ZSTACK_ROUTE_PROTO = "zstack"
+	ZSTACK_ROUTE_PROTO            = "zstack"
 	ZSTACK_ROUTE_PROTO_IDENTIFFER = "201"
 )
 
@@ -21,7 +21,7 @@ func NetmaskToCIDR(netmask string) (int, error) {
 	countBit := func(num uint) int {
 		count := uint(0)
 		var i uint
-		for i = 31; i>0; i-- {
+		for i = 31; i > 0; i-- {
 			count += ((num << i) >> uint(31)) & uint(1)
 		}
 
@@ -44,17 +44,18 @@ func GetNetworkNumber(ip, netmask string) (string, error) {
 	ips := strings.Split(ip, ".")
 	masks := strings.Split(netmask, ".")
 
-	ipInByte :=  make([]interface{}, 4)
-	for i:=0; i<len(ips); i++ {
-		p, err := strconv.ParseUint(ips[i], 10, 32);
+	ipInByte := make([]interface{}, 4)
+	for i := 0; i < len(ips); i++ {
+		p, err := strconv.ParseUint(ips[i], 10, 32)
 		if err != nil {
 			return "", errors.Wrap(err, fmt.Sprintf("unable to get network number[ip:%v, netmask:%v]", ip, netmask))
 		}
-		m, err := strconv.ParseUint(masks[i], 10, 32); PanicOnError(err)
+		m, err := strconv.ParseUint(masks[i], 10, 32)
+		PanicOnError(err)
 		if err != nil {
 			return "", errors.Wrap(err, fmt.Sprintf("unable to get network number[ip:%v, netmask:%v]", ip, netmask))
 		}
-		ipInByte[i] = p&m
+		ipInByte[i] = p & m
 	}
 
 	cidr, err := NetmaskToCIDR(netmask)
@@ -66,16 +67,16 @@ func GetNetworkNumber(ip, netmask string) (string, error) {
 }
 
 type Nic struct {
-	Name      string
-	Mac       string
-	Ip        string
-	Ip6       string
-	Gateway   string
-	Gateway6  string
-	IsDefault bool
-	Catatory  string
-	Netmask  string
-	PrefixLength  int
+	Name			string
+	Mac				string
+	Ip				string
+	Ip6				string
+	Gateway			string
+	Gateway6		string
+	IsDefault		bool
+	Catatory		string
+	Netmask			string
+	PrefixLength	int
 }
 
 func (nic Nic) String() string {
@@ -108,7 +109,7 @@ func GetAllNics() (map[string]Nic, error) {
 		}
 		nics[f.Name()] = Nic{
 			Name: strings.TrimSpace(f.Name()),
-			Mac: strings.TrimSpace(string(mac)),
+			Mac:  strings.TrimSpace(string(mac)),
 		}
 	}
 
@@ -187,7 +188,7 @@ func GetIpFromUrl(url string) (string, error) {
 }
 
 func CheckIpDuplicate(nicname, ip string) bool {
-	b := Bash{Command: fmt.Sprintf("sudo arping -D -w 1.5 -c 1 -I %s %s", nicname, ip) }
+	b := Bash{Command: fmt.Sprintf("sudo arping -D -w 2 -c 1 -I %s %s", nicname, ip)}
 	err := b.Run()
 	return err != nil
 }
@@ -269,14 +270,14 @@ func RemoveZStackRoute(ip string) error {
 }
 
 func SetZStackRouteProtoIdentifier() {
-	bash := Bash {
+	bash := Bash{
 		Command: "grep zstack /etc/iproute2/rt_protos",
 	}
-	check, _, _ , _ := bash.RunWithReturn()
+	check, _, _, _ := bash.RunWithReturn()
 
 	if check != 0 {
 		log.Debugf("no route proto zstack in /etc/iproute2/rt_protos")
-		bash = Bash {
+		bash = Bash{
 			Command: fmt.Sprintf("sudo bash -c \"echo -e '\n\n# Used by zstack\n%s     zstack' >> /etc/iproute2/rt_protos\"", ZSTACK_ROUTE_PROTO_IDENTIFFER),
 		}
 		bash.Run()
@@ -298,7 +299,7 @@ func CheckMgmtCidrContainsIp(ip string, mgmtNic map[string]interface{}) bool {
 	return mgmtNet.Contains(net.ParseIP(ip))
 }
 
-func GetPrivteInterface() []string  {
+func GetPrivteInterface() []string {
 	bash := Bash{
 		Command: fmt.Sprintf("sudo ip link | grep -B 2 'category:Private' | grep '<BROADCAST,MULTICAST' | awk -F ':' '{print $2}'"),
 	}
@@ -314,7 +315,7 @@ func GetPrivteInterface() []string  {
 	var nics []string
 	for _, name := range lines {
 		name = strings.Trim(name, " ")
-		if (name != "") {
+		if name != "" {
 			nics = append(nics, name)
 		}
 	}
@@ -346,13 +347,13 @@ func GetBroadcastIpFromNetwork(ip, netmask string) string {
 	ips := strings.Split(ip, ".")
 	masks := strings.Split(netmask, ".")
 
-    for i := 0; i < 4; i ++ {
-    	ipByte, err := strconv.Atoi(ips[i]);PanicOnError(err)
-    	maskByte, err := strconv.Atoi(masks[i]);PanicOnError(err)
+	for i := 0; i < 4; i++ {
+		ipByte, err := strconv.Atoi(ips[i]); PanicOnError(err)
+		maskByte, err := strconv.Atoi(masks[i]); PanicOnError(err)
 		ipByte = ipByte & maskByte
-    	maskByte = maskByte ^ 0xFF
+		maskByte = maskByte ^ 0xFF
 
-		brAddress = append(brAddress, fmt.Sprintf("%d", (byte)(ipByte ^ maskByte)))
+		brAddress = append(brAddress, fmt.Sprintf("%d", (byte)(ipByte^maskByte)))
 	}
 
 	return strings.Join(brAddress, ".")
@@ -370,7 +371,7 @@ func GetNexthop(dst string) (string, error) {
 		Command: fmt.Sprintf("ip r get %s | grep via | awk '{print $3}'", dst),
 	}
 	ret, o, e, err := bash.RunWithReturn()
-	if err != nil{
+	if err != nil {
 		return "", err
 	}
 	if ret != 0 {
@@ -385,7 +386,7 @@ func AddRoute(dst, nexthop string) error {
 		Command: fmt.Sprintf("sudo ip route add %s via %s", dst, nexthop),
 	}
 	ret, _, e, err := bash.RunWithReturn()
-	if err != nil{
+	if err != nil {
 		return err
 	}
 	if ret != 0 {
@@ -412,7 +413,7 @@ func DelIp6DefaultRoute() error {
 	return err
 }
 
-func AddIp6DefaultRoute(gw6, dev string)  {
+func AddIp6DefaultRoute(gw6, dev string) {
 	/* default ip6 route
 	# ip -6 r | grep default
 	default via caca::1 dev eth1  metric 1024 */
@@ -422,7 +423,7 @@ func AddIp6DefaultRoute(gw6, dev string)  {
 		Command: fmt.Sprintf("ip -6 r | grep default | awk '{print $3}'"),
 	}
 	ret, o, _, err := bash.RunWithReturn()
-	if err == nil && ret == 0{
+	if err == nil && ret == 0 {
 		oldGw6 = o
 	}
 
@@ -434,7 +435,8 @@ func AddIp6DefaultRoute(gw6, dev string)  {
 	bash = Bash{
 		Command: strings.Join(cmds, ";"),
 	}
-	_, _, _, err = bash.RunWithReturn(); PanicOnError(err)
+	_, _, _, err = bash.RunWithReturn()
+	PanicOnError(err)
 }
 
 func DelIp4DefaultRoute() error {
@@ -472,7 +474,8 @@ func AddIp4DefaultRoute(gw4, dev string)  {
 	bash = Bash{
 		Command: strings.Join(cmds, ";"),
 	}
-	_, _, _, err = bash.RunWithReturn(); PanicOnError(err)
+	_, _, _, err = bash.RunWithReturn()
+	PanicOnError(err)
 }
 
 func IsIpv4Address(address string) bool {

@@ -14,38 +14,38 @@ import (
 )
 
 const (
-	VIRTIO_PORT_PATH = "/dev/virtio-ports/applianceVm.vport"
+	VIRTIO_PORT_PATH     = "/dev/virtio-ports/applianceVm.vport"
 	BOOTSTRAP_INFO_CACHE = "/home/vyos/zvr/bootstrap-info.json"
 	TMP_LOCATION_FOR_ESX = "/tmp/bootstrap-info.json"
 	// use this rule number to set a rule which confirm route entry work issue ZSTAC-6170
 	ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER = 9999
-	NETWORK_HEALTH_STATUS_PATH = "/home/vyos/zvr/.duplicate"
+	NETWORK_HEALTH_STATUS_PATH                  = "/home/vyos/zvr/.duplicate"
 )
 
 type nic struct {
-	mac string
-	ip string
-	name string
-	netmask string
-	isDefaultRoute bool
-	gateway string
-	category string
-	l2type string
+	mac                 string
+	ip                  string
+	name                string
+	netmask             string
+	isDefaultRoute      bool
+	gateway             string
+	category            string
+	l2type              string
 	l2PhysicalInterface string
-	vni int
-	mtu int
-	ip6  string
-	prefixLength int
-	gateway6 string
-	addressMode string
+	vni                 int
+	mtu                 int
+	ip6                 string
+	prefixLength        int
+	gateway6            string
+	addressMode         string
 }
 
 var bootstrapInfo map[string]interface{} = make(map[string]interface{})
 var nics map[string]*nic = make(map[string]*nic)
 
-func waitIptablesServiceOnline()  {
+func waitIptablesServiceOnline() {
 	bash := utils.Bash{
-		Command: "/sbin/iptables-save",
+		Command: "sudo /sbin/iptables-save",
 	}
 
 	utils.LoopRunUntilSuccessOrTimeout(func() bool {
@@ -85,7 +85,7 @@ func parseEsxBootInfo() {
 			log.Debugf("bootstrap info not ready, waiting ...")
 			return false
 		}
-		
+
 		content, err := ioutil.ReadFile(TMP_LOCATION_FOR_ESX); utils.PanicOnError(err)
 		log.Debugf("recieved bootstrap info:\nsize:%d\n%s", len(content), string(content))
 		if err = json.Unmarshal(content, &bootstrapInfo); err != nil {
@@ -101,7 +101,8 @@ func parseEsxBootInfo() {
 
 func parseKvmBootInfo() {
 	utils.LoopRunUntilSuccessOrTimeout(func() bool {
-		content, err := ioutil.ReadFile(VIRTIO_PORT_PATH); utils.PanicOnError(err)
+		content, err := ioutil.ReadFile(VIRTIO_PORT_PATH)
+		utils.PanicOnError(err)
 		if len(content) == 0 {
 			log.Debugf("no content in %s, it may not be ready, wait it ...", VIRTIO_PORT_PATH)
 			return false
@@ -119,7 +120,7 @@ func parseKvmBootInfo() {
 	}, time.Duration(300)*time.Second, time.Duration(1)*time.Second)
 }
 
-func resetVyos()  {
+func resetVyos() {
 	// clear all configuration in case someone runs 'save' command manually before,
 	// to keep the vyos must be stateless
 
@@ -140,7 +141,7 @@ func resetVyos()  {
 	//server.RunVyosScriptAsUserVyos("load /opt/vyatta/etc/config.boot.default\nsave")
 }
 
-func checkIpDuplicate () {
+func checkIpDuplicate() {
 	// duplicate ip check
 	dupinfo := ""
 	for _, nic := range nics {
@@ -151,7 +152,7 @@ func checkIpDuplicate () {
 	if !strings.EqualFold(dupinfo, "") {
 		log.Error(dupinfo)
 		err := utils.MkdirForFile(NETWORK_HEALTH_STATUS_PATH, 0755); utils.PanicOnError(err)
-		err = ioutil.WriteFile(NETWORK_HEALTH_STATUS_PATH,  []byte(dupinfo), 0755); utils.PanicOnError(err)
+		err = ioutil.WriteFile(NETWORK_HEALTH_STATUS_PATH, []byte(dupinfo), 0755); utils.PanicOnError(err)
 	}
 }
 
@@ -169,7 +170,7 @@ func configureVyos() {
 		haStatus = v.(string)
 	}
 
-	eth0 := &nic{name: "eth0" }
+	eth0 := &nic{name: "eth0"}
 	var ok bool
 	eth0.mac, ok = mgmtNic["mac"].(string); utils.PanicIfError(ok, errors.New("cannot find 'mac' field for the management nic"))
 	eth0.ip, ok = mgmtNic["ip"].(string)
@@ -264,7 +265,7 @@ func configureVyos() {
 			utils.Assertf(nic.gateway != "", "gateway cannot be empty[nicname:%s]", nic.name)
 		}
 
-		if nic.ip6 != ""{
+		if nic.ip6 != "" {
 			utils.Assertf(nic.prefixLength != 0, "ipv6 prefix length cannot be empty[nicname:%s]", nic.name)
 			utils.Assertf(nic.addressMode != "", "ipv6 address mode cannot be empty[nicname:%s]", nic.name)
 			utils.Assertf(nic.gateway6 != "", "ipv6 gateway cannot be empty[nicname:%s]", nic.name)
@@ -274,7 +275,7 @@ func configureVyos() {
 		if nicname != nic.name {
 			devNames = append(devNames, &deviceName{
 				expected: nic.name,
-				actual: nicname,
+				actual:   nicname,
 			})
 		}
 	}
@@ -314,6 +315,8 @@ func configureVyos() {
 
 	log.Debugf("haStatus %+v", haStatus)
 	vyos := server.NewParserFromShowConfiguration()
+
+	log.Debugf("[configure: publicKey]")
 	tree := vyos.Tree
 
 	sshkey := bootstrapInfo["publicKey"].(string)
@@ -325,6 +328,7 @@ func configureVyos() {
 
 	tree.Setf("system login user vyos authentication public-keys %s key %s", id, key)
 	tree.Setf("system login user vyos authentication public-keys %s type %s", id, sshtype)
+	tree.Apply(true)
 
 	makeAlias := func(nic *nic) string {
 		result := ""
@@ -341,67 +345,65 @@ func configureVyos() {
 		return result
 	}
 
+	setNicTree := server.NewParserFromShowConfiguration().Tree
 	setNic := func(nic *nic) {
 		if nic.ip != "" {
 			cidr, err := utils.NetmaskToCIDR(nic.netmask)
 			utils.PanicOnError(err)
-			//tree.Setf("interfaces ethernet %s hw-id %s", nic.name, nic.mac)
-			tree.Setf("interfaces ethernet %s address %s", nic.name, fmt.Sprintf("%v/%v", nic.ip, cidr))
+			//setNicTree.Setf("interfaces ethernet %s hw-id %s", nic.name, nic.mac)
+			setNicTree.Setf("interfaces ethernet %s address %s", nic.name, fmt.Sprintf("%v/%v", nic.ip, cidr))
 		}
 		if nic.ip6 != "" {
-			tree.SetfWithoutCheckExisting("interfaces ethernet %s address %s", nic.name, fmt.Sprintf("%s/%d", nic.ip6, nic.prefixLength))
+			setNicTree.SetfWithoutCheckExisting("interfaces ethernet %s address %s", nic.name, fmt.Sprintf("%s/%d", nic.ip6, nic.prefixLength))
 		}
-		tree.Setf("interfaces ethernet %s duplex auto", nic.name)
-		tree.SetNicSmpAffinity(nic.name, "auto")
-		tree.Setf("interfaces ethernet %s speed auto", nic.name)
+		setNicTree.Setf("interfaces ethernet %s duplex auto", nic.name)
+		setNicTree.SetNicSmpAffinity(nic.name, "auto")
+		setNicTree.Setf("interfaces ethernet %s speed auto", nic.name)
 		if nic.mtu != 0 {
-			tree.Setf("interfaces ethernet %s speed auto", nic.name)
-			tree.SetNicMtu(nic.name, nic.mtu)
+			setNicTree.Setf("interfaces ethernet %s speed auto", nic.name)
+			setNicTree.SetNicMtu(nic.name, nic.mtu)
 		}
 		if nic.isDefaultRoute {
 			if nic.gateway != "" {
-				tree.Setf("protocols static route 0.0.0.0/0 next-hop %v", nic.gateway)
+				setNicTree.Setf("protocols static route 0.0.0.0/0 next-hop %v", nic.gateway)
 			}
 			if nic.gateway6 != "" {
-				tree.Setf("protocols static route6 ::/0 next-hop %v", nic.gateway6)
+				setNicTree.Setf("protocols static route6 ::/0 next-hop %v", nic.gateway6)
 			}
 		}
 
 		if nic.l2type != "" {
-			tree.Setf("interfaces ethernet %s description '%s'", nic.name, makeAlias(nic))
+			setNicTree.Setf("interfaces ethernet %s description '%s'", nic.name, makeAlias(nic))
 		}
 
 		if haStatus != utils.NOHA && nic.name != "eth0" {
-			tree.Setf("interfaces ethernet %s disable", nic.name)
+			setNicTree.Setf("interfaces ethernet %s disable", nic.name)
 		}
 
 		if nic.ip6 != "" && nic.category == "Private" {
 			switch nic.addressMode {
 			case "Stateful-DHCP":
-				tree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag true", nic.name)
-				tree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag true", nic.name)
-				tree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag false", nic.name, nic.ip6, nic.prefixLength)
+				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag true", nic.name)
+				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag true", nic.name)
+				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag false", nic.name, nic.ip6, nic.prefixLength)
 			case "Stateless-DHCP":
-				tree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag false", nic.name)
-				tree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag true", nic.name)
-				tree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag true", nic.name, nic.ip6, nic.prefixLength)
+				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag false", nic.name)
+				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag true", nic.name)
+				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag true", nic.name, nic.ip6, nic.prefixLength)
 			case "SLAAC":
-				tree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag false", nic.name)
-				tree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag false", nic.name)
-				tree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag true", nic.name, nic.ip6, nic.prefixLength)
+				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag false", nic.name)
+				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag false", nic.name)
+				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag true", nic.name, nic.ip6, nic.prefixLength)
 			}
-			tree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d on-link-flag true", nic.name, nic.ip6, nic.prefixLength)
-			tree.Setf("interfaces ethernet %s ipv6 router-advert max-interval 60", nic.name)
-			tree.Setf("interfaces ethernet %s ipv6 router-advert min-interval 15", nic.name)
-			tree.Setf("interfaces ethernet %s ipv6 router-advert send-advert true", nic.name)
+			setNicTree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d on-link-flag true", nic.name, nic.ip6, nic.prefixLength)
+			setNicTree.Setf("interfaces ethernet %s ipv6 router-advert max-interval 60", nic.name)
+			setNicTree.Setf("interfaces ethernet %s ipv6 router-advert min-interval 15", nic.name)
+			setNicTree.Setf("interfaces ethernet %s ipv6 router-advert send-advert true", nic.name)
 		}
 
 	}
 
 	sshport := bootstrapInfo["sshPort"].(float64)
-	utils.Assert(sshport != 0, "sshport not found in bootstrap info")
-	tree.Setf("service ssh port %v", int(sshport))
-	tree.Setf("service ssh listen-address %v", eth0.ip)
 
 	// configure firewall
 	/* SkipVyosIptables is a flag to indicate how to configure firewall and nat */
@@ -412,9 +414,10 @@ func configureVyos() {
 	log.Debugf("bootstrapInfo %+v", bootstrapInfo)
 	log.Debugf("SkipVyosIptables %+v", SkipVyosIptables)
 
+	log.Debugf("[configure: nic network]")
 	applianceTypeTmp, found := bootstrapInfo["applianceVmSubType"]
 	if !found {
-	    applianceTypeTmp = "None"
+		applianceTypeTmp = "None"
 	}
 	applianceType := applianceTypeTmp.(string)
 	log.Debugf("applianceType %+v", applianceType)
@@ -424,8 +427,8 @@ func configureVyos() {
 			var err error
 			setNic(nic)
 			if nic.isDefaultRoute {
-				defaultNic = utils.Nic{Name: nic.name, Mac: nic.mac, Ip:nic.ip, Ip6: nic.ip6,
-					Gateway: nic.gateway, Gateway6:nic.gateway6}
+				defaultNic = utils.Nic{Name: nic.name, Mac: nic.mac, Ip: nic.ip, Ip6: nic.ip6,
+					Gateway: nic.gateway, Gateway6: nic.gateway6}
 			}
 			if nic.category == "Private" {
 				err = utils.InitNicFirewall(nic.name, nic.ip, false, utils.REJECT)
@@ -440,24 +443,24 @@ func configureVyos() {
 		for _, nic := range nics {
 			setNic(nic)
 			if nic.isDefaultRoute {
-				defaultNic = utils.Nic{Name: nic.name, Mac: nic.mac, Ip:nic.ip, Ip6: nic.ip6,
-					Gateway: nic.gateway, Gateway6:nic.gateway6}
+				defaultNic = utils.Nic{Name: nic.name, Mac: nic.mac, Ip: nic.ip, Ip6: nic.ip6,
+					Gateway: nic.gateway, Gateway6: nic.gateway6}
 			}
-			tree.SetFirewallOnInterface(nic.name, "local",
+			setNicTree.SetFirewallOnInterface(nic.name, "local",
 				"action accept",
 				"state established enable",
 				"state related enable",
 				fmt.Sprintf("destination address %v", nic.ip),
 			)
 
-			tree.SetFirewallOnInterface(nic.name, "local",
+			setNicTree.SetFirewallOnInterface(nic.name, "local",
 				"action accept",
 				"protocol icmp",
 				fmt.Sprintf("destination address %v", nic.ip),
 			)
 
 			if nic.category == "Private" {
-				tree.SetZStackFirewallRuleOnInterface(nic.name, "behind","in",
+				setNicTree.SetZStackFirewallRuleOnInterface(nic.name, "behind", "in",
 					"action accept",
 					"state established enable",
 					"state related enable",
@@ -465,33 +468,33 @@ func configureVyos() {
 					"state new enable",
 				)
 			} else {
-				tree.SetZStackFirewallRuleOnInterface(nic.name, "behind","in",
+				setNicTree.SetZStackFirewallRuleOnInterface(nic.name, "behind", "in",
 					"action accept",
 					"state established enable",
 					"state related enable",
 				)
 
-				tree.SetFirewallWithRuleNumber(nic.name, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
+				setNicTree.SetFirewallWithRuleNumber(nic.name, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
 					"action accept",
 					"state new enable",
 				)
 			}
 
-			tree.SetZStackFirewallRuleOnInterface(nic.name, "behind","in",
+			setNicTree.SetZStackFirewallRuleOnInterface(nic.name, "behind", "in",
 				"action accept",
 				"protocol icmp",
 			)
 
 			// only allow ssh traffic on eth0, disable on others
 			if nic.name == "eth0" {
-				tree.SetFirewallOnInterface(nic.name, "local",
+				setNicTree.SetFirewallOnInterface(nic.name, "local",
 					fmt.Sprintf("destination port %v", int(sshport)),
 					fmt.Sprintf("destination address %v", nic.ip),
 					"protocol tcp",
 					"action accept",
 				)
 			} else {
-				tree.SetFirewallOnInterface(nic.name, "local",
+				setNicTree.SetFirewallOnInterface(nic.name, "local",
 					fmt.Sprintf("destination port %v", int(sshport)),
 					fmt.Sprintf("destination address %v", nic.ip),
 					"protocol tcp",
@@ -499,33 +502,50 @@ func configureVyos() {
 				)
 			}
 
-			tree.SetFirewallDefaultAction(nic.name, "local", "reject")
-			tree.SetFirewallDefaultAction(nic.name, "in", "reject")
+			setNicTree.SetFirewallDefaultAction(nic.name, "local", "reject")
+			setNicTree.SetFirewallDefaultAction(nic.name, "in", "reject")
 
-			tree.AttachFirewallToInterface(nic.name, "local")
-			tree.AttachFirewallToInterface(nic.name, "in")
+			setNicTree.AttachFirewallToInterface(nic.name, "local")
+			setNicTree.AttachFirewallToInterface(nic.name, "in")
 		}
 	}
 
-	tree.Set("system time-zone Asia/Shanghai")
+	setNicTree.Apply(true)
+	log.Debugf("[configure: ssh service]")
+	setSshTree := server.NewParserFromShowConfiguration().Tree
+	utils.Assert(sshport != 0, "sshport not found in bootstrap info")
+	setSshTree.Setf("service ssh port %v", int(sshport))
+	setSshTree.Setf("service ssh listen-address %v", eth0.ip)
+	setSshTree.Apply(true)
 
-	password, found := bootstrapInfo["vyosPassword"]; utils.Assert(found && password != "", "vyosPassword cannot be empty")
+	log.Debugf("[configure: system configuration]")
+	setSysTree := server.NewParserFromShowConfiguration().Tree
+	setSysTree.Set("system time-zone Asia/Shanghai")
+
+	password, found := bootstrapInfo["vyosPassword"]
+	utils.Assert(found && password != "", "vyosPassword cannot be empty")
 	if !isOnVMwareHypervisor() {
-		tree.Setf("system login user vyos authentication plaintext-password %v", password)
+		setSysTree.Setf("system login user vyos authentication plaintext-password %v", password)
 	}
 
 	/* create a cronjob to check sshd */
-	tree.Set("system task-scheduler task ssh interval 1")
-	tree.Set(fmt.Sprintf("system task-scheduler task ssh executable path '%s'", utils.Cronjob_file_ssh))
-	
-	tree.Apply(true)
+	setSysTree.Set("system task-scheduler task ssh interval 1")
+	setSysTree.Set(fmt.Sprintf("system task-scheduler task ssh executable path '%s'", utils.Cronjob_file_ssh))
 
-	if strings.EqualFold(haStatus,utils.NOHA) {
+	setSysTree.Apply(true)
+
+	log.Debugf("[configure: ssh-key]")
+	setKeyTree := server.NewParserFromShowConfiguration().Tree
+	setKeyTree.Setf("system login user vyos authentication public-keys %s key %s", id, key)
+	setKeyTree.Setf("system login user vyos authentication public-keys %s type %s", id, sshtype)
+	setKeyTree.Apply(true)
+
+	if strings.EqualFold(haStatus, utils.NOHA) {
 		checkIpDuplicate()
 	}
 
 	arping := func(nicname, ip, gateway string) {
-		b := utils.Bash{Command: fmt.Sprintf("sudo arping -q -A -w 1.5 -c 1 -I %s %s > /dev/null", nicname, ip) }
+		b := utils.Bash{Command: fmt.Sprintf("sudo arping -q -A -w 2 -c 1 -I %s %s > /dev/null", nicname, ip)}
 		b.Run()
 	}
 
@@ -574,7 +594,7 @@ func configureVyos() {
 	utils.WriteDefaultHaScript(&defaultNic)
 }
 
-func startZvr()  {
+func startZvr() {
 	b := utils.Bash{
 		Command: "bash -x /etc/init.d/zstack-virtualrouteragent restart >> /tmp/agentRestart.log 2>&1",
 	}
