@@ -126,7 +126,7 @@ func resetVyos()  {
 	// delete all interfaces
 	tree := server.NewParserFromShowConfiguration().Tree
 	tree.Delete("interfaces ethernet")
-	tree.Apply(false)
+	tree.Apply(true)
 
 	/*the API RunVyosScriptAsUserVyos doesn't work for this command.
 	the correct command sequence is that
@@ -518,7 +518,7 @@ func configureVyos() {
 	tree.Set("system task-scheduler task ssh interval 1")
 	tree.Set(fmt.Sprintf("system task-scheduler task ssh executable path '%s'", utils.Cronjob_file_ssh))
 	
-	tree.Apply(false)
+	tree.Apply(true)
 
 	if strings.EqualFold(haStatus,utils.NOHA) {
 		checkIpDuplicate()
@@ -562,7 +562,7 @@ func configureVyos() {
 		if err == nil && ret == 0 {
 			tree := server.NewParserFromShowConfiguration().Tree
 			tree.Deletef("protocols static route 0.0.0.0/0 next-hop %v", defaultNic.Gateway)
-			tree.Apply(false)
+			tree.Apply(true)
 
 			b := utils.Bash{
 				Command: fmt.Sprintf("ip route add default via %s dev %s", defaultNic.Gateway, defaultNic.Name),

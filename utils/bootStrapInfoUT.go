@@ -52,7 +52,7 @@ var reservedIpForPubL3 []string
 var freeIpsForMgt []string
 var freeIpsForPubL3 []string
 
-func init() {
+func InitForUt() {
     InitBootStrapInfoForUT()
     ParseBootStrapNicInfo()
     rand.Seed(time.Now().UnixNano())
@@ -66,7 +66,11 @@ func init() {
 }
 
 func InitBootStrapInfoForUT() {
-    content, err := ioutil.ReadFile(BOOTSTRAP_INFO_UT); PanicOnError(err)
+    log.Debugf("start init boot strap for ut")
+    content, err := ioutil.ReadFile(BOOTSTRAP_INFO_UT)
+    if err != nil {
+        return
+    }
     if len(content) == 0 {
         log.Debugf("no content in %s, can not get mgmt gateway", BOOTSTRAP_INFO_CACHE)
     }
