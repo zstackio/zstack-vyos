@@ -3,7 +3,8 @@ ifndef GOROOT
 endif
 
 export GO=$(GOROOT)/bin/go
-export GOPATH=$(shell pwd)
+#export GOPATH=$(shell pwd)
+export GO111MODULE=on
 
 TARGET_DIR=target
 PKG_ZVR_DIR=$(TARGET_DIR)/pkg-zvr
@@ -14,11 +15,11 @@ DEPS=github.com/Sirupsen/logrus github.com/pkg/errors github.com/fatih/structs g
 
 zvr:
 	mkdir -p $(TARGET_DIR)
-	$(GO) build -o $(TARGET_DIR)/zvr src/zvr/zvr.go
+	$(GO) build -mod vendor -o $(TARGET_DIR)/zvr zvr/zvr.go
 
 zvrboot:
 	mkdir -p $(TARGET_DIR)
-	$(GO) build -o $(TARGET_DIR)/zvrboot src/zvr/zvrboot.go
+	$(GO) build -mod vendor -o $(TARGET_DIR)/zvrboot zvrboot/zvrboot.go
 
 deps:
 	$(GO) get $(DEPS)
@@ -26,7 +27,11 @@ deps:
 clean:
 	rm -rf target/
 
-package: clean zvr zvrboot
+package: clean
+	mkdir -p $(TARGET_DIR)
+	$(GO) build -mod vendor  -o $(TARGET_DIR)/zvr zvr/zvr.go
+	mkdir -p $(TARGET_DIR)
+	$(GO) build -mod vendor -o $(TARGET_DIR)/zvrboot zvrboot/zvrboot.go
 	mkdir -p $(PKG_ZVR_DIR)
 	mkdir -p $(PKG_ZVRBOOT_DIR)
 	cp -f $(TARGET_DIR)/zvr $(PKG_ZVR_DIR)
@@ -54,9 +59,13 @@ package: clean zvr zvrboot
 	cp -f $(TARGET_DIR)/zvrboot $(PKG_ZVRBOOT_DIR)
 	cp -f scripts/version $(TARGET_DIR)
 	cp -f scripts/goprlimit $(PKG_ZVR_DIR)
-	$(GO) run package.go -conf package-config.json
+	$(GO) run -mod vendor package.go -conf package-config.json
 
-tar: zvr zvrboot
+tar:
+	mkdir -p $(TARGET_DIR)
+	$(GO) build -mod vendor -o $(TARGET_DIR)/zvr zvr/zvr.go
+	mkdir -p $(TARGET_DIR)
+	$(GO) build -mod vendor -o $(TARGET_DIR)/zvrboot zvrboot/zvrboot.go	
 	rm -rf $(PKG_TAR_DIR)
 	mkdir -p $(PKG_TAR_DIR)
 	cp -f $(TARGET_DIR)/zvr $(PKG_TAR_DIR)
@@ -86,3 +95,16 @@ tar: zvr zvrboot
 	cp -f scripts/goprlimit $(PKG_TAR_DIR)
 	tar czf $(TARGET_DIR)/zvr.tar.gz -C $(PKG_TAR_DIR) .
 
+.PHONY: test
+
+test:
+	python=$$(which python3);\
+	if [ $$? == 1 ];then\
+		echo "can not find python3, please install python3";\
+		exit 1;\
+	fi;\
+	pip install virtualenv;\
+	virtualenv -p $$python newenv;\
+	source newenv/bin/activate;\
+	pip install -r test/requirements.txt;\
+	python3 test/ut.py test/devTestEnv.json
