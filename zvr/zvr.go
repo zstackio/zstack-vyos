@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -123,9 +124,27 @@ func configureZvrFirewall() {
 	tree.Apply(true)
 }
 
+func getHeartBeatDir(fpath string) string {
+	if p, err := filepath.Abs(fpath); err != nil {
+		return os.Getenv("HOME")
+	} else {
+		return filepath.Dir(p)
+	}
+}
+
+func getHeartBeatFile(fpath string) string {
+	dir := getHeartBeatDir(fpath)
+	return filepath.Join(dir, ".zvr.diskmon")
+}
+
 func main() {
-	go restartRsyslog()
 	parseCommandOptions()
+	if st, err := utils.DiskUsage(getHeartBeatDir(options.LogFile)); err == nil && st.Avail == 0 {
+		fmt.Fprintf(os.Stderr, "disk is full\n")
+		os.Exit(1)
+	}
+
+	restartRsyslog()
 	utils.InitLog(options.LogFile, false)
 	utils.InitBootStrapInfo()
 	utils.InitVyosVersion()
@@ -134,6 +153,7 @@ func main() {
 	loadPlugins()
 	setupRotates()
 	server.VyosLockInterface(configureZvrFirewall)()
+	utils.StartDiskMon(getHeartBeatFile(options.LogFile), func(e error) { os.Exit(1) }, 2*time.Second)
 
 	server.Start()
 }

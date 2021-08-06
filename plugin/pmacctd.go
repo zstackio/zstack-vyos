@@ -8,6 +8,7 @@ import (
     "io/ioutil"
     "os/exec"
     "strings"
+    "strconv"
     "zvr/utils"
 )
 
@@ -143,7 +144,7 @@ func writeFlowHaScript(enable bool)  {
     err := ioutil.WriteFile(VYOSHA_FLOW_SCRIPT, []byte(conent), 0755); utils.PanicOnError(err)
 }
 
-func getUacctdPid() (string) {
+func getUacctdPid() int {
     stdout, err := exec.Command("pidof", "-x", uacctd_bin_file).Output()
     if err != nil {
         log.Debugf("get uacctd pid failed %v", err)
@@ -154,12 +155,17 @@ func getUacctdPid() (string) {
        when uacctd not runing, the output will be empty */
     out := strings.TrimSpace(string(stdout))
     if out == "" {
-        log.Debugf("keepalived is not running")
+        log.Debugf("uacctd is not running")
         return PID_ERROR
     }
     
     pids := strings.Fields(out)
-    return pids[len(pids)-1]
+    if n, err := strconv.Atoi(pids[len(pids)-1]); err != nil {
+        log.Debugf("unexpected %s pid: %v", uacctd_bin_file, pids)
+        return PID_ERROR
+    } else {
+        return n
+    }
 }
 
 func init()  {

@@ -19,7 +19,7 @@ type healthCheckCallback interface {
 
 var (
         healthStatus = &HealthStatus{Healthy:true, HealthDetail:""}
-        checkCallbacks []healthCheckCallback
+        checkCallbacks = make([]healthCheckCallback, 0)
 )
 
 func RegisterHealthCheckCallback(cb healthCheckCallback) {
@@ -37,7 +37,6 @@ func (status *HealthStatus) healthCheck() {
 }
 
 func init ()  {
-        checkCallbacks = make([]healthCheckCallback, 0)
         go func() {
                 for {
                         healthStatus.healthCheck()

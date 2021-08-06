@@ -2,8 +2,8 @@ package utils
 
 import (
 	"fmt"
-	"io/ioutil"
 	log "github.com/Sirupsen/logrus"
+	"io/ioutil"
 	"strconv"
 	"strings"
 )
@@ -19,11 +19,11 @@ type ZStackRouteTable struct {
 	Alias   string
 }
 
-func (t ZStackRouteTable) toString () string{
+func (t ZStackRouteTable) toString() string {
 	return fmt.Sprintf("%d %s", t.TableId, t.Alias)
 }
 
-func (t ZStackRouteTable) flushCommand () string{
+func (t ZStackRouteTable) flushCommand() string {
 	return fmt.Sprintf("sudo ip route flush table %d", t.TableId)
 }
 
@@ -59,7 +59,7 @@ func GetZStackRouteTables() []ZStackRouteTable {
 }
 
 func SyncZStackRouteTables(tables []ZStackRouteTable) error {
-	bash := Bash {
+	bash := Bash{
 		Command: fmt.Sprintf("cp %s %s; sed -i '/zs-rt-/d' %s", POLICY_ROUTE_TABLE_FILE, POLICY_ROUTE_TABLE_FILE_TEMP, POLICY_ROUTE_TABLE_FILE_TEMP),
 	}
 	ret, _, e, err := bash.RunWithReturn()
@@ -82,7 +82,7 @@ func SyncZStackRouteTables(tables []ZStackRouteTable) error {
 		}
 	}
 	ret, _, e, err = bash.RunWithReturn()
-	if err != nil || ret != 0{
+	if err != nil || ret != 0 {
 		return fmt.Errorf("copy temp route table file failed: %s", e)
 	}
 
@@ -90,11 +90,11 @@ func SyncZStackRouteTables(tables []ZStackRouteTable) error {
 }
 
 type ZStackRouteEntry struct {
-	TableId int
+	TableId         int
 	DestinationCidr string
-	NextHopIp string
-	NicName string
-	Distance int
+	NextHopIp       string
+	NicName         string
+	Distance        int
 }
 
 func (e ZStackRouteEntry) isEqual(b ZStackRouteEntry) bool {
@@ -117,7 +117,7 @@ func (e ZStackRouteEntry) addCommand() string {
 	} else if e.NicName != "" {
 		return fmt.Sprintf("sudo ip route add %s dev %s table %d",
 			e.DestinationCidr, e.NicName, e.TableId)
-	}else{
+	} else {
 		log.Debugf("can not add route entry,because nexthopIp or nicName is null")
 		return ""
 	}
@@ -144,11 +144,11 @@ func (e ZStackRouteEntry) deleteCommand() string {
 
 func getCurrentRouteEntries(tableId int) []ZStackRouteEntry {
 	var entries []ZStackRouteEntry
-	bash := Bash {
+	bash := Bash{
 		Command: fmt.Sprintf("ip route show table %d", tableId),
 	}
 	ret, result, _, err := bash.RunWithReturn()
-	if err == nil && ret == 0{
+	if err == nil && ret == 0 {
 		result = strings.TrimSpace(result)
 		lines := strings.Split(result, "\n")
 		for _, line := range lines {
@@ -160,32 +160,32 @@ func getCurrentRouteEntries(tableId int) []ZStackRouteEntry {
 			distance := 0
 			for i, item := range items {
 				if item == "metric" {
-					distance, _ = strconv.Atoi(items[i + 1])
+					distance, _ = strconv.Atoi(items[i+1])
 				}
 			}
 
 			if items[0] == "default" {
-				e := ZStackRouteEntry {
-					TableId: tableId,
+				e := ZStackRouteEntry{
+					TableId:         tableId,
 					DestinationCidr: "0.0.0.0/0",
-					NextHopIp: items[2],
-					Distance: distance,
+					NextHopIp:       items[2],
+					Distance:        distance,
 				}
 				entries = append(entries, e)
 			} else if items[1] == "via" {
-				e := ZStackRouteEntry {
-					TableId: tableId,
+				e := ZStackRouteEntry{
+					TableId:         tableId,
 					DestinationCidr: items[0],
-					NextHopIp: items[2],
-					Distance: distance,
+					NextHopIp:       items[2],
+					Distance:        distance,
 				}
 				entries = append(entries, e)
 			} else if items[1] == "dev" {
-				e := ZStackRouteEntry {
-					TableId: tableId,
+				e := ZStackRouteEntry{
+					TableId:         tableId,
 					DestinationCidr: items[0],
-					NicName: items[2],
-					Distance: distance,
+					NicName:         items[2],
+					Distance:        distance,
 				}
 				entries = append(entries, e)
 			}
@@ -195,7 +195,7 @@ func getCurrentRouteEntries(tableId int) []ZStackRouteEntry {
 	return entries
 }
 
-func SyncRouteEntries(currTables []ZStackRouteTable, entryMap map[int][]ZStackRouteEntry)  error {
+func SyncRouteEntries(currTables []ZStackRouteTable, entryMap map[int][]ZStackRouteEntry) error {
 	var newCmds []string
 	/* delete route tables */
 	for _, table := range currTables {
@@ -240,10 +240,10 @@ func SyncRouteEntries(currTables []ZStackRouteTable, entryMap map[int][]ZStackRo
 	if len(newCmds) == 0 {
 		return nil
 	}
-	
+
 	writePolicyRouteHaScript(entryMap)
-	
-	bash := Bash {
+
+	bash := Bash{
 		Command: strings.Join(newCmds, ";"),
 	}
 	ret, _, e, err := bash.RunWithReturn()
@@ -272,5 +272,3 @@ func writePolicyRouteHaScript(entryMap map[int][]ZStackRouteEntry) error {
 
 	return ioutil.WriteFile(VYOSHA_POLICY_ROUTE_SCRIPT, []byte(strings.Join(routes, "\n")), 0755)
 }
-
-

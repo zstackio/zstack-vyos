@@ -12,10 +12,10 @@ import (
 	"zvr/utils"
 )
 
-const(
+const (
 	CREATE_IPSEC_CONNECTION = "/vyos/createipsecconnection"
 	DELETE_IPSEC_CONNECTION = "/vyos/deleteipsecconnection"
-	SYNC_IPSEC_CONNECTION = "/vyos/syncipsecconnection"
+	SYNC_IPSEC_CONNECTION   = "/vyos/syncipsecconnection"
 	UPDATE_IPSEC_CONNECTION = "/vyos/updateipsecconnection"
 
 	IPSecInfoMaxSize = 256
@@ -23,11 +23,11 @@ const(
 	VYOSHA_IPSEC_SCRIPT = "/home/vyos/zvr/keepalived/script/ipsec.sh"
 
 	/* because strongswan 4.5.2 rekey will fail with aliyun ipsec vpn,
-	  a work around method is to restart the vpn before the rekey happened */
-	IPSecIkeRekeyInterval = 86400 /*  24 * 3600 seconds */
-	IPSecIkeRekeyIntervalMargin = 600 /* restart the vpn 10 mins before rekey */
-	IPSecRestartInterval = IPSecIkeRekeyInterval - IPSecIkeRekeyIntervalMargin
-	
+	a work around method is to restart the vpn before the rekey happened */
+	IPSecIkeRekeyInterval       = 86400 /*  24 * 3600 seconds */
+	IPSecIkeRekeyIntervalMargin = 600   /* restart the vpn 10 mins before rekey */
+	IPSecRestartInterval        = IPSecIkeRekeyInterval - IPSecIkeRekeyIntervalMargin
+
 	ipsecAddressGroup = "ipsec-group"
 )
 
@@ -35,31 +35,31 @@ var AutoRestartVpn = false
 var AutoRestartThreadCreated = false
 
 type ipsecInfo struct {
-	Uuid string `json:"uuid"`
-	State string `json:"state"`
-	LocalCidrs []string `json:"localCidrs"`
-	PeerAddress string `json:"peerAddress"`
-	RemoteId string `json:"remoteId"`
-	AuthMode string `json:"authMode"`
-	AuthKey string `json:"authKey"`
-	Vip string `json:"vip"`
-	PublicNic string `json:"publicNic"`
-	IkeAuthAlgorithm string `json:"ikeAuthAlgorithm"`
-	IkeEncryptionAlgorithm string `json:"ikeEncryptionAlgorithm"`
-	IkeDhGroup int `json:"ikeDhGroup"`
-	PolicyAuthAlgorithm string `json:"policyAuthAlgorithm"`
-	PolicyEncryptionAlgorithm string `json:"policyEncryptionAlgorithm"`
-	Pfs string `json:"pfs"`
-	PolicyMode string `json:"policyMode"`
-	TransformProtocol string `json:"transformProtocol"`
-	PeerCidrs []string `json:"peerCidrs"`
-	ExcludeSnat bool `json:"excludeSnat"`
-	ModifiedItems []string `json:"modifiedItems"`
+	Uuid                      string   `json:"uuid"`
+	State                     string   `json:"state"`
+	LocalCidrs                []string `json:"localCidrs"`
+	PeerAddress               string   `json:"peerAddress"`
+	RemoteId                  string   `json:"remoteId"`
+	AuthMode                  string   `json:"authMode"`
+	AuthKey                   string   `json:"authKey"`
+	Vip                       string   `json:"vip"`
+	PublicNic                 string   `json:"publicNic"`
+	IkeAuthAlgorithm          string   `json:"ikeAuthAlgorithm"`
+	IkeEncryptionAlgorithm    string   `json:"ikeEncryptionAlgorithm"`
+	IkeDhGroup                int      `json:"ikeDhGroup"`
+	PolicyAuthAlgorithm       string   `json:"policyAuthAlgorithm"`
+	PolicyEncryptionAlgorithm string   `json:"policyEncryptionAlgorithm"`
+	Pfs                       string   `json:"pfs"`
+	PolicyMode                string   `json:"policyMode"`
+	TransformProtocol         string   `json:"transformProtocol"`
+	PeerCidrs                 []string `json:"peerCidrs"`
+	ExcludeSnat               bool     `json:"excludeSnat"`
+	ModifiedItems             []string `json:"modifiedItems"`
 }
 
 type createIPsecCmd struct {
-	Infos []ipsecInfo `json:"infos"`
-	AutoRestartVpn bool `json:"autoRestartVpn"`
+	Infos          []ipsecInfo `json:"infos"`
+	AutoRestartVpn bool        `json:"autoRestartVpn"`
 }
 
 type deleteIPsecCmd struct {
@@ -67,8 +67,8 @@ type deleteIPsecCmd struct {
 }
 
 type syncIPsecCmd struct {
-	Infos []ipsecInfo `json:"infos"`
-	AutoRestartVpn bool `json:"autoRestartVpn"`
+	Infos          []ipsecInfo `json:"infos"`
+	AutoRestartVpn bool        `json:"autoRestartVpn"`
 }
 
 type updateIPsecReq struct {
@@ -93,43 +93,43 @@ func getIPsecPeers() (peers []string) {
 
 	for _, r := range rs.Children() {
 		peerStr := strings.Split(r.String(), " ")
-		peers = append(peers, peerStr[len(peerStr) - 1])
+		peers = append(peers, peerStr[len(peerStr)-1])
 	}
 
 	return
 }
 
 /* /opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl is a tool to display ipsec status, it has options:
-           "show-ipsec-sa!"                 => \$show_ipsec_sa,
-           "show-ipsec-sa-detail!"          => \$show_ipsec_sa_detail,
-           "get-peers-for-cli!"             => \$get_peers_for_cli,
-           "get-conn-for-cli=s"             => \$get_conn_for_cli,
-           "show-ipsec-sa-peer=s"           => \$show_ipsec_sa_peer,
-           "show-ipsec-sa-peer-detail=s"    => \$show_ipsec_sa_peer_detail,
-           "show-ipsec-sa-natt!"            => \$show_ipsec_sa_natt,
-           "show-ipsec-sa-stats!"           => \$show_ipsec_sa_stats,
-           "show-ipsec-sa-stats-peer=s"     => \$show_ipsec_sa_stats_peer,
-           "show-ipsec-sa-stats-conn=s{2}"  => \@show_ipsec_sa_stats_conn,
-           "show-ipsec-sa-conn-detail=s{2}" => \@show_ipsec_sa_conn_detail,
-           "show-ipsec-sa-conn=s{2}"        => \@show_ipsec_sa_conn,
-           "show-ike-sa!"                   => \$show_ike_sa,
-           "show-ike-sa-peer=s"             => \$show_ike_sa_peer,
-           "show-ike-sa-natt!"              => \$show_ike_sa_natt,
-           "show-ike-status!"               => \$show_ike_status,
-           "show-ike-secrets!"              => \$show_ike_secrets);
-           */
+   "show-ipsec-sa!"                 => \$show_ipsec_sa,
+   "show-ipsec-sa-detail!"          => \$show_ipsec_sa_detail,
+   "get-peers-for-cli!"             => \$get_peers_for_cli,
+   "get-conn-for-cli=s"             => \$get_conn_for_cli,
+   "show-ipsec-sa-peer=s"           => \$show_ipsec_sa_peer,
+   "show-ipsec-sa-peer-detail=s"    => \$show_ipsec_sa_peer_detail,
+   "show-ipsec-sa-natt!"            => \$show_ipsec_sa_natt,
+   "show-ipsec-sa-stats!"           => \$show_ipsec_sa_stats,
+   "show-ipsec-sa-stats-peer=s"     => \$show_ipsec_sa_stats_peer,
+   "show-ipsec-sa-stats-conn=s{2}"  => \@show_ipsec_sa_stats_conn,
+   "show-ipsec-sa-conn-detail=s{2}" => \@show_ipsec_sa_conn_detail,
+   "show-ipsec-sa-conn=s{2}"        => \@show_ipsec_sa_conn,
+   "show-ike-sa!"                   => \$show_ike_sa,
+   "show-ike-sa-peer=s"             => \$show_ike_sa_peer,
+   "show-ike-sa-natt!"              => \$show_ike_sa_natt,
+   "show-ike-status!"               => \$show_ike_status,
+   "show-ike-secrets!"              => \$show_ike_secrets);
+*/
 
 /* get vpn peer status */
-func isVpnPeerUp(peer string)  (status bool) {
+func isVpnPeerUp(peer string) (status bool) {
 	/*
-	/opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl --show-ipsec-sa-peer=10.86.0.3
-	Peer ID / IP                            Local ID / IP
-	------------                            -------------
-	10.86.0.3                               10.86.0.2
+			/opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl --show-ipsec-sa-peer=10.86.0.3
+			Peer ID / IP                            Local ID / IP
+			------------                            -------------
+			10.86.0.3                               10.86.0.2
 
-    	Tunnel  State  Bytes Out/In   Encrypt  Hash    NAT-T  A-Time  L-Time  Proto
-    	------  -----  -------------  -------  ----    -----  ------  ------  -----
-    	1       down   n/a            n/a      n/a     no     0       3600    all
+		    	Tunnel  State  Bytes Out/In   Encrypt  Hash    NAT-T  A-Time  L-Time  Proto
+		    	------  -----  -------------  -------  ----    -----  ------  ------  -----
+		    	1       down   n/a            n/a      n/a     no     0       3600    all
 	*/
 	bash := utils.Bash{
 		Command: fmt.Sprintf("/opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl --show-ipsec-sa-peer=%s | grep -w 'up'", peer),
@@ -148,7 +148,7 @@ func isVpnPeerUp(peer string)  (status bool) {
 	}
 }
 
-func isVpnAllPeersUp()  bool {
+func isVpnAllPeersUp() bool {
 	peers := getIPsecPeers()
 	for _, peer := range peers {
 		if !isVpnPeerUp(peer) {
@@ -160,15 +160,15 @@ func isVpnAllPeersUp()  bool {
 }
 
 /* /opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl is a tool to change ipsec config, it has options:
-	clear-vpn-ipsec-process
-	show-vpn-debug
-	show-vpn-debug-detail
-	get-all-peers
-	get-tunnels-for-peer
-	clear-tunnels-for-peer
-	clear-specific-tunnel-for-peer
-	clear-vtis-for-peer
-	*/
+clear-vpn-ipsec-process
+show-vpn-debug
+show-vpn-debug-detail
+get-all-peers
+get-tunnels-for-peer
+clear-tunnels-for-peer
+clear-specific-tunnel-for-peer
+clear-vtis-for-peer
+*/
 func restartVpnAfterConfig() {
 	if isVpnAllPeersUp() {
 		restartIPSecVpnTimer()
@@ -184,12 +184,12 @@ func restartVpnAfterConfig() {
 			return nil
 		}
 
-		if utils.Vyos_version == utils.VYOS_1_1_7  && len(getIPsecPeers()) >= 2 {
+		if utils.Vyos_version == utils.VYOS_1_1_7 && len(getIPsecPeers()) >= 2 {
 			bash := utils.Bash{
 				Command: "sudo ipsec restart",
 			}
 			bash.Run()
-		}else{
+		} else {
 			b := utils.Bash{
 				Command: "pidof starter; if [ $? -eq 0 ]; then sudo ipsec reload; else sudo ipsec restart; fi",
 			}
@@ -205,17 +205,18 @@ func restartVpnAfterConfig() {
 	}
 }
 
-func syncIpSecRulesByIptables()  {
+func syncIpSecRulesByIptables() {
 	snatRules := []utils.IptablesRule{}
 	localfilterRules := make(map[string][]utils.IptablesRule)
 	filterRules := make(map[string][]utils.IptablesRule)
 	vipNicNameMap := make(map[string]string)
 
 	for _, info := range ipsecMap {
-		if _, ok := vipNicNameMap[info.Vip] ; ok {
+		if _, ok := vipNicNameMap[info.Vip]; ok {
 			continue
 		}
-		nicname, err := utils.GetNicNameByMac(info.PublicNic); utils.PanicOnError(err)
+		nicname, err := utils.GetNicNameByMac(info.PublicNic)
+		utils.PanicOnError(err)
 		vipNicNameMap[info.Vip] = nicname
 	}
 
@@ -225,29 +226,29 @@ func syncIpSecRulesByIptables()  {
 			continue
 		}
 
-		rule := utils.NewIptablesRule(utils.UDP,  info.PeerAddress, "", 0, 500, nil, utils.RETURN, utils.IpsecRuleComment)
+		rule := utils.NewIptablesRule(utils.UDP, info.PeerAddress, "", 0, 500, nil, utils.RETURN, utils.IpsecRuleComment)
 		localfilterRules[nicname] = append(localfilterRules[nicname], rule)
 
-		rule = utils.NewIptablesRule(utils.UDP,  info.PeerAddress, "", 0, 4500, nil, utils.RETURN, utils.IpsecRuleComment)
+		rule = utils.NewIptablesRule(utils.UDP, info.PeerAddress, "", 0, 4500, nil, utils.RETURN, utils.IpsecRuleComment)
 		localfilterRules[nicname] = append(localfilterRules[nicname], rule)
 
-		rule = utils.NewIptablesRule(utils.ESP,  info.PeerAddress, "", 0, 0, nil, utils.RETURN, utils.IpsecRuleComment)
+		rule = utils.NewIptablesRule(utils.ESP, info.PeerAddress, "", 0, 0, nil, utils.RETURN, utils.IpsecRuleComment)
 		localfilterRules[nicname] = append(localfilterRules[nicname], rule)
 
-		rule = utils.NewIptablesRule(utils.AH,  info.PeerAddress, "", 0, 0, nil, utils.RETURN, utils.IpsecRuleComment)
+		rule = utils.NewIptablesRule(utils.AH, info.PeerAddress, "", 0, 0, nil, utils.RETURN, utils.IpsecRuleComment)
 		localfilterRules[nicname] = append(localfilterRules[nicname], rule)
 	}
 
 	for _, info := range ipsecMap {
 		nicname, _ := vipNicNameMap[info.Vip]
 		for _, remoteCidr := range info.PeerCidrs {
-			rule := utils.NewIptablesRule("",  remoteCidr, "", 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
-				utils.RETURN, utils.IpsecRuleComment + info.Uuid)
+			rule := utils.NewIptablesRule("", remoteCidr, "", 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
+				utils.RETURN, utils.IpsecRuleComment+info.Uuid)
 			filterRules[nicname] = append(filterRules[nicname], rule)
 
 			/* add remote cidr rule in local chain, so that remove cidr can access lb service of vpc */
-			rule = utils.NewIptablesRule("",  remoteCidr, "", 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
-				utils.RETURN, utils.IpsecRuleComment + info.Uuid)
+			rule = utils.NewIptablesRule("", remoteCidr, "", 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
+				utils.RETURN, utils.IpsecRuleComment+info.Uuid)
 			localfilterRules[nicname] = append(localfilterRules[nicname], rule)
 		}
 
@@ -255,7 +256,7 @@ func syncIpSecRulesByIptables()  {
 		for _, srcCidr := range info.LocalCidrs {
 			for _, remoteCidr := range info.PeerCidrs {
 				rule := utils.NewIpsecsIptablesRule("", srcCidr, remoteCidr, 0, 0, nil, utils.RETURN,
-					utils.IpsecRuleComment + info.Uuid, "", nicname)
+					utils.IpsecRuleComment+info.Uuid, "", nicname)
 				snatRules = append(snatRules, rule)
 			}
 		}
@@ -272,8 +273,9 @@ func syncIpSecRulesByIptables()  {
 	}
 }
 
-func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
-	nicname, err := utils.GetNicNameByMac(info.PublicNic); utils.PanicOnError(err)
+func createIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
+	nicname, err := utils.GetNicNameByMac(info.PublicNic)
+	utils.PanicOnError(err)
 
 	tree.Setf("vpn ipsec ipsec-interfaces interface %s", nicname)
 
@@ -318,7 +320,7 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 	}
 	tunnels := tree.Getf("vpn ipsec site-to-site peer %v tunnel", info.PeerAddress)
 	/* if local cidr or remote cidr decrease, delete old config */
-	for _, t := range tunnels.Children(){
+	for _, t := range tunnels.Children() {
 		num, _ := strconv.Atoi(t.Name())
 		if num >= tunnelNo {
 			tree.Deletef("vpn ipsec site-to-site peer %v tunnel %s", info.PeerAddress, t.Name())
@@ -328,10 +330,10 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 	if utils.IsSkipVyosIptables() {
 		return
 	}
-	
+
 	//create eipaddress group
 	tree.SetGroup("address", ipsecAddressGroup, info.PeerAddress)
-	
+
 	// configure firewall
 	des := "ipsec-500-udp"
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
@@ -378,7 +380,7 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 	for _, cidr := range info.PeerCidrs {
 		des = fmt.Sprintf("IPSEC-%s-%s", info.Uuid, cidr)
 		if r := tree.FindFirewallRuleByDescription(nicname, "in", des); r == nil {
-			tree.SetZStackFirewallRuleOnInterface(nicname, "front","in",
+			tree.SetZStackFirewallRuleOnInterface(nicname, "front", "in",
 				"action accept",
 				"state established enable",
 				"state related enable",
@@ -390,7 +392,7 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 
 		/* add remote cidr rule in local chain, so that remove cidr can access lb service of vpc */
 		if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
-			tree.SetZStackFirewallRuleOnInterface(nicname, "front","local",
+			tree.SetZStackFirewallRuleOnInterface(nicname, "front", "local",
 				"action accept",
 				"state established enable",
 				"state related enable",
@@ -418,7 +420,7 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo)  {
 					if f := tree.FindFirstNotExcludeSNATRule(1); num != 1 && num > f {
 						/*there has not been run here never*/
 						utils.LogError(fmt.Errorf("there is SNAT rule number unexcepted, rule:%v %v",
-							tree.Getf("nat source rule %v", num),  tree.Getf("nat source rule %v", f)))
+							tree.Getf("nat source rule %v", num), tree.Getf("nat source rule %v", f)))
 						tree.SwapSnatRule(num, f)
 						num = f
 					}
@@ -513,7 +515,6 @@ func deleteIPsecConnection(ctx *server.CommandContext) interface{} {
 		delete(ipsecMap, info.Uuid)
 	}
 
-	
 	bash := utils.Bash{
 		Command: fmt.Sprintf("ip rule list | grep 32766"),
 	}
@@ -522,9 +523,9 @@ func deleteIPsecConnection(ctx *server.CommandContext) interface{} {
 		bash := utils.Bash{
 			Command: fmt.Sprintf("sudo ip rule add from all table main pref 32766"),
 		}
-		_, _, _, err := bash.RunWithReturn(); utils.PanicOnError(err)
+		_, _, _, err := bash.RunWithReturn()
+		utils.PanicOnError(err)
 	}
-
 
 	if utils.IsSkipVyosIptables() {
 		syncIpSecRulesByIptables()
@@ -540,7 +541,8 @@ func deleteIPsecConnection(ctx *server.CommandContext) interface{} {
 }
 
 func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
-	nicname, err := utils.GetNicNameByMac(info.PublicNic); utils.PanicOnError(err)
+	nicname, err := utils.GetNicNameByMac(info.PublicNic)
+	utils.PanicOnError(err)
 
 	tree.Deletef("vpn ipsec ike-group %s", info.Uuid)
 	tree.Deletef("vpn ipsec esp-group %s", info.Uuid)
@@ -556,7 +558,7 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 	if r := tree.FindGroupByNameValue(info.PeerAddress, ipsecAddressGroup, "address"); r != nil {
 		r.Delete()
 	}
-	
+
 	des := fmt.Sprintf("^ipsec-%s-", info.Uuid)
 	for {
 		if r := tree.FindSnatRuleDescriptionRegex(des, utils.StringRegCompareFn); r != nil {
@@ -607,11 +609,11 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 func updateIPsecConnectionState(tree *server.VyosConfigTree, info ipsecInfo) {
 	if info.State == "Disabled" {
 		for i, _ := range info.PeerCidrs {
-			tree.Setf("vpn ipsec site-to-site peer %v tunnel %v disable", info.PeerAddress, i + 1);
+			tree.Setf("vpn ipsec site-to-site peer %v tunnel %v disable", info.PeerAddress, i+1)
 		}
-	} else if (info.State == "Enabled"){
+	} else if info.State == "Enabled" {
 		for i, _ := range info.PeerCidrs {
-			tree.Deletef("vpn ipsec site-to-site peer %v tunnel %v disable", info.PeerAddress, i + 1)
+			tree.Deletef("vpn ipsec site-to-site peer %v tunnel %v disable", info.PeerAddress, i+1)
 		}
 	}
 	tree.Apply(false)
@@ -625,47 +627,49 @@ func updateIPsecConnection(ctx *server.CommandContext) interface{} {
 	tree := vyos.Tree
 
 	for _, info := range cmd.Infos {
-		for _, item := range info.ModifiedItems{
+		for _, item := range info.ModifiedItems {
 			if item == "State" {
 				updateIPsecConnectionState(tree, cmd.Infos[0])
-		    }
+			}
 		}
 	}
 
 	return nil
 }
 
-func writeIpsecHaScript(enable bool)  {
+func writeIpsecHaScript(enable bool) {
 	if !utils.IsHaEnabled() {
 		return
 	}
 
 	if enable {
 		srcFile := "/home/vyos/zvr/keepalived/temp/ipsec.sh"
-		_,er := utils.CopyFile(srcFile,VYOSHA_IPSEC_SCRIPT);utils.PanicOnError(er)
+		_, er := utils.CopyFile(srcFile, VYOSHA_IPSEC_SCRIPT)
+		utils.PanicOnError(er)
 	} else {
 		conent := "echo 'no ipsec configured'"
-		err := ioutil.WriteFile(VYOSHA_IPSEC_SCRIPT, []byte(conent), 0755); utils.PanicOnError(err)
+		err := ioutil.WriteFile(VYOSHA_IPSEC_SCRIPT, []byte(conent), 0755)
+		utils.PanicOnError(err)
 	}
 
 }
 
 func getIkeUptime(peer string) int {
 	/*
-	* $ /opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl --show-ike-sa-peer=10.86.5.142
-	Peer ID / IP                            Local ID / IP
-	------------                            -------------
-	10.86.5.142                             10.86.5.144
+		* $ /opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl --show-ike-sa-peer=10.86.5.142
+		Peer ID / IP                            Local ID / IP
+		------------                            -------------
+		10.86.5.142                             10.86.5.144
 
-	    State  Encrypt  Hash    D-H Grp  NAT-T  A-Time  L-Time
-	    -----  -------  ----    -------  -----  ------  ------
-	    up     3des     sha1    2        no     5400    86400
+		    State  Encrypt  Hash    D-H Grp  NAT-T  A-Time  L-Time
+		    -----  -------  ----    -------  -----  ------  ------
+		    up     3des     sha1    2        no     5400    86400
 	*/
-	bash := utils.Bash {
+	bash := utils.Bash{
 		Command: fmt.Sprintf("/opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl --show-ike-sa-peer=%s | grep -A 2 A-Time | grep up", peer),
 	}
 	ret, o, _, err := bash.RunWithReturn()
-	if ret != 0 || err != nil{
+	if ret != 0 || err != nil {
 		return 0
 	}
 
@@ -679,7 +683,7 @@ func getIkeUptime(peer string) int {
 	return ltime - atime
 }
 
-func restartIPSecVpnTimer()  {
+func restartIPSecVpnTimer() {
 	if AutoRestartThreadCreated {
 		return
 	}
@@ -705,7 +709,7 @@ func restartIPSecVpnTimer()  {
 	go func() {
 		for {
 			select {
-			case <- restartTicker.C:
+			case <-restartTicker.C:
 				if !AutoRestartVpn {
 					return
 				}
@@ -714,7 +718,7 @@ func restartIPSecVpnTimer()  {
 				utils.Retry(func() error {
 					bash := utils.Bash{
 						Command: "pidof starter; if [ $? -eq 0 ]; then sudo ipsec reload; else sudo ipsec restart; fi",
-						NoLog: false,
+						NoLog:   false,
 					}
 					_, _, _, err := bash.RunWithReturn()
 					return err
@@ -723,7 +727,7 @@ func restartIPSecVpnTimer()  {
 				restartTicker = time.NewTicker(time.Second * IPSecRestartInterval)
 			}
 		}
-	} ()
+	}()
 }
 
 func IPsecEntryPoint() {

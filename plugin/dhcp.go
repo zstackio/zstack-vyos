@@ -20,11 +20,11 @@ const (
 	STOP_DHCP_SERVER_PATH    = "/stopDhcpServer"
 	REMOVE_DHCP_PATH         = "/removedhcp"
 
-	DHCPD_BIN_PATH_VYOS_1_1_7      = "/usr/sbin/dhcpd3"
-	DHCPD_BIN_PATH_VYOS_1_2		   = "/usr/sbin/dhcpd"
-	DHCPD_PATH          = "/home/vyos/zvr/dhcp3"
-	HOST_HOST_FILE_TEMP = "/tmp/.dhcphosts"
-	HOST_HOST_FILE      = "/etc/hosts"
+	DHCPD_BIN_PATH_VYOS_1_1_7 = "/usr/sbin/dhcpd3"
+	DHCPD_BIN_PATH_VYOS_1_2   = "/usr/sbin/dhcpd"
+	DHCPD_PATH                = "/home/vyos/zvr/dhcp3"
+	HOST_HOST_FILE_TEMP       = "/tmp/.dhcphosts"
+	HOST_HOST_FILE            = "/etc/hosts"
 
 	OMAPI_PORT = 7911
 
@@ -86,8 +86,19 @@ type DhcpServerStruct struct {
 }
 
 /* all dhcp server, key is vrNicMac */
-var DhcpServerEntries map[string]*DhcpServerStruct
-var DEFAULT_HOSTS []string
+var (
+	DhcpServerEntries = make(map[string]*DhcpServerStruct)
+	DEFAULT_HOSTS     = []string{
+		"127.0.0.1 localhost",
+		"::1     ip6-localhost ip6-loopback",
+		"fe00::0 ip6-localnet",
+		"ff00::0 ip6-mcastprefix",
+		"ff02::1 ip6-allnodes",
+		"ff02::2 ip6-allrouters",
+		"ff02::3 ip6-allhosts",
+		"127.0.1.1	  vyos	 #vyatta entry",
+	}
+)
 
 func getDhcpServerPath(nicName string) (pid, conf, lease, tempConf string) {
 	pid = fmt.Sprintf("%s/%s/%s.pid", DHCPD_PATH, nicName, nicName)
@@ -136,8 +147,8 @@ sudo /usr/sbin/dhcpd -pf {{.PidFile}} -cf {{.ConfFile}} -lf {{.LeaseFile}}
 `
 
 type dhcpServerFiles struct {
-	ConfFile string
-	PidFile string
+	ConfFile  string
+	PidFile   string
 	LeaseFile string
 	TempConf  string
 }
@@ -169,7 +180,7 @@ func writeDhcpScriptFile() {
 
 		if utils.Vyos_version == utils.VYOS_1_1_7 {
 			dhcpServerTemplate = dhcpServerHaTemplate_VYOS_1_1_7
-		} else  {
+		} else {
 			dhcpServerTemplate = dhcpServerHaTemplate_VYOS_1_2
 		}
 
@@ -297,15 +308,15 @@ func stopAllDhcpServers() {
 
 	bash := &utils.Bash{
 		Command: fmt.Sprintf("pkill -9 %s; rm -rf %s/*", progname, DHCPD_PATH),
-		Sudo: true,
+		Sudo:    true,
 	}
 	bash.Run()
 }
 
-func stopDhcpServer(pidFile  string) {
+func stopDhcpServer(pidFile string) {
 	b := &utils.Bash{
-		Command: fmt.Sprintf("kill -9 $(cat %s)", pidFile),
-		Sudo: true,
+		Command: fmt.Sprintf("kill -9 $(cat %s)"),
+		Sudo:    true,
 	}
 	b.Run()
 }
@@ -456,7 +467,7 @@ func makeDhcpFirewallRuleDescription(nicname string) string {
 	return fmt.Sprintf("DHCP-for-%s", nicname)
 }
 
-func getDhcpConfigFile(dhcp DhcpServerStruct, confFile string, nicname string)  {
+func getDhcpConfigFile(dhcp DhcpServerStruct, confFile string, nicname string) {
 	subnet := strings.Split(dhcp.Subnet, "/")
 	dhcpServer := map[string]interface{}{}
 	dhcpServer["OMAPIPort"] = getNicOmApiPort(nicname)
@@ -511,7 +522,7 @@ func startDhcpServer(dhcp dhcpServer) {
 
 	hostNameMap := make(map[string]string)
 
-	dhcpStruct := DhcpServerStruct{dhcp.NicMac,dhcp.Subnet, dhcp.Netmask,  dhcp.Gateway,
+	dhcpStruct := DhcpServerStruct{dhcp.NicMac, dhcp.Subnet, dhcp.Netmask, dhcp.Gateway,
 		dhcp.DnsServer, dhcp.DnsDomain, dhcp.Mtu, map[string]dhcpInfo{}}
 	for _, info := range dhcp.DhcpInfos {
 		/* if there is duplicated hostname */
@@ -531,12 +542,12 @@ func startDhcpServer(dhcp dhcpServer) {
 	getDhcpConfigFile(dhcpStruct, conFile, nicname)
 
 	/* start dhcp server for nic */
-	var dhcpdBinPath string;
+	var dhcpdBinPath string
 	if utils.Vyos_version == utils.VYOS_1_1_7 {
 		dhcpdBinPath = DHCPD_BIN_PATH_VYOS_1_1_7
-	} else  {
+	} else {
 		dhcpdBinPath = DHCPD_BIN_PATH_VYOS_1_2
-	} 
+	}
 
 	b := &utils.Bash{
 		Command: fmt.Sprintf("sudo %s -pf %s -cf %s -lf %s", dhcpdBinPath, pidFile, conFile, leaseFile),
@@ -620,16 +631,6 @@ missingok
 
 func init() {
 	os.Mkdir(DHCPD_PATH, os.ModePerm)
-	DEFAULT_HOSTS = []string{
-		"127.0.0.1 localhost",
-		"::1     ip6-localhost ip6-loopback",
-		"fe00::0 ip6-localnet",
-		"ff00::0 ip6-mcastprefix",
-		"ff02::1 ip6-allnodes",
-		"ff02::2 ip6-allrouters",
-		"ff02::3 ip6-allhosts",
-		"127.0.1.1	  vyos	 #vyatta entry"}
-	DhcpServerEntries = make(map[string]*DhcpServerStruct)
 	enableDhcpLog()
 }
 

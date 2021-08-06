@@ -1,33 +1,32 @@
 package plugin
 
 import (
+	"bytes"
+	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/fatih/structs"
 	"html/template"
+	"io/ioutil"
+	"strings"
 	"zvr/server"
 	"zvr/utils"
-	"fmt"
-	"strings"
-	"bytes"
-	"io/ioutil"
-	"github.com/fatih/structs"
-	/*log "github.com/Sirupsen/logrus"*/
-)
+	/*log "github.com/Sirupsen/logrus"*/)
 
 const (
-	ENABLE_PIMD_PATH = "/pimd/enable"
+	ENABLE_PIMD_PATH  = "/pimd/enable"
 	DISABLE_PIMD_PATH = "/pimd/disable"
-	GET_MROUTE_PATH = "/pimd/route"
+	GET_MROUTE_PATH   = "/pimd/route"
 
 	PIMD_BINARY_PATH = "/opt/vyatta/sbin/pimd"
-	PIMD_CONF_DIR = "/home/vyos/zvr/pimd/"
-	PIMD_CONF_PATH = "/home/vyos/zvr/pimd/pimd.conf"
+	PIMD_CONF_DIR    = "/home/vyos/zvr/pimd/"
+	PIMD_CONF_PATH   = "/home/vyos/zvr/pimd/pimd.conf"
 
 	VYOSHA_PIMD_SCRIPT = "/home/vyos/zvr/keepalived/script/pimd.sh"
 )
 
 type rendezvousPointInfo struct {
-	RpAddress string `json:"rpAddress"`
-	GroupAddress string `json:"groupAddress"`
+	RpAddress     string `json:"rpAddress"`
+	GroupAddress  string `json:"groupAddress"`
 	SourceAddress string `json:"sourceAddress"`
 }
 
@@ -35,15 +34,14 @@ type enablePimdCmd struct {
 	Rps []rendezvousPointInfo `json:"rps"`
 }
 
-
 type disablePimdCmd struct {
 }
 
 type mRouteInfo struct {
-	SourceAddress string `json:"sourceAddress"`
-	GroupAddress string `json:"groupAddress"`
+	SourceAddress     string `json:"sourceAddress"`
+	GroupAddress      string `json:"groupAddress"`
 	IngressInterfaces string `json:"ingressInterfaces"`
-	EgressInterfaces string `json:"egressInterfaces"`
+	EgressInterfaces  string `json:"egressInterfaces"`
 }
 
 type getMrouteRsp struct {
@@ -53,12 +51,11 @@ type getMrouteRsp struct {
 type getMrouteCmd struct {
 }
 
-type pimdAddNic struct {}
+type pimdAddNic struct{}
 
 var pimdEnable bool
 
-func init()  {
-	pimdEnable = false
+func init() {
 	RegisterAddNicCallback(&pimdAddNic{})
 }
 
@@ -66,7 +63,7 @@ func makePimdFirewallRuleDescription(name, nicname string) string {
 	return fmt.Sprintf("%s-for-%s", name, nicname)
 }
 
-func stopPimd()  {
+func stopPimd() {
 	pid, err := utils.FindFirstPIDByPSExtern(true, PIMD_BINARY_PATH)
 	if err == nil && pid != 0 {
 		utils.KillProcess(pid)
@@ -75,10 +72,10 @@ func stopPimd()  {
 	utils.Truncate(PIMD_CONF_PATH, 0)
 }
 
-func updatePimdConf(cmd *enablePimdCmd)  bool {
+func updatePimdConf(cmd *enablePimdCmd) bool {
 	bash := utils.Bash{
 		Command: fmt.Sprintf("mkdir -p %s", PIMD_CONF_DIR),
-		NoLog: true,
+		NoLog:   true,
 	}
 	bash.Run()
 
@@ -97,10 +94,13 @@ rp-address {{.RpAddress}} {{.GroupAddress}}
 	var m map[string]interface{}
 
 	oldChecksum, _ := getFileChecksum(PIMD_CONF_PATH)
-	tmpl, err := template.New("conf").Parse(conf); utils.PanicOnError(err)
+	tmpl, err := template.New("conf").Parse(conf)
+	utils.PanicOnError(err)
 	m = structs.Map(cmd)
-	err = tmpl.Execute(&buf, m); utils.PanicOnError(err)
-	err = ioutil.WriteFile(PIMD_CONF_PATH, buf.Bytes(), 0755); utils.PanicOnError(err)
+	err = tmpl.Execute(&buf, m)
+	utils.PanicOnError(err)
+	err = ioutil.WriteFile(PIMD_CONF_PATH, buf.Bytes(), 0755)
+	utils.PanicOnError(err)
 	newChecksum, _ := getFileChecksum(PIMD_CONF_PATH)
 
 	log.Debugf("pimd config file: %s, old checksum:%s, new checksum:%s", PIMD_CONF_PATH, oldChecksum, newChecksum)
@@ -108,16 +108,16 @@ rp-address {{.RpAddress}} {{.GroupAddress}}
 	return !strings.EqualFold(oldChecksum, newChecksum)
 }
 
-func (pimd *pimdAddNic) AddNic(nic string)  error {
+func (pimd *pimdAddNic) AddNic(nic string) error {
 	if pimdEnable == false {
 		return nil
 	}
 
 	if utils.IsSkipVyosIptables() {
-		rule := utils.NewIptablesRule("pimd", "", "", 0, 0, nil, utils.ACCEPT, utils.PIMDComment + nic)
+		rule := utils.NewIptablesRule("pimd", "", "", 0, 0, nil, utils.ACCEPT, utils.PIMDComment+nic)
 		utils.InsertFireWallRule(nic, rule, utils.LOCAL)
 
-		rule = utils.NewIptablesRule("igmp", "", "", 0, 0, nil, utils.ACCEPT, utils.PIMDComment + nic)
+		rule = utils.NewIptablesRule("igmp", "", "", 0, 0, nil, utils.ACCEPT, utils.PIMDComment+nic)
 		utils.InsertFireWallRule(nic, rule, utils.LOCAL)
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
@@ -162,13 +162,13 @@ func (pimd *pimdAddNic) AddNic(nic string)  error {
 	return nil
 }
 
-func addPimdFirewallByIptables(nics map[string]utils.Nic)  error{
+func addPimdFirewallByIptables(nics map[string]utils.Nic) error {
 	for _, nic := range nics {
 		/* pimd rule */
-		rule := utils.NewIptablesRule("pimd", "", "", 0, 0, nil, utils.ACCEPT, utils.PIMDComment + nic.Name)
+		rule := utils.NewIptablesRule("pimd", "", "", 0, 0, nil, utils.ACCEPT, utils.PIMDComment+nic.Name)
 		utils.InsertFireWallRule(nic.Name, rule, utils.LOCAL)
 
-		rule = utils.NewIptablesRule("igmp", "", "", 0, 0, nil, utils.ACCEPT, utils.PIMDComment + nic.Name)
+		rule = utils.NewIptablesRule("igmp", "", "", 0, 0, nil, utils.ACCEPT, utils.PIMDComment+nic.Name)
 		utils.InsertFireWallRule(nic.Name, rule, utils.LOCAL)
 	}
 
@@ -190,7 +190,8 @@ func restartPimd(force bool) {
 		Command: fmt.Sprintf("sudo %s -c %s", PIMD_BINARY_PATH, PIMD_CONF_PATH),
 	}
 
-	bash.RunWithReturn(); bash.PanicIfError()
+	bash.RunWithReturn()
+	bash.PanicIfError()
 }
 
 func enablePimdHandler(ctx *server.CommandContext) interface{} {
@@ -251,9 +252,9 @@ func enablePimdHandler(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
-func removePimdFirewallByIptables(nics map[string]utils.Nic)  error{
+func removePimdFirewallByIptables(nics map[string]utils.Nic) error {
 	for _, nic := range nics {
-		utils.DeleteFirewallRuleByComment(nic.Name, utils.PIMDComment + nic.Name)
+		utils.DeleteFirewallRuleByComment(nic.Name, utils.PIMDComment+nic.Name)
 	}
 
 	return nil
@@ -301,9 +302,9 @@ func getMrouteHandler(ctx *server.CommandContext) interface{} {
 		Command: fmt.Sprintf("sudo ip mroute"),
 	}
 
-	_, out, _, _ := bash.RunWithReturn();
+	_, out, _, _ := bash.RunWithReturn()
 	if out == "" {
-		return getMrouteRsp{Routes:nil}
+		return getMrouteRsp{Routes: nil}
 	}
 
 	/* line of mroute: (10.86.5.99, 239.1.1.1)          Iif: eth0       Oifs: eth1 pimreg */
@@ -318,7 +319,7 @@ func getMrouteHandler(ctx *server.CommandContext) interface{} {
 		items := strings.Split(line, " ")
 
 		for _, item := range items {
-			if item == " " || item == ""{
+			if item == " " || item == "" {
 				continue
 			}
 
@@ -367,10 +368,10 @@ func getMrouteHandler(ctx *server.CommandContext) interface{} {
 		routes = append(routes, route)
 	}
 
-	return getMrouteRsp{Routes:routes}
+	return getMrouteRsp{Routes: routes}
 }
 
-func writePimdHaScript(enable bool)  {
+func writePimdHaScript(enable bool) {
 	if !utils.IsHaEnabled() {
 		return
 	}
@@ -382,7 +383,8 @@ func writePimdHaScript(enable bool)  {
 		conent = "echo 'no pimd configured'"
 	}
 
-	err := ioutil.WriteFile(VYOSHA_PIMD_SCRIPT, []byte(conent), 0755); utils.PanicOnError(err)
+	err := ioutil.WriteFile(VYOSHA_PIMD_SCRIPT, []byte(conent), 0755)
+	utils.PanicOnError(err)
 }
 
 func PimdEntryPoint() {

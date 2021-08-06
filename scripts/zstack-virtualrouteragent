@@ -101,13 +101,13 @@ start_server() {
 
 do_stop() {
     pid=$(get_pid)
-    su - vyos -c "echo $(date) stop virtual router agent  pid: $pid >> $BOOTLOG"
+    su - vyos -c "echo $(date) stop virtual router agent pid: $pid >> $BOOTLOG"
     if [ x"$pid" != x"" ]; then
         kill -SIGINT $pid
         sleep 1
         kill -SIGTERM $pid 2> /dev/null
-        while kill -0 $pid; do
-            su - vyos -c "echo $(date) stop virtual router agent  pid: $pid >> $BOOTLOG"
+        while kill -0 $pid 2> /dev/null; do
+            su - vyos -c "echo $(date) stop virtual router agent pid: $pid >> $BOOTLOG"
             sleep 1
         done
     fi
@@ -119,7 +119,7 @@ stop_server() {
     if [ $ret -ne 0 ]; then
         echo "zstack virtual router agent stopped already"
         su - vyos -c "echo $(date) zstack virtual router agent stopped already >> $BOOTLOG"
-	      return
+        return
     fi
     (
         flock -e 300

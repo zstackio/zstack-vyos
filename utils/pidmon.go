@@ -34,11 +34,11 @@ func (pm *PidMon) Start() error {
 			if !pm.ok {
 				return
 			}
-			
+
 			if ProcessExists(pm.pid) == nil {
 				continue
 			}
-			
+
 			if n := pm.onPidMissing(); n > 0 {
 				pm.pid = n
 			}

@@ -1,16 +1,16 @@
 package main
 
 import (
-	"zvr/utils"
-	"time"
-	log "github.com/Sirupsen/logrus"
-	"io/ioutil"
 	"encoding/json"
-	"github.com/pkg/errors"
 	"fmt"
-	"zvr/server"
-	"strings"
+	log "github.com/Sirupsen/logrus"
+	"github.com/pkg/errors"
+	"io/ioutil"
 	"os"
+	"strings"
+	"time"
+	"zvr/server"
+	"zvr/utils"
 )
 
 const (
@@ -59,7 +59,8 @@ func waitIptablesServiceOnline() {
 
 func waitVirtioPortOnline() {
 	utils.LoopRunUntilSuccessOrTimeout(func() bool {
-		ok, err := utils.PathExists(VIRTIO_PORT_PATH); utils.PanicOnError(err)
+		ok, err := utils.PathExists(VIRTIO_PORT_PATH)
+		utils.PanicOnError(err)
 		if !ok {
 			log.Debugf("%s doesn't not exist, wait it ...", VIRTIO_PORT_PATH)
 		}
@@ -86,14 +87,17 @@ func parseEsxBootInfo() {
 			return false
 		}
 
-		content, err := ioutil.ReadFile(TMP_LOCATION_FOR_ESX); utils.PanicOnError(err)
+		content, err := ioutil.ReadFile(TMP_LOCATION_FOR_ESX)
+		utils.PanicOnError(err)
 		log.Debugf("recieved bootstrap info:\nsize:%d\n%s", len(content), string(content))
 		if err = json.Unmarshal(content, &bootstrapInfo); err != nil {
 			panic(errors.Wrap(err, fmt.Sprintf("unable to JSON parse:\n %s", string(content))))
 		}
 
-		err = utils.MkdirForFile(BOOTSTRAP_INFO_CACHE, 0666); utils.PanicOnError(err)
-		err = ioutil.WriteFile(BOOTSTRAP_INFO_CACHE, content, 0777); utils.PanicOnError(err)
+		err = utils.MkdirForFile(BOOTSTRAP_INFO_CACHE, 0666)
+		utils.PanicOnError(err)
+		err = ioutil.WriteFile(BOOTSTRAP_INFO_CACHE, content, 0777)
+		utils.PanicOnError(err)
 		os.Remove(TMP_LOCATION_FOR_ESX)
 		return true
 	}, time.Duration(300)*time.Second, time.Duration(1)*time.Second)
@@ -113,9 +117,12 @@ func parseKvmBootInfo() {
 			panic(errors.Wrap(err, fmt.Sprintf("unable to JSON parse:\n %s", string(content))))
 		}
 
-		err = utils.MkdirForFile(BOOTSTRAP_INFO_CACHE, 0666); utils.PanicOnError(err)
-		err = ioutil.WriteFile(BOOTSTRAP_INFO_CACHE, content, 0666); utils.PanicOnError(err)
-		err = os.Chmod(BOOTSTRAP_INFO_CACHE, 0777); utils.PanicOnError(err)
+		err = utils.MkdirForFile(BOOTSTRAP_INFO_CACHE, 0666)
+		utils.PanicOnError(err)
+		err = ioutil.WriteFile(BOOTSTRAP_INFO_CACHE, content, 0666)
+		utils.PanicOnError(err)
+		err = os.Chmod(BOOTSTRAP_INFO_CACHE, 0777)
+		utils.PanicOnError(err)
 		return true
 	}, time.Duration(300)*time.Second, time.Duration(1)*time.Second)
 }
@@ -151,8 +158,10 @@ func checkIpDuplicate() {
 	}
 	if !strings.EqualFold(dupinfo, "") {
 		log.Error(dupinfo)
-		err := utils.MkdirForFile(NETWORK_HEALTH_STATUS_PATH, 0755); utils.PanicOnError(err)
-		err = ioutil.WriteFile(NETWORK_HEALTH_STATUS_PATH, []byte(dupinfo), 0755); utils.PanicOnError(err)
+		err := utils.MkdirForFile(NETWORK_HEALTH_STATUS_PATH, 0755)
+		utils.PanicOnError(err)
+		err = ioutil.WriteFile(NETWORK_HEALTH_STATUS_PATH, []byte(dupinfo), 0755)
+		utils.PanicOnError(err)
 	}
 }
 
@@ -172,21 +181,26 @@ func configureVyos() {
 
 	eth0 := &nic{name: "eth0"}
 	var ok bool
-	eth0.mac, ok = mgmtNic["mac"].(string); utils.PanicIfError(ok, errors.New("cannot find 'mac' field for the management nic"))
+	eth0.mac, ok = mgmtNic["mac"].(string)
+	utils.PanicIfError(ok, errors.New("cannot find 'mac' field for the management nic"))
 	eth0.ip, ok = mgmtNic["ip"].(string)
 	ip, ok := mgmtNic["ip"].(string)
-	ip6, ok6 := mgmtNic["ip6"].(string); utils.PanicIfError(ok || ok6, fmt.Errorf("cannot find 'ip' field for the nic[name:%s]", eth0.name))
+	ip6, ok6 := mgmtNic["ip6"].(string)
+	utils.PanicIfError(ok || ok6, fmt.Errorf("cannot find 'ip' field for the nic[name:%s]", eth0.name))
 	if ip != "" {
 		eth0.ip = ip
-		eth0.netmask, ok = mgmtNic["netmask"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'netmask' field for the nic[name:%s]", eth0.name))
+		eth0.netmask, ok = mgmtNic["netmask"].(string)
+		utils.PanicIfError(ok, fmt.Errorf("cannot find 'netmask' field for the nic[name:%s]", eth0.name))
 		eth0.gateway = mgmtNic["gateway"].(string)
 	}
 	if ip6 != "" {
 		eth0.ip6 = ip6
-		prefixLength, ok := mgmtNic["prefixLength"].(float64); utils.PanicIfError(ok, fmt.Errorf("cannot find 'prefixLength' field for the nic[name:%s]", eth0.name))
+		prefixLength, ok := mgmtNic["prefixLength"].(float64)
+		utils.PanicIfError(ok, fmt.Errorf("cannot find 'prefixLength' field for the nic[name:%s]", eth0.name))
 		eth0.prefixLength = int(prefixLength)
 		eth0.gateway6 = mgmtNic["gateway6"].(string)
-		eth0.addressMode, ok = mgmtNic["addressMode"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'addressMode' field for the nic[name:%s]", eth0.name))
+		eth0.addressMode, ok = mgmtNic["addressMode"].(string)
+		utils.PanicIfError(ok, fmt.Errorf("cannot find 'addressMode' field for the nic[name:%s]", eth0.name))
 	}
 	eth0.isDefaultRoute = mgmtNic["isDefaultRoute"].(bool)
 
@@ -211,21 +225,27 @@ func configureVyos() {
 		for _, o := range otherNics {
 			onic := o.(map[string]interface{})
 			n := &nic{}
-			n.name, ok = onic["deviceName"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'deviceName' field for the nic"))
-			n.mac, ok = onic["mac"].(string); utils.PanicIfError(ok, errors.New("cannot find 'mac' field for the nic"))
+			n.name, ok = onic["deviceName"].(string)
+			utils.PanicIfError(ok, fmt.Errorf("cannot find 'deviceName' field for the nic"))
+			n.mac, ok = onic["mac"].(string)
+			utils.PanicIfError(ok, errors.New("cannot find 'mac' field for the nic"))
 			ip, ok := onic["ip"].(string)
-			ip6, ok6 := onic["ip6"].(string); utils.PanicIfError(ok || ok6, fmt.Errorf("cannot find 'ip' field for the nic[name:%s]", n.name))
+			ip6, ok6 := onic["ip6"].(string)
+			utils.PanicIfError(ok || ok6, fmt.Errorf("cannot find 'ip' field for the nic[name:%s]", n.name))
 			if ip != "" {
 				n.ip = ip
-				n.netmask, ok = onic["netmask"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'netmask' field for the nic[name:%s]", n.name))
+				n.netmask, ok = onic["netmask"].(string)
+				utils.PanicIfError(ok, fmt.Errorf("cannot find 'netmask' field for the nic[name:%s]", n.name))
 				n.gateway = onic["gateway"].(string)
 			}
 			if ip6 != "" {
 				n.ip6 = ip6
-				prefixLength, ok := onic["prefixLength"].(float64); utils.PanicIfError(ok, fmt.Errorf("cannot find 'prefixLength' field for the nic[name:%s]", n.name))
+				prefixLength, ok := onic["prefixLength"].(float64)
+				utils.PanicIfError(ok, fmt.Errorf("cannot find 'prefixLength' field for the nic[name:%s]", n.name))
 				n.prefixLength = int(prefixLength)
 				n.gateway6 = onic["gateway6"].(string)
-				n.addressMode, ok = onic["addressMode"].(string); utils.PanicIfError(ok, fmt.Errorf("cannot find 'addressMode' field for the nic[name:%s]", n.name))
+				n.addressMode, ok = onic["addressMode"].(string)
+				utils.PanicIfError(ok, fmt.Errorf("cannot find 'addressMode' field for the nic[name:%s]", n.name))
 			}
 
 			n.isDefaultRoute = onic["isDefaultRoute"].(bool)
@@ -271,7 +291,8 @@ func configureVyos() {
 			utils.Assertf(nic.gateway6 != "", "ipv6 gateway cannot be empty[nicname:%s]", nic.name)
 		}
 
-		nicname, err := utils.GetNicNameByMac(nic.mac); utils.PanicOnError(err)
+		nicname, err := utils.GetNicNameByMac(nic.mac)
+		utils.PanicOnError(err)
 		if nicname != nic.name {
 			devNames = append(devNames, &deviceName{
 				expected: nic.name,

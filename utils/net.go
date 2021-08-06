@@ -238,7 +238,7 @@ func SetZStackRoute(ip string, nic string, gw string) error {
 		return err
 	}
 	// NOTE(WeiW): It will return 2 if exists
-	if ret != 0 && ret != 2{
+	if ret != 0 && ret != 2 {
 		return errors.New(fmt.Sprintf("add route to %s/32 via %s dev %s failed", ip, gw, nic))
 	}
 
@@ -249,7 +249,8 @@ func GetNicForRoute(ip string) string {
 	bash := Bash{
 		Command: fmt.Sprintf("ip -o r get %s | awk '{print $3}'", ip),
 	}
-	_, o, _, err := bash.RunWithReturn(); PanicOnError(err)
+	_, o, _, err := bash.RunWithReturn()
+	PanicOnError(err)
 	return o
 }
 
@@ -293,8 +294,10 @@ func GetNicNumber(nic string) (int, error) {
 }
 
 func CheckMgmtCidrContainsIp(ip string, mgmtNic map[string]interface{}) bool {
-	maskCidr, err := NetmaskToCIDR(mgmtNic["netmask"].(string)); PanicOnError(err)
-	_, mgmtNet, err := net.ParseCIDR(fmt.Sprintf("%s/%d", mgmtNic["ip"], maskCidr)); PanicOnError(err)
+	maskCidr, err := NetmaskToCIDR(mgmtNic["netmask"].(string))
+	PanicOnError(err)
+	_, mgmtNet, err := net.ParseCIDR(fmt.Sprintf("%s/%d", mgmtNic["ip"], maskCidr))
+	PanicOnError(err)
 
 	return mgmtNet.Contains(net.ParseIP(ip))
 }
@@ -348,8 +351,10 @@ func GetBroadcastIpFromNetwork(ip, netmask string) string {
 	masks := strings.Split(netmask, ".")
 
 	for i := 0; i < 4; i++ {
-		ipByte, err := strconv.Atoi(ips[i]); PanicOnError(err)
-		maskByte, err := strconv.Atoi(masks[i]); PanicOnError(err)
+		ipByte, err := strconv.Atoi(ips[i])
+		PanicOnError(err)
+		maskByte, err := strconv.Atoi(masks[i])
+		PanicOnError(err)
 		ipByte = ipByte & maskByte
 		maskByte = maskByte ^ 0xFF
 
@@ -456,13 +461,13 @@ func DelIp4DefaultRoute() error {
 	return err
 }
 
-func AddIp4DefaultRoute(gw4, dev string)  {
+func AddIp4DefaultRoute(gw4, dev string) {
 	oldGw4 := ""
 	bash := Bash{
 		Command: fmt.Sprintf("ip -4 r | grep default | awk '{print $3}'"),
 	}
 	ret, o, _, err := bash.RunWithReturn()
-	if err == nil && ret == 0{
+	if err == nil && ret == 0 {
 		oldGw4 = o
 	}
 
