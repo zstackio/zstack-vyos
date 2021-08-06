@@ -10,9 +10,9 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"zvr/plugin"
-	"zvr/server"
-	"zvr/utils"
+	"github.com/zstackio/zstack-vyos/plugin"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 func loadPlugins() {

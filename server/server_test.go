@@ -1,8 +1,9 @@
 package server
 
 import (
+	"github.com/zstackio/zstack-vyos/utils/test"
 	"testing"
-	"zvr/utils"
+	"github.com/zstackio/zstack-vyos/utils"
 	"fmt"
 	"github.com/pkg/errors"
 	"net/http"
@@ -16,7 +17,7 @@ func startMockServer()  {
 		startServer()
 	}()
 	
-	utils.InitLog(utils.VYOS_UT_LOG_FOLDER + "server_test.log", false)
+	utils.InitLog(test.VYOS_UT_LOG_FOLDER + "server_test.log", false)
 	
 	time.Sleep(time.Duration(2) * time.Second)
 }

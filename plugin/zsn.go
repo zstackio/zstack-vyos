@@ -2,14 +2,14 @@ package plugin
 
 import (
 	"os"
-	"zvr/server"
+	"github.com/zstackio/zstack-vyos/server"
 	"fmt"
 	"io/ioutil"
 	"encoding/json"
 	log "github.com/Sirupsen/logrus"
 	"net/http"
 	"time"
-	"zvr/utils"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (

@@ -1,16 +1,16 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
+	"time"
 	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
 	"io/ioutil"
-	"os"
+	"encoding/json"
+	"fmt"
 	"strings"
-	"time"
-	"zvr/server"
-	"zvr/utils"
+	"os"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (

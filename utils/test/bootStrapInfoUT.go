@@ -1,9 +1,10 @@
-package utils
+package test
 
 import (
     "encoding/json"
     "fmt"
     log "github.com/Sirupsen/logrus"
+    "github.com/zstackio/zstack-vyos/utils"
     "io/ioutil"
     "sort"
     "strconv"
@@ -14,45 +15,19 @@ import (
 
 const (
     VYOS_UT_LOG_FOLDER="/home/vyos/vyos_ut/testLog/"
+    BOOTSTRAP_INFO_UT = "/home/vyos/vyos_ut/zstack-vyos/bootstrapinfo"
 )
 
-type NicInfo struct {
-    Ip                    string `json:"ip"`
-    Netmask               string `json:"netmask"`
-    Gateway               string `json:"gateway"`
-    Mac                   string `json:"Mac"`
-    Category              string `json:"category"`
-    L2Type                string `json:"l2type"`
-    PhysicalInterface     string `json:"physicalInterface"`
-    Vni                   int    `json:"vni"`
-    FirewallDefaultAction string `json:"firewallDefaultAction"`
-    Mtu                   int    `json:"mtu"`
-    Ip6                   string `json:"Ip6"`
-    PrefixLength          int    `json:"PrefixLength"`
-    Gateway6              string `json:"Gateway6"`
-    AddressMode           string `json:"AddressMode"`
-    Name                  string
-    IsDefault             bool
-}
-
-// ByAge implements sort.Interface for []Person based on
-// the Age field.
-type NicArray []NicInfo
-
-func (n NicArray) Len() int           { return len(n) }
-func (n NicArray) Swap(i, j int)      { n[i], n[j] = n[j], n[i] }
-func (n NicArray) Less(i, j int) bool { return n[i].Name < n[j].Name }
-
-var MgtNicForUT NicInfo
-var PubNicForUT NicInfo
-var PrivateNicsForUT []NicInfo
-var AdditionalPubNicsForUT []NicInfo
+var MgtNicForUT utils.NicInfo
+var PubNicForUT utils.NicInfo
+var PrivateNicsForUT []utils.NicInfo
+var AdditionalPubNicsForUT []utils.NicInfo
 var reservedIpForMgt []string
 var reservedIpForPubL3 []string
 var freeIpsForMgt []string
 var freeIpsForPubL3 []string
 
-func InitForUt() {
+func init() {
     InitBootStrapInfoForUT()
     ParseBootStrapNicInfo()
     rand.Seed(time.Now().UnixNano())
@@ -72,15 +47,15 @@ func InitBootStrapInfoForUT() {
         return
     }
     if len(content) == 0 {
-        log.Debugf("no content in %s, can not get mgmt gateway", BOOTSTRAP_INFO_CACHE)
+        log.Debugf("no content in %s, can not get mgmt gateway", utils.BOOTSTRAP_INFO_CACHE)
     }
     
-    if err := json.Unmarshal(content, &bootstrapInfo); err != nil {
-        log.Debugf("can not parse info from %s, can not get mgmt gateway", BOOTSTRAP_INFO_CACHE)
+    if err := json.Unmarshal(content, &utils.BootstrapInfo); err != nil {
+        log.Debugf("can not parse info from %s, can not get mgmt gateway", utils.BOOTSTRAP_INFO_CACHE)
     }
 }
 
-func getNic(m map[string]interface{}, tempNic *NicInfo) error  {
+func getNic(m map[string]interface{}, tempNic *utils.NicInfo) error  {
     name, ok := m["deviceName"].(string)
     if !ok {
         return fmt.Errorf("there is no nic name for %+v", m)
@@ -189,18 +164,18 @@ func getNic(m map[string]interface{}, tempNic *NicInfo) error  {
 }
 
 func ParseBootStrapNicInfo() {
-    nicString := bootstrapInfo["managementNic"].(map[string]interface{})
+    nicString := utils.BootstrapInfo["managementNic"].(map[string]interface{})
     if nicString != nil {
         if err := getNic(nicString, &MgtNicForUT); err != nil {
             return
         }
     }
     
-    otherNics := bootstrapInfo["additionalNics"].([]interface{})
+    otherNics := utils.BootstrapInfo["additionalNics"].([]interface{})
     if otherNics != nil {
         for _, o := range otherNics {
             onic := o.(map[string]interface{})
-            var additionalNic NicInfo
+            var additionalNic utils.NicInfo
             if err := getNic(onic, &additionalNic); err != nil {
                 return
             }
@@ -210,7 +185,7 @@ func ParseBootStrapNicInfo() {
                 continue
             }
             
-            if additionalNic.Category == NIC_TYPE_PRIVATE {
+            if additionalNic.Category == utils.NIC_TYPE_PRIVATE {
                 PrivateNicsForUT = append(PrivateNicsForUT, additionalNic)
             } else {
                 AdditionalPubNicsForUT = append(AdditionalPubNicsForUT, additionalNic)
@@ -218,27 +193,19 @@ func ParseBootStrapNicInfo() {
         }
     }
     
-    sort.Sort(NicArray(PrivateNicsForUT))
-    sort.Sort(NicArray(AdditionalPubNicsForUT))
+    sort.Sort(utils.NicArray(PrivateNicsForUT))
+    sort.Sort(utils.NicArray(AdditionalPubNicsForUT))
     
-    ips := bootstrapInfo["reservedIpForMgt"].([]interface{})
+    ips := utils.BootstrapInfo["reservedIpForMgt"].([]interface{})
     for _, ip := range ips {
         reservedIpForMgt = append(reservedIpForMgt, ip.(string))
     }
     
-    ips = bootstrapInfo["reservedIpForPubL3"].([]interface{})
+    ips = utils.BootstrapInfo["reservedIpForPubL3"].([]interface{})
     for _, ip := range ips {
         reservedIpForPubL3 = append(reservedIpForPubL3, ip.(string))
     }
     return
-}
-
-func SetHaStatus(status string) {
-    bootstrapInfo["haStatus"] = status
-}
-
-func GetHaStatus() (status string) {
-    return bootstrapInfo["haStatus"].(string)
 }
 
 func GetRandomIpForSubnet(sourceIp string) string {
@@ -315,5 +282,5 @@ func ReleasePubL3Ip(ip string)  {
 }
 
 func GetMgtGateway() string {
-    return bootstrapInfo["mgtGateway"].(string)
+    return utils.BootstrapInfo["mgtGateway"].(string)
 }

@@ -5,9 +5,9 @@ import (
         "net/http"
         glog "log"
         "fmt"
-        "zvr/utils"
+        "github.com/zstackio/zstack-vyos/utils"
         "github.com/prometheus/client_golang/prometheus/promhttp"
-        "zvr/server"
+        "github.com/zstackio/zstack-vyos/server"
         log "github.com/Sirupsen/logrus"
 )
 

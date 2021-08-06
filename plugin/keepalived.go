@@ -1,6 +1,8 @@
 package plugin
 
 import (
+	"github.com/zstackio/zstack-vyos/utils"
+	"github.com/zstackio/zstack-vyos/server"
 	"bytes"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
@@ -11,8 +13,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-	"zvr/server"
-	"zvr/utils"
 )
 
 type KeepAlivedStatus int

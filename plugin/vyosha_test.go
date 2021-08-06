@@ -2,9 +2,10 @@ package plugin
 
 import (
 	"fmt"
-	"zvr/server"
-	"zvr/utils"
-
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
+	"github.com/zstackio/zstack-vyos/utils/test"
+	
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -19,28 +20,28 @@ var _ = Describe("vyosHa test", func() {
 	var nicCmd *configureNicCmd
 
 	BeforeEach(func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"vyosha_test.log", false)
-		peerIp, _ = utils.GetFreeMgtIp()
-		vipIp, _ = utils.GetFreeMgtIp()
-		vipIp1, _ = utils.GetFreeMgtIp()
+		utils.InitLog(test.VYOS_UT_LOG_FOLDER+"vyosha_test.log", false)
+		peerIp, _ = test.GetFreeMgtIp()
+		vipIp, _ = test.GetFreeMgtIp()
+		vipIp1, _ = test.GetFreeMgtIp()
 		log.Debugf("vyosHa BeforeEach test peerIp: %s, vip: %s, vip1: %s", peerIp, vipIp, vipIp1)
 
-		vip = macVipPair{NicMac: utils.MgtNicForUT.Mac, NicVip: vipIp, Netmask: utils.MgtNicForUT.Netmask}
-		cmd = &setVyosHaCmd{Keepalive: 1, HeartbeatNic: utils.MgtNicForUT.Mac, LocalIp: utils.MgtNicForUT.Ip,
+		vip = macVipPair{NicMac: test.MgtNicForUT.Mac, NicVip: vipIp, Netmask: test.MgtNicForUT.Netmask}
+		cmd = &setVyosHaCmd{Keepalive: 1, HeartbeatNic: test.MgtNicForUT.Mac, LocalIp: test.MgtNicForUT.Ip,
 			PeerIp: "", Monitors: []string{"1.1.1.1", "1.1.1.2"}, Vips: []macVipPair{vip},
 			CallbackUrl: "http://127.0.0.1:7272/callback"}
 
 		nicCmd = &configureNicCmd{}
-		nicCmd.Nics = append(nicCmd.Nics, utils.MgtNicForUT)
+		nicCmd.Nics = append(nicCmd.Nics, test.MgtNicForUT)
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		configureNic(nicCmd)
 	})
 
 	AfterEach(func() {
 		log.Debugf("vyosHa AfterEach")
-		utils.ReleaseMgtIp(peerIp)
-		utils.ReleaseMgtIp(vipIp)
-		utils.ReleaseMgtIp(vipIp1)
+		test.ReleaseMgtIp(peerIp)
+		test.ReleaseMgtIp(vipIp)
+		test.ReleaseMgtIp(vipIp1)
 	})
 
 	log.Debugf("vyosHa test Context 1")

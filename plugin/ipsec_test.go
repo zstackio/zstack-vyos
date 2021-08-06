@@ -2,12 +2,13 @@ package plugin
 
 import (
     . "github.com/onsi/ginkgo"
-    "zvr/server"
-    "zvr/utils"
+    "github.com/zstackio/zstack-vyos/server"
+    "github.com/zstackio/zstack-vyos/utils"
+    "github.com/zstackio/zstack-vyos/utils/test"
 )
 
 func setTestIpsecEnv()  {
-    utils.InitLog(utils.VYOS_UT_LOG_FOLDER + "ipsec_test.log", false)
+    utils.InitLog(test.VYOS_UT_LOG_FOLDER + "ipsec_test.log", false)
 }
 
 var _ = Describe("ipsec_test", func() {
@@ -18,7 +19,7 @@ var _ = Describe("ipsec_test", func() {
     })
 
     It("test create ipsec", func() {
-        nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+        nicCmd.Nics = append(nicCmd.Nics, test.PubNicForUT)
         configureNic(nicCmd)
         cmd := &createIPsecCmd{}
         info := &ipsecInfo{}
@@ -29,7 +30,7 @@ var _ = Describe("ipsec_test", func() {
         info.PeerAddress = "172.25.10.63"
         info.AuthKey = "1234"
         info.AuthMode = "psk"
-        info.PublicNic = utils.PubNicForUT.Mac
+        info.PublicNic = test.PubNicForUT.Mac
         info.IkeAuthAlgorithm = "sha1"
         info.IkeEncryptionAlgorithm = "aes128"
         info.PolicyAuthAlgorithm = "sha1"
@@ -52,7 +53,7 @@ var _ = Describe("ipsec_test", func() {
     })
 
     It("test delete ipsec", func() {
-        nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+        nicCmd.Nics = append(nicCmd.Nics, test.PubNicForUT)
         configureNic(nicCmd)
         cmd := &createIPsecCmd{}
         info := &ipsecInfo{}
@@ -63,7 +64,7 @@ var _ = Describe("ipsec_test", func() {
         info.PeerAddress = "172.25.10.63"
         info.AuthKey = "1234"
         info.AuthMode = "psk"
-        info.PublicNic = utils.PubNicForUT.Mac
+        info.PublicNic = test.PubNicForUT.Mac
         info.IkeAuthAlgorithm = "sha1"
         info.IkeEncryptionAlgorithm = "aes128"
         info.PolicyAuthAlgorithm = "sha1"
@@ -91,7 +92,7 @@ var _ = Describe("ipsec_test", func() {
     })
 
     It("test update ipsec", func() {
-        nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+        nicCmd.Nics = append(nicCmd.Nics, test.PubNicForUT)
         configureNic(nicCmd)
         cmd := &createIPsecCmd{}
         info := &ipsecInfo{}
@@ -102,7 +103,7 @@ var _ = Describe("ipsec_test", func() {
         info.PeerAddress = "172.25.10.63"
         info.AuthKey = "1234"
         info.AuthMode = "psk"
-        info.PublicNic = utils.PubNicForUT.Mac
+        info.PublicNic = test.PubNicForUT.Mac
         info.IkeAuthAlgorithm = "sha1"
         info.IkeEncryptionAlgorithm = "aes128"
         info.PolicyAuthAlgorithm = "sha1"

@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/pkg/errors"
+	"github.com/zstackio/zstack-vyos/utils/test"
 	"testing"
-	"zvr/utils"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 func setUp() {
-	utils.InitLog(utils.VYOS_UT_LOG_FOLDER + "zvrboot.log", false)
+	utils.InitLog(test.VYOS_UT_LOG_FOLDER + "zvrboot.log", false)
 	waitIptablesServiceOnline()
 	content := ``
 	if err := json.Unmarshal([]byte(content), &bootstrapInfo); err != nil {

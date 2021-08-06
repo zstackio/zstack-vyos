@@ -5,8 +5,8 @@ import (
 	"github.com/pkg/errors"
 	"strings"
 	log "github.com/Sirupsen/logrus"
-	"zvr/server"
-	"zvr/utils"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (
@@ -286,13 +286,11 @@ func configureNic(cmd *configureNicCmd) interface{} {
 	tree.Apply(false)
 
 	if IsMaster() {
-		if utils.Vyos_version == utils.VYOS_1_2 {
-			bash := utils.Bash {
-				Command: fmt.Sprintf("ip link set up dev %s", nicname),
-				Sudo: true,
-			}
-			bash.Run()
+		bash := utils.Bash {
+			Command: fmt.Sprintf("ip link set up dev %s", nicname),
+			Sudo: true,
 		}
+		bash.Run()
 
 		checkNicIsUp(nicname, true)
 	}

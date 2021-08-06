@@ -5,9 +5,10 @@ import (
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
+	"github.com/zstackio/zstack-vyos/utils/test"
 	"strings"
-	"zvr/server"
-	"zvr/utils"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 var _ = Describe("dnat test", func() {
@@ -20,34 +21,34 @@ var _ = Describe("dnat test", func() {
 	var setCmd *setDnatCmd
 
 	BeforeEach(func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"dnat_test.log", false)
+		utils.InitLog(test.VYOS_UT_LOG_FOLDER+"dnat_test.log", false)
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		nicCmd = &configureNicCmd{}
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
+		nicCmd.Nics = append(nicCmd.Nics, test.PubNicForUT)
+		nicCmd.Nics = append(nicCmd.Nics, test.PrivateNicsForUT[0])
 		configureNic(nicCmd)
 
-		ipInPubL3, _ = utils.GetFreePubL3Ip()
-		ipInPubL32, _ = utils.GetFreePubL3Ip()
+		ipInPubL3, _ = test.GetFreePubL3Ip()
+		ipInPubL32, _ = test.GetFreePubL3Ip()
 
 		rule1 = dnatInfo{Uuid: "uuid1", VipPortStart: 100, VipPortEnd: 65530,
 			PrivatePortStart: 101, PrivatePortEnd: 65531, ProtocolType: "TCP", VipIp: ipInPubL3,
-			PublicMac: utils.PubNicForUT.Mac, PrivateIp: "192.168.1.100", PrivateMac: utils.PrivateNicsForUT[0].Mac,
+			PublicMac: test.PubNicForUT.Mac, PrivateIp: "192.168.1.100", PrivateMac: test.PrivateNicsForUT[0].Mac,
 			AllowedCidr: "1.1.1.0/24", SnatInboundTraffic: false}
 		rule2 = dnatInfo{Uuid: "uuid2", VipPortStart: 100, VipPortEnd: 65530,
 			PrivatePortStart: 101, PrivatePortEnd: 65531, ProtocolType: "UDP", VipIp: ipInPubL3,
-			PublicMac: utils.PubNicForUT.Mac, PrivateIp: "192.168.1.50", PrivateMac: utils.PrivateNicsForUT[0].Mac,
+			PublicMac: test.PubNicForUT.Mac, PrivateIp: "192.168.1.50", PrivateMac: test.PrivateNicsForUT[0].Mac,
 			AllowedCidr: "1.1.1.0/24", SnatInboundTraffic: false}
 
 		rule3 = dnatInfo{Uuid: "uuid1", VipPortStart: 22, VipPortEnd: 22,
 			PrivatePortStart: 22, PrivatePortEnd: 22, ProtocolType: "TCP", VipIp: ipInPubL32,
-			PublicMac: utils.PubNicForUT.Mac, PrivateIp: "192.168.1.200", PrivateMac: utils.PrivateNicsForUT[0].Mac,
+			PublicMac: test.PubNicForUT.Mac, PrivateIp: "192.168.1.200", PrivateMac: test.PrivateNicsForUT[0].Mac,
 			AllowedCidr: "1.1.2.0/24", SnatInboundTraffic: false}
 	})
 
 	AfterEach(func() {
-		utils.ReleasePubL3Ip(ipInPubL3)
-		utils.ReleasePubL3Ip(ipInPubL32)
+		test.ReleasePubL3Ip(ipInPubL3)
+		test.ReleasePubL3Ip(ipInPubL32)
 	})
 
 	It("setDnat", func() {
@@ -69,7 +70,7 @@ var _ = Describe("dnat test", func() {
 	It("add dnat rule", func() {
 		rule3 := dnatInfo{Uuid: "uuid1", VipPortStart: 22, VipPortEnd: 22,
 			PrivatePortStart: 22, PrivatePortEnd: 22, ProtocolType: "TCP", VipIp: ipInPubL32,
-			PublicMac: utils.PubNicForUT.Mac, PrivateIp: "192.168.1.200", PrivateMac: utils.PrivateNicsForUT[0].Mac,
+			PublicMac: test.PubNicForUT.Mac, PrivateIp: "192.168.1.200", PrivateMac: test.PrivateNicsForUT[0].Mac,
 			AllowedCidr: "1.1.2.0/24", SnatInboundTraffic: false}
 		setCmd = &setDnatCmd{Rules: []dnatInfo{rule3}}
 		log.Debugf("add dnat 3 %+v", setCmd)

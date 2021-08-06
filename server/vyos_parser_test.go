@@ -3,7 +3,7 @@ package server
 import (
     "testing"
 	"fmt"
-	"zvr/utils"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 func TestSetFirewall(t *testing.T) {

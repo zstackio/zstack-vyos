@@ -6,8 +6,8 @@ import (
         "github.com/pkg/errors"
         "io/ioutil"
         "strings"
-        "zvr/server"
-        "zvr/utils"
+        "github.com/zstackio/zstack-vyos/server"
+        "github.com/zstackio/zstack-vyos/utils"
 )
 
 const (

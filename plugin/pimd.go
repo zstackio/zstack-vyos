@@ -7,10 +7,11 @@ import (
 	"github.com/fatih/structs"
 	"html/template"
 	"io/ioutil"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 	"strings"
-	"zvr/server"
-	"zvr/utils"
-	/*log "github.com/Sirupsen/logrus"*/)
+	/*log "github.com/Sirupsen/logrus"*/
+)
 
 const (
 	ENABLE_PIMD_PATH  = "/pimd/enable"

@@ -1,9 +1,9 @@
 package plugin
 
 import (
-	"zvr/server"
+	"github.com/zstackio/zstack-vyos/server"
 	"html/template"
-	"zvr/utils"
+	"github.com/zstackio/zstack-vyos/utils"
 	"bytes"
 	"github.com/fatih/structs"
 	"strings"

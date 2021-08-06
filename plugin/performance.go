@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"zvr/utils"
+	"github.com/zstackio/zstack-vyos/utils"
 
 	log "github.com/Sirupsen/logrus"
 )

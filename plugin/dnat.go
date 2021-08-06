@@ -1,10 +1,10 @@
 package plugin
 
 import (
-	"zvr/server"
+	"github.com/zstackio/zstack-vyos/server"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
-	"zvr/utils"
+	"github.com/zstackio/zstack-vyos/utils"
 	"strings"
 )
 

@@ -1,13 +1,13 @@
-package plugin_test
+package test
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"testing"
 )
 
-func TestPlugin(t *testing.T) {
+func TestTest(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Plugin Suite")
+	RunSpecs(t, "Test Suite")
 }
-
