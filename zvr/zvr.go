@@ -14,7 +14,7 @@ import (
 	"zvr/utils"
 )
 
-func loadPlugins()  {
+func loadPlugins() {
 	plugin.ApvmEntryPoint()
 	plugin.DhcpEntryPoint()
 	plugin.MiscEntryPoint()
@@ -50,14 +50,14 @@ func doLogRotate(fpath string) {
 }
 
 func setupRotates() {
-	for _, cfgfile := range(logfiles) {
+	for _, cfgfile := range logfiles {
 		utils.SetFileOwner(cfgfile, "root", "root")
 	}
 
 	go func() {
 		for {
 			time.Sleep(time.Minute)
-			for _, cfgfile := range(logfiles) {
+			for _, cfgfile := range logfiles {
 				doLogRotate(cfgfile)
 			}
 		}
@@ -120,10 +120,10 @@ func configureZvrFirewall() {
 		"action accept",
 		fmt.Sprintf("description %s", des),
 	)
-	tree.Apply(false)
+	tree.Apply(true)
 }
 
-func main()  {
+func main() {
 	go restartRsyslog()
 	parseCommandOptions()
 	utils.InitLog(options.LogFile, false)
