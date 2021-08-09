@@ -125,11 +125,12 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 	keepalivedConf.BuildConf()
 	newCheckSum, err := getFileChecksum(KeepalivedConfigFile)
 	utils.PanicOnError(err)
+	/* if keepalived is not started, RestartKeepalived will also start keepalived */
 	if newCheckSum != checksum {
-		keepalivedConf.RestartKeepalived(true)
+		keepalivedConf.RestartKeepalived(KeepAlivedProcess_Reload)
 	} else {
 		log.Debugf("keepalived configure file unchanged")
-		keepalivedConf.RestartKeepalived(false)
+		keepalivedConf.RestartKeepalived(KeepAlivedProcess_Skip)
 	}
 
 	if !getKeepAlivedStatusStart {

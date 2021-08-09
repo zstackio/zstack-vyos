@@ -23,6 +23,14 @@ const (
 	KeepAlivedStatus_Backup
 )
 
+type KeepAlivedProcessAction int
+const (
+	KeepAlivedProcess_Reload KeepAlivedProcessAction = iota
+	KeepAlivedProcess_Restart
+	KeepAlivedProcess_Start
+	KeepAlivedProcess_Skip
+)
+
 const PID_ERROR = -1
 
 const (
@@ -383,7 +391,7 @@ func (k *KeepalivedConf) BuildConf() error {
 	return ioutil.WriteFile(ConntrackdConfigFile, buf.Bytes(), 0644)
 }
 
-func doRestartKeepalived(force bool) (error) {
+func doRestartKeepalived(action KeepAlivedProcessAction) error {
 	/* # ./keepalived -h
 		    Usage: ./keepalived [OPTION...]
 	            -f, --use-file=FILE          Use the specified configuration file
@@ -398,25 +406,31 @@ func doRestartKeepalived(force bool) (error) {
 		bash.RunWithReturn(); bash.PanicIfError()
 	} else {
 		/* keepalived is running, restart it only if force restart */
-		if !force {
+		switch action {
+		case KeepAlivedProcess_Restart:
+			bash := utils.Bash {
+				Command: fmt.Sprintf("kill -TERM %d; %s -D -S 2 -f %s -p %s", pid, KeepalivedBinaryFile, KeepalivedConfigFile, KeepalivedPidFile),
+				Sudo:    true,
+			}
+			return bash.Run()
+			
+		case KeepAlivedProcess_Reload:
+			bash := utils.Bash{
+				Command: fmt.Sprintf("sudo kill -HUP %d", pid),
+			}
+			return bash.Run()
+		
+		case KeepAlivedProcess_Skip:
+		default:
 			return nil
 		}
-		
-		bash := utils.Bash{
-			Command: fmt.Sprintf("sudo kill -HUP %d", pid),
-		}
-		return bash.Run()
 	}
-
-	bash := utils.Bash{
-		Command: fmt.Sprintf("kill -TERM %d; %s -D -S 2 -f %s -p %s", pid, KeepalivedBinaryFile, KeepalivedConfigFile, KeepalivedPidFile),
-		Sudo:    true,
-	}
-	return bash.Run()
+	
+	return nil
 }
 
-func (k *KeepalivedConf) RestartKeepalived(force bool) (error) {
-	return doRestartKeepalived(force)
+func (k *KeepalivedConf) RestartKeepalived(action KeepAlivedProcessAction) error {
+        return doRestartKeepalived(action)
 }
 
 func enableKeepalivedLog() {
@@ -574,7 +588,7 @@ func KeepalivedEntryPoint() {
 		if IsMaster() {
 			s := time.Now().Format(time.RFC3339) + " " + e.Error() + "\n"
 			ioutil.WriteFile(_zvr_shm, []byte(s), 0640)
-			doRestartKeepalived(false)
+			doRestartKeepalived(KeepAlivedProcess_Restart)
 		}
 	})
 
