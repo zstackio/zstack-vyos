@@ -473,14 +473,14 @@ def _json_http(
     if body is not None and not isinstance(body, str):
         body = json.dumps(body).encode('utf-8')
 
-    print("[Request]: %s url=%s, headers=%s, body=%s" % (method, uri, headers, body))
+    #print("[Request]: %s url=%s, headers=%s, body=%s" % (method, uri, headers, body))
     if body:
         headers['Content-Length'] = len(body)
         rsp = pool.request(method, uri, body=body, headers=headers)
     else:
         rsp = pool.request(method, uri, headers=headers)
 
-    print("[Response to %s %s]: status: %s, body: %s" % (method, uri, rsp.status, rsp.data))
+    #print("[Response to %s %s]: status: %s, body: %s" % (method, uri, rsp.status, rsp.data))
     return rsp
 
 

@@ -1,4 +1,4 @@
-module zvr
+module github.com/zstackio/zstack-vyos
 
 go 1.16
 

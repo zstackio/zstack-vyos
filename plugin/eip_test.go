@@ -5,25 +5,26 @@ import (
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	gomega "github.com/onsi/gomega"
-	"zvr/server"
-	"zvr/utils"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
+	"github.com/zstackio/zstack-vyos/utils/test"
 )
 
 var _ = Describe("eip_test", func() {
 	BeforeEach(func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"eip_test.log", false)
+		utils.InitLog(test.VYOS_UT_LOG_FOLDER+"eip_test.log", false)
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 	})
 
 	It("test create eip", func() {
 		nicCmd := &configureNicCmd{}
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
+		nicCmd.Nics = append(nicCmd.Nics, test.PubNicForUT)
+		nicCmd.Nics = append(nicCmd.Nics, test.PrivateNicsForUT[0])
 		configureNic(nicCmd)
 
-		ipInPubL3, _ := utils.GetFreePubL3Ip()
-		eip1 := eipInfo{VipIp: ipInPubL3, PublicMac: utils.PubNicForUT.Mac,
-			GuestIp: "192.168.1.200", PrivateMac: utils.PrivateNicsForUT[0].Mac,
+		ipInPubL3, _ := test.GetFreePubL3Ip()
+		eip1 := eipInfo{VipIp: ipInPubL3, PublicMac: test.PubNicForUT.Mac,
+			GuestIp: "192.168.1.200", PrivateMac: test.PrivateNicsForUT[0].Mac,
 			SnatInboundTraffic: false}
 		cmd1 := setEipCmd{Eip: eip1}
 		log.Debugf("TestCreateEip createEip eip1: %+v", eip1)
@@ -32,9 +33,9 @@ var _ = Describe("eip_test", func() {
 		checkEipGroupAddress(eip1, true)
 
 		// eip1, and eip2 share same guestIp
-		ipInPubL3_2, _ := utils.GetFreePubL3Ip()
-		eip2 := eipInfo{VipIp: ipInPubL3_2, PublicMac: utils.PubNicForUT.Mac,
-			GuestIp: "192.168.1.200", PrivateMac: utils.PrivateNicsForUT[0].Mac,
+		ipInPubL3_2, _ := test.GetFreePubL3Ip()
+		eip2 := eipInfo{VipIp: ipInPubL3_2, PublicMac: test.PubNicForUT.Mac,
+			GuestIp: "192.168.1.200", PrivateMac: test.PrivateNicsForUT[0].Mac,
 			SnatInboundTraffic: false}
 		cmd2 := setEipCmd{Eip: eip2}
 		log.Debugf("TestCreateEip createEip eip2: %+v", eip2)
@@ -91,8 +92,8 @@ var _ = Describe("eip_test", func() {
 		checkEipGroupAddress(eip2, false)
 
 		removeNic(nicCmd)
-		utils.ReleasePubL3Ip(ipInPubL3)
-		utils.ReleasePubL3Ip(ipInPubL3_2)
+		test.ReleasePubL3Ip(ipInPubL3)
+		test.ReleasePubL3Ip(ipInPubL3_2)
 	})
 })
 

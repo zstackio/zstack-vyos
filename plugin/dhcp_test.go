@@ -4,12 +4,13 @@ import (
     "fmt"
     . "github.com/onsi/ginkgo"
     "github.com/onsi/gomega"
+    "github.com/zstackio/zstack-vyos/utils/test"
     "io/ioutil"
-    "zvr/utils"
+    "github.com/zstackio/zstack-vyos/utils"
 )
 
 func setTestDhcpEnv()  {
-    utils.InitLog(utils.VYOS_UT_LOG_FOLDER + "dhcp_test.log", false)
+    utils.InitLog(test.VYOS_UT_LOG_FOLDER + "dhcp_test.log", false)
 }
 
 var _ = Describe("dhcp_test", func() {
@@ -41,7 +42,7 @@ var _ = Describe("dhcp_test", func() {
 
     It("test start dhcp", func() {
         nicCmd := &configureNicCmd{}
-        nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+        nicCmd.Nics = append(nicCmd.Nics, test.PubNicForUT)
         configureNic(nicCmd)
 
         cmd := &dhcpServerCmd{}
@@ -49,7 +50,7 @@ var _ = Describe("dhcp_test", func() {
         dhcpServer1 := &dhcpServer{}
         dhcpInfo1 := &dhcpInfo{}
 
-        dhcpServer1.NicMac = utils.PubNicForUT.Mac
+        dhcpServer1.NicMac = test.PubNicForUT.Mac
         //? dhcpServer.Subnet = "255.255.255.0"
         dhcpServer1.Mtu = 1450
         dhcpServer1.Gateway = "178.25.0.1"
@@ -58,7 +59,7 @@ var _ = Describe("dhcp_test", func() {
 
         dhcpInfo1.Ip = "10.0.98.186"
         dhcpInfo1.Dns = []string{"10.0.98.1"}
-        dhcpInfo1.Mac = utils.PubNicForUT.Mac
+        dhcpInfo1.Mac = test.PubNicForUT.Mac
         dhcpInfo1.Netmask = "255.255.255.0"
         dhcpInfo1.Gateway = "10.0.98.1"
         dhcpInfo1.Hostname = "10-0-98-186"
@@ -69,7 +70,7 @@ var _ = Describe("dhcp_test", func() {
 
         cmd.DhcpServers = []dhcpServer{*dhcpServer1}
 
-        nicname, err := utils.GetNicNameByMac(utils.PubNicForUT.Mac)
+        nicname, err := utils.GetNicNameByMac(test.PubNicForUT.Mac)
         utils.PanicOnError(err)
         pidFile, _, _, _ := getDhcpServerPath(nicname)
         stopDhcpServer(pidFile)

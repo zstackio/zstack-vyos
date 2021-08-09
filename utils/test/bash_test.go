@@ -1,26 +1,28 @@
-package utils
+package test
 
 import (
 	"fmt"
 	"io/ioutil"
 	"strings"
 	"testing"
+	
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 func setTestBashTestEnv()  {
-    InitLog(VYOS_UT_LOG_FOLDER + "bash_test.log", false)
+	utils.InitLog(VYOS_UT_LOG_FOLDER + "bash_test.log", false)
 }
 
 func TestBash(t *testing.T) {
     setTestBashTestEnv()
-	b := NewBash()
+	b := utils.NewBash()
 	b.Command = "ls"
 	b.Run()
 
 	ret, so, se, err := b.RunWithReturn()
 	fmt.Printf("%v, %v, %v", ret, so, se)
 
-	b = NewBash()
+	b = utils.NewBash()
 	b.Command = "ls a"
 	err = b.Run()
 	if err == nil {
@@ -33,7 +35,7 @@ func TestBash(t *testing.T) {
 	}
 	fmt.Printf("%v, %v, %v", ret, so, se)
 
-	b = NewBash()
+	b = utils.NewBash()
 	b.Command = "ls {{.File}}"
 	b.Arguments = map[string]string{
 		"File": "b",
@@ -47,7 +49,7 @@ func TestBash(t *testing.T) {
 }
 
 func TestSudo(t *testing.T) {
-	b := NewBash()
+	b := utils.NewBash()
 	f := "/etc/gotest.log"
 	b.Command = "echo hi; echo again; echo hello > {{.File}}"
 	b.Sudo = true
@@ -63,7 +65,7 @@ func TestSudo(t *testing.T) {
 		t.Fatal("unexpected output:", o)
 	}
 
-	b2 := &Bash{Command: "rm -f " + f, Sudo: true}
+	b2 := &utils.Bash{Command: "rm -f " + f, Sudo: true}
 	defer b2.Run()
 
 	buf, err := ioutil.ReadFile(f)
@@ -77,7 +79,7 @@ func TestSudo(t *testing.T) {
 }
 
 func TestSudo1(t *testing.T) {
-	b := Bash{
+	b := utils.Bash{
 		Command: "touch /root/gotest.log; echo hello > /root/gotest.log; rm /root/gotest.log",
 		Sudo: false,
 	}

@@ -1,10 +1,10 @@
 package plugin
 
 import (
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
-	"zvr/server"
-	"zvr/utils"
 )
 
 const (

@@ -9,7 +9,7 @@ import (
     "os/exec"
     "strings"
     "strconv"
-    "zvr/utils"
+    "github.com/zstackio/zstack-vyos/utils"
 )
 
 const (

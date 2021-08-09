@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"io/ioutil"
-	"zvr/utils"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (

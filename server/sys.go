@@ -2,7 +2,7 @@ package server
 
 import (
 	"strings"
-	"zvr/utils"
+	"github.com/zstackio/zstack-vyos/utils"
 	"fmt"
 	"sync"
 	"io/ioutil"

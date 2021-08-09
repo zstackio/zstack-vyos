@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"zvr/server"
-	"zvr/utils"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (

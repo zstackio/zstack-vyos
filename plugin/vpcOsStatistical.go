@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"zvr/utils"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 // the name of metric data label

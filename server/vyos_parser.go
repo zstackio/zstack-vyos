@@ -7,7 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"strconv"
 	"strings"
-	"zvr/utils"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 type VyosParser struct {

@@ -4,12 +4,13 @@ import (
     "fmt"
     . "github.com/onsi/ginkgo"
     "github.com/onsi/gomega"
-    "zvr/server"
-    "zvr/utils"
+    "github.com/zstackio/zstack-vyos/server"
+    "github.com/zstackio/zstack-vyos/utils"
+    "github.com/zstackio/zstack-vyos/utils/test"
 )
 
 func setTestDnsEnv()  {
-    utils.InitLog(utils.VYOS_UT_LOG_FOLDER + "dns_test.log", false)
+    utils.InitLog(test.VYOS_UT_LOG_FOLDER + "dns_test.log", false)
 }
 
 var _ = Describe("dns_test", func() {
@@ -25,13 +26,13 @@ var _ = Describe("dns_test", func() {
     })
 
     It("test set dns", func() {
-        nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+        nicCmd.Nics = append(nicCmd.Nics, test.PubNicForUT)
         configureNic(nicCmd)
         cmd := &setDnsCmd{}
         dns := &dnsInfo{}
 
         dns.DnsAddress = "223.5.5.5"
-        dns.NicMac = utils.PubNicForUT.Mac
+        dns.NicMac = test.PubNicForUT.Mac
 
         cmd.Dns = []dnsInfo{*dns}
 
@@ -39,17 +40,17 @@ var _ = Describe("dns_test", func() {
 
         gomega.Expect(checkDnsProcess()).To(gomega.BeTrue(), "dnsmasq start failed")
 
-        checkFirewall(utils.PubNicForUT, true)
+        checkFirewall(test.PubNicForUT, true)
     })
 
     It("test remove dns", func() {
-        nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+        nicCmd.Nics = append(nicCmd.Nics, test.PubNicForUT)
         configureNic(nicCmd)
         cmd := &setDnsCmd{}
         dns := &dnsInfo{}
 
         dns.DnsAddress = "223.5.5.5"
-        dns.NicMac = utils.PubNicForUT.Mac
+        dns.NicMac = test.PubNicForUT.Mac
 
         cmd.Dns = []dnsInfo{*dns}
         setDns(cmd)
@@ -60,7 +61,7 @@ var _ = Describe("dns_test", func() {
 
         gomega.Expect(checkDnsProcess()).NotTo(gomega.BeTrue(), "dnsmasq start failed")
 
-        checkFirewall(utils.PubNicForUT, false)
+        checkFirewall(test.PubNicForUT, false)
     })
 })
 

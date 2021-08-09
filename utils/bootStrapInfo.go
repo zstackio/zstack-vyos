@@ -13,8 +13,6 @@ const (
 	BOOTSTRAP_INFO_CACHE        = "/home/vyos/zvr/bootstrap-info.json"
 	DEFAULT_SSH_PORT            = 22
 	VYOSHA_DEFAULT_ROUTE_SCRIPT = "/home/vyos/zvr/keepalived/script/defaultroute.sh"
-	
-	BOOTSTRAP_INFO_UT = "/home/vyos/vyos_ut/zstack-vyos/bootstrapinfo"
 )
 
 const (
@@ -30,10 +28,37 @@ const (
 	
 )
 
-var bootstrapInfo map[string]interface{} = make(map[string]interface{})
+type NicInfo struct {
+	Ip                    string `json:"ip"`
+	Netmask               string `json:"netmask"`
+	Gateway               string `json:"gateway"`
+	Mac                   string `json:"Mac"`
+	Category              string `json:"category"`
+	L2Type                string `json:"l2type"`
+	PhysicalInterface     string `json:"physicalInterface"`
+	Vni                   int    `json:"vni"`
+	FirewallDefaultAction string `json:"firewallDefaultAction"`
+	Mtu                   int    `json:"mtu"`
+	Ip6                   string `json:"Ip6"`
+	PrefixLength          int    `json:"PrefixLength"`
+	Gateway6              string `json:"Gateway6"`
+	AddressMode           string `json:"AddressMode"`
+	Name                  string
+	IsDefault             bool
+}
+
+// ByAge implements sort.Interface for []Person based on
+// the Age field.
+type NicArray []NicInfo
+
+func (n NicArray) Len() int           { return len(n) }
+func (n NicArray) Swap(i, j int)      { n[i], n[j] = n[j], n[i] }
+func (n NicArray) Less(i, j int) bool { return n[i].Name < n[j].Name }
+
+var BootstrapInfo map[string]interface{} = make(map[string]interface{})
 
 func GetSshPortFromBootInfo() float64 {
-	port, ok := bootstrapInfo["sshPort"].(float64)
+	port, ok := BootstrapInfo["sshPort"].(float64)
 	if !ok {
 		return DEFAULT_SSH_PORT
 	}
@@ -42,12 +67,12 @@ func GetSshPortFromBootInfo() float64 {
 }
 
 func GetMgmtInfoFromBootInfo() map[string]interface{} {
-	mgmtNic := bootstrapInfo["managementNic"].(map[string]interface{})
+	mgmtNic := BootstrapInfo["managementNic"].(map[string]interface{})
 	return mgmtNic
 }
 
 func IsSkipVyosIptables() bool {
-	SkipVyosIptables, ok := bootstrapInfo["SkipVyosIptables"].(bool)
+	SkipVyosIptables, ok := BootstrapInfo["SkipVyosIptables"].(bool)
 	if !ok {
 		return false
 	}
@@ -56,7 +81,7 @@ func IsSkipVyosIptables() bool {
 }
 
 func IsConfigTcForVipQos() bool {
-	ConfigTcForVipQos, ok := bootstrapInfo["ConfigTcForVipQos"].(bool)
+	ConfigTcForVipQos, ok := BootstrapInfo["ConfigTcForVipQos"].(bool)
 	if !ok {
 		/* for upgraded vpc, there is no ConfigTcForVipQos in bootstrapinfo before it reboot */
 		return true
@@ -72,14 +97,14 @@ func InitBootStrapInfo() {
 		log.Debugf("no content in %s, can not get mgmt gateway", BOOTSTRAP_INFO_CACHE)
 	}
 
-	if err := json.Unmarshal(content, &bootstrapInfo); err != nil {
+	if err := json.Unmarshal(content, &BootstrapInfo); err != nil {
 		log.Debugf("can not parse info from %s, can not get mgmt gateway", BOOTSTRAP_INFO_CACHE)
 	}
 }
 
 func IsHaEnabled() bool {
-	if _, ok := bootstrapInfo["haStatus"]; ok {
-		if !strings.EqualFold(bootstrapInfo["haStatus"].(string), NOHA) {
+	if _, ok := BootstrapInfo["haStatus"]; ok {
+		if !strings.EqualFold(BootstrapInfo["haStatus"].(string), NOHA) {
 			return true
 		}
 	}
@@ -87,9 +112,9 @@ func IsHaEnabled() bool {
 	return false
 }
 
-func GetVirtualRouterUuid() string {
-	if _, ok := bootstrapInfo["uuid"]; ok {
-		return bootstrapInfo["uuid"].(string)
+func GetVirtualRouterUuid()  string {
+	if _, ok := BootstrapInfo["uuid"]; ok {
+		return BootstrapInfo["uuid"].(string)
 	}
 
 	return ""
@@ -97,7 +122,7 @@ func GetVirtualRouterUuid() string {
 
 
 func IsInManagementCidr(vipStr string) bool {
-	mgmtNic := bootstrapInfo["managementNic"].(map[string]interface{})
+	mgmtNic := BootstrapInfo["managementNic"].(map[string]interface{})
 	ipStr, _ := mgmtNic["ip"].(string)
 	netmaskStr, _ := mgmtNic["netmask"].(string)
 
@@ -112,13 +137,13 @@ func IsInManagementCidr(vipStr string) bool {
 
 func GetMnNodeIps() map[string]string {
 	mnNodeIps := make(map[string]string)
-	mnNodeIp := bootstrapInfo["managementNodeIp"]
+	mnNodeIp := BootstrapInfo["managementNodeIp"]
 	if mnNodeIp != nil {
 		mnNodeIpStr := mnNodeIp.(string)
 		mnNodeIps[mnNodeIpStr] = mnNodeIpStr
 	}
 
-	mnPeerNodeIp := bootstrapInfo["managementPeerNodeIp"]
+	mnPeerNodeIp := BootstrapInfo["managementPeerNodeIp"]
 	if mnPeerNodeIp != nil {
 		mnPeerNodeStr := mnPeerNodeIp.(string)
 		mnNodeIps[mnPeerNodeStr] = mnPeerNodeStr
@@ -144,7 +169,7 @@ func WriteDefaultHaScript(defaultNic *Nic) {
 }
 
 func IsSLB() bool {
-	applianceType, found := bootstrapInfo["applianceVmSubType"]
+	applianceType, found := BootstrapInfo["applianceVmSubType"]
 	if !found {
 		return false
 	}
@@ -153,7 +178,7 @@ func IsSLB() bool {
 
 func GetBootStrapNicInfo() map[string]Nic {
     bootstrapNics := make(map[string]Nic)
-    mgmtNic := bootstrapInfo["managementNic"].(map[string]interface{})
+    mgmtNic := BootstrapInfo["managementNic"].(map[string]interface{})
     if mgmtNic != nil {
         name, ok1 := mgmtNic["deviceName"].(string)
         mac, ok2 := mgmtNic["mac"].(string)
@@ -164,7 +189,7 @@ func GetBootStrapNicInfo() map[string]Nic {
         }
     }
 
-    otherNics := bootstrapInfo["additionalNics"].([]interface{})
+    otherNics := BootstrapInfo["additionalNics"].([]interface{})
     if otherNics != nil {
         for _, o := range otherNics {
             onic := o.(map[string]interface{})
@@ -179,4 +204,12 @@ func GetBootStrapNicInfo() map[string]Nic {
     }
 
     return bootstrapNics
+}
+
+func SetHaStatus(status string) {
+	BootstrapInfo["haStatus"] = status
+}
+
+func GetHaStatus() (status string) {
+	return BootstrapInfo["haStatus"].(string)
 }
