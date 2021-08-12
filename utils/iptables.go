@@ -494,7 +494,7 @@ func DestroyNicFirewall(nic string) {
 			deleteIptablesRule(FirewallTable, rule)
 		}
 	}
-	r := fmt.Sprintf("sudo iptables -t %s -D INPUT -j %s", FirewallTable, chainName)
+	r := fmt.Sprintf("sudo iptables -t %s -D %s -i %s -j %s", FirewallTable, Predefined_local_chain, nic, chainName)
 	cmd := Bash{
 		Command: r,
 	}
@@ -515,7 +515,7 @@ func DestroyNicFirewall(nic string) {
 			deleteIptablesRule(FirewallTable, rule)
 		}
 	}
-	r = fmt.Sprintf("sudo iptables -t %s -D FORWARD -j %s", FirewallTable, chainName)
+	r = fmt.Sprintf("sudo iptables -t %s -D %s -i %s -j %s", FirewallTable, Predefined_forward_chain, nic, chainName)
 	cmd = Bash{
 		Command: r,
 	}
@@ -790,6 +790,10 @@ func newChain(tableName, parentChain, chainName, nicName string) error {
 	}
 
 	return nil
+}
+
+func ListRule(tableName, chainName string) ([]string, error) {
+        return listRule(tableName, chainName)
 }
 
 func listRule(tableName, chainName string) ([]string, error) {
