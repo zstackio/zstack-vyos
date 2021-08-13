@@ -19,8 +19,8 @@ var _ = Describe("dnat test", func() {
 	var rule2 dnatInfo
 	var rule3 dnatInfo
 	var setCmd *setDnatCmd
-
-	BeforeEach(func() {
+	
+	It("config nic for snat test", func() {
 		utils.InitLog(test.VYOS_UT_LOG_FOLDER+"dnat_test.log", false)
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		nicCmd = &configureNicCmd{}
@@ -44,11 +44,6 @@ var _ = Describe("dnat test", func() {
 			PrivatePortStart: 22, PrivatePortEnd: 22, ProtocolType: "TCP", VipIp: ipInPubL32,
 			PublicMac: test.PubNicForUT.Mac, PrivateIp: "192.168.1.200", PrivateMac: test.PrivateNicsForUT[0].Mac,
 			AllowedCidr: "1.1.2.0/24", SnatInboundTraffic: false}
-	})
-
-	AfterEach(func() {
-		test.ReleasePubL3Ip(ipInPubL3)
-		test.ReleasePubL3Ip(ipInPubL32)
 	})
 
 	It("setDnat", func() {
@@ -104,6 +99,11 @@ var _ = Describe("dnat test", func() {
 		removeDnat(&rcmd)
 		checkDnatConfigDelete(rule2)
 		checkDnatConfigDelete(rule3)
+	})
+	
+	It("release ip after test", func() {
+		test.ReleasePubL3Ip(ipInPubL3)
+		test.ReleasePubL3Ip(ipInPubL32)
 	})
 })
 

@@ -13,5 +13,7 @@
     "pubL3Uuid_1": "a5cef821f178447097ef66eabd15bc35",
     "pubL3Uuid_2": "af7d1bf279f14e80a3ba4608cd7d0691",
     "privateL3Uuid_1": "2ae9d105a94143bab0ac64ded06c870a",
-    "privateL3Uuid_2": "c48aa34936484a77a95508d920dbfeba"
+    "privateL3Uuid_2": "c48aa34936484a77a95508d920dbfeba",
+    "keepTestVm": false,
+    "testLogFolder": ""
 }

@@ -315,7 +315,7 @@ func stopAllDhcpServers() {
 
 func stopDhcpServer(pidFile string) {
 	b := &utils.Bash{
-		Command: fmt.Sprintf("kill -9 $(cat %s)"),
+		Command: fmt.Sprintf("kill -9 $(cat %s)", pidFile),
 		Sudo:    true,
 	}
 	b.Run()

@@ -17,8 +17,8 @@ var _ = Describe("route test", func() {
 	var nextHopInmgt string
 	var r0, r1, r2, r3, r4, r5, r6, r7, r8 routeInfo
 	var nicCmd *configureNicCmd
-
-	BeforeEach(func() {
+	
+	It("prepare for route set", func() {
 		utils.InitLog(test.VYOS_UT_LOG_FOLDER+"route_test.log", false)
 		utils.InitVyosVersion()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
@@ -47,13 +47,6 @@ var _ = Describe("route test", func() {
 			Sudo:    true,
 		}
 		bash.Run()
-	})
-
-	AfterEach(func() {
-		test.ReleasePubL3Ip(nextHopInPubL3)
-		test.ReleasePubL3Ip(nextHopInPubL32)
-		test.ReleaseMgtIp(nextHopInmgt)
-		utils.SetHaStatus(oldHaStatus)
 	})
 
 	It("route set", func() {
@@ -85,6 +78,13 @@ var _ = Describe("route test", func() {
 		routes1 := []routeInfo{r0}
 		setRoutes(routes1)
 		checkRoutes(routes1, []routeInfo{r1, r2, r3, r4, r5, r6})
+	})
+	
+	It("release after route delte",func() {
+		test.ReleasePubL3Ip(nextHopInPubL3)
+		test.ReleasePubL3Ip(nextHopInPubL32)
+		test.ReleaseMgtIp(nextHopInmgt)
+		utils.SetHaStatus(oldHaStatus)
 	})
 })
 

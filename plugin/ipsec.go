@@ -299,7 +299,7 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 	utils.Assertf(info.AuthMode == "psk", "vyos plugin only supports authMode 'psk', %s is not supported yet", info.AuthMode)
 	tree.Setf("vpn ipsec site-to-site peer %s authentication mode pre-shared-secret", info.PeerAddress)
 	tree.Setf("vpn ipsec site-to-site peer %s authentication pre-shared-secret %s", info.PeerAddress, info.AuthKey)
-	tree.Setf("vpn ipsec site-to-site peer %s authentication id", info.Vip)
+	tree.Setf("vpn ipsec site-to-site peer %s authentication id %s", info.PeerAddress, info.Vip)
 	if info.RemoteId != "" {
 		tree.Setf("vpn ipsec site-to-site peer %s authentication remote-id", info.RemoteId)
 	}
