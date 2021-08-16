@@ -13,7 +13,7 @@ restart_zvr() {
 }
 
 check_version() {
-    ret=$(timeout 3 curl -sb -H "Content-Type: application/json; charset=utf-8" -H "User-Agent: curl" -X POST $uri)
+    ret=$(timeout 30 curl -s -H "Content-Type: application/json; charset=utf-8" -H "User-Agent: curl" -X POST $uri)
     if [[ "$ret" =~ "\"success\":true" ]]; then
         current_version=$(parse_json $ret "zvrVersion")
         if [ x$zvr_version != x$current_version ];then
