@@ -104,18 +104,53 @@ func configureLBFirewallRule(tree *server.VyosConfigTree, dev string) (err error
 	var sourceNic string
 
 	priNics := utils.GetPrivteInterface()
-	for _, priNic := range priNics {
-		if priNic != dev && tree.FindFirewallRuleByDescriptionRegex(priNic, "local", des, utils.StringRegCompareFn) != nil {
-			sourceNic = priNic
-			break
-		}
-	}
-
-	log.Debug(sourceNic)
 
 	if utils.IsSkipVyosIptables() {
+	        find := false
+                for _, priNic := range priNics {
+                        if ruleString, err := utils.ListRule(utils.FirewallTable, priNic + utils.LOCAL.String()) ; err == nil && priNic != dev {
+                                for _, rule := range ruleString{
+                                        if strings.Contains(rule, utils.LbRuleComment) {
+                                                find = true
+                                                sourceNic = priNic
+                                                break
+                                        }
+                                }
+                        }
+                        if find {
+                                break
+                        }
+                }
+
+
+	        ruleString, err := utils.ListRule(utils.FirewallTable, sourceNic+utils.LOCAL.String())
+	        if  err != nil{
+	                log.Debugf("failed to get rule of table %s chain %s, because %v",utils.FirewallTable, sourceNic+utils.LOCAL.String(), err)
+	                return err
+	        }
+	        cmds := make([]string, 0)
+	        for _, r := range ruleString {
+	                if strings.Contains(r, utils.LbRuleComment) {
+	                        r = strings.Replace(r, sourceNic + utils.LOCAL.String(), dev + utils.LOCAL.String(), 1)
+	                        cmds = append(cmds, fmt.Sprintf("iptables %s", r))
+	                }
+	        }
+	        b := utils.Bash{
+	                Command: strings.Join(cmds, "\n"),
+                        Sudo: true,
+	        }
+	        _, _, _, err = b.RunWithReturn()
+	        if err != nil {
+	                return err
+	        }
 		//removeDnsFirewallRules(priNic)
 	} else {
+                for _, priNic := range priNics {
+                        if priNic != dev && tree.FindFirewallRuleByDescriptionRegex(priNic, "local", des, utils.StringRegCompareFn) != nil {
+                                sourceNic = priNic
+                                break
+                        }
+                }
 		if rs := tree.FindFirewallRulesByDescriptionRegex(sourceNic, "local", des, utils.StringRegCompareFn); rs != nil {
 			for _, r := range rs {
 				prefix := r.String()
