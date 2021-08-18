@@ -2,6 +2,7 @@ package plugin
 
 import (
     "fmt"
+    log "github.com/Sirupsen/logrus"
     . "github.com/onsi/ginkgo"
     "github.com/onsi/gomega"
     "github.com/zstackio/zstack-vyos/utils/test"
@@ -114,6 +115,7 @@ var _ = Describe("lb_test", func() {
         ip1 := nicIpInfo{Ip:test.PubNicForUT.Ip, Netmask:test.PubNicForUT.Netmask, OwnerEthernetMac: test.PubNicForUT.Mac}
 
         cmd := &setVipCmd{SyncVip:false, Vips: vips, NicIps: []nicIpInfo{ip1}}
+        log.Debugf("setVip %+v", cmd)
         setVip(cmd)
         checkVipConfig(vips, test.PubNicForUT, utils.NOHA)
 

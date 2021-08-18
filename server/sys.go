@@ -127,11 +127,6 @@ function atexit() {
 
 trap atexit EXIT SIGHUP SIGINT SIGTERM
 
-session_env=$($API getSessionEnv $PPID)
-echo $session_env
-eval $session_env
-$API setupSession
-
 $DISCARD
 %s
 $COMMIT

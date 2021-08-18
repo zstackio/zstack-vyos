@@ -33,9 +33,11 @@ var _ = Describe("vip_test", func() {
 		oldHaStatus := utils.GetHaStatus()
 		utils.SetHaStatus(utils.NOHA)
 		cmd := &setVipCmd{SyncVip: false, Vips: vips, NicIps: []nicIpInfo{ip1}}
+		log.Debugf("setvip %+v", cmd)
 		setVip(cmd)
 		checkVipConfig(vips, test.PubNicForUT, utils.NOHA)
-
+		
+		log.Debugf("setvip %+v", cmd)
 		setVip(cmd)
 		checkVipConfig(vips, test.PubNicForUT, utils.NOHA)
 

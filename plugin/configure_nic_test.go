@@ -112,13 +112,14 @@ var _ = Describe("configure_nic_test", func() {
     })
 
     It("TestCheckNicIsUp", func() {
-        log.Debugf("############### TestCheckNicIsUp ###############")
+        log.Debugf("############### TestCheckNicIsUp for master ###############")
         cmd.Nics = append(cmd.Nics, test.PrivateNicsForUT[0])
         configureNic(cmd)
         err := checkNicIsUp(test.PrivateNicsForUT[0].Name, false)
         gomega.Expect(err).To(gomega.BeNil(), fmt.Sprintf("nic [%s] shoud be up", test.PrivateNicsForUT[0].Name))
 
         removeNic(cmd)
+        log.Debugf("############### TestCheckNicIsUp for backup ###############")
         SetKeepalivedStatusForUt(KeepAlivedStatus_Backup)
         configureNic(cmd)
         err = checkNicIsUp(test.PrivateNicsForUT[0].Name, false)

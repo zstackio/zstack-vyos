@@ -29,13 +29,21 @@ BOOTSTRAPINFO=os.getcwd()+"bootstrapinfo"
    4. reboot remote vm to clean old configure
    5. run go test in remote vm 
 '''
+
+def test_log(log):
+    print("%s: %s" % (time.asctime(time.localtime(time.time())), log))
+
 def exec_command(ssh, command):
-    ret = True
+    ret = False
     stdin, stdout, stderr = ssh.exec_command(command)
+
     for line in stdout:
         print('... ' + line.strip('\n'))
-        if "FAIL" in line:
-            ret = False
+        if "VYOS UT TEST: successfully" in line:
+            ret = True
+
+    for line in stderr:
+        print('*** ' + line.strip('\n'))
 
     return ret
 
@@ -150,9 +158,9 @@ class TestZStackVyos:
                 print("delete vmnic [%s] failed, because %s",
                       self.envIpMaps[self.testEnv.pubL3Uuid_1][nicUuid], e1)
 
-    def createTestVyosVm(self, imageuuid):
+    def createTestVyosVm(self, imageuuid, version):
         cVyos = CreateVmInstanceAction()
-        cVyos.name = self.testEnv.testName
+        cVyos.name = self.testEnv.testName + version
         cVyos.imageUuid = imageuuid
         cVyos.instanceOfferingUuid = self.testEnv.instanceOfferingUuid
         cVyos.l3NetworkUuids = [self.testEnv.mgtL3NetworkUuid, self.testEnv.pubL3Uuid_1, self.testEnv.pubL3Uuid_2,
@@ -256,6 +264,7 @@ class TestZStackVyos:
         return mgtNic
 
     def startVyosTest(self, vyos):
+        test_log("##########preparing test env")
         mgtNic = self.buildVyosBootStrap(vyos)
         vyosVmIp = mgtNic.ip
 
@@ -283,9 +292,9 @@ class TestZStackVyos:
 
         print("installing zstack binary file")
         print("install zvrboot.bin")
-        exec_command(ssh, "bash -x /home/vyos/zvrboot.bin")
+        exec_command(ssh, "sudo bash -x /home/vyos/zvrboot.bin")
         print("install zvr.bin")
-        exec_command(ssh, "bash -x /home/vyos/zvr.bin")
+        exec_command(ssh, "sudo bash -x /home/vyos/zvr.bin")
 
         print("copying zstack-vyos code")
         exec_command(ssh, "rm -rf /home/vyos/vyos_ut/zstack-vyos/; mkdir -p /home/vyos/vyos_ut/zstack-vyos")
@@ -294,15 +303,24 @@ class TestZStackVyos:
         scp.put(os.path.abspath(os.path.dirname(os.getcwd())) + "/zstack-vyos", remote_path='/home/vyos/vyos_ut/', recursive=True)
         print("copy bootstrapinfo")
         scp.put(BOOTSTRAPINFO, '/home/vyos/vyos_ut/zstack-vyos/bootstrapinfo')
-        scp.close()
 
-        print("runing test case")
+        test_log("##########runing test case")
         exec_command(ssh, "mkdir -p /home/vyos/vyos_ut/testLog/; chmod 777 /home/vyos/vyos_ut/testLog/")
-        ret = exec_command(ssh, "export PATH=$PATH:/home/vyos/vyos_ut/go/bin; cd /home/vyos/vyos_ut/zstack-vyos;ginkgo  -v -r --failFast --cover")
-        ssh.close()
+        ret = exec_command(ssh, "bash -x /home/vyos/vyos_ut/zstack-vyos/test/run_test.sh")
 
-        if ret == True and  CREATE_NEW_VYOS:
+        folder = os.getcwd()
+        if self.testEnv.testLogFolder != "":
+            folder = self.testEnv.testLogFolder
+
+        folder = folder + "/" + vyos.name + "/"
+        print("download test log to to %s" % folder)
+        scp.get("/home/vyos/vyos_ut/testLog", folder, recursive=True)
+
+        if ret == True or self.testEnv.keepTestVm == False:
             self.deleteTestVyosVm(vyos.uuid)
+
+        scp.close()
+        ssh.close()
 
         return ret
 
@@ -310,7 +328,7 @@ class TestZStackVyos:
         vyos = None
         if CREATE_NEW_VYOS:
             imageUuid = self.testEnv.vyosImageUuid_1_1_7_5_4_80
-            vyos = self.createTestVyosVm(imageUuid)
+            vyos = self.createTestVyosVm(imageUuid, "1.1.7_5.4.80")
         else:
             vyos = self.queryTestVyosVm(VYOS_VM_UUID)
 
@@ -320,7 +338,7 @@ class TestZStackVyos:
         vyos = None
         if CREATE_NEW_VYOS:
             imageUuid = self.testEnv.vyosImageUuid_1_1_7_3_13
-            vyos = self.createTestVyosVm(imageUuid)
+            vyos = self.createTestVyosVm(imageUuid, "1.1.7_3.13")
         else:
             vyos = self.queryTestVyosVm(VYOS_VM_UUID)
 
@@ -330,7 +348,7 @@ class TestZStackVyos:
         vyos = None
         if CREATE_NEW_VYOS:
             imageUuid = self.testEnv.vyosImageUuid_1_2_0_5_4_80
-            vyos = self.createTestVyosVm(imageUuid)
+            vyos = self.createTestVyosVm(imageUuid, "1.2.0_5.4.80")
         else:
             vyos = self.queryTestVyosVm(VYOS_VM_UUID)
 
