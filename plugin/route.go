@@ -53,6 +53,9 @@ func syncRoutes(ctx *server.CommandContext) interface{} {
 func getCurrentStaticRoutes(tree *server.VyosConfigTree) (routes []routeInfo) {
 	var infos []routeInfo
 	rnode := tree.Get("protocols static route")
+	if rnode == nil {
+	        return infos
+	}
 	for _, r := range rnode.Children() {
 		nhop := r.Get("next-hop")
 		if nhop != nil {
