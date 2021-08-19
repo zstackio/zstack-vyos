@@ -1,0 +1,77 @@
+{
+    "group": "firewall",
+    "infolist": [
+        {
+            "title": "test create/delete a rule",
+            "cmdlist": [
+                {
+                    "path": "/fw/create/rule",
+                    "msgbody": {"ref":{"mac":"PrivateNicsForUT[0].Mac","ruleSetInfo":{"name":"RuleSet-public network-out","actionType":"accept","enableDefaultLog":false,"rules":[{"action":"accept","protocol":"all","sourceIp":"1.3.5.7-1.3.5.100","destIp":"2.4.6.8-2.4.6.100","allowStates":"new,established,invalid,related","ruleNumber":1234,"enableLog":false,"state":"enable","isDefault":false}]},"forward":"out"}}
+                },
+                {
+                    "path": "/fw/delete/rule",
+                    "msgbody": {"ref":{"mac":"PrivateNicsForUT[0].Mac","ruleSetInfo":{"name":"RuleSet-public network-out","actionType":"accept","enableDefaultLog":false,"rules":[{"action":"accept","protocol":"all","sourceIp":"1.3.5.7-1.3.5.100","destIp":"1.3.5.7-1.3.5.100","allowStates":"new,established,invalid,related","ruleNumber":1234,"enableLog":false,"state":"enable","isDefault":false}]},"forward":"out"}}
+                }
+            ]
+        },
+
+        {
+            "title": "test modify a rule multiple times",
+            "cmdlist": [
+                {
+                    "path": "/fw/create/rule",
+                    "msgbody": {"ref":{"mac":"PubNicForUT.Mac","ruleSetInfo":{"name":"RuleSet-public network-out","actionType":"accept","enableDefaultLog":false,"rules":[{"action":"accept","protocol":"all","sourceIp":"30.30.30.1-30.30.30.10","destIp":"40.40.40.1-40.40.40.10","allowStates":"new,established,invalid,related","ruleNumber":1133,"enableLog":false,"state":"enable","isDefault":false}]},"forward":"out"}}
+                },
+                {
+                    "path": "/fw/create/rule",
+                    "msgbody": {"ref":{"mac":"PubNicForUT.Mac","ruleSetInfo":{"name":"RuleSet-public network-out","actionType":"accept","enableDefaultLog":false,"rules":[{"action":"accept","protocol":"all","sourceIp":"10.10.10.0/24,10.20.20.20,30.30.30.1-30.30.30.20","destIp":"40.40.40.1-40.40.40.10","allowStates":"new,established,invalid,related","ruleNumber":1133,"enableLog":false,"state":"enable","isDefault":false}]},"forward":"out"}}
+                },
+                {
+                    "path": "/fw/create/rule",
+                    "msgbody": {"ref":{"mac":"PubNicForUT.Mac","ruleSetInfo":{"name":"RuleSet-public network-out","actionType":"accept","enableDefaultLog":false,"rules":[{"action":"accept","protocol":"all","sourceIp":"30.30.30.1-30.30.30.30","destIp":"40.40.40.1-40.40.40.10,50.50.50.50,60.60.60.0/24","allowStates":"new,established,invalid,related","ruleNumber":1133,"enableLog":false,"state":"enable","isDefault":false}]},"forward":"out"}}
+                },
+                {
+                    "path": "/fw/create/rule",
+                    "msgbody": {"ref":{"mac":"PubNicForUT.Mac","ruleSetInfo":{"name":"RuleSet-public network-out","actionType":"accept","enableDefaultLog":false,"rules":[{"action":"accept","protocol":"all","sourceIp":"10.10.100.0/24,10.20.20.200,30.30.30.10-30.30.30.200","destIp":"40.40.40.10-40.40.40.100,50.50.50.150,60.60.100.0/24","allowStates":"new,established,invalid,related","ruleNumber":1133,"enableLog":false,"state":"enable","isDefault":false}]},"forward":"out"}}
+                },
+                {
+                    "path": "/fw/delete/rule",
+                    "msgbody": {"ref":{"mac":"PubNicForUT.Mac","ruleSetInfo":{"name":"RuleSet-public network-out","actionType":"accept","enableDefaultLog":false,"rules":[{"action":"accept","protocol":"all","sourceIp":"10.10.100.0/24,10.20.20.200,30.30.30.10-30.30.30.200","destIp":"40.40.40.10-40.40.40.100,50.50.50.150,60.60.100.0/24","allowStates":"new,established,invalid,related","ruleNumber":1133,"enableLog":false,"state":"enable","isDefault":false}]},"forward":"out"}}
+                }
+            ]
+        },
+
+        {
+            "title": "test ruleSet bind/unbind firewall",
+            "cmdlist": [
+                {
+                    "path": "/fw/create/rule",
+                    "msgbody": {"ref":{"mac":"PrivateNicsForUT[0].Mac","ruleSetInfo":{"name":"rule_set_test1","enableDefaultLog":false,"rules":[]},"forward":"in"}}
+                },
+                {
+                    "path": "/fw/apply/ruleSet/changes",
+                    "msgbody": {"refs":[{"mac":"PrivateNicsForUT[0].Mac","forward":"in"}],"deleteRules":[],"newRules":[{"action":"accept","protocol":"all","sourceIp":"3.3.3.3,3.3.3.30-3.3.3.100","destIp":"4.4.4.0/24,4.5.5.5-4.5.5.100","allowStates":"new,established,invalid,related","ruleNumber":1145,"enableLog":false,"state":"disable","isDefault":false},{"action":"accept","protocol":"all","sourceIp":"1.1.1.1,1.1.1.10-1.1.1.100","destIp":"2.2.2.2","allowStates":"new,established,invalid,related","ruleNumber":1144,"enableLog":false,"state":"disable","isDefault":false}]}
+                },
+                {
+                    "path":"/fw/apply/ruleSet/changes",
+                    "msgbody": {"refs":[{"mac":"PrivateNicsForUT[0].Mac","forward":"in"}],"deleteRules":[{"action":"accept","protocol":"all","sourceIp":"3.3.3.3,3.3.3.30-3.3.3.100","destIp":"4.4.4.0/24,4.5.5.5-4.5.5.100","allowStates":"new,established,invalid,related","ruleNumber":1145,"enableLog":false,"state":"disable","isDefault":false},{"action":"accept","protocol":"all","sourceIp":"1.1.1.1,1.1.1.10-1.1.1.100","destIp":"2.2.2.2","allowStates":"new,established,invalid,related","ruleNumber":1144,"enableLog":false,"state":"disable","isDefault":false}],"newRules":[{"action":"accept","protocol":"all","sourceIp":"1.1.1.1","destIp":"2.2.2.2","allowStates":"new,established,invalid,related","ruleNumber":1144,"enableLog":false,"state":"enable","isDefault":false},{"action":"accept","protocol":"all","sourceIp":"3.3.3.3","destIp":"4.4.4.4","allowStates":"new,established,invalid,related","ruleNumber":1145,"enableLog":false,"state":"enable","isDefault":false}]}
+                },
+                {
+                    "path": "/fw/delete/rule",
+                    "msgbody": {"ref":{"mac":"PrivateNicsForUT[0].Mac","ruleSetInfo":{"name":"rule_set_test1","enableDefaultLog":false,"rules":[{"action":"accept","protocol":"all","sourceIp":"3.3.3.3","destIp":"4.4.4.4","allowStates":"new,established,invalid,related","ruleNumber":1145,"enableLog":false,"state":"enable","isDefault":false},{"action":"accept","protocol":"all","sourceIp":"3.3.3.4","destIp":"4.4.4.3","allowStates":"new,established,invalid,related","ruleNumber":1145,"enableLog":false,"state":"enable","isDefault":false},{"action":"accept","protocol":"all","sourceIp":"1.1.1.1","destIp":"2.2.2.2","allowStates":"new,established,invalid,related","ruleNumber":1144,"enableLog":false,"state":"disable","isDefault":false}]},"forward":"in"}}
+                }
+            ]
+        },
+
+        {
+            "title": "test reboot vpc and apply rules",
+            "cmdlist": [
+                {
+                    "path": "/fw/apply/rule",
+                    "msgbody": {"refs":[{"mac":"PrivateNicsForUT[0].Mac","ruleSetInfo":{"name":"RuleSet-public network-in","actionType":"reject","enableDefaultLog":false,"rules":[{"action":"accept","protocol":"all","sourceIp":"1.2.3.4,2.3.4.0/24","destIp":"3.4.5.6,4.5.6.0/24","allowStates":"new,established,invalid,related","ruleNumber":1133,"enableLog":false,"state":"enable","isDefault":false}]},"forward":"in"},{"mac":"PrivateNicsForUT[0].Mac","ruleSetInfo":{"name":"RuleSet-public network-local","actionType":"reject","enableDefaultLog":false,"rules":[]},"forward":"local"},{"mac":"PrivateNicsForUT[0].Mac","ruleSetInfo":{"name":"RuleSet-public network-out","actionType":"accept","enableDefaultLog":false,"rules":[{"action":"accept","protocol":"all","sourceIp":"1.1.1.0/24,2.2.2.2","destIp":"1.1.1.0/24,2.2.2.2","allowStates":"new,established,invalid,related","ruleNumber":1122,"enableLog":false,"state":"enable","isDefault":false}]},"forward":"out"}],"success":true}
+                }
+            ]
+        }
+
+    ]
+}

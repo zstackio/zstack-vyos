@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net"
 	"strings"
+	"os"
 )
 
 const (
@@ -25,7 +26,8 @@ const (
 	
 	NIC_TYPE_PRIVATE = "Private"
 	NIC_TYPE_PUBLIC = "Public"
-	
+
+	VYOS_UT_LOG_FOLDER="/home/vyos/vyos_ut/testLog/"
 )
 
 type NicInfo struct {
@@ -76,8 +78,16 @@ func IsSkipVyosIptables() bool {
 	if !ok {
 		return false
 	}
-
+	
 	return SkipVyosIptables
+}
+
+func SetSkipVyosIptablesForUT(enable bool)  {
+	if enable {
+		BootstrapInfo["SkipVyosIptables"] = true
+	} else {
+		BootstrapInfo["SkipVyosIptables"] = false
+	}
 }
 
 func IsConfigTcForVipQos() bool {
@@ -185,6 +195,7 @@ func GetBootStrapNicInfo() map[string]Nic {
         ip, ok3 := mgmtNic["ip"].(string)
         if ok1 && ok2 && ok3 {
             mnic := Nic{Name: name, Mac: mac, Ip: ip}
+			mnic.Catatory, _ = mgmtNic["category"].(string)
             bootstrapNics[mnic.Name] = mnic
         }
     }
@@ -198,6 +209,7 @@ func GetBootStrapNicInfo() map[string]Nic {
             ip, ok3 := onic["ip"].(string)
             if ok1 && ok2 && ok3 {
                 additionalNic := Nic{Name: name, Mac: mac, Ip: ip}
+				additionalNic.Catatory, _ = mgmtNic["category"].(string)
                 bootstrapNics[additionalNic.Name] = additionalNic
             }
         }
@@ -212,4 +224,8 @@ func SetHaStatus(status string) {
 
 func GetHaStatus() (status string) {
 	return BootstrapInfo["haStatus"].(string)
+}
+
+func IsRuingUT() bool  {
+	return strings.Contains(os.Args[0], "/home/vyos/vyos_ut/zstack-vyos/")
 }

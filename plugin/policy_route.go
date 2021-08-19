@@ -2,10 +2,9 @@ package plugin
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
+	"strings"
 )
 
 const (
@@ -184,78 +183,106 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd) {
 		}
 	}
 
-	var chains []utils.IptablesChain
-	var rules []utils.IptablesRule
+	var rules []*utils.IpTableRule
+	mangleTable := utils.NewIpTables(utils.MangleTable)
+	mangleTable.RemoveIpTableRuleByComments(utils.PolicyRouteComment)
+	// delete residual iptables rules when upgrade
+	mangleTable.RemoveIpTableRuleByComments("Zs-Pr-Rules")
 
 	if len(cmd.RuleSets) > 0 && cmd.MarkConntrack {
-		rules = append(rules, utils.NewMangleIptablesRule(utils.MANGLE_PREROUTING.String(), "", "", "", 0, 0,
-			0, 0, utils.IPTABLES_MARK_UNSET, nil, utils.CONNMARK_RESTORE, utils.PolicyRouteComment, "", ""))
-		rules = append(rules, utils.NewMangleIptablesRule(utils.MANGLE_PREROUTING.String(), "", "", "", 0, 0,
-			0, 0, utils.IPTABLES_MARK_NOT_MATCH, nil, utils.ACCEPT, utils.PolicyRouteComment, "", ""))
+		rule := utils.NewIpTableRule(utils.PREROUTING.String())
+		rule.SetAction(utils.IPTABLES_ACTION_CONNMARK_RESTORE).SetComment(utils.PolicyRouteComment)
+		rule.SetMarkType(utils.IptablesMarkUnset)
+		rules = append(rules, rule)
+		
+		rule = utils.NewIpTableRule(utils.PREROUTING.String())
+		rule.SetAction(utils.IPTABLES_ACTION_ACCEPT).SetComment(utils.PolicyRouteComment)
+		rule.SetMarkType(utils.IptablesMarkNotMatch)
+		rules = append(rules, rule)
 	}
 
 	for _, table := range cmd.TableNumbers {
 		chainName := getPolicyRouteTableChainName(table)
-		chains = append(chains, utils.NewIpTablesChain(chainName))
-		rules = append(rules, utils.NewMangleIptablesRule(chainName, "", "", "", 0, 0,
-			0, table, utils.IPTABLES_MARK_MATCH, nil, utils.MARK, utils.PolicyRouteComment, "", ""))
+		mangleTable.AddChain(chainName)
+		
+		rule := utils.NewIpTableRule(chainName)
+		rule.SetAction(utils.IPTABLES_ACTION_MARK).SetTargetMark(table)
+		rule.SetComment(utils.PolicyRouteComment).SetMarkType(utils.IptablesMarkMatch).SetMark(0)
+		rules = append(rules, rule)
+		
 		if cmd.MarkConntrack {
-			rules = append(rules, utils.NewMangleIptablesRule(chainName, "", "", "", 0, 0,
-				0, table, utils.IPTABLES_MARK_UNSET, nil, utils.CONNMARK, utils.PolicyRouteComment, "", ""))
+			rule := utils.NewIpTableRule(chainName)
+			rule.SetAction(utils.IPTABLES_ACTION_CONNMARK).SetTargetMark(table)
+			rule.SetComment(utils.PolicyRouteComment)
+			rules = append(rules, rule)
 		}
 	}
 
 	systemRuleSetMap := map[string]bool{}
 	for _, rset := range cmd.RuleSets {
 		systemRuleSetMap[rset.RuleSetName] = rset.System
-		chains = append(chains, utils.NewIpTablesChain(getPolicyRouteSetChainName(rset.RuleSetName)))
+		chainName := getPolicyRouteSetChainName(rset.RuleSetName)
+		mangleTable.AddChain(chainName)
 	}
 
 	for _, ref := range cmd.Refs {
-		nicname, err := utils.GetNicNameByMac(ref.Mac)
-		utils.PanicOnError(err)
+		nicname, err := utils.GetNicNameByMac(ref.Mac);utils.PanicOnError(err)
 		chainName := getPolicyRouteSetChainName(ref.RuleSetName)
-		rules = append(rules, utils.NewMangleIptablesRule(utils.MANGLE_PREROUTING.String(), "", "", "", 0, 0,
-			0, 0, utils.IPTABLES_MARK_UNSET, nil, chainName, utils.PolicyRouteComment, nicname, ""))
+		rule := utils.NewIpTableRule(utils.PREROUTING.String())
+		rule.SetAction(chainName).SetComment(utils.PolicyRouteComment)
+		rule.SetMarkType(utils.IptablesMarkUnset).SetMark(0).SetInNic(nicname)
+		rules = append(rules, rule)
+		
 		if systemRuleSetMap[ref.RuleSetName] {
 			items := strings.Split(ref.RuleSetName, "-")
 			routeTableChainName := getPolicyRouteTableChainNameByString(items[len(items)-1])
-			rules = append(rules, utils.NewMangleIptablesRule(chainName, "", "", "", 0, 0,
-				0, 0, utils.IPTABLES_MARK_UNSET, nil, routeTableChainName, utils.PolicyRouteComment, "", ""))
+			rule := utils.NewIpTableRule(chainName)
+			rule.SetAction(routeTableChainName).SetComment(utils.PolicyRouteComment)
+			rule.SetMarkType(utils.IptablesMarkUnset).SetMark(0)
+			rules = append(rules, rule)
 		}
 	}
 
-	for _, rule := range cmd.Rules {
-		if rule.State == "disable" {
+	for _, r := range cmd.Rules {
+		if r.State == "disable" {
 			continue
 		}
 
-		if systemRuleSetMap[rule.RuleSetName] {
-			ipRules = append(ipRules, utils.ZStackIpRule{From: rule.SourceIp, TableId: uint64(rule.TableNumber)})
+		if systemRuleSetMap[r.RuleSetName] {
+			ipRules = append(ipRules, utils.ZStackIpRule{From: r.SourceIp, TableId: uint64(r.TableNumber)})
 			continue
 		}
 
-		chainName := getPolicyRouteSetChainName(rule.RuleSetName)
-		sourcePort := 0
-		destPort := 0
-		if rule.SourcePort != "" {
-			sourcePort, _ = strconv.Atoi(rule.SourcePort)
+		chainName := getPolicyRouteSetChainName(r.RuleSetName)
+		rule := utils.NewIpTableRule(chainName)
+		rule.SetAction(getPolicyRouteTableChainName(r.TableNumber)).SetComment(utils.PolicyRouteComment)
+		rule.SetProto(r.Protocol).SetSrcPort(r.SourcePort).SetDstPort(r.DestPort)
+		if r.SourceIp != "" {
+			if strings.Contains(r.SourceIp, "/") {
+				rule.SetSrcIp(r.SourceIp)
+			} else {
+				rule.SetSrcIp(r.SourceIp+"/32")
+			}
+			
 		}
-		if rule.DestPort != "" {
-			destPort, _ = strconv.Atoi(rule.DestPort)
+		if r.DestIp != "" {
+			if strings.Contains(r.DestIp, "/") {
+				rule.SetDstIp(r.DestIp)
+			} else {
+				rule.SetDstIp(r.DestIp+"/32")
+			}
 		}
-		rules = append(rules, utils.NewMangleIptablesRule(chainName, rule.Protocol, rule.SourceIp, rule.DestIp, sourcePort, destPort,
-			0, 0, utils.IPTABLES_MARK_UNSET, nil, getPolicyRouteTableChainName(rule.TableNumber), utils.PolicyRouteComment, "", ""))
+		rule.SetMarkType(utils.IptablesMarkUnset).SetMark(0)
+		rules = append(rules, rule)
 	}
-	err := utils.SyncZStackRouteTables(rts)
-	utils.PanicOnError(err)
-	err = utils.SyncZStackIpRules(currRules, ipRules)
-	utils.PanicOnError(err)
+	
+	err := utils.SyncZStackRouteTables(rts);utils.PanicOnError(err)
+	err = utils.SyncZStackIpRules(currRules, ipRules); utils.PanicOnError(err)
 	if err = utils.SyncRouteEntries(currTables, entriesMap); err != nil && IsMaster() {
 		utils.PanicOnError(err)
 	}
-	err = utils.SyncMangleTables(chains, rules, utils.PolicyRouteComment)
-	utils.PanicOnError(err)
+	mangleTable.AddIpTableRules(rules)
+	err = mangleTable.Apply(); utils.PanicOnError(err)
 }
 
 func PolicyRouteEntryPoint() {

@@ -250,35 +250,6 @@ func getFlowCounter(ctx *server.CommandContext) interface{} {
         return getFlowCounterRsp{Counters:counters}
 }
 
-func makeEnv() interface{} {
-        rules := `-A PREROUTING -j VYATTA_CT_IGNORE
--A PREROUTING -j VYATTA_CT_TIMEOUT
--A PREROUTING -j VYATTA_CT_PREROUTING_HOOK
--A OUTPUT -j VYATTA_CT_IGNORE
--A OUTPUT -j VYATTA_CT_TIMEOUT
--A OUTPUT -j VYATTA_CT_OUTPUT_HOOK
--A VYATTA_CT_HELPER -j RETURN
--A VYATTA_CT_IGNORE -j RETURN
--A VYATTA_CT_OUTPUT_HOOK -j RETURN
--A VYATTA_CT_PREROUTING_HOOK -j RETURN
--A VYATTA_CT_TIMEOUT -j RETURN`
-
-        bash := utils.Bash {
-                Command: "sudo iptables -t raw -C  PREROUTING -j VYATTA_CT_PREROUTING_HOOK",
-        }
-        ret, o, _, _ := bash.RunWithReturn()
-        log.Debugf(fmt.Sprintf("iptables raw output: %v ", o))
-        if ret != 0 {
-                ruleset := strings.Split(rules, "\n")
-                err := utils.AppendIptalbesRuleSet(ruleset,"raw"); utils.PanicOnError(err)
-        }
-        return nil
-}
-
-func init() {
-        makeEnv()
-}
-
 func FlowMeterEntryPoint()  {
         server.RegisterAsyncCommandHandler(FLOW_METER_REFRESH, server.VyosLock(refreshFlowMeter))
         server.RegisterAsyncCommandHandler(FLOW_METER_GET_COUNTER, server.VyosLock(getFlowCounter))

@@ -1,10 +1,9 @@
-package test
+package utils
 
 import (
     "encoding/json"
     "fmt"
     log "github.com/Sirupsen/logrus"
-    "github.com/zstackio/zstack-vyos/utils"
     "io/ioutil"
     "sort"
     "strconv"
@@ -14,20 +13,23 @@ import (
 )
 
 const (
-    VYOS_UT_LOG_FOLDER="/home/vyos/vyos_ut/testLog/"
     BOOTSTRAP_INFO_UT = "/home/vyos/vyos_ut/zstack-vyos/bootstrapinfo"
 )
 
-var MgtNicForUT utils.NicInfo
-var PubNicForUT utils.NicInfo
-var PrivateNicsForUT []utils.NicInfo
-var AdditionalPubNicsForUT []utils.NicInfo
+var MgtNicForUT NicInfo
+var PubNicForUT NicInfo
+var PrivateNicsForUT []NicInfo
+var AdditionalPubNicsForUT []NicInfo
 var reservedIpForMgt []string
 var reservedIpForPubL3 []string
 var freeIpsForMgt []string
 var freeIpsForPubL3 []string
 
 func init() {
+    if !IsRuingUT() {
+        return
+    }
+    
     InitBootStrapInfoForUT()
     ParseBootStrapNicInfo()
     rand.Seed(time.Now().UnixNano())
@@ -47,15 +49,15 @@ func InitBootStrapInfoForUT() {
         return
     }
     if len(content) == 0 {
-        log.Debugf("no content in %s, can not get mgmt gateway", utils.BOOTSTRAP_INFO_CACHE)
+        log.Debugf("no content in %s, can not get mgmt gateway", BOOTSTRAP_INFO_CACHE)
     }
     
-    if err := json.Unmarshal(content, &utils.BootstrapInfo); err != nil {
-        log.Debugf("can not parse info from %s, can not get mgmt gateway", utils.BOOTSTRAP_INFO_CACHE)
+    if err := json.Unmarshal(content, &BootstrapInfo); err != nil {
+        log.Debugf("can not parse info from %s, can not get mgmt gateway", BOOTSTRAP_INFO_CACHE)
     }
 }
 
-func getNic(m map[string]interface{}, tempNic *utils.NicInfo) error  {
+func getNic(m map[string]interface{}, tempNic *NicInfo) error  {
     name, ok := m["deviceName"].(string)
     if !ok {
         return fmt.Errorf("there is no nic name for %+v", m)
@@ -75,14 +77,14 @@ func getNic(m map[string]interface{}, tempNic *utils.NicInfo) error  {
         tempNic.Ip = ip
     }
     
-    netmask, _ := m["netmask"].(string)
+    netmask, ok := m["netmask"].(string)
     if !ok {
         tempNic.Netmask = ""
     } else {
         tempNic.Netmask = netmask
     }
     
-    gateway, _ := m["gateway"].(string)
+    gateway, ok := m["gateway"].(string)
     if !ok {
         tempNic.Gateway = ""
     } else {
@@ -96,14 +98,14 @@ func getNic(m map[string]interface{}, tempNic *utils.NicInfo) error  {
         tempNic.Ip6 = ip6
     }
     
-    prefixLength, _ := m["prefixLength"].(float64)
+    prefixLength, ok := m["prefixLength"].(float64)
     if !ok {
         tempNic.PrefixLength = 0
     } else {
         tempNic.PrefixLength = int(prefixLength)
     }
     
-    gateway6, _ := m["gateway6"].(string)
+    gateway6, ok := m["gateway6"].(string)
     if !ok {
         tempNic.Gateway6 = ""
     } else {
@@ -117,41 +119,41 @@ func getNic(m map[string]interface{}, tempNic *utils.NicInfo) error  {
         tempNic.IsDefault = isDefault
     }
     
-    category, _ := m["category"].(string)
+    category, ok := m["category"].(string)
     if !ok {
         return fmt.Errorf("there is no nic category for %+v", m)
     }
     tempNic.Category = category
     
-    l2Type, _ := m["L2Type"].(string)
+    l2Type, ok := m["l2type"].(string)
     if !ok {
         tempNic.L2Type = ""
     } else {
         tempNic.L2Type = l2Type
     }
     
-    physicalInterface, _ := m["physicalInterface"].(string)
+    physicalInterface, ok := m["physicalInterface"].(string)
     if !ok {
         tempNic.PhysicalInterface = ""
     } else {
         tempNic.PhysicalInterface = physicalInterface
     }
     
-    vni, _ := m["vni"].(int)
+    vni, ok := m["vni"].(int)
     if !ok {
         tempNic.Vni = 0
     } else {
         tempNic.Vni = vni
     }
     
-    mtu, _ := m["mtu"].(int)
+    mtu, ok := m["mtu"].(int)
     if !ok {
         tempNic.Mtu = 1450
     } else {
         tempNic.Mtu = mtu
     }
     
-    addressMode, _ := m["addressMode"].(string)
+    addressMode, ok := m["addressMode"].(string)
     if !ok {
         tempNic.AddressMode = "Stateful-DHCP"
     } else {
@@ -164,18 +166,18 @@ func getNic(m map[string]interface{}, tempNic *utils.NicInfo) error  {
 }
 
 func ParseBootStrapNicInfo() {
-    nicString := utils.BootstrapInfo["managementNic"].(map[string]interface{})
+    nicString := BootstrapInfo["managementNic"].(map[string]interface{})
     if nicString != nil {
         if err := getNic(nicString, &MgtNicForUT); err != nil {
             return
         }
     }
     
-    otherNics := utils.BootstrapInfo["additionalNics"].([]interface{})
+    otherNics := BootstrapInfo["additionalNics"].([]interface{})
     if otherNics != nil {
         for _, o := range otherNics {
             onic := o.(map[string]interface{})
-            var additionalNic utils.NicInfo
+            var additionalNic NicInfo
             if err := getNic(onic, &additionalNic); err != nil {
                 return
             }
@@ -185,7 +187,7 @@ func ParseBootStrapNicInfo() {
                 continue
             }
             
-            if additionalNic.Category == utils.NIC_TYPE_PRIVATE {
+            if additionalNic.Category == NIC_TYPE_PRIVATE {
                 PrivateNicsForUT = append(PrivateNicsForUT, additionalNic)
             } else {
                 AdditionalPubNicsForUT = append(AdditionalPubNicsForUT, additionalNic)
@@ -193,15 +195,15 @@ func ParseBootStrapNicInfo() {
         }
     }
     
-    sort.Sort(utils.NicArray(PrivateNicsForUT))
-    sort.Sort(utils.NicArray(AdditionalPubNicsForUT))
+    sort.Sort(NicArray(PrivateNicsForUT))
+    sort.Sort(NicArray(AdditionalPubNicsForUT))
     
-    ips := utils.BootstrapInfo["reservedIpForMgt"].([]interface{})
+    ips := BootstrapInfo["reservedIpForMgt"].([]interface{})
     for _, ip := range ips {
         reservedIpForMgt = append(reservedIpForMgt, ip.(string))
     }
     
-    ips = utils.BootstrapInfo["reservedIpForPubL3"].([]interface{})
+    ips = BootstrapInfo["reservedIpForPubL3"].([]interface{})
     for _, ip := range ips {
         reservedIpForPubL3 = append(reservedIpForPubL3, ip.(string))
     }
@@ -210,11 +212,11 @@ func ParseBootStrapNicInfo() {
 
 func GetRandomIpForSubnet(sourceIp string) string {
     sips := strings.Split(sourceIp, ".")
-    num, _ := strconv.Atoi(sips[0])
+    num, _ := strconv.Atoi(sips[3])
     /* normal case, gateway will be the first or last ip address */
     lastIp := rand.Int() & 0x3F + 10
     if lastIp == num  {
-        lastIp = rand.Int() & 0xFF
+        lastIp = rand.Int() & 0xFF + 10
     }
     
     sips[3] = fmt.Sprintf("%d", lastIp)
@@ -282,5 +284,5 @@ func ReleasePubL3Ip(ip string)  {
 }
 
 func GetMgtGateway() string {
-    return utils.BootstrapInfo["mgtGateway"].(string)
+    return BootstrapInfo["mgtGateway"].(string)
 }

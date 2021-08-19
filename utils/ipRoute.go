@@ -97,12 +97,30 @@ type ZStackRouteEntry struct {
 	Distance        int
 }
 
-func (e ZStackRouteEntry) isEqual(b ZStackRouteEntry) bool {
-	if e.NicName != "" {
-		return e.TableId == b.TableId && e.DestinationCidr == b.DestinationCidr && e.NicName == b.NicName && e.Distance == b.Distance
-	} else {
-		return e.TableId == b.TableId && e.DestinationCidr == b.DestinationCidr && e.NextHopIp == b.NextHopIp && e.Distance == b.Distance
+func (e ZStackRouteEntry) Equal(b ZStackRouteEntry) error {
+	if e.TableId != b.TableId {
+		return fmt.Errorf("tableId is different, %d:%d", e.TableId, b.TableId)
 	}
+	
+	if e.DestinationCidr != b.DestinationCidr {
+		return fmt.Errorf("destinationCidr is different, %s:%s", e.DestinationCidr, b.DestinationCidr)
+	}
+	
+	if e.Distance != b.Distance {
+		return fmt.Errorf("distance is different, %d:%d", e.Distance, b.Distance)
+	}
+	
+	if e.NicName != "" {
+		if e.NicName != b.NicName {
+			return fmt.Errorf("nicName is different, %s:%s", e.NicName, b.NicName)
+		}
+	} else {
+		if e.NextHopIp != b.NextHopIp {
+			return fmt.Errorf("nextHopIp is different, %s:%s", e.NextHopIp, b.NextHopIp)
+		}
+	}
+	
+	return nil
 }
 
 func (e ZStackRouteEntry) addCommand() string {
@@ -142,7 +160,7 @@ func (e ZStackRouteEntry) deleteCommand() string {
 
 }
 
-func getCurrentRouteEntries(tableId int) []ZStackRouteEntry {
+func GetCurrentRouteEntries(tableId int) []ZStackRouteEntry {
 	var entries []ZStackRouteEntry
 	bash := Bash{
 		Command: fmt.Sprintf("ip route show table %d", tableId),
@@ -158,6 +176,7 @@ func getCurrentRouteEntries(tableId int) []ZStackRouteEntry {
 
 			items := strings.Fields(line)
 			distance := 0
+			nicName := ""
 			for i, item := range items {
 				if item == "metric" {
 					distance, _ = strconv.Atoi(items[i+1])
@@ -173,10 +192,14 @@ func getCurrentRouteEntries(tableId int) []ZStackRouteEntry {
 				}
 				entries = append(entries, e)
 			} else if items[1] == "via" {
+				if items[3] == "dev" {
+					nicName = items[4]
+				}
 				e := ZStackRouteEntry{
 					TableId:         tableId,
 					DestinationCidr: items[0],
 					NextHopIp:       items[2],
+					NicName:         nicName,
 					Distance:        distance,
 				}
 				entries = append(entries, e)
@@ -205,12 +228,12 @@ func SyncRouteEntries(currTables []ZStackRouteTable, entryMap map[int][]ZStackRo
 	}
 
 	for tableId, entries := range entryMap {
-		currEntries := getCurrentRouteEntries(tableId)
+		currEntries := GetCurrentRouteEntries(tableId)
 		/* delete old entries that is not needed */
 		for _, oe := range currEntries {
 			exist := false
 			for _, ne := range entries {
-				if oe.isEqual(ne) {
+				if oe.Equal(ne) == nil {
 					exist = true
 					break
 				}
@@ -225,7 +248,7 @@ func SyncRouteEntries(currTables []ZStackRouteTable, entryMap map[int][]ZStackRo
 		for _, ne := range entries {
 			exist := false
 			for _, oe := range currEntries {
-				if oe.isEqual(ne) {
+				if oe.Equal(ne) == nil {
 					exist = true
 					break
 				}

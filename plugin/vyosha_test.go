@@ -1,66 +1,68 @@
 package plugin
 
 import (
-	"fmt"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
-	"github.com/zstackio/zstack-vyos/utils/test"
-	
-	log "github.com/Sirupsen/logrus"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+    "fmt"
+    "github.com/zstackio/zstack-vyos/server"
+    "github.com/zstackio/zstack-vyos/utils"
+    
+    log "github.com/Sirupsen/logrus"
+    . "github.com/onsi/ginkgo"
+    . "github.com/onsi/gomega"
 )
 
-var _ = Describe("vyosHa test", func() {
+var _ = Describe("vyosHa_test", func() {
 	var peerIp string
 	var vipIp string
 	var vipIp1 string
 	var vip macVipPair
 	var cmd *setVyosHaCmd
 	var nicCmd *configureNicCmd
-
-	BeforeEach(func() {
-		utils.InitLog(test.VYOS_UT_LOG_FOLDER+"vyosha_test.log", false)
-		peerIp, _ = test.GetFreeMgtIp()
-		vipIp, _ = test.GetFreeMgtIp()
-		vipIp1, _ = test.GetFreeMgtIp()
+	
+	It("vyosHa test preparing", func() {
+		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"vyosha_test.log", false)
+		peerIp, _ = utils.GetFreeMgtIp()
+		vipIp, _ = utils.GetFreeMgtIp()
+		vipIp1, _ = utils.GetFreeMgtIp()
 		log.Debugf("vyosHa BeforeEach test peerIp: %s, vip: %s, vip1: %s", peerIp, vipIp, vipIp1)
 
-		vip = macVipPair{NicMac: test.MgtNicForUT.Mac, NicVip: vipIp, Netmask: test.MgtNicForUT.Netmask}
-		cmd = &setVyosHaCmd{Keepalive: 1, HeartbeatNic: test.MgtNicForUT.Mac, LocalIp: test.MgtNicForUT.Ip,
+		vip = macVipPair{NicMac: utils.MgtNicForUT.Mac, NicVip: vipIp, Netmask: utils.MgtNicForUT.Netmask}
+		cmd = &setVyosHaCmd{Keepalive: 1, HeartbeatNic: utils.MgtNicForUT.Mac, LocalIp: utils.MgtNicForUT.Ip,
 			PeerIp: "", Monitors: []string{"1.1.1.1", "1.1.1.2"}, Vips: []macVipPair{vip},
 			CallbackUrl: "http://127.0.0.1:7272/callback"}
 
 		nicCmd = &configureNicCmd{}
-		nicCmd.Nics = append(nicCmd.Nics, test.MgtNicForUT)
+		nicCmd.Nics = append(nicCmd.Nics, utils.MgtNicForUT)
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		configureNic(nicCmd)
 	})
-
-	AfterEach(func() {
-		log.Debugf("vyosHa AfterEach")
-		test.ReleaseMgtIp(peerIp)
-		test.ReleaseMgtIp(vipIp)
-		test.ReleaseMgtIp(vipIp1)
+	
+	It("enable vyos", func() {
+		log.Debugf("vyosHa it enable vyos")
+		setVyosHa(cmd)
+		err := checkVyosConfig(cmd)
+		Expect(err).To(BeNil(), "vyosHa check failed %+s", err)
 	})
-
-	log.Debugf("vyosHa test Context 1")
-	Context("vyosHa test Context 1", func() {
-		log.Debugf("vyosHa Context")
-		It("enable vyos", func() {
-			log.Debugf("vyosHa it enable vyos")
-			setVyosHa(cmd)
-			err := checkVyosConfig(cmd)
-			Expect(err).To(BeNil(), "vyosHa check failed %+s", err)
-		})
-
-		It("change vyosHa peer address", func() {
-			log.Debugf("vyosHa it change vyos peer address")
-			cmd.PeerIp = vipIp1
-			setVyosHa(cmd)
-			err := checkVyosConfig(cmd)
-			Expect(err).To(BeNil(), "vyosHa check failed %+s", err)
-		})
+	
+	It("change vyosHa peer address", func() {
+		log.Debugf("vyosHa it change vyos peer address")
+		cmd.PeerIp = vipIp1
+		setVyosHa(cmd)
+		err := checkVyosConfig(cmd)
+		Expect(err).To(BeNil(), "vyosHa check failed %+s", err)
+	})
+	
+	It("vyosHa test destroying", func() {
+		utils.ReleaseMgtIp(peerIp)
+		utils.ReleaseMgtIp(vipIp)
+		utils.ReleaseMgtIp(vipIp1)
+		tree := server.NewParserFromShowConfiguration().Tree
+		tree.DetachFirewallFromInterface(utils.MgtNicForUT.Name, "in")
+		tree.DetachFirewallFromInterface(utils.MgtNicForUT.Name, "local")
+		tree.Apply(false)
+		tree = server.NewParserFromShowConfiguration().Tree
+		tree.Deletef("firewall name %s.in", utils.MgtNicForUT.Name)
+		tree.Deletef("firewall name %s.local", utils.MgtNicForUT.Name)
+		tree.Apply(false)
 	})
 })
 

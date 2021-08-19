@@ -431,6 +431,10 @@ func (t *VyosConfigTree) AttachFirewallToInterface(ethname, direction string) {
 	t.Setf("interfaces ethernet %v firewall %s name %v.%v", ethname, direction, ethname, direction)
 }
 
+func (t *VyosConfigTree) DetachFirewallFromInterface(ethname, direction string) {
+	t.Deletef("interfaces ethernet %v firewall %s name %v.%v", ethname, direction, ethname, direction)
+}
+
 func (t *VyosConfigTree) FindFirewallRuleByDescription(ethname, direction, des string) *VyosConfigNode {
 	return t.FindFirewallRuleByDescriptionRegex(ethname, direction, des, utils.StringCompareFn)
 }

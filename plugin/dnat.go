@@ -45,39 +45,66 @@ type syncDnatCmd struct {
 var pfMap map[string]dnatInfo
 
 func syncPortForwardingRules() error {
-	dnatRules := []utils.IptablesRule{}
-	filterRules := make(map[string][]utils.IptablesRule)
+	table := utils.NewIpTables(utils.FirewallTable)
+	natTable := utils.NewIpTables(utils.NatTable)
+	
+	var filterRules []*utils.IpTableRule
+	var dnatRules []*utils.IpTableRule
 
+	table.RemoveIpTableRuleByComments(utils.PortFordingRuleComment)
+	natTable.RemoveIpTableRuleByComments(utils.PortFordingRuleComment)
+	
 	for _, r := range pfMap {
 		pubNicName, err := utils.GetNicNameByMac(r.PublicMac); utils.PanicOnError(err)
-		/* from ZStack side, port range is not supported */
-		protocol := utils.TCP
-		if r.ProtocolType != "TCP" {
-			protocol = utils.UDP
+		
+		protocol := utils.IPTABLES_PROTO_TCP
+		if strings.ToLower(r.ProtocolType) != utils.IPTABLES_PROTO_TCP {
+			protocol = utils.IPTABLES_PROTO_UDP
 		}
+		var portRange string
+		var natPortRange string
+		if r.VipPortEnd != r.VipPortStart {
+			portRange = fmt.Sprintf("%d:%d", r.PrivatePortStart, r.PrivatePortEnd)
+			natPortRange = fmt.Sprintf("%d:%d", r.VipPortStart, r.VipPortEnd)
+		} else {
+			portRange = fmt.Sprintf("%d", r.PrivatePortStart)
+			natPortRange = fmt.Sprintf("%d", r.VipPortStart)
+		}
+
 		if r.AllowedCidr != "" && r.AllowedCidr != "0.0.0.0/0" {
-			ruleSpec := utils.NewIptablesRule(protocol, fmt.Sprintf("!%s", r.AllowedCidr), r.PrivateIp + "/32", 0, r.VipPortStart,
-				[]string{utils.NEW}, utils.REJECT, fmt.Sprintf("%s%s-%d", utils.PortFordingRuleComment, r.VipIp, r.VipPortStart))
-			filterRules[pubNicName] = append(filterRules[pubNicName], ruleSpec)
+			rule := utils.NewIpTableRule(utils.GetRuleSetName(pubNicName, utils.RULESET_IN))
+			rule.SetAction(utils.IPTABLES_ACTION_REJECT).SetRejectType(utils.REJECT_TYPE_ICMP_UNREACHABLE)
+			rule.SetComment(utils.PortFordingRuleComment)
+			rule.SetSrcIp(fmt.Sprintf("! %s", r.AllowedCidr)).SetDstIp(fmt.Sprintf("%s/32", r.PrivateIp))
+			rule.SetProto(protocol).SetDstPort(portRange).SetState([]string{utils.IPTABLES_STATE_NEW})
+			filterRules = append(filterRules, rule)
 		}
-
-		ruleSpec := utils.NewIptablesRule(protocol, "", r.PrivateIp + "/32", 0, r.VipPortStart,
-			[]string{utils.NEW}, utils.RETURN, fmt.Sprintf("%s%s-%d", utils.PortFordingRuleComment, r.VipIp, r.VipPortStart))
-		filterRules[pubNicName] = append(filterRules[pubNicName], ruleSpec)
-
-		ruleSpec = utils.NewNatIptablesRule(protocol, "" , r.VipIp + "/32", 0, r.VipPortStart,
-			nil, utils.DNAT, fmt.Sprintf("%s%s-%d", utils.PortFordingRuleComment, r.VipIp, r.VipPortStart), r.PrivateIp, r.PrivatePortStart)
-		dnatRules = append(dnatRules, ruleSpec)
+		rule := utils.NewIpTableRule(utils.GetRuleSetName(pubNicName, utils.RULESET_IN))
+		rule.SetAction(utils.IPTABLES_ACTION_RETURN)
+		rule.SetComment(utils.PortFordingRuleComment)
+		rule.SetDstIp(fmt.Sprintf("%s/32", r.PrivateIp))
+		rule.SetProto(protocol).SetDstPort(portRange).SetState([]string{utils.IPTABLES_STATE_NEW})
+		filterRules = append(filterRules, rule)
+		
+		rule = utils.NewIpTableRule(utils.RULESET_DNAT.String())
+		rule.SetAction(utils.IPTABLES_ACTION_DNAT)
+		rule.SetComment(utils.PortFordingRuleComment)
+		rule.SetDstIp(fmt.Sprintf("%s/32", r.VipIp))
+		rule.SetProto(protocol).SetDstPort(natPortRange)
+		rule.SetDnatTargetIp(r.PrivateIp).SetDnatTargetPort(strings.Replace(portRange, ":", "-", -1))
+		dnatRules = append(dnatRules, rule)
 	}
-
-	if err := utils.SyncNatRule(nil, dnatRules, utils.PortFordingRuleComment); err != nil {
-		log.Warnf("SyncNatRule for portforwarding failed %s", err.Error())
+	
+	table.AddIpTableRules(filterRules)
+	if err := table.Apply(); err != nil {
+		log.Warnf("sync portforwarding firewall table failed %s", err.Error())
 		utils.PanicOnError(err)
 		return err
 	}
-
-	if err := utils.SyncFirewallRule(filterRules, utils.PortFordingRuleComment, utils.IN); err != nil {
-		log.Warnf("SyncFirewallRule for portforwarding failed %s", err.Error())
+	
+	natTable.AddIpTableRules(dnatRules)
+	if err := natTable.Apply(); err != nil {
+		log.Warnf("sync portforwarding nat table failed %s", err.Error())
 		utils.PanicOnError(err)
 		return err
 	}
@@ -99,7 +126,7 @@ func syncDnat(cmd *syncDnatCmd) interface{} {
 		for _, rule := range cmd.Rules {
 			pfMap[rule.Uuid] = rule
 		}
-		syncPortForwardingRules()
+		return syncPortForwardingRules()
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
 		dnatRegex := ".*(\\w.){3}\\w-\\w{1,}-\\w{1,}-(\\w{2}:){5}\\w{2}-\\w{1,}-\\w{1,}-\\w{1,}"
@@ -284,7 +311,7 @@ func setDnat(cmd *setDnatCmd) interface{} {
 		for _, r := range cmd.Rules {
 			pfMap[r.Uuid] = r
 		}
-		syncPortForwardingRules()
+		return syncPortForwardingRules()
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
 		setRuleInTree(tree, cmd.Rules)
@@ -306,7 +333,7 @@ func removeDnat(cmd *removeDnatCmd) interface{} {
 		for _, r := range cmd.Rules {
 			delete(pfMap, r.Uuid)
 		}
-		syncPortForwardingRules()
+		err := syncPortForwardingRules(); utils.PanicOnError(err)
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
 		for _, r := range cmd.Rules {
@@ -334,9 +361,9 @@ func removeDnat(cmd *removeDnatCmd) interface{} {
 	}
 
 	for _, r := range cmd.Rules {
-		proto := "udp"
-		if r.ProtocolType != "UDP" {
-			proto = "tcp"
+		proto := utils.IPTABLES_PROTO_UDP
+		if r.ProtocolType != utils.IPTABLES_PROTO_UDP {
+			proto = utils.IPTABLES_PROTO_TCP
 		}
 		t := utils.ConnectionTrackTuple{IsNat:false, IsDst: true, Ip: r.VipIp, Protocol: proto,
 			PortStart: r.VipPortStart, PortEnd: r.VipPortEnd}
@@ -345,8 +372,11 @@ func removeDnat(cmd *removeDnatCmd) interface{} {
 	return nil
 }
 
-func DnatEntryPoint() {
+func init()  {
 	pfMap = make(map[string]dnatInfo, PortForwardingInfoMaxSize)
+}
+
+func DnatEntryPoint() {
 	server.RegisterAsyncCommandHandler(CREATE_PORT_FORWARDING_PATH, server.VyosLock(setDnatHandler))
 	server.RegisterAsyncCommandHandler(REVOKE_PORT_FORWARDING_PATH, server.VyosLock(removeDnatHandler))
 	server.RegisterAsyncCommandHandler(SYNC_PORT_FORWARDING_PATH, server.VyosLock(syncDnatHandler))

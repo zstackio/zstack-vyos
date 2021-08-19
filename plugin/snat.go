@@ -96,14 +96,6 @@ func getNicSNATRuleNumber(nicNo int) (pubNicRuleNo int, priNicRuleNo int) {
 }
 
 //Deprecated
-func setSnatRule(pubNic, priNic, priCidr, pubIp string) {
-	rule := utils.NewSnatIptablesRule(false, true, priCidr, "224.0.0.0/8", pubNic, utils.SNAT, utils.SNATComment+priCidr, pubIp, 0)
-	utils.InsertNatRule(rule, utils.POSTROUTING)
-	rule = utils.NewSnatIptablesRule(false, true, priCidr, "224.0.0.0/8", priNic, utils.SNAT, utils.SNATComment+priCidr, pubIp, 0)
-	utils.InsertNatRule(rule, utils.POSTROUTING)
-}
-
-//Deprecated
 func setSnatHandler(ctx *server.CommandContext) interface{}  {
 	cmd := &setSnatCmd{}
 	ctx.GetCommand(cmd)
@@ -124,7 +116,22 @@ func setSnat(cmd *setSnatCmd) interface{} {
 	utils.PanicOnError(err)
 
 	if utils.IsSkipVyosIptables() {
-		setSnatRule(outNic, inNic, address, s.PublicIp)
+		table := utils.NewIpTables(utils.NatTable)
+
+		var rules []*utils.IpTableRule
+
+		rule := utils.NewIpTableRule(utils.RULESET_SNAT.String())
+		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
+		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(outNic).SetSnatTargetIp(s.PublicIp)
+		rules = append(rules, rule)
+
+		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
+		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
+		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
+		rules = append(rules, rule)
+
+		table.AddIpTableRules(rules)
+		return table.Apply()
 	} else {
 		// make source nat rule as the latest rule
 		// in case there are EIP rules
@@ -159,10 +166,6 @@ func setSnat(cmd *setSnatCmd) interface{} {
 	return nil
 }
 
-func deleteSnatRule(priCidr string) {
-	utils.DeleteSNatRuleByComment(utils.SNATComment + priCidr)
-}
-
 func removeSnatHandler(ctx *server.CommandContext) interface{} {
 	cmd := &removeSnatCmd{}
 	ctx.GetCommand(&cmd)
@@ -172,11 +175,27 @@ func removeSnatHandler(ctx *server.CommandContext) interface{} {
 
 func removeSnat(cmd *removeSnatCmd) interface{} {
 	if utils.IsSkipVyosIptables() {
+
+		table := utils.NewIpTables(utils.NatTable)
 		for _, s := range cmd.NatInfo {
-			address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask)
+			publicNic, err := utils.GetNicNameByMac(s.PublicNicMac)
 			utils.PanicOnError(err)
-			deleteSnatRule(address)
+			priNic, err := utils.GetNicNameByMac(s.PrivateNicMac)
+			utils.PanicOnError(err)
+			address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask);utils.PanicOnError(err)
+
+			rule := utils.NewIpTableRule(utils.RULESET_SNAT.String())
+			rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
+			rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(publicNic).SetSnatTargetIp(s.PublicIp)
+			table.RemoveIpTableRule([]*utils.IpTableRule{rule})
+
+			rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
+			rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
+			rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(priNic).SetSnatTargetIp(s.PublicIp)
+			table.RemoveIpTableRule([]*utils.IpTableRule{rule})
 		}
+
+		return table.Apply()
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
 
@@ -210,13 +229,17 @@ func hasRuleNumberForAddress(tree *server.VyosConfigTree, address string, ruleNo
 }
 
 func syncSnatByIptables(Snats []snatInfo, state bool) {
+
 	/* delete all snat rules */
-	utils.DeleteSNatRuleByComment(utils.SNATComment)
+	table := utils.NewIpTables(utils.NatTable)
+	table.RemoveIpTableRuleByComments(utils.SNATComment)
 
 	if state == false {
+		err := table.Apply(); utils.PanicOnError(err)
 		return
 	}
 
+	var rules []*utils.IpTableRule
 	for _, s := range Snats {
 		outNic, err := utils.GetNicNameByMac(s.PublicNicMac)
 		utils.PanicOnError(err)
@@ -225,8 +248,19 @@ func syncSnatByIptables(Snats []snatInfo, state bool) {
 		address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask)
 		utils.PanicOnError(err)
 
-		setSnatRule(outNic, inNic, address, s.PublicIp)
+		rule := utils.NewIpTableRule(utils.RULESET_SNAT.String())
+		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
+		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(outNic).SetSnatTargetIp(s.PublicIp)
+		rules = append(rules, rule)
+
+		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
+		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
+		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
+		rules = append(rules, rule)
 	}
+
+	table.AddIpTableRules(rules)
+	err := table.Apply(); utils.PanicOnError(err)
 }
 
 func applySnatRules(Snats []snatInfo, state bool) bool {

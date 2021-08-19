@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
-
 	"github.com/zstackio/zstack-vyos/plugin"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
@@ -56,6 +54,10 @@ func setupRotates() {
 	}
 
 	go func() {
+		if utils.IsRuingUT() {
+			return
+		}
+		
 		for {
 			time.Sleep(time.Minute)
 			for _, cfgfile := range logfiles {
@@ -95,10 +97,6 @@ func parseCommandOptions() {
 
 func configureZvrFirewall() {
 	if utils.IsSkipVyosIptables() {
-		err := utils.InitNicFirewall("eth0", options.Ip, true, utils.ACCEPT)
-		if err != nil {
-			log.Debugf("zvr configureZvrFirewall failed %s", err.Error())
-		}
 		return
 	}
 

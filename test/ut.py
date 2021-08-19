@@ -20,7 +20,7 @@ VYOS_PASSWORD = "vyos"
 
 GOROOT="/home/vyos/vyos_ut/go/"
 GOPATH="/home/vyos/vyos_ut/zstack-vyos/"
-BOOTSTRAPINFO=os.getcwd()+"bootstrapinfo"
+BOOTSTRAPINFO=os.getcwd()+"/bootstrapinfo"
 
 '''test step:
    1. copy zvr.bin, zvrboot.bin to remote vm
@@ -298,9 +298,11 @@ class TestZStackVyos:
 
         print("copying zstack-vyos code")
         exec_command(ssh, "rm -rf /home/vyos/vyos_ut/zstack-vyos/; mkdir -p /home/vyos/vyos_ut/zstack-vyos")
-        print("copy zstack-vyos code")
-        print(os.path.abspath(os.path.dirname(os.getcwd())) + "/zstack-vyos")
-        scp.put(os.path.abspath(os.path.dirname(os.getcwd())) + "/zstack-vyos", remote_path='/home/vyos/vyos_ut/', recursive=True)
+        print("copy zstack-vyos code from %s" % (os.getcwd()))
+        srcFolderAndFiles = ["plugin", "prlimit", "scripts", "server", "test", "utils", "vendor", "zvr", "zvrboot", "go.mod", "makefile", "package.go"]
+        for f in srcFolderAndFiles:
+            print("copy os.getcwd()/" + f + " .....")
+            scp.put(os.getcwd() + "/" + f, remote_path='/home/vyos/vyos_ut/zstack-vyos/', recursive=True)
         print("copy bootstrapinfo")
         scp.put(BOOTSTRAPINFO, '/home/vyos/vyos_ut/zstack-vyos/bootstrapinfo')
 
@@ -316,7 +318,7 @@ class TestZStackVyos:
         print("download test log to to %s" % folder)
         scp.get("/home/vyos/vyos_ut/testLog", folder, recursive=True)
 
-        if ret == True or self.testEnv.keepTestVm == False:
+        if ret == True or self.testEnv.deleteTestVm == True:
             self.deleteTestVyosVm(vyos.uuid)
 
         scp.close()
@@ -360,13 +362,13 @@ def TestAll():
             print("test vyos 1.1.7 kenel 5.4.80 failed")
             return
 
-        if test.TestVyos_1_1_7_3_13() != True:
-            print("test vyos 1.1.7 kenel 3.13 failed")
-            return
+        #if test.TestVyos_1_1_7_3_13() != True:
+        #    print("test vyos 1.1.7 kenel 3.13 failed")
+        #    return
 
-        if test.TestVyos_1_2_0_5_4_80() != True:
-            print("test vyos 1.2.0 kenel 5.4.80 failed")
-            return
+        #if test.TestVyos_1_2_0_5_4_80() != True:
+        #    print("test vyos 1.2.0 kenel 5.4.80 failed")
+        #    return
 
 if __name__ == "__main__":
     TestAll()
