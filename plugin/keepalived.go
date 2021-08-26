@@ -589,6 +589,13 @@ func KeepalivedEntryPoint() {
 			s := time.Now().Format(time.RFC3339) + " " + e.Error() + "\n"
 			ioutil.WriteFile(_zvr_shm, []byte(s), 0640)
 			doRestartKeepalived(KeepAlivedProcess_Restart)
+			
+			/* when disk is full, keepalived will restart and zvr process will exit, peer vpc will become the master vpc,
+			   when keepalived start again, it will enter backup state, then call back script, but there are 2 issues:
+			   1. peer become master, but current still has the master config, leads to traffic issue
+			   2. because disk is full, keepalvied may start failed, it will not call backup script, so call it here */
+			keepAlivedStatus = KeepAlivedStatus_Backup
+			callStatusChangeScripts()
 		}
 	})
 
