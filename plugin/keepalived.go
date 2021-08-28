@@ -542,7 +542,7 @@ func getKeepAlivedStatus() KeepAlivedStatus {
 
 	bash := utils.Bash{
 		// There is race between generating keepalived.data and reading its content.
-		Command: fmt.Sprintf("timeout 1 sudo kill -USR1 %d; sleep 0.1; awk -F '=' '/State/{print $2}' /tmp/keepalived.data",
+		Command: fmt.Sprintf("timeout 1 sudo kill -USR1 %d; sleep 0.1; sudo awk -F '=' '/State/{print $2}' /tmp/keepalived.data",
 			pid),
 		NoLog: true,
 	}
