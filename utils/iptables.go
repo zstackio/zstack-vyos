@@ -494,7 +494,7 @@ func DestroyNicFirewall(nic string) {
 			deleteIptablesRule(FirewallTable, rule)
 		}
 	}
-	r := fmt.Sprintf("sudo iptables -t %s -D %s -i %s -j %s", FirewallTable, Predefined_local_chain, nic, chainName)
+	r := fmt.Sprintf("sudo iptables -t %s -D %s -i %s -j %s; sudo iptables -t %s -X %s", FirewallTable, Predefined_local_chain, nic, chainName, FirewallTable, chainName)
 	cmd := Bash{
 		Command: r,
 	}
@@ -515,7 +515,7 @@ func DestroyNicFirewall(nic string) {
 			deleteIptablesRule(FirewallTable, rule)
 		}
 	}
-	r = fmt.Sprintf("sudo iptables -t %s -D %s -i %s -j %s", FirewallTable, Predefined_forward_chain, nic, chainName)
+	r = fmt.Sprintf("sudo iptables -t %s -D %s -i %s -j %s; sudo iptables -t %s -X %s", FirewallTable, Predefined_forward_chain, nic, chainName, FirewallTable, chainName)
 	cmd = Bash{
 		Command: r,
 	}
