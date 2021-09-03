@@ -181,7 +181,15 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 
 		pubNicName, err := utils.GetNicNameByMac(r.PublicMac); utils.PanicOnError(err)
 		
-		if currentRule := getRule(tree, des); currentRule == nil {
+		existed := false
+		if currentRule := getRule(tree, des); currentRule != nil {
+			if pip := currentRule.Getf("translation address %v", r.PrivateIp); pip == nil {
+				currentRule.Delete()
+			} else {
+				existed = true
+			}
+		}
+		if !existed {
 			tree.SetDnat(
 				fmt.Sprintf("description %v", des),
 				fmt.Sprintf("destination address %v", r.VipIp),
@@ -196,7 +204,16 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 		}
 		
 		reject := makeAllowCidrRejectDescription(r)
-		if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", reject); fr == nil {
+		existed = false
+		if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", reject); fr != nil {
+			if pip := fr.Getf("destination address %v", r.PrivateIp); pip == nil {
+				fr.Delete()
+			} else {
+				existed = true
+			}
+		}
+		
+		if !existed {
 			if r.AllowedCidr != "" && r.AllowedCidr != "0.0.0.0/0" {
 				tree.SetZStackFirewallRuleOnInterface(pubNicName, "behind","in",
 					"action reject",
@@ -210,10 +227,21 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 					"state new enable",
 				)
 			}
+		} else {
+			log.Debugf("firewall rule %s exists, skip it", reject)
 		}
 
 		des = makeDnatDescription(r)
-		if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", des); fr == nil {
+		existed = false
+		if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", des); fr != nil {
+			if pip := fr.Getf("destination address %v", r.PrivateIp); pip == nil {
+				fr.Delete()
+			} else {
+				existed = true
+			}
+		}
+		
+		if !existed {
 			if r.AllowedCidr != "" && r.AllowedCidr != "0.0.0.0/0" {
 				tree.SetZStackFirewallRuleOnInterface(pubNicName, "behind","in",
 					"action accept",
@@ -236,6 +264,8 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 					"state new enable",
 				)
 			}
+		} else {
+			log.Debugf("firewall rule %s exists, skip it", des)
 		}
 
 		tree.AttachFirewallToInterface(pubNicName, "in")

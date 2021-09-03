@@ -57,6 +57,7 @@ var _ = Describe("dnat test", func() {
 	It("setDnat again", func() {
 		setCmd := &setDnatCmd{Rules: []dnatInfo{rule1, rule2}}
 		log.Debugf("add dnat 2 %+v", setCmd)
+		rule1.PrivateIp = "192.168.1.101"
 		setDnat(setCmd)
 		checkDnatConfig(rule1)
 		checkDnatConfig(rule2)
