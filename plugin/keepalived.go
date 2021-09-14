@@ -413,19 +413,19 @@ func doRestartKeepalived(action KeepAlivedProcessAction) error {
 				Sudo:    true,
 			}
 			return bash.Run()
-			
+
 		case KeepAlivedProcess_Reload:
 			bash := utils.Bash{
 				Command: fmt.Sprintf("sudo kill -HUP %d", pid),
 			}
 			return bash.Run()
-		
+
 		case KeepAlivedProcess_Skip:
 		default:
 			return nil
 		}
 	}
-	
+
 	return nil
 }
 
@@ -537,12 +537,13 @@ func getKeepAlivedStatus() KeepAlivedStatus {
 	
 	pid := getKeepalivedPid()
 	if pid == PID_ERROR {
+		log.Debugf("Error occurs while get keepalived pid, return keepalived status as unkdonw")
 		return KeepAlivedStatus_Unknown
 	}
 
 	bash := utils.Bash{
 		// There is race between generating keepalived.data and reading its content.
-		Command: fmt.Sprintf("timeout 1 sudo kill -USR1 %d; sleep 0.1; sudo awk -F '=' '/State/{print $2}' /tmp/keepalived.data",
+		Command: fmt.Sprintf("timeout 1 sudo kill -USR1 %d;sudo grep -A 6 'VRRP Topology' /tmp/keepalived.data | awk -F '=' '/State/{print $2}'",
 			pid),
 		NoLog: true,
 	}
