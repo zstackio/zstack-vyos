@@ -492,6 +492,7 @@ func changeDefaultNic(cmd *ChangeDefaultNicCmd) interface{} {
 	pubNic, err := utils.GetNicNameByMac(cmd.NewNic.Mac); utils.PanicOnError(err)
 	tree.Deletef("protocols static route 0.0.0.0/0")
 	tree.Deletef("protocols static route6 ::/0")
+	tree.Deletef("system gateway-address")
 	if cmd.NewNic.Gateway != "" {
 		tree.Setf("protocols static route 0.0.0.0/0 next-hop %v", cmd.NewNic.Gateway)
 	}
