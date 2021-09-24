@@ -13,13 +13,25 @@ PKG_TAR_DIR=$(TARGET_DIR)/pkg-tar
 
 DEPS=github.com/Sirupsen/logrus github.com/pkg/errors github.com/fatih/structs github.com/prometheus/client_golang/prometheus github.com/bcicen/go-haproxy
 
+.PHONY: zvr
 zvr:
 	mkdir -p $(TARGET_DIR)
 	$(GO) build -mod vendor -o $(TARGET_DIR)/zvr zvr/zvr.go
 
+.PHONY: zvrarm
+zvrarm:
+	mkdir -p $(TARGET_DIR)
+	CGO_ENABLED=0 GOOS="linux" GOARCH="arm64" $(GO) build -mod vendor -o $(TARGET_DIR)/zvr_aarch64 zvr/zvr.go
+
+.PHONY: zvrboot
 zvrboot:
 	mkdir -p $(TARGET_DIR)
 	$(GO) build -mod vendor -o $(TARGET_DIR)/zvrboot zvrboot/zvrboot.go
+
+.PHONY: zvrbootarm
+zvrbootarm:
+	mkdir -p $(TARGET_DIR)
+	CGO_ENABLED=0 GOOS="linux" GOARCH="arm64" $(GO) build -mod vendor -o $(TARGET_DIR)/zvrboot_aarch64 zvrboot/zvrboot.go
 
 deps:
 	$(GO) get $(DEPS)
@@ -27,16 +39,12 @@ deps:
 clean:
 	rm -rf target/
 
-package: clean
-	mkdir -p $(TARGET_DIR)
-	$(GO) build -mod vendor  -o $(TARGET_DIR)/zvr zvr/zvr.go
-	mkdir -p $(TARGET_DIR)
-	$(GO) build -mod vendor -o $(TARGET_DIR)/zvrboot zvrboot/zvrboot.go
+package: clean zvr zvrarm zvrboot zvrbootarm
 	mkdir -p $(PKG_ZVR_DIR)
 	mkdir -p $(PKG_ZVRBOOT_DIR)
 	cp -f $(TARGET_DIR)/zvr $(PKG_ZVR_DIR)
+	cp -f $(TARGET_DIR)/zvr_aarch64 $(PKG_ZVR_DIR)
 	cp -f scripts/ipsec.sh $(PKG_ZVR_DIR)
-	cp -f scripts/zvr_aarch64 $(PKG_ZVR_DIR)
 	cp -f scripts/zstack-virtualrouteragent $(PKG_ZVR_DIR)
 	cp -f scripts/haproxy $(PKG_ZVR_DIR)
 	cp -f scripts/haproxy_aarch64 $(PKG_ZVR_DIR)
@@ -55,23 +63,18 @@ package: clean
 	cp -f scripts/zsn-crontab.sh $(PKG_ZVR_DIR)
 	cp -f scripts/pimd_aarch64 $(PKG_ZVR_DIR)
 	cp -f scripts/uacctd $(PKG_ZVR_DIR)
-	cp -f scripts/zvrboot_aarch64 $(PKG_ZVRBOOT_DIR)
 	cp -f $(TARGET_DIR)/zvrboot $(PKG_ZVRBOOT_DIR)
+	cp -f $(TARGET_DIR)/zvrboot_aarch64 $(PKG_ZVRBOOT_DIR)
 	cp -f scripts/version $(TARGET_DIR)
 	cp -f scripts/goprlimit $(PKG_ZVR_DIR)
 	$(GO) run -mod vendor package.go -conf package-config.json
 
-tar:
-	mkdir -p $(TARGET_DIR)
-	$(GO) build -mod vendor -o $(TARGET_DIR)/zvr zvr/zvr.go
-	mkdir -p $(TARGET_DIR)
-	$(GO) build -mod vendor -o $(TARGET_DIR)/zvrboot zvrboot/zvrboot.go	
+tar: zvr zvrarm zvrboot zvrbootarm
 	rm -rf $(PKG_TAR_DIR)
 	mkdir -p $(PKG_TAR_DIR)
 	cp -f $(TARGET_DIR)/zvr $(PKG_TAR_DIR)
+	cp -f $(TARGET_DIR)/zvr_aarch64 $(PKG_ZVR_DIR)
 	cp -f scripts/ipsec.sh $(PKG_TAR_DIR)
-	cp -f scripts/zvr_aarch64 $(PKG_TAR_DIR)
-	cp -f scripts/zvrboot_aarch64 $(PKG_TAR_DIR)
 	cp -f scripts/haproxy $(PKG_TAR_DIR)
 	cp -f scripts/haproxy_aarch64 $(PKG_TAR_DIR)
 	cp -f scripts/gobetween $(PKG_TAR_DIR)
@@ -92,6 +95,7 @@ tar:
 	cp -f scripts/zsn-crontab.sh $(PKG_TAR_DIR)
 	cp -f scripts/pimd_aarch64 $(PKG_TAR_DIR)
 	cp -f $(TARGET_DIR)/zvrboot $(PKG_TAR_DIR)
+	cp -f $(TARGET_DIR)/zvrboot_aarch64 $(PKG_ZVRBOOT_DIR)
 	cp -f scripts/goprlimit $(PKG_TAR_DIR)
 	tar czf $(TARGET_DIR)/zvr.tar.gz -C $(PKG_TAR_DIR) .
 
