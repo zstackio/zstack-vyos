@@ -21,8 +21,6 @@ func LoopRunUntilSuccessOrTimeout(fn func() bool, timeout, interval time.Duratio
 		case r := <-ch:
 			if r {
 				return nil
-			} else {
-				return errors.New("fn failed")
 			}
 		case now := <-tk.C:
 			if now.After(expiredTime) {

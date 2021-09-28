@@ -18,7 +18,6 @@ import (
 func loadPlugins() {
 	plugin.ApvmEntryPoint()
 	plugin.DhcpEntryPoint()
-	plugin.MiscEntryPoint()
 	plugin.DnsEntryPoint()
 	plugin.SnatEntryPoint()
 	plugin.DnatEntryPoint()
@@ -38,6 +37,7 @@ func loadPlugins() {
 	plugin.PimdEntryPoint()
 	plugin.FirewallEntryPoint()
 	plugin.PerformanceEntryPoint()
+	plugin.MiscEntryPoint()
 }
 
 // Note: there shouldn't be 'daily' etc. in the following config files.

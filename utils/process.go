@@ -83,12 +83,18 @@ func KillProcess1(pid int, waitTime uint) error {
 	}
 	b.Run()
 
-	check := func() bool {
-		// return true if process not exists
-		return ProcessExists(pid) != nil
+	check := func() error {
+		processStatus := ProcessExists(pid)
+		if processStatus == nil {
+			// return error if process exists
+			return fmt.Errorf("Pid %v is still alive", pid)
+		}
+		// return nil if process not exists
+		return nil
 	}
 
-	if check() {
+	if check() == nil {
+		//process has been killed
 		return nil
 	}
 
@@ -98,7 +104,12 @@ func KillProcess1(pid int, waitTime uint) error {
 		}
 		b.Run()
 
-		return check()
+		processStatus := Retry(check, 3, 1)
+		if processStatus == nil {
+			return true
+		} else {
+			return false
+		}
 	}, time.Duration(waitTime)*time.Second, time.Duration(500)*time.Millisecond)
 }
 
