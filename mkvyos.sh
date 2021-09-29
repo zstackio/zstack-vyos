@@ -92,6 +92,7 @@ PIMD=$tmpdir/pimd
 UACCTD=$tmpdir/uacctd
 SSHD=$tmpdir/sshd.sh
 ZVRMONITOR=$tmpdir/zvr-monitor.sh
+FILEMONITOR=$tmpdir/file-monitor.sh
 ZVRREBOOT=$tmpdir/zvr-reboot.sh
 CPUMONITOR=$tmpdir/cpu-monitor
 SYSCTL=$tmpdir/sysctl.conf
@@ -122,6 +123,7 @@ upload $HEALTHCHECK $ROOTPATH/usr/share/healthcheck.sh
 mkdir-p $ROOTPATH/home/vyos/zvr/ssh
 upload $SSHD $ROOTPATH/home/vyos/zvr/ssh/sshd.sh
 upload $ZVRMONITOR $ROOTPATH/home/vyos/zvr/ssh/zvr-monitor.sh
+upload $FILEMONITOR $ROOTPATH/home/vyos/zvr/ssh/file-monitor.sh
 upload $ZVRREBOOT $ROOTPATH/home/vyos/zvr/ssh/zvr-reboot.sh
 upload $CPUMONITOR $ROOTPATH/etc/logrotate.d/cpu-monitor
 upload $SYSCTL $ROOTPATH/etc/sysctl.conf
@@ -143,6 +145,7 @@ chmod +x $SBIN_DIR/uacctd
 chmod +x /usr/share/healthcheck.sh
 chmod +x /home/vyos/zvr/ssh/sshd.sh
 chmod +x /home/vyos/zvr/ssh/zvr-monitor.sh
+chmod +x /home/vyos/zvr/ssh/file-monitor.sh
 chmod +x /home/vyos/zvr/ssh/zvr-reboot.sh
 chmod 644 /etc/sysctl.conf
 chmod 644 /etc/conntrackd/conntrackd.conf
@@ -158,6 +161,7 @@ chown vyos:users $SBIN_DIR/uacctd
 chown vyos:users /usr/share/healthcheck.sh
 chown vyos:users /home/vyos/zvr/ssh/sshd.sh
 chown vyos:users /home/vyos/zvr/ssh/zvr-monitor.sh
+chown vyos:users /home/vyos/zvr/ssh/file-monitor.sh
 chown vyos:users /home/vyos/zvr/ssh/zvr-reboot.sh
 chown root:root /etc/sysctl.conf
 chown root:root /etc/conntrackd/conntrackd.conf
