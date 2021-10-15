@@ -91,6 +91,7 @@ HEALTHCHECK=$tmpdir/healthcheck.sh
 PIMD=$tmpdir/pimd
 UACCTD=$tmpdir/uacctd
 SSHD=$tmpdir/sshd.sh
+RSYSLOGD=$tmp/rsyslog.sh
 ZVRMONITOR=$tmpdir/zvr-monitor.sh
 ZVRREBOOT=$tmpdir/zvr-reboot.sh
 CPUMONITOR=$tmpdir/cpu-monitor
@@ -121,6 +122,7 @@ upload $ZVR_VERSION $ROOTPATH/home/vyos/zvr/version
 upload $HEALTHCHECK $ROOTPATH/usr/share/healthcheck.sh
 mkdir-p $ROOTPATH/home/vyos/zvr/ssh
 upload $SSHD $ROOTPATH/home/vyos/zvr/ssh/sshd.sh
+upload $RSYSLOGD $ROOTPATH/home/vyos/zvr/ssh/rsyslog.sh
 upload $ZVRMONITOR $ROOTPATH/home/vyos/zvr/ssh/zvr-monitor.sh
 upload $ZVRREBOOT $ROOTPATH/home/vyos/zvr/ssh/zvr-reboot.sh
 upload $CPUMONITOR $ROOTPATH/etc/logrotate.d/cpu-monitor
@@ -142,6 +144,7 @@ chmod +x $SBIN_DIR/pimd
 chmod +x $SBIN_DIR/uacctd
 chmod +x /usr/share/healthcheck.sh
 chmod +x /home/vyos/zvr/ssh/sshd.sh
+chmod +x /home/vyos/zvr/ssh/rsyslog.sh
 chmod +x /home/vyos/zvr/ssh/zvr-monitor.sh
 chmod +x /home/vyos/zvr/ssh/zvr-reboot.sh
 chmod 644 /etc/sysctl.conf
@@ -157,6 +160,7 @@ chown vyos:users $SBIN_DIR/pimd
 chown vyos:users $SBIN_DIR/uacctd
 chown vyos:users /usr/share/healthcheck.sh
 chown vyos:users /home/vyos/zvr/ssh/sshd.sh
+chown vyos:users /home/vyos/zvr/ssh/rsyslog.sh
 chown vyos:users /home/vyos/zvr/ssh/zvr-monitor.sh
 chown vyos:users /home/vyos/zvr/ssh/zvr-reboot.sh
 chown root:root /etc/sysctl.conf

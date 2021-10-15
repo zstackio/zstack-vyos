@@ -64,6 +64,14 @@ fi
 chown vyos:users $TARGET_SSHD
 chmod +x $TARGET_SSHD
 
+TARGET_RSYSLOGD=/home/vyos/zvr/ssh/rsyslog.sh
+if [[ ! -f $TARGET_RSYSLOGD || $(diff rsyslog.sh $TARGET_RSYSLOGD) ]]; then
+    yes | mkdir -p `dirname $TARGET_RSYSLOGD`
+    yes | cp -f rsyslog.sh $TARGET_RSYSLOGD
+fi
+chown vyos:users $TARGET_RSYSLOGD
+chmod +x $TARGET_RSYSLOGD
+
 TARGET_ZVRMONITOR=/home/vyos/zvr/ssh/zvr-monitor.sh
 if [[ ! -f $TARGET_ZVRMONITOR || $(diff zvr-monitor.sh $TARGET_ZVRMONITOR) ]]; then
     yes | mkdir -p `dirname $TARGET_ZVRMONITOR`
