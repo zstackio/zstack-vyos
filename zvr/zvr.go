@@ -65,10 +65,6 @@ func setupRotates() {
 	}()
 }
 
-func restartRsyslog() {
-	exec.Command("sudo", "/etc/init.d/rsyslog", "restart").Run()
-}
-
 var options server.Options
 
 func abortOnWrongOption(msg string) {
@@ -144,7 +140,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	restartRsyslog()
 	utils.InitLog(options.LogFile, false)
 	utils.InitBootStrapInfo()
 	utils.InitVyosVersion()
