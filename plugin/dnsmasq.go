@@ -3,13 +3,13 @@ package plugin
 import (
 	"bytes"
 	"fmt"
+	"github.com/zstackio/zstack-vyos/utils"
 	"html/template"
 	"io/ioutil"
-	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (
-	DNSMASQ_BIN_PATH       = "/usr/sbin/dnsmasq -x /var/run/dnsmasq/dnsmasq.pid -u dnsmasq -7 /etc/dnsmasq.d"
+	DNSMASQ_BIN_PATH       = "/usr/sbin/dnsmasq -x /var/run/dnsmasq.pid -u dnsmasq -7 /etc/dnsmasq.d"
 	DNSMASQ_CONF_PATH      = "/etc/dnsmasq.conf"
 	DNSMASQ_CONF_PATH_TEMP = "/home/vyos/zvr/dnsmasq.conf"
 )
