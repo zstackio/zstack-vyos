@@ -88,6 +88,14 @@ fi
 chown vyos:users $TARGET_ZVRREBOOT
 chmod +x $TARGET_ZVRREBOOT
 
+TARGET_FILEMONITOR=/home/vyos/zvr/ssh/file-monitor.sh
+if [[ ! -f $TARGET_FILEMONITOR || $(diff file-monitor.sh $TARGET_FILEMONITOR) ]]; then
+    yes | mkdir -p `dirname $TARGET_FILEMONITOR`
+    yes | cp -f file-monitor.sh $TARGET_FILEMONITOR
+fi
+chown vyos:users $TARGET_FILEMONITOR
+chmod +x $TARGET_FILEMONITOR
+
 TARGET_CPUMONITOR=/etc/logrotate.d/cpu-monitor
 if [[ ! -f $TARGET_CPUMONITOR || $(diff cpu-monitor $TARGET_CPUMONITOR) ]]; then
     yes | mkdir -p `dirname $TARGET_CPUMONITOR`

@@ -215,6 +215,11 @@ func initHandler(ctx *server.CommandContext) interface{} {
 		tree.Set("system task-scheduler task cpu-monitor executable arguments 'b -n 1 -H >> /var/log/top.log'")
 	}
 
+	if tree.Get("system task-scheduler task file-monitor") == nil {
+	        tree.Set("system task-scheduler task file-monitor interval 1")
+	        tree.Set(fmt.Sprintf("system task-scheduler task file-monitor executable path '%s'", utils.Cronjob_file_fileMonitor))
+        }
+
 	tree.Apply(false)
 
 	doRefreshLogLevel(initConfig.LogLevel)

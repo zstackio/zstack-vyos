@@ -25,6 +25,7 @@ var (
 	Cronjob_file_rsyslog    = "/home/vyos/zvr/ssh/rsyslog.sh"
 	Cronjob_file_zsn        = "/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh"
 	Cronjob_file_zvrMonitor = "/home/vyos/zvr/ssh/zvr-monitor.sh"
+	Cronjob_file_fileMonitor = "/home/vyos/zvr/ssh/file-monitor.sh"
 
 	Vyos_version_file = "/opt/vyatta/etc/version"
 	Vyos_version      = VYOS_1_1_7
