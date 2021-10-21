@@ -1354,7 +1354,7 @@ func refreshLbIpTables()  {
 				break
 			case *GBListener:
 				rules, nicname = v.getIptablesRule()
-				rules, nicname = v.getIcmpIptablesRule()
+				icmpRules, nicname = v.getIcmpIptablesRule()
 				break
 			default:
 				continue
