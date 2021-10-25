@@ -28,6 +28,10 @@ if [ x$ETH0_IP == "x" ]; then
    err_exit "unable to get the IP of eth0"
 fi
 
+cleanup_tmp_dir() {
+    rm -rf /tmp/tmp-log
+}
+
 get_pid() {
     echo $(pgrep -x zvr)
 }
@@ -60,6 +64,7 @@ server_status() {
 }
 
 do_start() {
+    cleanup_tmp_dir
     chown -R vyos:users $HOMDIR
     su - vyos -c "echo $(date) start zstack virtual router >> $BOOTLOG"
     su - vyos -c "nohup $SERVER -ip $ETH0_IP -logfile $LOGFILE >>$BOOTLOG 2>&1 < /dev/null &"

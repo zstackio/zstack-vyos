@@ -146,6 +146,14 @@ func resetVyos() {
 	current for workaround ,just */
 	// reload default configuration
 	//server.RunVyosScriptAsUserVyos("load /opt/vyatta/etc/config.boot.default\nsave")
+        cleanUpTmpDir()
+}
+
+func cleanUpTmpDir() {
+        b := utils.Bash{
+                Command: "sudo rm -rf /tmp/tmp-log",
+        }
+        b.Run()
 }
 
 func checkIpDuplicate() {
