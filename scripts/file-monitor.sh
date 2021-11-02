@@ -97,6 +97,6 @@ if [ x$NEED_REPORT_MN = x"true" ]; then
     diskUsed=$(echo $di|awk '{print $2}')
     diskUsedutilization=$(echo $di|awk '{print $3}')
     retToMn=$(echo $ret_template | sed "s#var1#$virtualRouterUuid#g" | sed "s#var2#${retJson%?}#g" |sed "s#var3#$diskTotal#g" | sed "s#var4#$diskUsed#g" | sed "s#var5#$diskUsedutilization#g")
+    reportToManagementNode
+    echo "$(date '+%Y-%m-%d %H:%M:%S') report abnormal files: $retToMn to mn" >> $LOGFILE
 fi
-
-reportToManagementNode
