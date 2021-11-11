@@ -855,7 +855,35 @@ func setVip(cmd *setVipCmd) interface{} {
 	}
 	bash.Run()
 
+	go sendGARP(cmd)
+
 	return nil
+}
+
+func sendGARP(cmd *setVipCmd)  {
+        if utils.IsHaEnabled() {
+                if IsBackup() {
+                        return
+                }
+        }
+        
+        var command strings.Builder
+        for _,vip := range cmd.Vips {
+                nicName, _ := utils.GetNicNameByMac(vip.OwnerEthernetMac)
+                if nicName != "" {
+                        command.WriteString(fmt.Sprintf( "sudo arping -U -I %s %s -c 5;", nicName, vip.Ip))
+                }
+        }
+        //send the gratuitious ARP out
+        if command.Len() > 0 {
+                bash := utils.Bash{
+                        Command: command.String(),
+                }
+                _, _, _, error := bash.RunWithReturn()
+                if error != nil {
+                        log.Debugf("send the gratuitious ARP for eip failed : %v", error)
+                }
+        }
 }
 
 func getDeleteFailVip (info []vipInfo) ([]vipInfo) {
