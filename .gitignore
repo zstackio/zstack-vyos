@@ -28,3 +28,8 @@ _testmain.go
 zvr.log
 target/
 bin/
+
+.vscode/
+
+.DS_Store
+*/.DS_Store
