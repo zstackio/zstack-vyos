@@ -149,4 +149,11 @@ fi
 chown vyos:users $TAGET_TEMP_SCRIPT
 chmod +x $TAGET_TEMP_SCRIPT
 
+OSVERSION=`uname -r`
+if [ "$OSVERSION" = "3.13.11-1-amd64-vyos" ]; then
+  sudo cp  grub.cfg.3.13 /boot/grub/grub.cfg
+elif [ "$OSVERSION" = "5.4.80-amd64-vyos" ]; then
+  sudo cp  grub.cfg.5.4.80 /boot/grub/grub.cfg
+fi
+
 exit 0
