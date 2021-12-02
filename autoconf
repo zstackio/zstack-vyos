@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 SCRIPT_NAME=$0
 REPO_NAME=`basename -s .git $(git config --get remote.origin.url)`
