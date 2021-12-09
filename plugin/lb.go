@@ -55,6 +55,7 @@ const (
 var (
 	haproxyVersion = HAPROXY_VERSION_1_6_9
 	gobetweenListeners map[string]*GBListener
+	haproxyListeners map[string]*HaproxyListener
 )
 
 const (
@@ -134,6 +135,8 @@ type Listener interface {
 	getLbCounters(listenerUuid string) ([]*LbCounter, int)
 	getIptablesRule()([]utils.IptablesRule, string)
 	getLbInfo() (lb lbInfo)
+	startPidMonitor()
+	stopPidMonitor()
 }
 
 // the listener implemented with HaProxy
@@ -147,6 +150,7 @@ type HaproxyListener struct {
 	maxConnect string
 	maxSession int   //same to maxConnect
 	aclPath string
+	pm      *utils.PidMon
 }
 
 // the listener implemented with gobetween
@@ -361,6 +365,51 @@ func getListenerMaxCocurrenceSocket(maxConnect string) (string) {
 	return strconv.Itoa(maxSocket)
 }
 
+func (this *HaproxyListener) startPidMonitor()  {
+	if _, ok := haproxyListeners[this.lb.ListenerUuid]; !ok {
+		pids := this.getPids()
+		if len(pids) > 0 {
+			sort.Strings(pids)
+			pid, _ := strconv.Atoi(pids[0])
+			this.pm = utils.NewPidMon(pid, func() int {
+				log.Warnf("start haproxy in PidMon for %s", this.lb.ListenerUuid)
+				_, err := this.startListenerService()
+				if err != nil {
+					log.Warnf("failed to respawn haproxy: %s", err)
+					return -1
+				}
+				
+				pids = this.getPids()
+				if len(pids) == 0 {
+					log.Warnf("failed to read haproxy pid: %s", err)
+					return -1
+				}
+				
+				pid, _ := strconv.Atoi(pids[0])
+				return pid
+			})
+			log.Debugf("created haproxy PidMon for %s", this.lb.ListenerUuid)
+			haproxyListeners[this.lb.ListenerUuid] = this
+			this.pm.Start()
+		} else {
+			log.Warnf("failed to get haproxy pid")
+			return
+		}
+	} else {
+		log.Debugf("haproxy PidMon for %s already created", this.lb.ListenerUuid)
+	}
+}
+
+func (this *HaproxyListener) stopPidMonitor()  {
+	if lb, ok := haproxyListeners[this.lb.ListenerUuid]; ok {
+		log.Warnf("stop haproxy PidMon for %s", this.lb.ListenerUuid)
+		lb.pm.Stop()
+		delete(haproxyListeners, this.lb.ListenerUuid)
+	} else {
+		log.Warnf("haproxy PidMon for %s not created", this.lb.ListenerUuid)
+	}
+}
+
 func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo)  (err error) {
         conf := `global
     maxconn {{.MaxConnection}}
@@ -563,7 +612,7 @@ func (this *HaproxyListener) checkIfListenerServiceUpdate(origChecksum string, c
 	if pid > 0 {
 		//log.Debugf("lb %s pid: %v orig: %v curr: %v", this.confPath, pid, origChecksum, currChecksum)
 		return strings.EqualFold(origChecksum, currChecksum) == false, nil
-	} else if (pid == -1) {
+	} else if pid == -1 {
 		err = nil
 	}
 	return true, err
@@ -1004,8 +1053,6 @@ func (this *GBListener) startListenerService() (int,  error) {
 		return ret, err
 	}
 
-	this.startPidMonitor()
-
 	return ret, err
 }
 
@@ -1032,7 +1079,6 @@ func (this *GBListener) checkIfListenerServiceUpdate(origChecksum string, currCh
 	err = nil
 	if pid, _:= utils.FindFirstPIDByPS( this.confPath); pid > 0 {
 		if strings.EqualFold(origChecksum, currChecksum) {
-			this.startPidMonitor()
 			return false, nil
 		}
 		log.Debugf("lb %s pid: %v orig: %v curr: %v", this.confPath, pid, origChecksum, currChecksum)
@@ -1131,7 +1177,6 @@ func (this *GBListener) stopListenerService() ( err error) {
 	pid, err := utils.FindFirstPIDByPS(this.confPath)
 	//log.Debugf("lb %s pid: %v result:%v", this.confPath, pid, err)
 	err = nil
-	this.stopPidMonitor()
 
 	if pid > 0 {
 		err = utils.KillProcess(pid); utils.PanicOnError(err)
@@ -1232,6 +1277,7 @@ func setLb(lb lbInfo) {
 	newChecksum, err1 := getFileChecksum(makeLbConfFilePath(lb)); utils.PanicOnError(err1)
 	if update, err := listener.checkIfListenerServiceUpdate(checksum, newChecksum); err == nil && !update {
 		log.Debugf("no need refresh the listener: %v\n", lb.ListenerUuid)
+		listener.startPidMonitor()
 		return
 	}
 	utils.PanicOnError(err)
@@ -1245,6 +1291,7 @@ func setLb(lb lbInfo) {
 		return
 	}
 
+	listener.startPidMonitor()
 	if err := listener.postActionListenerServiceStart(); err != nil {
 		utils.PanicOnError(err)
 	}
@@ -1378,7 +1425,8 @@ func delLb(lb lbInfo) {
 	if  listener == nil {
 		return
 	}
-
+	
+	listener.stopPidMonitor()
 	err := listener.stopListenerService(); utils.PanicOnError(err)
 	_, err = listener.postActionListenerServiceStop(); utils.PanicOnError(err)
 }
@@ -1803,6 +1851,7 @@ missingok
 
 func init()  {
 	gobetweenListeners = map[string]*GBListener{}
+	haproxyListeners = map[string]*HaproxyListener{}
 }
 
 func LbEntryPoint() {
