@@ -67,16 +67,16 @@ func GetNetworkNumber(ip, netmask string) (string, error) {
 }
 
 type Nic struct {
-	Name			string
-	Mac				string
-	Ip				string
-	Ip6				string
-	Gateway			string
-	Gateway6		string
-	IsDefault		bool
-	Catatory		string
-	Netmask			string
-	PrefixLength	int
+	Name         string
+	Mac          string
+	Ip           string
+	Ip6          string
+	Gateway      string
+	Gateway6     string
+	IsDefault    bool
+	Catatory     string
+	Netmask      string
+	PrefixLength int
 }
 
 func (nic Nic) String() string {
@@ -256,15 +256,9 @@ func GetNicForRoute(ip string) string {
 
 func RemoveZStackRoute(ip string) error {
 	SetZStackRouteProtoIdentifier()
-	bash := Bash{
-		Command: fmt.Sprintf("sudo ip route del %s/32 proto %s", ip, ZSTACK_ROUTE_PROTO),
-	}
-	ret, _, _, err := bash.RunWithReturn()
-	if err != nil {
+	// DeleteRouteIfExists: delete only when the route exists and the type is ZSTACK_ROUTE_PROTO
+	if err := DeleteRouteIfExists(ip); err != nil {
 		return err
-	}
-	if ret != 0 {
-		return errors.New(fmt.Sprintf("del route to %s/32 proto %s failed", ip, ZSTACK_ROUTE_PROTO))
 	}
 
 	return nil
@@ -366,11 +360,11 @@ func GetBroadcastIpFromNetwork(ip, netmask string) string {
 
 func GetNexthop(dst string) (string, error) {
 	/* $ ip r get 10.86.4.0/23
-	10.86.4.0 via 192.168.100.1 dev eth1  src 192.168.100.129
-	    cache
-	$ ip r get 192.168.250.0/24
-	broadcast 192.168.250.0 dev eth0  src 192.168.250.14
-	    cache <local,brd>
+	   10.86.4.0 via 192.168.100.1 dev eth1  src 192.168.100.129
+	       cache
+	   $ ip r get 192.168.250.0/24
+	   broadcast 192.168.250.0 dev eth0  src 192.168.250.14
+	       cache <local,brd>
 	*/
 	bash := Bash{
 		Command: fmt.Sprintf("ip r get %s | grep via | awk '{print $3}'", dst),
@@ -420,8 +414,8 @@ func DelIp6DefaultRoute() error {
 
 func AddIp6DefaultRoute(gw6, dev string) {
 	/* default ip6 route
-	# ip -6 r | grep default
-	default via caca::1 dev eth1  metric 1024 */
+	   # ip -6 r | grep default
+	   default via caca::1 dev eth1  metric 1024 */
 
 	oldGw6 := ""
 	bash := Bash{
