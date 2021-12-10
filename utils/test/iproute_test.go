@@ -8,6 +8,39 @@ import (
 	"sort"
 )
 
+var _ = Describe("set&remove zstack route test", func() {
+	BeforeEach(func() {
+		utils.InitLog(VYOS_UT_LOG_FOLDER+"iproute_test.log", false)
+	})
+
+	It("test set&remove zstack route", func() {
+		ip := "88.1.1.1"
+		intfip := "10.1.1.2/24"
+		gw := "10.1.1.1"
+		bash := utils.Bash{
+			Command: fmt.Sprintf("sudo ip addr add %s dev eth0", intfip),
+		}
+		ret, _, _, _ := bash.RunWithReturn()
+		Expect(ret).To(Equal(0), "set test env failed.")
+		if ret == 0 {
+			err := utils.SetZStackRoute(ip, "eth0", gw)
+			Expect(err).To(BeNil(), "set zstack route failed.")
+
+			err = utils.RemoveZStackRoute(ip)
+			Expect(err).To(BeNil(), "remove existed route failed.")
+
+			err = utils.RemoveZStackRoute("99.1.1.1")
+			Expect(err).To(BeNil(), "remove non-existent route failed.")
+
+			bash = utils.Bash{
+				Command: fmt.Sprintf("sudo ip addr del %s dev eth0", intfip),
+			}
+			bash.RunWithReturn()
+		}
+
+	})
+})
+
 var _ = Describe("linux ip route table test", func() {
 	BeforeEach(func() {
 		utils.InitLog(VYOS_UT_LOG_FOLDER+"iproute_test.log", false)
