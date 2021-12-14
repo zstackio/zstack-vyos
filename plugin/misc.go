@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (
@@ -19,7 +19,7 @@ const (
 	TEST_PATH          = "/test"
 	CONFIGURE_NTP_PATH = "/configurentp"
 	/* please follow following rule to change the version:
-	http://confluence.zstack.io/pages/viewpage.action?pageId=34014178 */
+	   http://confluence.zstack.io/pages/viewpage.action?pageId=34014178 */
 	VERSION_FILE_PATH          = "/home/vyos/zvr/version"
 	NETWORK_HEALTH_STATUS_PATH = "/home/vyos/zvr/.duplicate"
 	NTP_CONF_DIR               = "/home/vyos/zvr/ntp/conf/"
@@ -179,7 +179,7 @@ interface listen ::1
 }
 func initHandler(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(initConfig)
-	addRouteIfCallbackIpChanged()
+	addRouteIfCallbackIpChanged(true)
 	if initConfig.MgtCidr != "" {
 		mgmtNic := utils.GetMgmtInfoFromBootInfo()
 		nexthop, _ := utils.GetNexthop(initConfig.MgtCidr)
@@ -190,19 +190,19 @@ func initHandler(ctx *server.CommandContext) interface{} {
 
 	tree := server.NewParserFromShowConfiguration().Tree
 
-        if tree.Get("system task-scheduler task ssh") != nil {
-                tree.Delete("system task-scheduler task ssh")
-        }
-	
+	if tree.Get("system task-scheduler task ssh") != nil {
+		tree.Delete("system task-scheduler task ssh")
+	}
+
 	if tree.Get("system task-scheduler task ssh") == nil {
 		tree.Set("system task-scheduler task ssh interval 1")
 		tree.Set(fmt.Sprintf("system task-scheduler task ssh executable path '%s'", utils.Cronjob_file_ssh))
 	}
 
-        if tree.Get("system task-scheduler task rsyslog") == nil {
-                tree.Set("system task-scheduler task rsyslog interval 1")
-                tree.Set(fmt.Sprintf("system task-scheduler task rsyslog executable path '%s'", utils.Cronjob_file_rsyslog))
-        }
+	if tree.Get("system task-scheduler task rsyslog") == nil {
+		tree.Set("system task-scheduler task rsyslog interval 1")
+		tree.Set(fmt.Sprintf("system task-scheduler task rsyslog executable path '%s'", utils.Cronjob_file_rsyslog))
+	}
 
 	if tree.Get("system task-scheduler task zvr-monitor") == nil {
 		tree.Set("system task-scheduler task zvr-monitor interval 1")
@@ -216,9 +216,9 @@ func initHandler(ctx *server.CommandContext) interface{} {
 	}
 
 	if tree.Get("system task-scheduler task file-monitor") == nil {
-	        tree.Set("system task-scheduler task file-monitor interval 1")
-	        tree.Set(fmt.Sprintf("system task-scheduler task file-monitor executable path '%s'", utils.Cronjob_file_fileMonitor))
-        }
+		tree.Set("system task-scheduler task file-monitor interval 1")
+		tree.Set(fmt.Sprintf("system task-scheduler task file-monitor executable path '%s'", utils.Cronjob_file_fileMonitor))
+	}
 
 	tree.Apply(false)
 
@@ -231,7 +231,7 @@ func initHandler(ctx *server.CommandContext) interface{} {
 
 func pingHandler(ctx *server.CommandContext) interface{} {
 
-	addRouteIfCallbackIpChanged()
+	addRouteIfCallbackIpChanged(false)
 	var haStatus string
 	if !utils.IsHaEnabled() {
 		haStatus = utils.NOHA
@@ -271,8 +271,19 @@ func GetInitConfig() *InitConfig {
 	return initConfig
 }
 
-func addRouteIfCallbackIpChanged() {
+func addRouteIfCallbackIpChanged(init bool) {
+
+	update := false
 	if server.CURRENT_CALLBACK_IP != server.CALLBACK_IP {
+		update = true
+	} else if init {
+		// for reconnect
+		if !utils.CheckZStackRouteExists(server.CALLBACK_IP) {
+			update = true
+		}
+	}
+
+	if update {
 		if server.CURRENT_CALLBACK_IP == "" {
 			log.Debug(fmt.Sprintf("agent first start, add static route to callback ip host"))
 		} else {
@@ -285,7 +296,7 @@ func addRouteIfCallbackIpChanged() {
 		}
 
 		mgmtNic := utils.GetMgmtInfoFromBootInfo()
-		if mgmtNic == nil || utils.CheckMgmtCidrContainsIp(server.CALLBACK_IP, mgmtNic) == false {
+		if mgmtNic != nil && utils.CheckMgmtCidrContainsIp(server.CALLBACK_IP, mgmtNic) == false {
 			err := utils.SetZStackRoute(server.CALLBACK_IP, "eth0", mgmtNic["gateway"].(string))
 			utils.PanicOnError(err)
 		} else if mgmtNic == nil {
