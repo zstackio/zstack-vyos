@@ -460,9 +460,9 @@ func configureVyos() {
 					Gateway: nic.gateway, Gateway6: nic.gateway6}
 			}
 			if nic.category == "Private" {
-				err = utils.InitNicFirewall(nic.name, nic.ip, false, utils.REJECT)
+				err = utils.InitNicFirewall(nic.name, nic.ip, false, utils.IPTABLES_ACTION_REJECT)
 			} else {
-				err = utils.InitNicFirewall(nic.name, nic.ip, true, utils.REJECT)
+				err = utils.InitNicFirewall(nic.name, nic.ip, true, utils.IPTABLES_ACTION_REJECT)
 			}
 			if err != nil {
 				log.Debugf("InitNicFirewall for nic: %s failed", err.Error())
@@ -488,30 +488,15 @@ func configureVyos() {
 				fmt.Sprintf("destination address %v", nic.ip),
 			)
 
-			if nic.category == "Private" {
-				setNicTree.SetZStackFirewallRuleOnInterface(nic.name, "behind", "in",
-					"action accept",
-					"state established enable",
-					"state related enable",
-					"state invalid enable",
-					"state new enable",
-				)
-			} else {
-				setNicTree.SetZStackFirewallRuleOnInterface(nic.name, "behind", "in",
-					"action accept",
-					"state established enable",
-					"state related enable",
-				)
-
-				setNicTree.SetFirewallWithRuleNumber(nic.name, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
-					"action accept",
-					"state new enable",
-				)
-			}
-
 			setNicTree.SetZStackFirewallRuleOnInterface(nic.name, "behind", "in",
 				"action accept",
-				"protocol icmp",
+				"state established enable",
+				"state related enable",
+			)
+
+			setNicTree.SetFirewallWithRuleNumber(nic.name, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
+				"action accept",
+				"state new enable",
 			)
 
 			// only allow ssh traffic on eth0, disable on others
@@ -646,6 +631,7 @@ func main() {
 	}
 	log.Debugf("zvrboot main")
 	utils.InitVyosVersion()
+	utils.InitBootStrapInfo()
 	configureVyos()
 	startZvr()
 	log.Debugf("successfully configured the sysmtem and bootstrap the zstack virtual router agents")

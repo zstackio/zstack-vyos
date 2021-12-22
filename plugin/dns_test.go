@@ -6,33 +6,28 @@ import (
     "github.com/onsi/gomega"
     "github.com/zstackio/zstack-vyos/server"
     "github.com/zstackio/zstack-vyos/utils"
-    "github.com/zstackio/zstack-vyos/utils/test"
 )
 
 func setTestDnsEnv()  {
-    utils.InitLog(test.VYOS_UT_LOG_FOLDER + "dns_test.log", false)
+    utils.InitLog(utils.VYOS_UT_LOG_FOLDER + "dns_test.log", false)
 }
 
 var _ = Describe("dns_test", func() {
     var nicCmd *configureNicCmd
-
-    BeforeEach(func() {
+    
+    It("dns test preparing", func() {
         setTestDnsEnv()
         nicCmd = &configureNicCmd{}
     })
 
-    AfterEach(func() {
-        removeNic(nicCmd)
-    })
-
     It("test set dns", func() {
-        nicCmd.Nics = append(nicCmd.Nics, test.PubNicForUT)
+        nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
         configureNic(nicCmd)
         cmd := &setDnsCmd{}
         dns := &dnsInfo{}
 
         dns.DnsAddress = "223.5.5.5"
-        dns.NicMac = test.PubNicForUT.Mac
+        dns.NicMac = utils.PubNicForUT.Mac
 
         cmd.Dns = []dnsInfo{*dns}
 
@@ -40,17 +35,17 @@ var _ = Describe("dns_test", func() {
 
         gomega.Expect(checkDnsProcess()).To(gomega.BeTrue(), "dnsmasq start failed")
 
-        checkFirewall(test.PubNicForUT, true)
+        checkFirewall(utils.PubNicForUT, true)
     })
 
     It("test remove dns", func() {
-        nicCmd.Nics = append(nicCmd.Nics, test.PubNicForUT)
+        nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
         configureNic(nicCmd)
         cmd := &setDnsCmd{}
         dns := &dnsInfo{}
 
         dns.DnsAddress = "223.5.5.5"
-        dns.NicMac = test.PubNicForUT.Mac
+        dns.NicMac = utils.PubNicForUT.Mac
 
         cmd.Dns = []dnsInfo{*dns}
         setDns(cmd)
@@ -61,7 +56,11 @@ var _ = Describe("dns_test", func() {
 
         gomega.Expect(checkDnsProcess()).NotTo(gomega.BeTrue(), "dnsmasq start failed")
 
-        checkFirewall(test.PubNicForUT, false)
+        checkFirewall(utils.PubNicForUT, false)
+    })
+    
+    It("dns test destroying", func() {
+        removeNic(nicCmd)
     })
 })
 

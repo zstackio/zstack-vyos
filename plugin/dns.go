@@ -39,16 +39,34 @@ func makeDnsFirewallRuleDescription(nicname string) string {
 }
 
 func setDnsFirewallRules(nicName string) error {
-	rule := utils.NewIptablesRule(utils.UDP, "", "", 0, 53, nil, utils.RETURN, utils.DnsRuleComment)
-	utils.InsertFireWallRule(nicName, rule, utils.LOCAL)
-	rule = utils.NewIptablesRule(utils.TCP, "", "", 0, 53, nil, utils.RETURN, utils.DnsRuleComment)
-	utils.InsertFireWallRule(nicName, rule, utils.LOCAL)
-	return nil
+    table := utils.NewIpTables(utils.FirewallTable)
+    
+    var rules []*utils.IpTableRule
+    
+    rule := utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
+    rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
+    rule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("53")
+    rules = append(rules, rule)
+    
+    rule = utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
+    rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
+    rule.SetProto(utils.IPTABLES_PROTO_TCP).SetDstPort("53")
+    rules = append(rules, rule)
+    
+	table.AddIpTableRules(rules)
+    return table.Apply()
 }
 
 func removeDnsFirewallRules(nicName string) error {
-	utils.DeleteLocalFirewallRuleByComment(nicName, utils.DnsRuleComment)
-	return nil
+    table := utils.NewIpTables(utils.FirewallTable)
+    dnsRules := utils.GetDnsIpTableRule(table)
+    for _, r := range dnsRules {
+        if r.GetChainName() == utils.GetRuleSetName(nicName, utils.RULESET_LOCAL) {
+            table.RemoveIpTableRule([]*utils.IpTableRule{r})
+        }
+    }
+    
+    return table.Apply()
 }
 
 func setDnsHandler(ctx *server.CommandContext) interface{} {

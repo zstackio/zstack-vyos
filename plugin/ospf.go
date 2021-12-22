@@ -237,15 +237,6 @@ func (this *ospfProtocol) setNetwork() error {
 			}
 
 			if !utils.IsSkipVyosIptables() {
-				if r := this.Tree.FindFirewallRuleByDescription(nic, "in", FIREWALL_DESCRIPTION); r == nil {
-					this.Tree.SetZStackFirewallRuleOnInterface(nic, "front","in",
-						fmt.Sprintf("description %v", FIREWALL_DESCRIPTION),
-						fmt.Sprintf("protocol ospf"),
-						"action accept",
-					)
-
-				}
-
 				if r := this.Tree.FindFirewallRuleByDescription(nic, "local", FIREWALL_DESCRIPTION); r == nil {
 					this.Tree.SetFirewallOnInterface(nic, "local",
 						fmt.Sprintf("description %v", FIREWALL_DESCRIPTION),
@@ -405,32 +396,25 @@ func getNeighbors(ctx *server.CommandContext) interface{} {
 	return getOspfNeighborRsp{Neighbors:neighbors}
 }
 
-func syncOspfRulesByIptables(NetworkInfos []networkInfo)  {
-	localfilterRules := make(map[string][]utils.IptablesRule)
-	filterRules := make(map[string][]utils.IptablesRule)
-	snatRules := []utils.IptablesRule{}
-
+func syncOspfRulesByIptables(NetworkInfos []networkInfo) {
+	table := utils.NewIpTables(utils.FirewallTable)
+	
+	ospfRules := utils.GetOSPFIpTableRule(table)
+	table.RemoveIpTableRule(ospfRules)
+	
+	var filterRules []*utils.IpTableRule
+	
 	for _, info := range NetworkInfos {
-		nicname, err := utils.GetNicNameByMac(info.NicMac); utils.PanicOnError(err)
-		rule := utils.NewIptablesRule("ospf",  "", "", 0, 0, nil, utils.RETURN, utils.OSPFComment)
-		filterRules[nicname] = append(filterRules[nicname], rule)
-		lrule := utils.NewIptablesRule("ospf",  "", "", 0, 0, nil, utils.RETURN, utils.OSPFComment)
-		localfilterRules[nicname] = append(localfilterRules[nicname], lrule)
-
-		srule := utils.NewIpsecsIptablesRule("OSPF", "", "", 0, 0, nil, utils.RETURN,
-			utils.OSPFComment + nicname, "", nicname)
-		snatRules = append(snatRules, srule)
-	}
-
-	if err := utils.SyncNatRule(snatRules, nil, utils.OSPFComment); err != nil {
-		log.Warnf("ospf SyncNatRule failed %s", err.Error())
+		nicname, err := utils.GetNicNameByMac(info.NicMac);
 		utils.PanicOnError(err)
+		rule := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
+		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
+		rule.SetProto(utils.IPTABLES_PROTO_OSPF)
+		filterRules = append(filterRules, rule)
 	}
-
-	if err := utils.SyncLocalAndInFirewallRule(filterRules, localfilterRules, utils.OSPFComment); err != nil {
-		log.Warnf("ospf SyncFirewallRule in failed %s", err.Error())
-		utils.PanicOnError(err)
-	}
+	
+	table.AddIpTableRules(filterRules)
+	err := table.Apply(); utils.PanicOnError(err)
 }
 
 func OspfEntryPoint()  {

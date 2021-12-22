@@ -115,11 +115,22 @@ func (pimd *pimdAddNic) AddNic(nic string) error {
 	}
 
 	if utils.IsSkipVyosIptables() {
-		rule := utils.NewIptablesRule("pimd", "", "", 0, 0, nil, utils.ACCEPT, utils.PIMDComment+nic)
-		utils.InsertFireWallRule(nic, rule, utils.LOCAL)
-
-		rule = utils.NewIptablesRule("igmp", "", "", 0, 0, nil, utils.ACCEPT, utils.PIMDComment+nic)
-		utils.InsertFireWallRule(nic, rule, utils.LOCAL)
+		table := utils.NewIpTables(utils.FirewallTable)
+		
+		var rules []*utils.IpTableRule
+		
+		rule := utils.NewIpTableRule(utils.GetRuleSetName(nic, utils.RULESET_LOCAL))
+		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
+		rule.SetProto(utils.IPTABLES_PROTO_PIMD).SetInNic(nic)
+		rules = append(rules, rule)
+		
+		rule = utils.NewIpTableRule(utils.GetRuleSetName(nic, utils.RULESET_LOCAL))
+		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
+		rule.SetProto(utils.IPTABLES_PROTO_IGMP).SetInNic(nic)
+		rules = append(rules, rule)
+		
+		table.AddIpTableRules(rules)
+		return table.Apply()
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
 		des := makePimdFirewallRuleDescription(nic, "pimd")
@@ -163,14 +174,41 @@ func (pimd *pimdAddNic) AddNic(nic string) error {
 	return nil
 }
 
-func addPimdFirewallByIptables(nics map[string]utils.Nic) error {
+func getPimdFirewallByNic(nics map[string]utils.Nic) []*utils.IpTableRule {
+	var rules []*utils.IpTableRule
 	for _, nic := range nics {
 		/* pimd rule */
-		rule := utils.NewIptablesRule("pimd", "", "", 0, 0, nil, utils.ACCEPT, utils.PIMDComment+nic.Name)
-		utils.InsertFireWallRule(nic.Name, rule, utils.LOCAL)
+		rule := utils.NewIpTableRule(utils.GetRuleSetName(nic.Name, utils.RULESET_LOCAL))
+		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
+		rule.SetProto(utils.IPTABLES_PROTO_PIMD)
+		rules = append(rules, rule)
 
-		rule = utils.NewIptablesRule("igmp", "", "", 0, 0, nil, utils.ACCEPT, utils.PIMDComment+nic.Name)
-		utils.InsertFireWallRule(nic.Name, rule, utils.LOCAL)
+		rule = utils.NewIpTableRule(utils.GetRuleSetName(nic.Name, utils.RULESET_LOCAL))
+		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
+		rule.SetProto(utils.IPTABLES_PROTO_IGMP)
+		rules = append(rules, rule)
+
+		rule = utils.NewIpTableRule(utils.GetRuleSetName(nic.Name, utils.RULESET_IN))
+		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
+		rule.SetDstIp("224.0.0.0/4")
+		rule.SetState([]string{utils.IPTABLES_STATE_NEW, utils.IPTABLES_STATE_RELATED, utils.IPTABLES_STATE_ESTABLISHED})
+		rules = append(rules, rule)
+	}
+
+	return rules
+}
+
+func addPimdFirewallByIptables(nics map[string]utils.Nic) error {
+	table := utils.NewIpTables(utils.FirewallTable)
+	oldRules := utils.GetPimdIpTableRule(table)
+	table.RemoveIpTableRule(oldRules)
+	
+	var rules []*utils.IpTableRule
+	rules = getPimdFirewallByNic(nics)
+	
+	if len(rules) > 0 {
+		table.AddIpTableRules(rules)
+		return table.Apply()
 	}
 
 	return nil
@@ -254,11 +292,11 @@ func enablePimdHandler(ctx *server.CommandContext) interface{} {
 }
 
 func removePimdFirewallByIptables(nics map[string]utils.Nic) error {
-	for _, nic := range nics {
-		utils.DeleteFirewallRuleByComment(nic.Name, utils.PIMDComment+nic.Name)
-	}
+	table := utils.NewIpTables(utils.FirewallTable)
+	oldRules := getPimdFirewallByNic(nics)
+	table.RemoveIpTableRule(oldRules)
 
-	return nil
+	return table.Apply()
 }
 
 func disablePimdHandler(ctx *server.CommandContext) interface{} {

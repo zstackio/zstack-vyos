@@ -452,15 +452,32 @@ shared-network {{.SubnetName}} {
 `
 
 func setDhcpFirewallRules(nicName string) error {
-	rule := utils.NewIptablesRule(utils.UDP, "", "", 0, 67, nil, utils.RETURN, utils.DnsRuleComment)
-	utils.InsertFireWallRule(nicName, rule, utils.LOCAL)
-	rule = utils.NewIptablesRule(utils.UDP, "", "", 0, 68, nil, utils.RETURN, utils.DnsRuleComment)
-	utils.InsertFireWallRule(nicName, rule, utils.LOCAL)
-	rule = utils.NewIptablesRule(utils.UDP, "", "", 0, 53, nil, utils.RETURN, utils.DnsRuleComment)
-	utils.InsertFireWallRule(nicName, rule, utils.LOCAL)
-	rule = utils.NewIptablesRule(utils.TCP, "", "", 0, 53, nil, utils.RETURN, utils.DnsRuleComment)
-	utils.InsertFireWallRule(nicName, rule, utils.LOCAL)
-	return nil
+	table := utils.NewIpTables(utils.FirewallTable)
+	
+	var rules []*utils.IpTableRule
+	
+	rule := utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
+	rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
+	rule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("67")
+	rules = append(rules, rule)
+	
+	rule = utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
+	rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
+	rule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("68")
+	rules = append(rules, rule)
+	
+	rule = utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
+	rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
+	rule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("53")
+	rules = append(rules, rule)
+	
+	rule = utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
+	rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
+	rule.SetProto(utils.IPTABLES_PROTO_TCP).SetDstPort("68")
+	rules = append(rules, rule)
+	
+	table.AddIpTableRules(rules)
+	return table.Apply()
 }
 
 func makeDhcpFirewallRuleDescription(nicname string) string {

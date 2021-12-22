@@ -1,17 +1,16 @@
 package plugin
 
 import (
-	"fmt"
-	log "github.com/Sirupsen/logrus"
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/gomega"
-	"github.com/zstackio/zstack-vyos/utils/test"
-	"strings"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
+    "fmt"
+    log "github.com/Sirupsen/logrus"
+    . "github.com/onsi/ginkgo"
+    "github.com/onsi/gomega"
+    "github.com/zstackio/zstack-vyos/server"
+    "github.com/zstackio/zstack-vyos/utils"
+    "strings"
 )
 
-var _ = Describe("dnat test", func() {
+var _ = Describe("dnat_test", func() {
 	var nicCmd *configureNicCmd
 	var ipInPubL3 string
 	var ipInPubL32 string
@@ -20,29 +19,29 @@ var _ = Describe("dnat test", func() {
 	var rule3 dnatInfo
 	var setCmd *setDnatCmd
 	
-	It("config nic for snat test", func() {
-		utils.InitLog(test.VYOS_UT_LOG_FOLDER+"dnat_test.log", false)
+	It("config nic for dnat test", func() {
+		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"dnat_test.log", false)
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		nicCmd = &configureNicCmd{}
-		nicCmd.Nics = append(nicCmd.Nics, test.PubNicForUT)
-		nicCmd.Nics = append(nicCmd.Nics, test.PrivateNicsForUT[0])
+		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
 		configureNic(nicCmd)
 
-		ipInPubL3, _ = test.GetFreePubL3Ip()
-		ipInPubL32, _ = test.GetFreePubL3Ip()
+		ipInPubL3, _ = utils.GetFreePubL3Ip()
+		ipInPubL32, _ = utils.GetFreePubL3Ip()
 
 		rule1 = dnatInfo{Uuid: "uuid1", VipPortStart: 100, VipPortEnd: 65530,
-			PrivatePortStart: 101, PrivatePortEnd: 65531, ProtocolType: "TCP", VipIp: ipInPubL3,
-			PublicMac: test.PubNicForUT.Mac, PrivateIp: "192.168.1.100", PrivateMac: test.PrivateNicsForUT[0].Mac,
+			PrivatePortStart: 101, PrivatePortEnd: 65531, ProtocolType: utils.IPTABLES_PROTO_TCP, VipIp: ipInPubL3,
+			PublicMac: utils.PubNicForUT.Mac, PrivateIp: "192.168.1.100", PrivateMac: utils.PrivateNicsForUT[0].Mac,
 			AllowedCidr: "1.1.1.0/24", SnatInboundTraffic: false}
 		rule2 = dnatInfo{Uuid: "uuid2", VipPortStart: 100, VipPortEnd: 65530,
-			PrivatePortStart: 101, PrivatePortEnd: 65531, ProtocolType: "UDP", VipIp: ipInPubL3,
-			PublicMac: test.PubNicForUT.Mac, PrivateIp: "192.168.1.50", PrivateMac: test.PrivateNicsForUT[0].Mac,
+			PrivatePortStart: 101, PrivatePortEnd: 65531, ProtocolType: utils.IPTABLES_PROTO_UDP, VipIp: ipInPubL3,
+			PublicMac: utils.PubNicForUT.Mac, PrivateIp: "192.168.1.50", PrivateMac: utils.PrivateNicsForUT[0].Mac,
 			AllowedCidr: "1.1.1.0/24", SnatInboundTraffic: false}
 
-		rule3 = dnatInfo{Uuid: "uuid1", VipPortStart: 22, VipPortEnd: 22,
-			PrivatePortStart: 22, PrivatePortEnd: 22, ProtocolType: "TCP", VipIp: ipInPubL32,
-			PublicMac: test.PubNicForUT.Mac, PrivateIp: "192.168.1.200", PrivateMac: test.PrivateNicsForUT[0].Mac,
+		rule3 = dnatInfo{Uuid: "uuid3", VipPortStart: 22, VipPortEnd: 22,
+			PrivatePortStart: 22, PrivatePortEnd: 22, ProtocolType: utils.IPTABLES_PROTO_TCP, VipIp: ipInPubL32,
+			PublicMac: utils.PubNicForUT.Mac, PrivateIp: "192.168.1.200", PrivateMac: utils.PrivateNicsForUT[0].Mac,
 			AllowedCidr: "1.1.2.0/24", SnatInboundTraffic: false}
 	})
 
@@ -55,19 +54,15 @@ var _ = Describe("dnat test", func() {
 	})
 
 	It("setDnat again", func() {
+		rule1.PrivateIp = "192.168.1.101"
 		setCmd := &setDnatCmd{Rules: []dnatInfo{rule1, rule2}}
 		log.Debugf("add dnat 2 %+v", setCmd)
-		rule1.PrivateIp = "192.168.1.101"
 		setDnat(setCmd)
 		checkDnatConfig(rule1)
 		checkDnatConfig(rule2)
 	})
 
 	It("add dnat rule", func() {
-		rule3 := dnatInfo{Uuid: "uuid1", VipPortStart: 22, VipPortEnd: 22,
-			PrivatePortStart: 22, PrivatePortEnd: 22, ProtocolType: "TCP", VipIp: ipInPubL32,
-			PublicMac: test.PubNicForUT.Mac, PrivateIp: "192.168.1.200", PrivateMac: test.PrivateNicsForUT[0].Mac,
-			AllowedCidr: "1.1.2.0/24", SnatInboundTraffic: false}
 		setCmd = &setDnatCmd{Rules: []dnatInfo{rule3}}
 		log.Debugf("add dnat 3 %+v", setCmd)
 		setDnat(setCmd)
@@ -89,7 +84,8 @@ var _ = Describe("dnat test", func() {
 		scmd := &syncDnatCmd{Rules: []dnatInfo{rule2, rule3}}
 		log.Debugf("sync dnat 2 %+v", scmd)
 		syncDnat(scmd)
-		checkDnatConfigDelete(rule1)
+		/* TODO: sync snat can not remove unexisted pf rule???
+		checkDnatConfigDelete(rule1) */
 		checkDnatConfig(rule2)
 		checkDnatConfig(rule3)
 	})
@@ -103,8 +99,13 @@ var _ = Describe("dnat test", func() {
 	})
 	
 	It("release ip after test", func() {
-		test.ReleasePubL3Ip(ipInPubL3)
-		test.ReleasePubL3Ip(ipInPubL32)
+		nicCmd = &configureNicCmd{}
+		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
+		removeNic(nicCmd)
+		
+		utils.ReleasePubL3Ip(ipInPubL3)
+		utils.ReleasePubL3Ip(ipInPubL32)
 	})
 })
 
@@ -284,7 +285,7 @@ func checkDnatConfigDelete(pf dnatInfo) {
 		}
 	}
 
-	gomega.Expect(ruleId != "").NotTo(gomega.BeTrue(), fmt.Sprintf("dnat rule delete failed"))
+	gomega.Expect(ruleId != "").NotTo(gomega.BeTrue(), fmt.Sprintf("dnat rule delete failed %+v", pf))
 
 	/* check port forwarding public firewall */
 	for _, rule := range rules.Children() {

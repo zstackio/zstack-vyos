@@ -1,29 +1,29 @@
 package plugin
 
 import (
-	"github.com/zstackio/zstack-vyos/server"
-	"html/template"
-	"github.com/zstackio/zstack-vyos/utils"
 	"bytes"
-	"github.com/fatih/structs"
-	"strings"
-	"fmt"
-	"path/filepath"
-	"io/ioutil"
-	"strconv"
-	"os"
-	"regexp"
-	prom "github.com/prometheus/client_golang/prometheus"
-	haproxy "github.com/bcicen/go-haproxy"
-	cidrman "github.com/EvilSuperstars/go-cidrman"
-	"sort"
-	log "github.com/Sirupsen/logrus"
-	"net/http"
-	"time"
+	"crypto/md5"
 	"encoding/json"
 	"errors"
-	"crypto/md5"
+	"fmt"
+	cidrman "github.com/EvilSuperstars/go-cidrman"
+	log "github.com/Sirupsen/logrus"
+	haproxy "github.com/bcicen/go-haproxy"
+	"github.com/fatih/structs"
+	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
+	"html/template"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
 	"runtime"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
 )
 
 const (
@@ -80,7 +80,7 @@ const(
 
 type backendServerInfo struct{
 	Ip string `json:"ip"`
-	Weight int `json:"weight`
+	Weight int `json:"weight"`
 }
 
 type serverGroupInfo struct {
@@ -133,7 +133,7 @@ type Listener interface {
 	stopListenerService() ( err error)
 	postActionListenerServiceStop() (ret int, err error)
 	getLbCounters(listenerUuid string) ([]*LbCounter, int)
-	getIptablesRule()([]utils.IptablesRule, string)
+	getIptablesRule()([]*utils.IpTableRule, string)
 	getLbInfo() (lb lbInfo)
 	startPidMonitor()
 	stopPidMonitor()
@@ -378,13 +378,13 @@ func (this *HaproxyListener) startPidMonitor()  {
 					log.Warnf("failed to respawn haproxy: %s", err)
 					return -1
 				}
-				
+
 				pids = this.getPids()
 				if len(pids) == 0 {
 					log.Warnf("failed to read haproxy pid: %s", err)
 					return -1
 				}
-				
+
 				pid, _ := strconv.Atoi(pids[0])
 				return pid
 			})
@@ -619,19 +619,15 @@ func (this *HaproxyListener) checkIfListenerServiceUpdate(origChecksum string, c
 }
 
 func (this *HaproxyListener) preActionListenerServiceStart() ( err error) {
-	comment := makeDropRuleComments(this.lb)
-	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic); utils.PanicOnError(err)
 	if utils.IsSkipVyosIptables() {
 		rule, _ := this.getSynIptablesRule()
-		ruleMap := map[string][]utils.IptablesRule{}
-		ruleMap[nicname] = rule
-		for _, pname := range utils.GetPrivteInterface() {
-			ruleMap[pname] = rule
-		}
-		err := utils.SyncFirewallRule(ruleMap, comment, utils.LOCAL)
-		return err
+
+		table := utils.NewIpTables(utils.FirewallTable)
+		table.AddIpTableRules([]*utils.IpTableRule{rule})
+		return table.Apply()
 	}
 
+	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic); utils.PanicOnError(err)
 	// drop SYN packets to make clients to resend, this is for restarting LB without losing packets
 	tree := server.NewParserFromShowConfiguration().Tree
 	dropRuleDes := fmt.Sprintf("lb-%v-%s-drop", this.lb.LbUuid, this.lb.ListenerUuid)
@@ -652,14 +648,12 @@ func (this *HaproxyListener) preActionListenerServiceStart() ( err error) {
 }
 
 func (this *HaproxyListener) rollbackPreActionListenerServiceStart() ( err error) {
-	commet := makeDropRuleComments(this.lb)
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
 	if utils.IsSkipVyosIptables() {
-		utils.DeleteFirewallRuleByComment(nicname, commet)
-		for _, pname := range utils.GetPrivteInterface() {
-			utils.DeleteFirewallRuleByComment(pname, commet)
-		}
-		return nil
+		table := utils.NewIpTables(utils.FirewallTable)
+		rule, _ := this.getSynIptablesRule()
+		table.RemoveIpTableRule([]*utils.IpTableRule{rule})
+		return  table.Apply()
 	}
 
 	// drop SYN packets to make clients to resend, this is for restarting LB without losing packets
@@ -676,9 +670,6 @@ func (this *HaproxyListener) rollbackPreActionListenerServiceStart() ( err error
 func configureInternalFirewallRule(tree *server.VyosConfigTree, des string, rules ...string) (err error) {
 	/*support to access lb vip from all the private nics */
 	err = nil
-	if utils.IsSkipVyosIptables() {
-		return
-	}
 	priNics := utils.GetPrivteInterface()
 	for _, priNic := range priNics {
 		if r := tree.FindFirewallRuleByDescription(priNic, "local", des); r == nil {
@@ -691,9 +682,6 @@ func configureInternalFirewallRule(tree *server.VyosConfigTree, des string, rule
 func cleanInternalFirewallRule(tree *server.VyosConfigTree, des string) (err error) {
 	/*support to access lb vip from all the private nics */
 	err = nil
-	if utils.IsSkipVyosIptables() {
-		return
-	}
 	priNics := utils.GetPrivteInterface()
 	for _, priNic := range priNics {
 		if r := tree.FindFirewallRuleByDescription(priNic, "local", des); r != nil {
@@ -708,13 +696,27 @@ setlb:
 */
 func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
-	dropComment := makeDropRuleComments(this.lb)
 	if utils.IsSkipVyosIptables() {
-		utils.DeleteFirewallRuleByComment(nicname, dropComment)
-		for _, pname := range utils.GetPrivteInterface() {
-			utils.DeleteFirewallRuleByComment(pname, dropComment)
+		table := utils.NewIpTables(utils.FirewallTable)
+		rule, _ := this.getSynIptablesRule()
+		table.RemoveIpTableRule([]*utils.IpTableRule{rule})
+
+		rules, _ := this.getIptablesRule()
+		table.AddIpTableRules(rules)
+
+		priNics := utils.GetPrivteInterface()
+		for _, priNic := range priNics {
+			for _, r := range rules {
+				newRule := r.Copy()
+				newRule.SetChainName(utils.GetRuleSetName(priNic, utils.RULESET_LOCAL))
+				table.AddIpTableRules([]*utils.IpTableRule{newRule})
+			}
 		}
-		return nil
+
+		rules, _ = this.getIcmpIptablesRule()
+		table.AddIpTableRules(rules)
+
+		return  table.Apply()
 	}
 
 	tree := server.NewParserFromShowConfiguration().Tree
@@ -736,7 +738,7 @@ func (this *HaproxyListener) postActionListenerServiceStart() ( err error) {
 	}
 
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallLocalICMPDes); r == nil {
-		tree.SetFirewallWithRuleNumber(nicname, "local", LB_LOCAL_ICMP_FIREWALL_RULE_NUMBER,
+		tree.SetFirewallOnInterface(nicname, "local",
 			fmt.Sprintf("destination address %v", this.lb.Vip),
 			fmt.Sprintf("description %v", this.firewallLocalICMPDes),
 			"protocol icmp",
@@ -804,6 +806,33 @@ func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error
 		}
 		cleanInternalFirewallRule(tree, this.firewallDes)
 		tree.Apply(false)
+	} else {
+		table := utils.NewIpTables(utils.FirewallTable)
+		var rules []*utils.IpTableRule
+		r, _ := this.getIptablesRule()
+		rules = append(rules, r...)
+
+		rules, _ = this.getIcmpIptablesRule()
+		rules = append(rules, r...)
+
+		var tempRules []*utils.IpTableRule
+		priNics := utils.GetPrivteInterface()
+		for _, priNic := range priNics {
+			if priNic != nicname {
+				for _, r := range rules {
+					tmp := r.Copy()
+					tmp.SetChainName(utils.GetRuleSetName(priNic, utils.RULESET_LOCAL))
+					tempRules = append(tempRules, tmp)
+				}
+			}
+		}
+		if len(tempRules) > 0{
+			rules = append(rules, tempRules...)
+		}
+
+		table.RemoveIpTableRule(rules)
+
+		err := table.Apply(); utils.PanicOnError(err)
 	}
 
 	if e, _ := utils.PathExists(this.pidPath); e {
@@ -823,22 +852,33 @@ func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error
 	return 0, err
 }
 
-func (this *HaproxyListener) getIptablesRule()([]utils.IptablesRule, string) {
+func (this *HaproxyListener) getIptablesRule() ([]*utils.IpTableRule, string) {
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
-	return []utils.IptablesRule{utils.NewLoadBalancerIptablesRule(utils.TCP, this.lb.Vip, this.lb.LoadBalancerPort,
-		utils.RETURN, makeLbFirewallRuleComments(this.lb), nil)}, nicname
+	rule := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
+	rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.LbRuleComment)
+	rule.SetProto(utils.IPTABLES_PROTO_TCP).SetDstPort(fmt.Sprintf("%d", this.lb.LoadBalancerPort)).SetDstIp(this.lb.Vip+"/32")
+
+	return []*utils.IpTableRule{rule}, nicname
 }
 
-func (this *HaproxyListener) getIcmpIptablesRule()([]utils.IptablesRule, string) {
+func (this *HaproxyListener) getIcmpIptablesRule() ([]*utils.IpTableRule, string) {
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
-	return []utils.IptablesRule{utils.NewLoadBalancerIptablesRule(utils.ICMP, this.lb.Vip, 0,
-		utils.RETURN, makeLbFirewallRuleComments(this.lb), nil)}, nicname
+
+	rule := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
+	rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.LbRuleComment)
+	rule.SetProto(utils.IPTABLES_PROTO_ICMP).SetDstIp(this.lb.Vip+"/32")
+
+	return []*utils.IpTableRule{rule}, nicname
 }
 
-func (this *HaproxyListener) getSynIptablesRule()([]utils.IptablesRule, string) {
+func (this *HaproxyListener) getSynIptablesRule() (*utils.IpTableRule, string) {
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
-	return []utils.IptablesRule{utils.NewLoadBalancerIptablesRule(utils.TCP, this.lb.Vip, this.lb.LoadBalancerPort,
-		utils.DROP, makeDropRuleComments(this.lb), []string{utils.SYN})}, nicname
+	rule := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
+	rule.SetAction(utils.IPTABLES_ACTION_DROP).SetComment(utils.LbRuleComment)
+	rule.SetDstIp(this.lb.Vip+"/32").SetProto(utils.IPTABLES_PROTO_TCP).SetDstPort(fmt.Sprintf("%d", this.lb.LoadBalancerPort))
+	rule.SetTcpFlags([]string{"SYN"})
+
+	return rule, nicname
 }
 
 func (this *HaproxyListener) getLbInfo() (lb lbInfo) {
@@ -1095,26 +1135,39 @@ func (this *GBListener) rollbackPreActionListenerServiceStart() ( err error) {
 	return nil
 }
 
-func (this *GBListener) setGBListenerRuleByIptables(nic string)  {
-	dport, _ := strconv.Atoi(this.apiPort)
-	rule := utils.NewLoadBalancerIptablesRule(utils.TCP, "", dport,
-		utils.ACCEPT, makeLbFirewallRuleComments(this.lb), nil)
-	utils.InsertFireWallRule(nic, rule, utils.LOCAL)
-
-	rule = utils.NewLoadBalancerIptablesRule(utils.UDP, this.lb.Vip, this.lb.LoadBalancerPort,
-		utils.ACCEPT, makeLbFirewallRuleComments(this.lb), nil)
-	utils.InsertFireWallRule(nic, rule, utils.LOCAL)
-}
-
-func (this *GBListener) getIcmpIptablesRule()([]utils.IptablesRule, string) {
+func (this *GBListener) getIcmpIptablesRule()([]*utils.IpTableRule, string) {
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
-	return []utils.IptablesRule{utils.NewLoadBalancerIptablesRule(utils.ICMP, this.lb.Vip, 0,
-		utils.RETURN, makeLbFirewallRuleComments(this.lb), nil)}, nicname
+
+	rule := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
+	rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.LbRuleComment)
+	rule.SetDstIp(this.lb.Vip+"/32").SetProto(utils.IPTABLES_PROTO_ICMP)
+
+	return []*utils.IpTableRule{rule}, nicname
 }
 
 func (this *GBListener) postActionListenerServiceStart() ( err error) {
 	if utils.IsSkipVyosIptables() {
-		return nil
+		table := utils.NewIpTables(utils.FirewallTable)
+
+		rules, _ := this.getIptablesRule()
+		table.AddIpTableRules(rules)
+
+		priNics := utils.GetPrivteInterface()
+		for _, priNic := range priNics {
+			for _, r := range rules {
+				newRule := r.Copy()
+				newRule.SetChainName(utils.GetRuleSetName(priNic, utils.RULESET_LOCAL))
+				table.AddIpTableRules([]*utils.IpTableRule{newRule})
+			}
+		}
+
+		rules, _ = this.getIcmpIptablesRule()
+		table.AddIpTableRules(rules)
+
+		rules, _ = this.getIcmpIptablesRule()
+		table.AddIpTableRules(rules)
+
+		return  table.Apply()
 	}
 
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
@@ -1147,8 +1200,10 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 	}
 
 	if r := tree.FindFirewallRuleByDescription(nicname, "local", this.firewallLocalICMPDes); r == nil {
-		tree.SetFirewallWithRuleNumber(nicname, "local", LB_LOCAL_ICMP_FIREWALL_RULE_NUMBER,
+		tree.SetFirewallOnInterface(nicname, "local",
+			fmt.Sprintf("destination address %v", this.lb.Vip),
 			fmt.Sprintf("description %v", this.firewallLocalICMPDes),
+			fmt.Sprintf("destination address %v", this.lb.Vip),
 			"protocol icmp",
 			"action accept")
 	}
@@ -1158,13 +1213,21 @@ func (this *GBListener) postActionListenerServiceStart() ( err error) {
 	return nil
 }
 
-func (this *GBListener) getIptablesRule()([]utils.IptablesRule, string) {
+func (this *GBListener) getIptablesRule()([]*utils.IpTableRule, string) {
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic ); utils.PanicOnError(err)
-	dport, _ := strconv.Atoi(this.apiPort)
-	return []utils.IptablesRule {
-		utils.NewLoadBalancerIptablesRule(utils.TCP, "", dport, utils.ACCEPT, makeLbFirewallRuleComments(this.lb), nil),
-		utils.NewLoadBalancerIptablesRule(utils.UDP, this.lb.Vip, this.lb.LoadBalancerPort, utils.ACCEPT, makeLbFirewallRuleComments(this.lb), nil)},
-		nicname
+	var rules []*utils.IpTableRule
+
+	rule := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
+	rule.SetAction(utils.IPTABLES_ACTION_ACCEPT).SetComment(utils.LbRuleComment)
+	rule.SetDstPort(this.apiPort).SetProto(utils.IPTABLES_PROTO_TCP)
+	rules = append(rules, rule)
+
+	rule = utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
+	rule.SetAction(utils.IPTABLES_ACTION_ACCEPT).SetComment(utils.LbRuleComment)
+	rule.SetDstIp(this.lb.Vip+"/32").SetDstPort(fmt.Sprintf("%d", this.lb.LoadBalancerPort)).SetProto(utils.IPTABLES_PROTO_UDP)
+	rules = append(rules, rule)
+
+	return rules, nicname
 }
 
 func (this *GBListener) getLbInfo() (lb lbInfo) {
@@ -1203,6 +1266,24 @@ func (this *GBListener) postActionListenerServiceStop() (ret int, err error) {
 		}
 		cleanInternalFirewallRule(tree, this.firewallDes)
 		tree.Apply(false)
+	} else {
+                table := utils.NewIpTables(utils.FirewallTable)
+                rules, _ := this.getIptablesRule()
+                table.RemoveIpTableRule(rules)
+
+                priNics := utils.GetPrivteInterface()
+                for _, priNic := range priNics {
+                        for _, r := range rules {
+                                newRule := r.Copy()
+                                newRule.SetChainName(utils.GetRuleSetName(priNic, utils.RULESET_LOCAL))
+                                table.RemoveIpTableRule([]*utils.IpTableRule{newRule})
+                        }
+                }
+
+                rules, _ = this.getIcmpIptablesRule()
+                table.RemoveIpTableRule(rules)
+
+                err := table.Apply(); utils.PanicOnError(err)
 	}
 
 	if e, _ := utils.PathExists(this.pidPath); e {
@@ -1252,14 +1333,6 @@ func makeLbFirewallRuleDescription(lb lbInfo) string {
 
 func makeLbFirewallLocalICMPRuleDescription(lb lbInfo) string {
 	return fmt.Sprintf("LBICMP-%v", lb.LbUuid)
-}
-
-func makeDropRuleComments(lb lbInfo) string {
-	return fmt.Sprintf("%s-%s-%s", utils.LbSynRuleComment, lb.LbUuid, lb.ListenerUuid)
-}
-
-func makeLbFirewallRuleComments(lb lbInfo) string {
-	return fmt.Sprintf("%s-%s-%s", utils.LbRuleComment, lb.LbUuid, lb.ListenerUuid)
 }
 
 func setLb(lb lbInfo) {
@@ -1379,45 +1452,9 @@ func refreshLb(ctx *server.CommandContext) interface{} {
 		}
 	}
 
-	refreshLbIpTables()
 	removeUnusedCertificate()
 
 	return nil
-}
-
-func refreshLbIpTables()  {
-	/* reinstall all lb firewalls */
-	if utils.IsSkipVyosIptables() {
-		filterRules := make(map[string][]utils.IptablesRule)
-		priNics := utils.GetPrivteInterface()
-		for _, listener := range LbListeners {
-			var nicname string
-			var rules []utils.IptablesRule
-			var icmpRules []utils.IptablesRule
-			switch v := listener.(type) {
-			case *HaproxyListener:
-				rules, nicname = v.getIptablesRule()
-				icmpRules, _ = v.getIcmpIptablesRule()
-				break
-			case *GBListener:
-				rules, nicname = v.getIptablesRule()
-				icmpRules, nicname = v.getIcmpIptablesRule()
-				break
-			default:
-				continue
-			}
-
-			filterRules[nicname] = append(filterRules[nicname], rules...)
-			filterRules[nicname] = append(filterRules[nicname], icmpRules...)
-			for _, priNic := range priNics {
-				if priNic != nicname {
-					filterRules[priNic] = append(filterRules[priNic], rules...)
-				}
-			}
-		}
-
-		err := utils.SyncFirewallRule(filterRules, utils.LbRuleComment, utils.LOCAL); utils.PanicOnError(err)
-	}
 }
 
 func delLb(lb lbInfo) {
@@ -1425,7 +1462,7 @@ func delLb(lb lbInfo) {
 	if  listener == nil {
 		return
 	}
-	
+
 	listener.stopPidMonitor()
 	err := listener.stopListenerService(); utils.PanicOnError(err)
 	_, err = listener.postActionListenerServiceStop(); utils.PanicOnError(err)
@@ -1441,9 +1478,7 @@ func deleteLb(ctx *server.CommandContext) interface{} {
 		}
 	}
 
-	refreshLbIpTables()
 	removeUnusedCertificate()
-	//generateLbHaScript()
 
 	return nil
 }

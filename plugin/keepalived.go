@@ -531,7 +531,7 @@ func getConntrackdPid() int {
 
 /* true master, false backup */
 func getKeepAlivedStatus() KeepAlivedStatus {
-	if isRunningInUTCase {
+	if utils.IsRuingUT() {
 		return keepAlivedStatus
 	}
 	
@@ -604,14 +604,9 @@ func KeepalivedEntryPoint() {
 }
 
 var keepAlivedStatus KeepAlivedStatus
-var isRunningInUTCase bool
 
-func init ()  {
-	isRunningInUTCase = false
-}
 
 func SetKeepalivedStatusForUt(status KeepAlivedStatus)  {
-	isRunningInUTCase = true
 	utils.SetHaStatus(utils.HABACKUP)
 	keepAlivedStatus = status
 }

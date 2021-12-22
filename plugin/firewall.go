@@ -1,80 +1,87 @@
 package plugin
 
 import (
-	"errors"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
+	"net"
 	"strconv"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
-	"net"
 )
 
 const (
-	fwGetConfigPath = "/fw/getConfig"
-	fwCreateRulePath = "/fw/create/rule"
-	fwDeleteRulePath = "/fw/delete/rule"
-	fwChangeRuleStatePath = "/fw/changeState/rule"
-	fwCreateRuleSetPath = "/fw/create/ruleSet"
-	fwDeleteRuleSetPath = "/fw/delete/ruleSet"
-	fwAttachRulesetPath = "/fw/attach/ruleSet"
-	fwDetachRuleSetPath = "/fw/detach/ruleSet"
-	fwApplyUserRulesPath = "/fw/apply/rule"
-	fwUpdateRuleSetPath = "/fw/update/ruleSet"
-	fwDeleteUserRulePath = "/fw/delete/firewall"
-	fwApplyRuleSetPath = "/fw/apply/ruleSet/changes"
-	zstackRuleNumberFront = 1000
-	zstackRuleNumberEnd = 4000
+	fwGetConfigPath                   = "/fw/getConfig"
+	fwCreateRulePath                  = "/fw/create/rule"
+	fwDeleteRulePath                  = "/fw/delete/rule"
+	fwChangeRuleStatePath             = "/fw/changeState/rule"
+	fwCreateRuleSetPath               = "/fw/create/ruleSet"
+	fwDeleteRuleSetPath               = "/fw/delete/ruleSet"
+	fwAttachRulesetPath               = "/fw/attach/ruleSet"
+	fwDetachRuleSetPath               = "/fw/detach/ruleSet"
+	fwApplyUserRulesPath              = "/fw/apply/rule"
+	fwUpdateRuleSetPath               = "/fw/update/ruleSet"
+	fwDeleteUserRulePath              = "/fw/delete/firewall"
+	fwApplyRuleSetPath                = "/fw/apply/ruleSet/changes"
+	zstackRuleNumberFront             = 1000
+	zstackRuleNumberEnd               = 4000
 	FIREWALL_RULE_SOURCE_GROUP_SUFFIX = "source"
-	FIREWALL_RULE_DEST_GROUP_SUFFIX = "dest"
-	IP_SPLIT = ","
+	FIREWALL_RULE_DEST_GROUP_SUFFIX   = "dest"
+	IP_SPLIT                          = ","
+
+	FIREWALL_DIRECTION_OUT   = "out"
+	FIREWALL_DIRECTION_IN    = "in"
+	FIREWALL_DIRECTION_LOCAL = "local"
+
+	RULEINFO_DISABLE = "disable"
+	RULEINFO_ENABLE  = "enable"
 )
 
 var moveNicFirewallRetyCount = 0
 
 type ethInfo struct {
 	Name string `json:"name"`
-	Mac string `json:"mac"`
+	Mac  string `json:"mac"`
 }
 
 type nicTypeInfo struct {
-	Mac string `json:"mac"`
+	Mac     string `json:"mac"`
 	NicType string `json:"nicType"`
 }
 
 type ruleInfo struct {
-	Action string `json:"action"`
-	Protocol string `json:"protocol"`
-	DestPort string `json:"destPort"`
-	SourcePort string `json:"sourcePort"`
-	SourceIp string `json:"sourceIp"`
-	DestIp string `json:"destIp"`
+	Action      string `json:"action"`
+	Protocol    string `json:"protocol"`
+	DestPort    string `json:"destPort"`
+	SourcePort  string `json:"sourcePort"`
+	SourceIp    string `json:"sourceIp"`
+	DestIp      string `json:"destIp"`
 	AllowStates string `json:"allowStates"`
-	Tcp string `json:"tcp"`
-	Icmp string `json:"icmp"`
-	RuleNumber int `json:"ruleNumber"`
-	EnableLog bool `json:"enableLog"`
-	State string `json:"state"`
-	IsDefault bool `json:"isDefault"`
+	Tcp         string `json:"tcp"`
+	Icmp        string `json:"icmp"`
+	RuleNumber  int    `json:"ruleNumber"`
+	EnableLog   bool   `json:"enableLog"`
+	State       string `json:"state"`
+	IsDefault   bool   `json:"isDefault"`
 }
 
 type ethRuleSetRef struct {
-	Mac string `json:"mac"`
+	Mac         string      `json:"mac"`
 	RuleSetInfo ruleSetInfo `json:"ruleSetInfo"`
-	Forward string `json:"forward"`
+	Forward     string      `json:"forward"`
 }
 
 type ruleSetInfo struct {
-	Name string `json:"name"`
-	ActionType string `json:"actionType"`
-	EnableDefaultLog bool `json:"enableDefaultLog"`
-	Rules []ruleInfo `json:"rules"`
+	Name             string     `json:"name"`
+	ActionType       string     `json:"actionType"`
+	EnableDefaultLog bool       `json:"enableDefaultLog"`
+	Rules            []ruleInfo `json:"rules"`
 }
 
 type defaultRuleSetAction struct {
 	RuleSetName string `json:"ruleSetName"`
-	ActionType string `json:"actionType"`
+	ActionType  string `json:"actionType"`
 }
 
 type getConfigCmd struct {
@@ -94,10 +101,10 @@ type createRuleCmd struct {
 }
 
 type changeRuleStateCmd struct {
-	Rule ruleInfo `json:"rule"`
-	State string `json:"state"`
-	Mac string `json:"mac"`
-	Forward string `json:"forward"`
+	Rule    ruleInfo `json:"rule"`
+	State   string   `json:"state"`
+	Mac     string   `json:"mac"`
+	Forward string   `json:"forward"`
 }
 
 type deleteRuleCmd struct {
@@ -121,15 +128,15 @@ type detachRuleSetCmd struct {
 }
 
 type updateRuleSetCmd struct {
-	Mac string `json:"mac"`
-	Forward string `json:"forward"`
+	Mac        string `json:"mac"`
+	Forward    string `json:"forward"`
 	ActionType string `json:"actionType"`
 }
 
 type applyRuleSetChangesCmd struct {
-	Refs []ethRuleSetRef `json:"refs"`
-	DeleteRules []ruleInfo `json:"deleteRules"`
-	NewRules []ruleInfo `json:"newRules"`
+	Refs        []ethRuleSetRef `json:"refs"`
+	DeleteRules []ruleInfo      `json:"deleteRules"`
+	NewRules    []ruleInfo      `json:"newRules"`
 }
 
 func (r *ruleSetInfo) toRules() []string {
@@ -156,7 +163,7 @@ func (r *ruleInfo) toGroups(suffix string) []string {
 	}
 
 	ips := strings.Split(ipstr, IP_SPLIT)
-	for _, ip := range(ips)  {
+	for _, ip := range ips {
 		if _, cidr, err := net.ParseCIDR(ip); err == nil {
 			mini := cidr.IP
 			max := utils.GetUpperIp(*cidr)
@@ -171,16 +178,16 @@ func (r *ruleInfo) toGroups(suffix string) []string {
 func (r *ruleInfo) toRules(ruleSetName string) []string {
 	rules := make([]string, 0)
 	if r.Action != "" {
-		rules = append(rules, fmt.Sprintf("action %s",r.Action))
+		rules = append(rules, fmt.Sprintf("action %s", r.Action))
 	}
 	if r.Protocol != "" {
-		rules = append(rules, fmt.Sprintf("protocol %s",r.Protocol))
+		rules = append(rules, fmt.Sprintf("protocol %s", r.Protocol))
 	}
 	if r.Tcp != "" {
-		rules = append(rules, fmt.Sprintf("tcp flags %s",r.Tcp))
+		rules = append(rules, fmt.Sprintf("tcp flags %s", r.Tcp))
 	}
 	if r.Icmp != "" {
-		rules = append(rules, fmt.Sprintf("icmp type-name %s",r.Icmp))
+		rules = append(rules, fmt.Sprintf("icmp type-name %s", r.Icmp))
 	}
 	if r.EnableLog {
 		rules = append(rules, fmt.Sprintf("log enable"))
@@ -189,10 +196,10 @@ func (r *ruleInfo) toRules(ruleSetName string) []string {
 		rules = append(rules, fmt.Sprintf("disable"))
 	}
 	if r.SourcePort != "" {
-		rules = append(rules, fmt.Sprintf("source port %s",r.SourcePort))
+		rules = append(rules, fmt.Sprintf("source port %s", r.SourcePort))
 	}
 	if r.DestPort != "" {
-		rules = append(rules, fmt.Sprintf("destination port %s",r.DestPort))
+		rules = append(rules, fmt.Sprintf("destination port %s", r.DestPort))
 	}
 	if r.DestIp != "" {
 		if strings.Contains(r.DestIp, IP_SPLIT) {
@@ -205,12 +212,12 @@ func (r *ruleInfo) toRules(ruleSetName string) []string {
 		if strings.Contains(r.SourceIp, IP_SPLIT) {
 			rules = append(rules, fmt.Sprintf("source group address-group %s", r.makeGroupName(ruleSetName, FIREWALL_RULE_SOURCE_GROUP_SUFFIX)))
 		} else {
-			rules = append(rules, fmt.Sprintf("source address %s",r.SourceIp))
+			rules = append(rules, fmt.Sprintf("source address %s", r.SourceIp))
 		}
 	}
 	if r.AllowStates != "" {
-		for _,state := range strings.Split(r.AllowStates, IP_SPLIT) {
-			rules = append(rules, fmt.Sprintf("state %s enable",state))
+		for _, state := range strings.Split(r.AllowStates, IP_SPLIT) {
+			rules = append(rules, fmt.Sprintf("state %s enable", state))
 		}
 	}
 	return rules
@@ -223,7 +230,7 @@ func getIp(t *server.VyosConfigNode, forward string) string {
 	if ip := t.GetChildrenValue(fmt.Sprintf("%s address", forward)); ip != "" {
 		return ip
 	} else {
-		return t.GetChildrenValue(fmt.Sprintf("%s group address-group",forward))
+		return t.GetChildrenValue(fmt.Sprintf("%s group address-group", forward))
 	}
 }
 
@@ -237,7 +244,7 @@ func isDefaultRule(n string) bool {
 }
 
 func buildRuleSetName(nicName string, forward string) string {
-	return fmt.Sprintf("%s.%s", nicName, forward)
+	return fmt.Sprintf("%s.%s", nicName, strings.ToLower(forward))
 }
 
 func getRuleNumber(t *server.VyosConfigNode) int {
@@ -260,7 +267,7 @@ func getAllowStates(t *server.VyosConfigNode) string {
 	if d := t.Get("state"); d == nil || len(d.Children()) == 0 {
 		return ""
 	} else {
-		states := make([]string,0)
+		states := make([]string, 0)
 		for _, c := range d.Children() {
 			if c.Value() == "enable" {
 				states = append(states, c.Name())
@@ -271,76 +278,138 @@ func getAllowStates(t *server.VyosConfigNode) string {
 	}
 }
 
-func detachRuleSet(ctx *server.CommandContext) interface{} {
+func detachRuleSetHandler(ctx *server.CommandContext) interface{} {
 	cmd := &detachRuleSetCmd{}
 	ctx.GetCommand(cmd)
+	return detachRuleSet(cmd)
+}
+
+func detachRuleSet(cmd *detachRuleSetCmd) interface{} {
+
 	ref := cmd.Ref
 	tree := server.NewParserFromShowConfiguration().Tree
-	nic, err := utils.GetNicNameByMac(ref.Mac); utils.PanicOnError(err)
-	tree.Deletef("interfaces ethernet %s firewall %s", nic, ref.Forward)
-	tree.Apply(false)
-	return nil
-}
-
-func attachRuleSet(ctx *server.CommandContext) interface{} {
-	cmd := &attachRuleSetCmd{}
-	ctx.GetCommand(cmd)
-	ref := cmd.Ref
-	tree := server.NewParserFromShowConfiguration().Tree
-	nic, err := utils.GetNicNameByMac(ref.Mac); utils.PanicOnError(err)
-	ruleSetName := buildRuleSetName(nic, ref.Forward)
-	tree.AttachRuleSetOnInterface(nic, ref.Forward, ruleSetName)
-	tree.Apply(false)
-	return nil
-}
-
-func deleteRuleSet(ctx *server.CommandContext) interface{} {
-	cmd := &deleteRuleSetCmd{}
-	ctx.GetCommand(cmd)
-	tree := server.NewParserFromShowConfiguration().Tree
-	tree.Deletef("firewall name %s", cmd.RuleSetName)
-	tree.Apply(false)
-	return nil
-}
-
-func createRuleSet(ctx *server.CommandContext) interface{} {
-	cmd := &createRuleSetCmd{}
-	ctx.GetCommand(cmd)
-	tree := server.NewParserFromShowConfiguration().Tree
-	ruleSet := cmd.RuleSet
-	tree.CreateFirewallRuleSet(ruleSet.Name, ruleSet.toRules())
-	tree.Apply(false)
-	return nil
-}
-
-func deleteRule(ctx *server.CommandContext) interface{} {
-	cmd := &deleteRuleCmd{}
-	ctx.GetCommand(cmd)
-	ref := cmd.Ref
-	tree := server.NewParserFromShowConfiguration().Tree
-	nic, err := utils.GetNicNameByMac(ref.Mac); utils.PanicOnError(err)
-	ruleSetName := buildRuleSetName(nic, ref.Forward)
-	for _, rule := range ref.RuleSetInfo.Rules {
-		tree.Deletef("firewall name %s rule %v", ruleSetName, rule.RuleNumber)
-		if r := tree.FindGroupByName(rule.makeGroupName(ruleSetName, FIREWALL_RULE_SOURCE_GROUP_SUFFIX), "address"); r != nil {
-			r.Delete()
-		}
-		if r := tree.FindGroupByName(rule.makeGroupName(ruleSetName, FIREWALL_RULE_DEST_GROUP_SUFFIX), "address"); r != nil {
-			r.Delete()
-		}
+	nic, err := utils.GetNicNameByMac(ref.Mac)
+	utils.PanicOnError(err)
+	if utils.IsSkipVyosIptables() {
+		detachRuleSetOnInterfaceByIptables(nic, ref.Forward)
+	} else {
+		tree.Deletef("interfaces ethernet %s firewall %s", nic, ref.Forward)
+		tree.Apply(false)
 	}
 
-	tree.Apply(false)
 	return nil
 }
 
-func applyRuleSetChanges(ctx *server.CommandContext) interface{} {
+func attachRuleSetHandler(ctx *server.CommandContext) interface{} {
+	cmd := &attachRuleSetCmd{}
+	ctx.GetCommand(cmd)
+	return attachRuleSet(cmd)
+}
+
+func attachRuleSet(cmd *attachRuleSetCmd) interface{} {
+
+	ref := cmd.Ref
+	tree := server.NewParserFromShowConfiguration().Tree
+	nic, err := utils.GetNicNameByMac(ref.Mac)
+	utils.PanicOnError(err)
+	ruleSetName := buildRuleSetName(nic, ref.Forward)
+	if utils.IsSkipVyosIptables() {
+		return attachRuleSetOnInterfaceByIptables(ref)
+	} else {
+		tree.AttachRuleSetOnInterface(nic, ref.Forward, ruleSetName)
+		tree.Apply(false)
+	}
+
+	return nil
+}
+
+func deleteRuleSetHandler(ctx *server.CommandContext) interface{} {
+	cmd := &deleteRuleSetCmd{}
+	ctx.GetCommand(cmd)
+	return deleteRuleSet(cmd)
+}
+
+func deleteRuleSet(cmd *deleteRuleSetCmd) interface{} {
+
+	tree := server.NewParserFromShowConfiguration().Tree
+	if utils.IsSkipVyosIptables() {
+		deleteRuleSetByIptables(cmd.RuleSetName)
+	} else {
+		tree.Deletef("firewall name %s", cmd.RuleSetName)
+		tree.Apply(false)
+	}
+
+	return nil
+}
+
+func createRuleSetHandler(ctx *server.CommandContext) interface{} {
+	cmd := &createRuleSetCmd{}
+	ctx.GetCommand(cmd)
+	return createRuleSet(cmd)
+}
+
+func createRuleSet(cmd *createRuleSetCmd) interface{} {
+
+	tree := server.NewParserFromShowConfiguration().Tree
+	ruleSet := cmd.RuleSet
+	if utils.IsSkipVyosIptables() {
+		createRuleSetByIptables(ruleSet)
+	} else {
+		tree.CreateFirewallRuleSet(ruleSet.Name, ruleSet.toRules())
+		tree.Apply(false)
+	}
+
+	return nil
+}
+
+func deleteRuleHandler(ctx *server.CommandContext) interface{} {
+	cmd := &deleteRuleCmd{}
+	ctx.GetCommand(cmd)
+	return deleteRule(cmd)
+}
+
+func deleteRule(cmd *deleteRuleCmd) interface{} {
+
+	ref := cmd.Ref
+
+	nic, err := utils.GetNicNameByMac(ref.Mac)
+	utils.PanicOnError(err)
+	ruleSetName := buildRuleSetName(nic, ref.Forward)
+	if utils.IsSkipVyosIptables() {
+		return deleteRuleByIpTables(ruleSetName, ref)
+	} else {
+		tree := server.NewParserFromShowConfiguration().Tree
+		for _, rule := range ref.RuleSetInfo.Rules {
+			tree.Deletef("firewall name %s rule %v", ruleSetName, rule.RuleNumber)
+			if r := tree.FindGroupByName(rule.makeGroupName(ruleSetName, FIREWALL_RULE_SOURCE_GROUP_SUFFIX), "address"); r != nil {
+				r.Delete()
+			}
+			if r := tree.FindGroupByName(rule.makeGroupName(ruleSetName, FIREWALL_RULE_DEST_GROUP_SUFFIX), "address"); r != nil {
+				r.Delete()
+			}
+		}
+		tree.Apply(false)
+	}
+
+	return nil
+}
+
+func applyRuleSetChangesHandler(ctx *server.CommandContext) interface{} {
 	cmd := &applyRuleSetChangesCmd{}
 	ctx.GetCommand(cmd)
+	return applyRuleSetChanges(cmd)
+}
+
+func applyRuleSetChanges(cmd *applyRuleSetChangesCmd) interface{} {
+
 	tree := server.NewParserFromShowConfiguration().Tree
 	refs := cmd.Refs
+	if utils.IsSkipVyosIptables() {
+		return applyRuleSetChangesByIpTables(cmd)
+	}
 	for _, ref := range refs {
-		nic, err := utils.GetNicNameByMac(ref.Mac); utils.PanicOnError(err)
+		nic, err := utils.GetNicNameByMac(ref.Mac)
+		utils.PanicOnError(err)
 		ruleSetName := buildRuleSetName(nic, ref.Forward)
 		for _, rule := range cmd.DeleteRules {
 			tree.Deletef("firewall name %s rule %v", ruleSetName, rule.RuleNumber)
@@ -370,13 +439,23 @@ func applyRuleSetChanges(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
-func createRule(ctx *server.CommandContext) interface{} {
+func createRuleHandler(ctx *server.CommandContext) interface{} {
 	cmd := &createRuleCmd{}
 	ctx.GetCommand(cmd)
+
+	return createRule(cmd)
+}
+
+func createRule(cmd *createRuleCmd) interface{} {
+
 	tree := server.NewParserFromShowConfiguration().Tree
 	ref := cmd.Ref
-	nic, err := utils.GetNicNameByMac(ref.Mac); utils.PanicOnError(err)
+	nic, err := utils.GetNicNameByMac(ref.Mac)
+	utils.PanicOnError(err)
 	ruleSetName := buildRuleSetName(nic, ref.Forward)
+	if utils.IsSkipVyosIptables() {
+		return createRuleByIptables(nic, ruleSetName, ref)
+	}
 	if rs := tree.Get(fmt.Sprintf("firewall name %s", ruleSetName)); rs == nil {
 		tree.CreateFirewallRuleSet(ruleSetName, []string{"default-action accept"})
 	}
@@ -404,47 +483,66 @@ func createRule(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
-func changeRuleState(ctx *server.CommandContext) interface{} {
+func changeRuleStateHandler(ctx *server.CommandContext) interface{} {
 	cmd := &changeRuleStateCmd{}
 	ctx.GetCommand(cmd)
-	tree := server.NewParserFromShowConfiguration().Tree
+	return changeRuleState(cmd)
+}
+
+func changeRuleState(cmd *changeRuleStateCmd) interface{} {
+
 	rule := cmd.Rule
-	nic, err := utils.GetNicNameByMac(cmd.Mac); utils.PanicOnError(err)
+	nic, err := utils.GetNicNameByMac(cmd.Mac)
+	utils.PanicOnError(err)
 	ruleSetName := buildRuleSetName(nic, cmd.Forward)
-	tree.ChangeFirewallRuleState(ruleSetName, rule.RuleNumber, cmd.State)
-	tree.Apply(false)
+	if utils.IsSkipVyosIptables() {
+		return changeRuleStateByIpTables(ruleSetName, rule, cmd.State)
+	} else {
+		tree := server.NewParserFromShowConfiguration().Tree
+		tree.ChangeFirewallRuleState(ruleSetName, rule.RuleNumber, cmd.State)
+		tree.Apply(false)
+	}
+
 	return nil
 }
 
-func getFirewallConfig(ctx *server.CommandContext) interface{} {
+func getFirewallConfigHandler(ctx *server.CommandContext) interface{} {
 
-	if utils.IsSkipVyosIptables() {
-		panic(errors.New("can not use firewall if skipvyosiptables is true"))
-	}
 	cmd := &getConfigCmd{}
 	ctx.GetCommand(cmd)
+	return getFirewallConfig(cmd)
+}
+
+func getFirewallConfig(cmd *getConfigCmd) interface{} {
+
 	ethInfos := make([]ethInfo, 0)
-	tree := server.NewParserFromShowConfiguration().Tree
 	//sync interfaces
 	for _, nicInfo := range cmd.NicTypeInfos {
 		err := utils.Retry(func() error {
 			nicname, e := utils.GetNicNameByMac(nicInfo.Mac)
 			ethInfos = append(ethInfos, ethInfo{
 				Name: nicname,
-				Mac: nicInfo.Mac,
+				Mac:  nicInfo.Mac,
 			})
 			if e != nil {
 				return e
 			} else {
 				return nil
 			}
-		}, 5, 1); utils.PanicOnError(err)
+		}, 5, 1)
+		utils.PanicOnError(err)
+	}
+
+	if utils.IsSkipVyosIptables() {
+		refs := getFirewallConfigFromIpTables(ethInfos)
+		return getConfigRsp{Refs: refs}
 	}
 
 	//sync ruleSet and rules
+	tree := server.NewParserFromShowConfiguration().Tree
 	rs := tree.Get("firewall name")
 	if ruleSetNodes := rs.Children(); ruleSetNodes == nil {
-		return getConfigRsp{Refs:nil}
+		return getConfigRsp{Refs: nil}
 	} else {
 		refs := make([]ethRuleSetRef, 0)
 		for _, e := range ethInfos {
@@ -460,7 +558,7 @@ func getFirewallConfig(ctx *server.CommandContext) interface{} {
 					mac, err := utils.GetMacByNicName(e.Name)
 					utils.PanicOnError(err)
 
-				    ruleSetName := ec.GetChildrenValue("name")
+					ruleSetName := ec.GetChildrenValue("name")
 					ruleSetNode := rs.Get(ruleSetName)
 					ruleSet := ruleSetInfo{}
 					ruleSet.Name = ruleSetNode.Name()
@@ -473,7 +571,7 @@ func getFirewallConfig(ctx *server.CommandContext) interface{} {
 
 					if r := ruleSetNode.Get("rule"); r != nil {
 						for _, rc := range r.Children() {
-							rules = append(rules, ruleInfo {
+							rules = append(rules, ruleInfo{
 								RuleNumber:  getRuleNumber(rc),
 								Action:      rc.GetChildrenValue("action"),
 								Protocol:    rc.GetChildrenValue("protocol"),
@@ -528,34 +626,66 @@ func deleteOldRules(tree *server.VyosConfigTree) {
 	tree.Apply(false)
 }
 
-func updateRuleSet(ctx *server.CommandContext) interface{} {
+func updateRuleSetHandler(ctx *server.CommandContext) interface{} {
 	cmd := &updateRuleSetCmd{}
 	ctx.GetCommand(cmd)
+	return updateRuleSet(cmd)
+}
+
+func updateRuleSet(cmd *updateRuleSetCmd) interface{} {
+
 	tree := server.NewParserFromShowConfiguration().Tree
-	nic, err := utils.GetNicNameByMac(cmd.Mac); utils.PanicOnError(err)
+	nic, err := utils.GetNicNameByMac(cmd.Mac)
+	utils.PanicOnError(err)
 	ruleSetName := buildRuleSetName(nic, cmd.Forward)
-	tree.SetFirewalRuleSetAction(ruleSetName, cmd.ActionType)
-	tree.Apply(false)
+	if utils.IsSkipVyosIptables() {
+		return updateRuleSetByIptables(ruleSetName, cmd.ActionType)
+	} else {
+		tree.SetFirewalRuleSetAction(ruleSetName, cmd.ActionType)
+		tree.Apply(false)
+	}
+
 	return nil
 }
 
-func deleteUserRule(ctx *server.CommandContext) interface{} {
-	tree := server.NewParserFromShowConfiguration().Tree
+func deleteUserRuleHandler(ctx *server.CommandContext) interface{} {
 	cmd := &getConfigCmd{}
 	ctx.GetCommand(cmd)
-	deleteOldRules(tree)
-	allowNewStateTrafficOnPubNic(cmd.NicTypeInfos)
+
+	return deleteUserRule(cmd)
+}
+
+func deleteUserRule(cmd *getConfigCmd) interface{} {
+
+	if utils.IsSkipVyosIptables() {
+		return deleteUserRuleByIpTables(cmd)
+	} else {
+		tree := server.NewParserFromShowConfiguration().Tree
+		deleteOldRules(tree)
+		allowNewStateTrafficOnPubNic(cmd.NicTypeInfos)
+	}
+
 	return nil
 }
 
-func applyUserRules(ctx *server.CommandContext) interface{} {
+func applyUserRulesHandler(ctx *server.CommandContext) interface{} {
 	cmd := &applyUserRuleCmd{}
 	ctx.GetCommand(cmd)
+	return applyUserRules(cmd)
+}
+
+func applyUserRules(cmd *applyUserRuleCmd) interface{} {
+
+	if utils.IsSkipVyosIptables() {
+		return applyUserRulesByIpTables(cmd)
+	}
+
 	tree := server.NewParserFromShowConfiguration().Tree
 	deleteOldRules(tree)
 
 	for _, ref := range cmd.Refs {
-		nic, err := utils.GetNicNameByMac(ref.Mac); utils.PanicOnError(err)
+		nic, err := utils.GetNicNameByMac(ref.Mac)
+		utils.PanicOnError(err)
 		ruleSetName := buildRuleSetName(nic, ref.Forward)
 
 		//create ruleSet
@@ -588,7 +718,7 @@ func getIcmpRule(t *server.VyosConfigNode) int {
 			continue
 		}
 
-		if cn.Get("action accept")!= nil && cn.Get("protocol icmp") != nil {
+		if cn.Get("action accept") != nil && cn.Get("protocol icmp") != nil {
 			return number
 		}
 	}
@@ -621,7 +751,7 @@ func getStateRule(t *server.VyosConfigNode) (int, string) {
 	return 0, nicType
 }
 
-func moveLowPriorityRulesToTheBack () {
+func moveLowPriorityRulesToTheBack() {
 	err := utils.Retry(func() error {
 		moveNicInForwardFirewall()
 		if moveNicFirewallRetyCount != 0 {
@@ -629,14 +759,15 @@ func moveLowPriorityRulesToTheBack () {
 		} else {
 			return nil
 		}
-	}, 3, 1);utils.LogError(err)
+	}, 3, 1)
+	utils.LogError(err)
 }
 
 func moveNicInForwardFirewall() {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Info("move nic firewall config failed, retry it...")
-			moveNicFirewallRetyCount ++
+			moveNicFirewallRetyCount++
 		} else {
 			moveNicFirewallRetyCount = 0
 		}
@@ -681,7 +812,7 @@ func moveNicInForwardFirewall() {
 
 		if nicType != "Private" {
 			if eNode.Get("9999") == nil {
-				tree.SetFirewallWithRuleNumber(nic.Name, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
+				tree.SetFirewallWithRuleNumber(nic.Name, "in", utils.IPTABLES_RULENUMBER_9999,
 					"action accept",
 					"state new enable",
 				)
@@ -708,13 +839,14 @@ func allowNewStateTrafficOnPubNic(nicInfos []nicTypeInfo) {
 		if nicInfo.NicType == "Private" {
 			continue
 		}
-		nicName, err := utils.GetNicNameByMac(nicInfo.Mac); utils.PanicOnError(err)
+		nicName, err := utils.GetNicNameByMac(nicInfo.Mac)
+		utils.PanicOnError(err)
 		eNode := tree.Getf("firewall name %s.in rule", nicName)
 		if eNode == nil {
 			continue
 		}
 		if eNode.Get("9999") == nil {
-			tree.SetFirewallWithRuleNumber(nicName, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
+			tree.SetFirewallWithRuleNumber(nicName, "in", utils.IPTABLES_RULENUMBER_9999,
 				"action accept",
 				"state new enable",
 			)
@@ -728,17 +860,17 @@ func allowNewStateTrafficOnPubNic(nicInfos []nicTypeInfo) {
 }
 
 func FirewallEntryPoint() {
-	server.RegisterAsyncCommandHandler(fwApplyRuleSetPath, server.VyosLock(applyRuleSetChanges))
-	server.RegisterAsyncCommandHandler(fwGetConfigPath, server.VyosLock(getFirewallConfig))
-	server.RegisterAsyncCommandHandler(fwDeleteUserRulePath, server.VyosLock(deleteUserRule))
-	server.RegisterAsyncCommandHandler(fwCreateRulePath, server.VyosLock(createRule))
-	server.RegisterAsyncCommandHandler(fwDeleteRulePath, server.VyosLock(deleteRule))
-	server.RegisterAsyncCommandHandler(fwChangeRuleStatePath, server.VyosLock(changeRuleState))
-	server.RegisterAsyncCommandHandler(fwCreateRuleSetPath, server.VyosLock(createRuleSet))
-	server.RegisterAsyncCommandHandler(fwDeleteRuleSetPath, server.VyosLock(deleteRuleSet))
-	server.RegisterAsyncCommandHandler(fwAttachRulesetPath, server.VyosLock(attachRuleSet))
-	server.RegisterAsyncCommandHandler(fwDetachRuleSetPath, server.VyosLock(detachRuleSet))
-	server.RegisterAsyncCommandHandler(fwApplyUserRulesPath, server.VyosLock(applyUserRules))
-	server.RegisterAsyncCommandHandler(fwUpdateRuleSetPath, server.VyosLock(updateRuleSet))
+	server.RegisterAsyncCommandHandler(fwApplyRuleSetPath, server.VyosLock(applyRuleSetChangesHandler))
+	server.RegisterAsyncCommandHandler(fwApplyUserRulesPath, server.VyosLock(applyUserRulesHandler))
+	server.RegisterAsyncCommandHandler(fwGetConfigPath, server.VyosLock(getFirewallConfigHandler))
+	server.RegisterAsyncCommandHandler(fwDeleteUserRulePath, server.VyosLock(deleteUserRuleHandler))
+	server.RegisterAsyncCommandHandler(fwCreateRulePath, server.VyosLock(createRuleHandler))
+	server.RegisterAsyncCommandHandler(fwDeleteRulePath, server.VyosLock(deleteRuleHandler))
+	server.RegisterAsyncCommandHandler(fwChangeRuleStatePath, server.VyosLock(changeRuleStateHandler))
+	server.RegisterAsyncCommandHandler(fwUpdateRuleSetPath, server.VyosLock(updateRuleSetHandler))
+	server.RegisterAsyncCommandHandler(fwCreateRuleSetPath, server.VyosLock(createRuleSetHandler))
+	server.RegisterAsyncCommandHandler(fwDeleteRuleSetPath, server.VyosLock(deleteRuleSetHandler))
+	server.RegisterAsyncCommandHandler(fwAttachRulesetPath, server.VyosLock(attachRuleSetHandler))
+	server.RegisterAsyncCommandHandler(fwDetachRuleSetPath, server.VyosLock(detachRuleSetHandler))
 	moveLowPriorityRulesToTheBack()
 }

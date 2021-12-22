@@ -54,14 +54,35 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 	/* add firewall */
 	tree := server.NewParserFromShowConfiguration().Tree
 	if utils.IsSkipVyosIptables() {
-		rule := utils.NewIptablesRule("vrrp", cmd.PeerIp, "", 0, 0, nil, utils.ACCEPT, utils.VRRPComment)
-		utils.InsertFireWallRule(heartbeatNicNme, rule, utils.LOCAL)
-
-		rule = utils.NewIptablesRule("udp", cmd.PeerIp, "", 0, 3780, nil, utils.ACCEPT, utils.CTHAComment)
-		utils.InsertFireWallRule(heartbeatNicNme, rule, utils.LOCAL)
-
-		rule = utils.NewNatIptablesRule("vrrp", "", "", 0, 0, nil, utils.RETURN, utils.VRRPComment, "", 0)
-		utils.InsertNatRule(rule, utils.POSTROUTING)
+		table := utils.NewIpTables(utils.FirewallTable)
+		var rules []*utils.IpTableRule
+		
+		rule := utils.NewIpTableRule(utils.GetRuleSetName(heartbeatNicNme, utils.RULESET_LOCAL))
+		rule.SetAction(utils.IPTABLES_ACTION_ACCEPT).SetComment(utils.SystemTopRule)
+		rule.SetProto(utils.IPTABLES_PROTO_VRRP).SetSrcIp(cmd.PeerIp+"/32")
+		rules = append(rules, rule)
+		
+		rule = utils.NewIpTableRule(utils.GetRuleSetName(heartbeatNicNme, utils.RULESET_LOCAL))
+		rule.SetAction(utils.IPTABLES_ACTION_ACCEPT).SetComment(utils.SystemTopRule)
+		rule.SetProto(utils.IPTABLES_PROTO_UDP).SetSrcIp(cmd.PeerIp+"/32").SetDstPort("3780")
+		rules = append(rules, rule)
+		table.AddIpTableRules(rules)
+		
+		if err := table.Apply(); err != nil {
+			log.Debugf("apply vrrp firewall table failed")
+			return err
+		}
+		
+		natTable := utils.NewIpTables(utils.NatTable)
+		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
+		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
+		rule.SetProto(utils.IPTABLES_PROTO_VRRP)
+		natTable.AddIpTableRules([]*utils.IpTableRule{rule})
+		
+		if err := natTable.Apply(); err != nil {
+			log.Debugf("apply vrrp nat table failed")
+			return err
+		}
 	} else {
 		des := "Vyos-HA"
 		if fr := tree.FindFirewallRuleByDescription(heartbeatNicNme, "local", des); fr == nil {
@@ -205,6 +226,10 @@ func NonManagementUpNics() []string {
 }
 
 func getKeepAlivedStatusTask() {
+	if utils.IsRuingUT() {
+		return
+	}
+	
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	defer func() { getKeepAlivedStatusStart = false; log.Errorf("!!!!!!!!!keepalived status check task exited") }()
@@ -240,6 +265,10 @@ func getKeepAlivedStatusTask() {
 }
 
 func keepAlivedCheckTask() {
+	if utils.IsRuingUT() {
+		return
+	}
+	
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	defer func() { keepAlivedCheckStart = false; log.Errorf("!!!!!!!!!keepalived process check task exited") }()

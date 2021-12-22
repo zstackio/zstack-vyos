@@ -16,7 +16,7 @@ func getIpRouteTableAlias(tableId uint64) string {
 	return fmt.Sprintf("%s%d", PolicyRouteChainPrefix, tableId)
 }
 
-func (a ZStackIpRule) equal(b ZStackIpRule)  bool {
+func (a ZStackIpRule) Equal(b ZStackIpRule)  bool {
 	if a.TableId != b.TableId {
 		return false
 	}
@@ -87,7 +87,7 @@ func SyncZStackIpRules(currRules, rules []ZStackIpRule) error  {
 	for _, crule := range currRules {
 		exist := false
 		for _, nrule := range rules {
-			if crule.equal(nrule) {
+			if crule.Equal(nrule) {
 				exist = true
 				break
 			}
@@ -102,7 +102,7 @@ func SyncZStackIpRules(currRules, rules []ZStackIpRule) error  {
 	for _, nrule := range rules {
 		exist := false
 		for _, crule := range currRules {
-			if crule.equal(nrule) {
+			if crule.Equal(nrule) {
 				exist = true
 				break
 			}

@@ -4,13 +4,12 @@ import (
 	"fmt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/zstackio/zstack-vyos/utils/test"
-	"strings"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
+	"strings"
 )
 
-var _ = Describe("route test", func() {
+var _ = Describe("route_test", func() {
 	var oldHaStatus string
 	var nextHopInPubL3 string
 	var nextHopInPubL32 string
@@ -19,16 +18,16 @@ var _ = Describe("route test", func() {
 	var nicCmd *configureNicCmd
 	
 	It("prepare for route set", func() {
-		utils.InitLog(test.VYOS_UT_LOG_FOLDER+"route_test.log", false)
+		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"route_test.log", false)
 		utils.InitVyosVersion()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 
 		oldHaStatus = utils.GetHaStatus()
-		nextHopInPubL3, _ = test.GetFreePubL3Ip()
-		nextHopInPubL32, _ = test.GetFreePubL3Ip()
-		nextHopInmgt, _ = test.GetFreeMgtIp()
-
-		r0 = routeInfo{Destination: "172.16.0.0/12", Target: test.GetMgtGateway(), Distance: 1}
+		nextHopInPubL3, _ = utils.GetFreePubL3Ip()
+		nextHopInPubL32, _ = utils.GetFreePubL3Ip()
+		nextHopInmgt, _ = utils.GetFreeMgtIp()
+		
+		r0 = routeInfo{Destination: "172.16.0.0/12", Target: utils.GetMgtGateway(), Distance: 1}
 		r1 = routeInfo{Destination: "1.1.1.0/24", Target: nextHopInPubL3, Distance: 100}
 		r2 = routeInfo{Destination: "1.1.2.0/24", Target: nextHopInPubL3, Distance: 110}
 		r3 = routeInfo{Destination: "1.1.3.0/24", Target: nextHopInmgt, Distance: 120}
@@ -39,11 +38,11 @@ var _ = Describe("route test", func() {
 		r8 = routeInfo{Destination: "1.1.3.0/24", Target: nextHopInmgt, Distance: 130}
 
 		nicCmd = &configureNicCmd{}
-		nicCmd.Nics = append(nicCmd.Nics, test.PubNicForUT)
+		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
 		configureNic(nicCmd)
 
 		bash := utils.Bash{
-			Command: fmt.Sprintf("ip link set up dev %s", test.PubNicForUT.Name),
+			Command: fmt.Sprintf("ip link set up dev %s", utils.PubNicForUT.Name),
 			Sudo:    true,
 		}
 		bash.Run()
@@ -81,9 +80,12 @@ var _ = Describe("route test", func() {
 	})
 	
 	It("release after route delte",func() {
-		test.ReleasePubL3Ip(nextHopInPubL3)
-		test.ReleasePubL3Ip(nextHopInPubL32)
-		test.ReleaseMgtIp(nextHopInmgt)
+		utils.ReleasePubL3Ip(nextHopInPubL3)
+		utils.ReleasePubL3Ip(nextHopInPubL32)
+		utils.ReleaseMgtIp(nextHopInmgt)
+		nicCmd = &configureNicCmd{}
+		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+		removeNic(nicCmd)
 		utils.SetHaStatus(oldHaStatus)
 	})
 })

@@ -5,15 +5,14 @@ import (
     log "github.com/Sirupsen/logrus"
     . "github.com/onsi/ginkgo"
     "github.com/onsi/gomega"
-    "github.com/zstackio/zstack-vyos/utils/test"
-    "io/ioutil"
-    "strings"
     "github.com/zstackio/zstack-vyos/server"
     "github.com/zstackio/zstack-vyos/utils"
+    "io/ioutil"
+    "strings"
 )
 
 func setTestLbEnv() {
-    utils.InitLog(test.VYOS_UT_LOG_FOLDER+"lb_test.log", false)
+    utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"lb_test.log", false)
 }
 
 var _ = Describe("lb_test", func() {
@@ -30,17 +29,17 @@ var _ = Describe("lb_test", func() {
     })
 
     It("LB:test lb will delete firewall rule after start failed", func() {
-        nicCmd.Nics = append(nicCmd.Nics, test.PubNicForUT)
+        nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
         configureNic(nicCmd)
 
         var vips []vipInfo
-        vip1 := vipInfo{Ip: "100.64.1.200", Netmask: test.PubNicForUT.Netmask, Gateway: test.PubNicForUT.Gateway,
-            OwnerEthernetMac: test.PubNicForUT.Mac}
-        vip2 := vipInfo{Ip: "100.64.1.201", Netmask: test.PubNicForUT.Netmask, Gateway: test.PubNicForUT.Gateway,
-            OwnerEthernetMac: test.PubNicForUT.Mac}
+        vip1 := vipInfo{Ip: "100.64.1.200", Netmask: utils.PubNicForUT.Netmask, Gateway: utils.PubNicForUT.Gateway,
+            OwnerEthernetMac: utils.PubNicForUT.Mac}
+        vip2 := vipInfo{Ip: "100.64.1.201", Netmask: utils.PubNicForUT.Netmask, Gateway: utils.PubNicForUT.Gateway,
+            OwnerEthernetMac: utils.PubNicForUT.Mac}
         vips = append(vips, vip1)
         vips = append(vips, vip2)
-        ip1 := nicIpInfo{Ip: test.PubNicForUT.Ip, Netmask: test.PubNicForUT.Netmask, OwnerEthernetMac: test.PubNicForUT.Mac}
+        ip1 := nicIpInfo{Ip: utils.PubNicForUT.Ip, Netmask: utils.PubNicForUT.Netmask, OwnerEthernetMac: utils.PubNicForUT.Mac}
 
         cmd := &setVipCmd{SyncVip: false, Vips: vips, NicIps: []nicIpInfo{ip1}}
         setVip(cmd)
@@ -54,7 +53,7 @@ var _ = Describe("lb_test", func() {
         lb.Vip = "100.64.1.201"
         lb.NicIps = append(lb.NicIps, "192.168.100.10")
         lb.Mode = "http"
-        lb.PublicNic = test.PubNicForUT.Mac
+        lb.PublicNic = utils.PubNicForUT.Mac
         lb.Parameters = append(lb.Parameters,
             "balancerWeight::192.168.100.10::100",
             "connectionIdleTimeout::60",
@@ -79,7 +78,7 @@ var _ = Describe("lb_test", func() {
         defer func() {
             err := recover()
             if err != nil {
-                checkLbFirewall(test.PubNicForUT, *lb, false)
+                checkLbFirewall(utils.PubNicForUT, *lb, false)
                 bash = utils.Bash{
                     Command: fmt.Sprintf("sudo chmod 111 /opt/vyatta/sbin/haproxy"),
                 }
@@ -102,22 +101,22 @@ var _ = Describe("lb_test", func() {
         4.check haproxy pid
         5.check haproxy configuration
         */
-        nicCmd.Nics = append(nicCmd.Nics, test.PubNicForUT)
+        nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
         configureNic(nicCmd)
 
         var vips []vipInfo
-        vip1 := vipInfo{ Ip: "100.64.1.200", Netmask: test.PubNicForUT.Netmask, Gateway: test.PubNicForUT.Gateway,
-            OwnerEthernetMac: test.PubNicForUT.Mac}
-        vip2 := vipInfo{ Ip: "100.64.1.201", Netmask: test.PubNicForUT.Netmask, Gateway: test.PubNicForUT.Gateway,
-            OwnerEthernetMac: test.PubNicForUT.Mac}
+        vip1 := vipInfo{ Ip: "100.64.1.200", Netmask: utils.PubNicForUT.Netmask, Gateway: utils.PubNicForUT.Gateway,
+            OwnerEthernetMac: utils.PubNicForUT.Mac}
+        vip2 := vipInfo{ Ip: "100.64.1.201", Netmask: utils.PubNicForUT.Netmask, Gateway: utils.PubNicForUT.Gateway,
+            OwnerEthernetMac: utils.PubNicForUT.Mac}
         vips = append(vips, vip1)
         vips = append(vips, vip2)
-        ip1 := nicIpInfo{Ip:test.PubNicForUT.Ip, Netmask:test.PubNicForUT.Netmask, OwnerEthernetMac: test.PubNicForUT.Mac}
+        ip1 := nicIpInfo{Ip: utils.PubNicForUT.Ip, Netmask: utils.PubNicForUT.Netmask, OwnerEthernetMac: utils.PubNicForUT.Mac}
 
         cmd := &setVipCmd{SyncVip:false, Vips: vips, NicIps: []nicIpInfo{ip1}}
         log.Debugf("setVip %+v", cmd)
         setVip(cmd)
-        checkVipConfig(vips, test.PubNicForUT, utils.NOHA)
+        checkVipConfig(vips, utils.PubNicForUT, utils.NOHA)
 
         rcmd := &removeVipCmd{Vips:vips}
         defer func() {
@@ -147,7 +146,7 @@ func testLbSuccess() {
     lb.Vip = "100.64.1.201"
     lb.NicIps = append(lb.NicIps, "192.168.100.10")
     lb.Mode = "http"
-    lb.PublicNic = test.PubNicForUT.Mac
+    lb.PublicNic = utils.PubNicForUT.Mac
     lb.Parameters = append(lb.Parameters,
         "balancerWeight::192.168.100.10::100",
         "connectionIdleTimeout::60",
@@ -163,9 +162,9 @@ func testLbSuccess() {
         "unhealthyThreshold::2")
 
     setLb(*lb)
-    checkLbFirewall(test.PubNicForUT, *lb, true)
+    checkLbFirewall(utils.PubNicForUT, *lb, true)
     delLb(*lb)
-    checkLbFirewall(test.PubNicForUT, *lb, false)
+    checkLbFirewall(utils.PubNicForUT, *lb, false)
 }
 
 func testLbRefreshLbLog() {

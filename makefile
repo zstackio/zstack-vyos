@@ -109,7 +109,7 @@ tar: zvr zvrarm zvrboot zvrbootarm
 
 .PHONY: test
 
-test:
+test: clean package
 	python=$$(which python3);\
 	if [ $$? == 1 ];then\
 		echo "can not find python3, please install python3";\

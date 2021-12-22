@@ -3,13 +3,13 @@ package plugin
 import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 	"io/ioutil"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (
@@ -206,69 +206,89 @@ func restartVpnAfterConfig() {
 }
 
 func syncIpSecRulesByIptables() {
-	snatRules := []utils.IptablesRule{}
-	localfilterRules := make(map[string][]utils.IptablesRule)
-	filterRules := make(map[string][]utils.IptablesRule)
-	vipNicNameMap := make(map[string]string)
+	table := utils.NewIpTables(utils.FirewallTable)
+	natTable := utils.NewIpTables(utils.NatTable)
 
+	var snatRules []*utils.IpTableRule
+	var filterRules []*utils.IpTableRule
+
+	table.RemoveIpTableRuleByComments(utils.IpsecRuleComment)
+	natTable.RemoveIpTableRuleByComments(utils.IpsecRuleComment)
+
+	vipNicNameMap := make(map[string]string)
 	for _, info := range ipsecMap {
 		if _, ok := vipNicNameMap[info.Vip]; ok {
 			continue
 		}
-		nicname, err := utils.GetNicNameByMac(info.PublicNic)
+		nicName, err := utils.GetNicNameByMac(info.PublicNic)
 		utils.PanicOnError(err)
-		vipNicNameMap[info.Vip] = nicname
+		vipNicNameMap[info.Vip] = nicName
 	}
 
+	nicMap := make(map[string]string)
 	for _, info := range ipsecMap {
-		nicname, _ := vipNicNameMap[info.Vip]
-		if _, ok := localfilterRules[nicname]; ok {
+		nicName, _ := vipNicNameMap[info.Vip]
+		if _, ok := nicMap[nicName]; ok {
 			continue
+		} else {
+			nicMap[nicName] = nicName
 		}
 
-		rule := utils.NewIptablesRule(utils.UDP, info.PeerAddress, "", 0, 500, nil, utils.RETURN, utils.IpsecRuleComment)
-		localfilterRules[nicname] = append(localfilterRules[nicname], rule)
+		rule := utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
+		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.IpsecRuleComment)
+		rule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("500").SetSrcIp(info.PeerAddress + "/32")
+		filterRules = append(filterRules, rule)
 
-		rule = utils.NewIptablesRule(utils.UDP, info.PeerAddress, "", 0, 4500, nil, utils.RETURN, utils.IpsecRuleComment)
-		localfilterRules[nicname] = append(localfilterRules[nicname], rule)
+		rule = utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
+		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.IpsecRuleComment)
+		rule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("4500").SetSrcIp(info.PeerAddress + "/32")
+		filterRules = append(filterRules, rule)
 
-		rule = utils.NewIptablesRule(utils.ESP, info.PeerAddress, "", 0, 0, nil, utils.RETURN, utils.IpsecRuleComment)
-		localfilterRules[nicname] = append(localfilterRules[nicname], rule)
+		rule = utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
+		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.IpsecRuleComment)
+		rule.SetProto(utils.IPTABLES_PROTO_ESP).SetSrcIp(info.PeerAddress + "/32")
+		filterRules = append(filterRules, rule)
 
-		rule = utils.NewIptablesRule(utils.AH, info.PeerAddress, "", 0, 0, nil, utils.RETURN, utils.IpsecRuleComment)
-		localfilterRules[nicname] = append(localfilterRules[nicname], rule)
+		rule = utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
+		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.IpsecRuleComment)
+		rule.SetProto(utils.IPTABLES_PROTO_AH).SetSrcIp(info.PeerAddress + "/32")
+		filterRules = append(filterRules, rule)
 	}
 
 	for _, info := range ipsecMap {
 		nicname, _ := vipNicNameMap[info.Vip]
 		for _, remoteCidr := range info.PeerCidrs {
-			rule := utils.NewIptablesRule("", remoteCidr, "", 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
-				utils.RETURN, utils.IpsecRuleComment+info.Uuid)
-			filterRules[nicname] = append(filterRules[nicname], rule)
+			rule := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_IN))
+			rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.IpsecRuleComment)
+			rule.SetSrcIp(remoteCidr).SetState([]string{utils.IPTABLES_STATE_NEW, utils.IPTABLES_STATE_RELATED, utils.IPTABLES_STATE_ESTABLISHED})
+			filterRules = append(filterRules, rule)
 
-			/* add remote cidr rule in local chain, so that remove cidr can access lb service of vpc */
-			rule = utils.NewIptablesRule("", remoteCidr, "", 0, 0, []string{utils.NEW, utils.RELATED, utils.ESTABLISHED},
-				utils.RETURN, utils.IpsecRuleComment+info.Uuid)
-			localfilterRules[nicname] = append(localfilterRules[nicname], rule)
+			rule = utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
+			rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.IpsecRuleComment)
+			rule.SetSrcIp(remoteCidr).SetState([]string{utils.IPTABLES_STATE_NEW, utils.IPTABLES_STATE_RELATED, utils.IPTABLES_STATE_ESTABLISHED})
+			filterRules = append(filterRules, rule)
 		}
 
 		/* nat rule */
 		for _, srcCidr := range info.LocalCidrs {
 			for _, remoteCidr := range info.PeerCidrs {
-				rule := utils.NewIpsecsIptablesRule("", srcCidr, remoteCidr, 0, 0, nil, utils.RETURN,
-					utils.IpsecRuleComment+info.Uuid, "", nicname)
+				rule := utils.NewIpTableRule(utils.RULESET_SNAT.String())
+				rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.IpsecRuleComment)
+				rule.SetSrcIp(srcCidr).SetDstIp(remoteCidr).SetOutNic(nicname)
 				snatRules = append(snatRules, rule)
 			}
 		}
 	}
 
-	if err := utils.SyncNatRule(snatRules, nil, utils.IpsecRuleComment); err != nil {
-		log.Warnf("ipsec SyncNatRule failed %s", err.Error())
+	table.AddIpTableRules(filterRules)
+	if err := table.Apply(); err != nil {
+		log.Warnf("ipsec add firewall rule failed %v", err)
 		utils.PanicOnError(err)
 	}
 
-	if err := utils.SyncLocalAndInFirewallRule(filterRules, localfilterRules, utils.IpsecRuleComment); err != nil {
-		log.Warnf("ipsec SyncFirewallRule in failed %s", err.Error())
+	natTable.AddIpTableRules(snatRules)
+	if err := natTable.Apply(); err != nil {
+		log.Warnf("ipsec add nat rule failed %v", err)
 		utils.PanicOnError(err)
 	}
 }
@@ -438,9 +458,13 @@ func openNatTraversal(tree *server.VyosConfigTree) {
 	}
 }
 
-func createIPsecConnection(ctx *server.CommandContext) interface{} {
+func createIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
 	cmd := &createIPsecCmd{}
 	ctx.GetCommand(cmd)
+	return createIPsecConnection(cmd)
+}
+
+func createIPsecConnection(cmd *createIPsecCmd) interface{} {
 	AutoRestartVpn = cmd.AutoRestartVpn
 
 	vyos := server.NewParserFromShowConfiguration()
@@ -467,9 +491,13 @@ func createIPsecConnection(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
-func syncIPsecConnection(ctx *server.CommandContext) interface{} {
+func syncIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
 	cmd := &syncIPsecCmd{}
 	ctx.GetCommand(cmd)
+	return syncIPsecConnection(cmd)
+}
+
+func syncIPsecConnection(cmd *syncIPsecCmd) interface{} {
 	AutoRestartVpn = cmd.AutoRestartVpn
 
 	vyos := server.NewParserFromShowConfiguration()
@@ -500,10 +528,27 @@ func syncIPsecConnection(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
-func deleteIPsecConnection(ctx *server.CommandContext) interface{} {
+func restoreIpRuleForMainRouteTable() {
+	bash := utils.Bash{
+		Command: fmt.Sprintf("ip rule list | grep 32766"),
+	}
+	ret, out, _, err := bash.RunWithReturn()
+	if ret != 0 || err != nil || out == "" {
+		bash := utils.Bash{
+			Command: fmt.Sprintf("ip rule add from all table main pref 32766"),
+		}
+		_, _, _, err := bash.RunWithReturn()
+		utils.PanicOnError(err)
+	}
+}
+
+func deleteIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
 	cmd := &deleteIPsecCmd{}
 	ctx.GetCommand(cmd)
+	return deleteIPsecConnection(cmd)
+}
 
+func deleteIPsecConnection(cmd *deleteIPsecCmd) interface{} {
 	vyos := server.NewParserFromShowConfiguration()
 	tree := vyos.Tree
 	for _, info := range cmd.Infos {
@@ -515,17 +560,7 @@ func deleteIPsecConnection(ctx *server.CommandContext) interface{} {
 		delete(ipsecMap, info.Uuid)
 	}
 
-	bash := utils.Bash{
-		Command: fmt.Sprintf("ip rule list | grep 32766"),
-	}
-	_, out, _, _ := bash.RunWithReturn()
-	if out == "" {
-		bash := utils.Bash{
-			Command: fmt.Sprintf("sudo ip rule add from all table main pref 32766"),
-		}
-		_, _, _, err := bash.RunWithReturn()
-		utils.PanicOnError(err)
-	}
+	restoreIpRuleForMainRouteTable()
 
 	if utils.IsSkipVyosIptables() {
 		syncIpSecRulesByIptables()
@@ -534,6 +569,9 @@ func deleteIPsecConnection(ctx *server.CommandContext) interface{} {
 	if len(ipsecMap) > 0 {
 		writeIpsecHaScript(true)
 	} else {
+		tree := server.NewParserFromShowConfiguration().Tree
+		tree.Deletef("firewall group address-group %s", ipsecAddressGroup)
+		tree.Apply(false)
 		writeIpsecHaScript(false)
 	}
 
@@ -547,6 +585,14 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 	tree.Deletef("vpn ipsec ike-group %s", info.Uuid)
 	tree.Deletef("vpn ipsec esp-group %s", info.Uuid)
 	tree.Deletef("vpn ipsec site-to-site peer %s", info.PeerAddress)
+
+	ipsec := tree.Get("vpn ipsec site-to-site peer")
+	noipsec := false
+	if ipsec == nil || ipsec.Size() == 0 {
+		noipsec = true
+		// no any ipsec connection, delete ipsec related rules
+		tree.Delete("vpn ipsec")
+	}
 
 	if utils.IsSkipVyosIptables() {
 		return
@@ -583,13 +629,7 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 		}
 	}
 
-	ipsec := tree.Get("vpn ipsec site-to-site peer")
-	if ipsec == nil || ipsec.Size() == 0 {
-		// no any ipsec connection
-
-		// delete ipsec related rules
-		tree.Delete("vpn ipsec")
-
+	if noipsec {
 		// delete firewall
 		if r := tree.FindFirewallRuleByDescription(nicname, "local", "ipsec-500-udp"); r != nil {
 			r.Delete()
@@ -602,6 +642,17 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 		}
 		if r := tree.FindFirewallRuleByDescription(nicname, "local", "ipsec-ah"); r != nil {
 			r.Delete()
+		}
+
+		if info.ExcludeSnat {
+			for _, localCidr := range info.LocalCidrs {
+				for _, remoteCidr := range info.PeerCidrs {
+					des = fmt.Sprintf("ipsec-%s-%s-%s", info.Uuid, localCidr, remoteCidr)
+					if r := tree.FindSnatRuleDescription(des); r != nil {
+						r.Delete()
+					}
+				}
+			}
 		}
 	}
 }
@@ -619,10 +670,13 @@ func updateIPsecConnectionState(tree *server.VyosConfigTree, info ipsecInfo) {
 	tree.Apply(false)
 }
 
-func updateIPsecConnection(ctx *server.CommandContext) interface{} {
+func updateIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
 	cmd := &updateIPsecReq{}
 	ctx.GetCommand(cmd)
+	return updateIPsecConnection(cmd)
+}
 
+func updateIPsecConnection(cmd *updateIPsecReq) interface{} {
 	vyos := server.NewParserFromShowConfiguration()
 	tree := vyos.Tree
 
@@ -633,6 +687,8 @@ func updateIPsecConnection(ctx *server.CommandContext) interface{} {
 			}
 		}
 	}
+
+	restoreIpRuleForMainRouteTable()
 
 	return nil
 }
@@ -684,6 +740,11 @@ func getIkeUptime(peer string) int {
 }
 
 func restartIPSecVpnTimer() {
+	/* doesn't running in ut */
+	if utils.IsRuingUT() {
+		return
+	}
+
 	if AutoRestartThreadCreated {
 		return
 	}
@@ -732,8 +793,8 @@ func restartIPSecVpnTimer() {
 
 func IPsecEntryPoint() {
 	ipsecMap = make(map[string]ipsecInfo, IPSecInfoMaxSize)
-	server.RegisterAsyncCommandHandler(CREATE_IPSEC_CONNECTION, server.VyosLock(createIPsecConnection))
-	server.RegisterAsyncCommandHandler(DELETE_IPSEC_CONNECTION, server.VyosLock(deleteIPsecConnection))
-	server.RegisterAsyncCommandHandler(SYNC_IPSEC_CONNECTION, server.VyosLock(syncIPsecConnection))
-	server.RegisterAsyncCommandHandler(UPDATE_IPSEC_CONNECTION, server.VyosLock(updateIPsecConnection))
+	server.RegisterAsyncCommandHandler(CREATE_IPSEC_CONNECTION, server.VyosLock(createIPsecConnectionHandler))
+	server.RegisterAsyncCommandHandler(DELETE_IPSEC_CONNECTION, server.VyosLock(deleteIPsecConnectionHandler))
+	server.RegisterAsyncCommandHandler(SYNC_IPSEC_CONNECTION, server.VyosLock(syncIPsecConnectionHandler))
+	server.RegisterAsyncCommandHandler(UPDATE_IPSEC_CONNECTION, server.VyosLock(updateIPsecConnectionHandler))
 }

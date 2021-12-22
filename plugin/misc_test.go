@@ -5,14 +5,13 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
-	"github.com/zstackio/zstack-vyos/utils/test"
 )
 
 var _ = Describe("misc_test", func() {
 	var nicCmd *configureNicCmd
 	BeforeEach(func() {
 		nicCmd = &configureNicCmd{}
-		utils.InitLog(test.VYOS_UT_LOG_FOLDER+"misc_test.log", false)
+		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"misc_test.log", false)
 	})
 
 	AfterEach(func() {
@@ -21,13 +20,13 @@ var _ = Describe("misc_test", func() {
 
 	It("test add callback route", func() {
 		nicCmd := &configureNicCmd{}
-		nicCmd.Nics = append(nicCmd.Nics, test.MgtNicForUT)
-		nicCmd.Nics = append(nicCmd.Nics, test.PubNicForUT)
+		nicCmd.Nics = append(nicCmd.Nics, utils.MgtNicForUT)
+		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		configureNic(nicCmd)
 
-		ipInPubL3, _ := test.GetFreePubL3Ip()
-		defer test.ReleasePubL3Ip(ipInPubL3)
+		ipInPubL3, _ := utils.GetFreePubL3Ip()
+		defer utils.ReleasePubL3Ip(ipInPubL3)
 
 		server.CALLBACK_IP = ipInPubL3
 		addRouteIfCallbackIpChanged(true)

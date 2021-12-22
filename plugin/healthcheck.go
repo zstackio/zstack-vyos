@@ -1,6 +1,7 @@
 package plugin
 
 import (
+        "github.com/zstackio/zstack-vyos/utils"
         "time"
 )
 
@@ -37,6 +38,10 @@ func (status *HealthStatus) healthCheck() {
 }
 
 func init ()  {
+        if utils.IsRuingUT() {
+                return
+        }
+        
         go func() {
                 for {
                         healthStatus.healthCheck()

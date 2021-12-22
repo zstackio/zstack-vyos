@@ -14,7 +14,6 @@ const (
 	VR_CONFIGURE_NIC_FIREWALL_DEFAULT_ACTION_PATH = "/configurenicdefaultaction"
 	VR_REMOVE_NIC_PATH = "/removenic"
 	VR_CHANGE_DEFAULT_NIC_PATH = "/changeDefaultNic"
-	ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER = 9999
 	RA_MAX_INTERVAL = 60
 	RA_MIN_INTERVAL = 15
 )
@@ -67,11 +66,21 @@ func makeNicFirewallDescription(nicname, ip string) string {
 }
 
 func addSecondaryIpFirewall(nicname, ip string,  tree *server.VyosConfigTree)  {
-	if (utils.IsSkipVyosIptables()) {
-		rule := utils.NewIptablesRule("", "", ip, 0, 0, []string{utils.RELATED, utils.ESTABLISHED}, utils.ACCEPT, utils.VRRPComment)
-		utils.InsertFireWallRule(nicname, rule, utils.LOCAL)
-		rule = utils.NewIptablesRule("icmp", "", ip, 0, 0, nil, utils.ACCEPT, utils.VRRPComment)
-		utils.InsertFireWallRule(nicname, rule, utils.LOCAL)
+	if utils.IsSkipVyosIptables() {
+		rule := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
+		rule.SetComment(utils.SystemTopRule).SetAction(utils.IPTABLES_ACTION_ACCEPT)
+		rule.SetDstIp(ip+"/32").SetState([]string{utils.IPTABLES_STATE_RELATED, utils.IPTABLES_STATE_ESTABLISHED})
+		
+		rule1 := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
+		rule1.SetComment(utils.SystemTopRule).SetAction(utils.IPTABLES_ACTION_ACCEPT)
+		rule1.SetDstIp(ip+"/32").SetProto(utils.IPTABLES_PROTO_ICMP)
+		
+		table := utils.NewIpTables(utils.FirewallTable)
+		table.AddIpTableRules([]*utils.IpTableRule{rule, rule1})
+		err := table.Apply()
+		if err != nil {
+			log.Debugf("add secondary IP firewall failed %s", err)
+		}
 	} else {
 		des := makeNicFirewallDescription(nicname, ip)
 		if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
@@ -95,7 +104,7 @@ func addSecondaryIpFirewall(nicname, ip string,  tree *server.VyosConfigTree)  {
 
 }
 
-func configureLBFirewallRule(tree *server.VyosConfigTree, dev string) (err error) {
+func configureLBFirewallRuleByVyos(tree *server.VyosConfigTree, dev string) (err error) {
 	/*get all the rules created by lb from an private nic first;
 	config these rules on dev second*/
 
@@ -104,68 +113,102 @@ func configureLBFirewallRule(tree *server.VyosConfigTree, dev string) (err error
 	var sourceNic string
 
 	priNics := utils.GetPrivteInterface()
-
+	for _, priNic := range priNics {
+		if priNic != dev && tree.FindFirewallRuleByDescriptionRegex(priNic, "local", des, utils.StringRegCompareFn) != nil {
+			sourceNic = priNic
+			break
+		}
+	}
+	
+	if rs := tree.FindFirewallRulesByDescriptionRegex(sourceNic, "local", des, utils.StringRegCompareFn); rs != nil {
+		for _, r := range rs {
+			prefix := r.String()
+			rule := make([]string, 0)
+			for _, d := range r.FullString() {
+				rule = append(rule, strings.Replace(d, prefix, "", -1))
+			}
+			log.Debug(rule)
+			log.Debug(r.String())
+			tree.SetFirewallOnInterface(dev, "local", rule...)
+		}
+	}
+	
 	if utils.IsSkipVyosIptables() {
-	        find := false
-                for _, priNic := range priNics {
-                        if ruleString, err := utils.ListRule(utils.FirewallTable, priNic + utils.LOCAL.String()) ; err == nil && priNic != dev {
-                                for _, rule := range ruleString{
-                                        if strings.Contains(rule, utils.LbRuleComment) {
-                                                find = true
-                                                sourceNic = priNic
-                                                break
-                                        }
-                                }
-                        }
-                        if find {
-                                break
-                        }
-                }
-
-
-	        ruleString, err := utils.ListRule(utils.FirewallTable, sourceNic+utils.LOCAL.String())
-	        if  err != nil{
-	                log.Debugf("failed to get rule of table %s chain %s, because %v",utils.FirewallTable, sourceNic+utils.LOCAL.String(), err)
-	                return err
-	        }
-	        cmds := make([]string, 0)
-	        for _, r := range ruleString {
-	                if strings.Contains(r, utils.LbRuleComment) {
-	                        r = strings.Replace(r, sourceNic + utils.LOCAL.String(), dev + utils.LOCAL.String(), 1)
-	                        cmds = append(cmds, fmt.Sprintf("iptables %s", r))
-	                }
-	        }
-	        b := utils.Bash{
-	                Command: strings.Join(cmds, "\n"),
-                        Sudo: true,
-	        }
-	        _, _, _, err = b.RunWithReturn()
-	        if err != nil {
-	                return err
-	        }
-		//removeDnsFirewallRules(priNic)
-	} else {
-                for _, priNic := range priNics {
-                        if priNic != dev && tree.FindFirewallRuleByDescriptionRegex(priNic, "local", des, utils.StringRegCompareFn) != nil {
-                                sourceNic = priNic
-                                break
-                        }
-                }
-		if rs := tree.FindFirewallRulesByDescriptionRegex(sourceNic, "local", des, utils.StringRegCompareFn); rs != nil {
-			for _, r := range rs {
-				prefix := r.String()
-				rule := make([]string, 0)
-				for _, d := range r.FullString() {
-					rule = append(rule, strings.Replace(d, prefix, "", -1))
+		/*find := false
+		for _, priNic := range priNics {
+			if ruleString, err := utils.ListRule(utils.FirewallTable, priNic + utils.RULESET_LOCAL.String()) ; err == nil && priNic != dev {
+				for _, rule := range ruleString{
+					if strings.Contains(rule, utils.LbRuleComment) {
+						find = true
+						sourceNic = priNic
+						break
+						}
 				}
-				log.Debug(rule)
-				log.Debug(r.String())
-				tree.SetFirewallOnInterface(dev, "local", rule...)
+			}
+			if find {
+				break
 			}
 		}
+
+
+		ruleString, err := utils.ListRule(utils.FirewallTable, sourceNic+utils.RULESET_LOCAL.String())
+		if  err != nil{
+				log.Debugf("failed to get rule of table %s chain %s, because %v",utils.FirewallTable, sourceNic+utils.RULESET_LOCAL.String(), err)
+				return err
+		}
+		cmds := make([]string, 0)
+		for _, r := range ruleString {
+				if strings.Contains(r, utils.LbRuleComment) {
+						r = strings.Replace(r, sourceNic + utils.RULESET_LOCAL.String(), dev + utils.RULESET_LOCAL.String(), 1)
+						cmds = append(cmds, fmt.Sprintf("iptables %s", r))
+				}
+		}
+		b := utils.Bash{
+				Command: strings.Join(cmds, "\n"),
+					Sudo: true,
+		}
+		_, _, _, err = b.RunWithReturn()
+		if err != nil {
+				return err
+		}*/
+		//removeDnsFirewallRules(priNic)
+	} else {
+	
 	}
 
 	return
+}
+
+func configureLBFirewallRuleByIpTables(dev string) error {
+	sourceNic := ""
+	priNics := utils.GetPrivteInterface()
+	for _, priNic := range priNics {
+		if priNic != dev {
+			sourceNic = priNic
+			break
+		}
+	}
+	
+	if sourceNic == "" {
+		log.Debugf("this is the first private nic %s", dev)
+		return nil
+	}
+	
+	table := utils.NewIpTables(utils.FirewallTable)
+	rules := table.Found(utils.GetRuleSetName(sourceNic, utils.RULESET_LOCAL), utils.LbRuleComment)
+	if len(rules) == 0 {
+		log.Debugf("there is no private loadBalancer configure for nic: %s", sourceNic)
+		return nil
+	}
+	
+	newChainName := utils.GetRuleSetName(dev, utils.RULESET_LOCAL)
+	for _, r := range rules {
+		r.SetChainName(newChainName)
+	}
+	log.Debugf("add private lb rules for nic: %s, rules %+v", dev, rules)
+	table.AddIpTableRules(rules)
+	
+	return table.Apply()
 }
 
 func configureNicHandler(ctx *server.CommandContext) interface{} {
@@ -173,6 +216,91 @@ func configureNicHandler(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 
 	return configureNic(cmd)
+}
+
+func configureNicFirewall(nics []utils.NicInfo) {
+	if utils.IsSkipVyosIptables() {
+		for _, nic := range nics {
+			nicname, _ := utils.GetNicNameByMac(nic.Mac)
+			if nic.Category == "Private" {
+				err := utils.InitNicFirewall(nicname, nic.Ip, false, utils.IPTABLES_ACTION_REJECT); utils.PanicOnError(err)
+			} else {
+				err := utils.InitNicFirewall(nicname, nic.Ip, true, utils.IPTABLES_ACTION_REJECT); utils.PanicOnError(err)
+			}
+			
+			if nic.Category == "Private" {
+				log.Debug("start configure LB firewall rule for new added nic")
+				configureLBFirewallRuleByIpTables(nicname)
+			}
+		}
+	} else {
+		tree := server.NewParserFromShowConfiguration().Tree
+		for _, nic := range nics {
+			nicname, _ := utils.GetNicNameByMac(nic.Mac)
+			tree.SetFirewallDefaultAction(nicname, "local", "reject")
+			tree.SetFirewallDefaultAction(nicname, "in", "reject")
+		}
+		tree.Apply(false)
+		
+		tree = server.NewParserFromShowConfiguration().Tree
+		for _, nic := range nics {
+			nicname, _ := utils.GetNicNameByMac(nic.Mac)
+			tree.AttachFirewallToInterface(nicname, "local")
+			tree.AttachFirewallToInterface(nicname, "in")
+		}
+		tree.Apply(false)
+		
+		tree = server.NewParserFromShowConfiguration().Tree
+		for _, nic := range nics {
+			nicname, _ := utils.GetNicNameByMac(nic.Mac)
+			tree.SetFirewallOnInterface(nicname, "local",
+				"action accept",
+				"state established enable",
+				"state related enable",
+				fmt.Sprintf("destination address %v", nic.Ip),
+			)
+			tree.SetFirewallOnInterface(nicname, "local",
+				"action accept",
+				"protocol icmp",
+				fmt.Sprintf("destination address %v", nic.Ip),
+			)
+			
+			tree.SetZStackFirewallRuleOnInterface(nicname, "behind","in",
+				"action accept",
+				"state established enable",
+				"state related enable",
+			)
+				
+			tree.SetFirewallWithRuleNumber(nicname, "in", utils.IPTABLES_RULENUMBER_9999,
+				"action accept",
+				"state new enable",
+			)
+
+			// only allow ssh traffic on eth0, disable on others
+			if nicname == "eth0" {
+				tree.SetFirewallOnInterface(nicname, "local",
+					fmt.Sprintf("destination port %v", int(utils.GetSshPortFromBootInfo())),
+					fmt.Sprintf("destination address %v", nic.Ip),
+					"protocol tcp",
+					"action accept",
+				)
+			} else {
+				tree.SetFirewallOnInterface(nicname, "local",
+					fmt.Sprintf("destination port %v", int(utils.GetSshPortFromBootInfo())),
+					fmt.Sprintf("destination address %v", nic.Ip),
+					"protocol tcp",
+					"action reject",
+				)
+			}
+			
+			if nic.Category == "Private" {
+				log.Debug("start configure LB firewall rule")
+				configureLBFirewallRuleByVyos(tree, nicname)
+			}
+		}
+		
+		tree.Apply(false)
+	}
 }
 
 func configureNic(cmd *configureNicCmd) interface{} {
@@ -199,7 +327,7 @@ func configureNic(cmd *configureNicCmd) interface{} {
 			cidr, err := utils.NetmaskToCIDR(nic.Netmask)
 			utils.PanicOnError(err)
 			addr := fmt.Sprintf("%v/%v", nic.Ip, cidr)
-			tree.Setf("interfaces ethernet %s address %v", nicname, addr)
+			tree.Setf(fmt.Sprintf("interfaces ethernet %s address %v", nicname, addr))
 		}
 		if nic.Ip6 != "" {
 			tree.SetfWithoutCheckExisting("interfaces ethernet %s address %s", nicname, fmt.Sprintf("%s/%d", nic.Ip6, nic.PrefixLength))
@@ -234,83 +362,9 @@ func configureNic(cmd *configureNicCmd) interface{} {
 			tree.Setf("interfaces ethernet %s ipv6 router-advert min-interval %d", nicname, RA_MIN_INTERVAL)
 			tree.Setf("interfaces ethernet %s ipv6 router-advert send-advert true", nicname)
 		}
-
-		if utils.IsSkipVyosIptables() {
-			if nic.Category == "Private" {
-				utils.InitNicFirewall(nicname, nic.Ip, false, utils.REJECT)
-			} else {
-				utils.InitNicFirewall(nicname, nic.Ip, true, utils.REJECT)
-			}
-		} else {
-			tree.SetFirewallOnInterface(nicname, "local",
-				"action accept",
-				"state established enable",
-				"state related enable",
-				fmt.Sprintf("destination address %v", nic.Ip),
-			)
-			tree.SetFirewallOnInterface(nicname, "local",
-				"action accept",
-				"protocol icmp",
-				fmt.Sprintf("destination address %v", nic.Ip),
-			)
-
-			if nic.Category == "Private" {
-				tree.SetZStackFirewallRuleOnInterface(nicname, "behind","in",
-					"action accept",
-					"state established enable",
-					"state related enable",
-					"state invalid enable",
-					"state new enable",
-				)
-			} else {
-				tree.SetZStackFirewallRuleOnInterface(nicname, "behind","in",
-					"action accept",
-					"state established enable",
-					"state related enable",
-				)
-
-				tree.SetFirewallWithRuleNumber(nicname, "in", ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER,
-					"action accept",
-					"state new enable",
-				)
-			}
-
-			tree.SetZStackFirewallRuleOnInterface(nicname, "behind","in",
-				"action accept",
-				"protocol icmp",
-			)
-
-			// only allow ssh traffic on eth0, disable on others
-			if nicname == "eth0" {
-				tree.SetFirewallOnInterface(nicname, "local",
-					fmt.Sprintf("destination port %v", int(utils.GetSshPortFromBootInfo())),
-					fmt.Sprintf("destination address %v", nic.Ip),
-					"protocol tcp",
-					"action accept",
-				)
-			} else {
-				tree.SetFirewallOnInterface(nicname, "local",
-					fmt.Sprintf("destination port %v", int(utils.GetSshPortFromBootInfo())),
-					fmt.Sprintf("destination address %v", nic.Ip),
-					"protocol tcp",
-					"action reject",
-				)
-			}
-
-			tree.SetFirewallDefaultAction(nicname, "local", "reject")
-			tree.SetFirewallDefaultAction(nicname, "in", "reject")
-
-			tree.AttachFirewallToInterface(nicname, "local")
-			tree.AttachFirewallToInterface(nicname, "in")
-		}
-
+		
 		if nic.L2Type != "" {
 			tree.Setf("interfaces ethernet %s description '%s'", nicname, makeAlias(nic))
-		}
-
-		if nic.Category == "Private" {
-			log.Debug("start configure LB firewall rule")
-			configureLBFirewallRule(tree, nicname)
 		}
 
 		if !IsMaster() {
@@ -319,6 +373,8 @@ func configureNic(cmd *configureNicCmd) interface{} {
 	}
 
 	tree.Apply(false)
+	
+	configureNicFirewall(cmd.Nics)
 
 	if IsMaster() {
 		bash := utils.Bash {
@@ -413,7 +469,7 @@ func removeNic(cmd *configureNicCmd) interface{} {
 		}, 5, 1); utils.PanicOnError(err)
 		tree.Deletef("interfaces ethernet %s", nicname)
 		if utils.IsSkipVyosIptables() {
-			utils.DestroyNicFirewall(nicname)
+			err := utils.DestroyNicFirewall(nicname); utils.PanicOnError(err)
 		} else {
 			tree.Deletef("firewall name %s.in", nicname)
 			tree.Deletef("firewall name %s.local", nicname)
@@ -463,9 +519,9 @@ func configureNicDefaultAction(cmd *configureNicCmd) interface{} {
 		}, 5, 1); utils.PanicOnError(err)
 
 		if utils.IsSkipVyosIptables() {
-			utils.SetDefaultRule(nicname, nic.FirewallDefaultAction)
+			err := utils.SetNicDefaultFirewallRule(nicname, nic.FirewallDefaultAction); utils.PanicOnError(err)
 		} else {
-			if strings.Compare(nic.FirewallDefaultAction, "reject") == 0 {
+			if strings.Compare(strings.ToLower(nic.FirewallDefaultAction), "reject") == 0 {
 				tree.SetFirewallDefaultAction(nicname, "local", "reject")
 				tree.SetFirewallDefaultAction(nicname, "in", "reject")
 			} else {
@@ -501,15 +557,31 @@ func changeDefaultNic(cmd *ChangeDefaultNicCmd) interface{} {
 	}
 
 	if utils.IsSkipVyosIptables() {
+		table := utils.NewIpTables(utils.NatTable)
+		
 		/* delete all snat rules */
-		utils.DeleteSNatRuleByComment(utils.SNATComment)
+		table.RemoveIpTableRuleByComments(utils.SNATComment)
 
+		var rules []*utils.IpTableRule
 		for _, s := range cmd.Snats {
 			outNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
 			inNic, err := utils.GetNicNameByMac(s.PrivateNicMac); utils.PanicOnError(err)
 			address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
 
-			setSnatRule(outNic, inNic, address, s.PublicIp)
+			rule := utils.NewIpTableRule(utils.RULESET_SNAT.String())
+			rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
+			rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(outNic).SetSnatTargetIp(s.PublicIp)
+			rules = append(rules, rule)
+			
+			rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
+			rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
+			rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
+			rules = append(rules, rule)
+		}
+		
+		table.AddIpTableRules(rules)
+		if err := table.Apply(); err != nil {
+			return err
 		}
 	} else {
 		for _, s := range cmd.Snats {
