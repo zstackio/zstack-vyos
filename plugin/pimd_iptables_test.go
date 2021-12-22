@@ -77,8 +77,23 @@ func checkRegisterAddNicCallback(nic string) {
 
 func checkAddPimdFirewallByIptables(nics map[string]utils.Nic) {
 	table := utils.NewIpTables(utils.FirewallTable)
-
 	for _, nic := range nics {
+		rules := table.Found(utils.GetRuleSetName(nic.Name, utils.RULESET_LOCAL), utils.SystemTopRule)
+		for _, rule := range rules{
+			if rule.GetProto() == utils.IPTABLES_PROTO_PIMD {
+				Expect(rule.GetRuleNumber() < 1000).To(BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
+			}
+			if rule.GetProto() == utils.IPTABLES_PROTO_IGMP {
+				Expect(rule.GetRuleNumber() < 1000).To(BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
+			}
+		}
+		rules = table.Found(utils.GetRuleSetName(nic.Name, utils.RULESET_IN), utils.SystemTopRule)
+		for _, rule := range rules{
+			if rule.GetDstIp() == "224.0.0.0/4" {
+				Expect(rule.GetRuleNumber() < 1000).To(BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
+			}
+		}
+
 		rule := utils.NewIpTableRule(utils.GetRuleSetName(nic.Name, utils.RULESET_LOCAL))
 		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
 		rule.SetProto(utils.IPTABLES_PROTO_PIMD)

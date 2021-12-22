@@ -16,6 +16,7 @@ const (
 	SystemLastLastRule = "default rule 9999"
 	SystemLastRule     = "default rule 10000"
 
+	/*network service rule comment*/
 	FirewallRule           = "firewall rule"
 	PortFordingRuleComment = "pf rule"
 	EipRuleComment         = "eip rule"
@@ -40,11 +41,11 @@ const (
 	
 	LOCAL_CHAIN_SYSTEM_RULE_RULE_NUMBER_MIN = 1
 	LOCAL_CHAIN_SYSTEM_RULE_RULE_NUMBER_MAX = 1000
-	LOCAL_CHAIN_SERVICE_RULE_NUMBER_MIN = 4000
+	LOCAL_CHAIN_SERVICE_RULE_NUMBER_MIN = 5001
 	LOCAL_CHAIN_SERVICE_RULE_NUMBER_MAX = 9000
 
-	FORWARD_CHAIN_SYSTEM_RULE_RULE_NUMBER_MIN = 4000
-	FORWARD_CHAIN_SYSTEM_RULE_RULE_NUMBER_MAX = 5000
+	FORWARD_CHAIN_SYSTEM_RULE_RULE_NUMBER_MIN = 1
+	FORWARD_CHAIN_SYSTEM_RULE_RULE_NUMBER_MAX = 1000
 	FORWARD_CHAIN_SERVICE_RULE_NUMBER_MIN = 5001
 	FORWARD_CHAIN_SERVICE_RULE_NUMBER_MAX = 9000
 )
@@ -65,8 +66,8 @@ var filterLocalRulesPriority = map[string]int{
 }
 
 var filterForwardRulesPriority = map[string]int{
-	FirewallRule:           1000,
 	SystemTopRule:          FORWARD_CHAIN_SYSTEM_RULE_RULE_NUMBER_MIN,
+	FirewallRule:           1000,
 	IpsecRuleComment:       5000,
 	PortFordingRuleComment: 6000,
 	EipRuleComment:         7001,
