@@ -89,6 +89,11 @@ func parseEsxBootInfo() {
 
 		content, err := ioutil.ReadFile(TMP_LOCATION_FOR_ESX)
 		utils.PanicOnError(err)
+
+		if len(content) == 0 {
+			return false
+		}
+
 		log.Debugf("recieved bootstrap info:\nsize:%d\n%s", len(content), string(content))
 		if err = json.Unmarshal(content, &bootstrapInfo); err != nil {
 			panic(errors.Wrap(err, fmt.Sprintf("unable to JSON parse:\n %s", string(content))))
