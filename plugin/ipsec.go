@@ -23,7 +23,7 @@ const (
 	VYOSHA_IPSEC_SCRIPT = "/home/vyos/zvr/keepalived/script/ipsec.sh"
 
 	/* because strongswan 4.5.2 rekey will fail with aliyun ipsec vpn,
-	a work around method is to restart the vpn before the rekey happened */
+	   a work around method is to restart the vpn before the rekey happened */
 	IPSecIkeRekeyInterval       = 86400 /*  24 * 3600 seconds */
 	IPSecIkeRekeyIntervalMargin = 600   /* restart the vpn 10 mins before rekey */
 	IPSecRestartInterval        = IPSecIkeRekeyInterval - IPSecIkeRekeyIntervalMargin
@@ -700,8 +700,8 @@ func writeIpsecHaScript(enable bool) {
 
 	if enable {
 		srcFile := "/home/vyos/zvr/keepalived/temp/ipsec.sh"
-		_, er := utils.CopyFile(srcFile, VYOSHA_IPSEC_SCRIPT)
-		utils.PanicOnError(er)
+		err := utils.CopyFile(srcFile, VYOSHA_IPSEC_SCRIPT)
+		utils.PanicOnError(err)
 	} else {
 		conent := "echo 'no ipsec configured'"
 		err := ioutil.WriteFile(VYOSHA_IPSEC_SCRIPT, []byte(conent), 0755)
