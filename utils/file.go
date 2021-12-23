@@ -2,7 +2,7 @@ package utils
 
 import (
 	"fmt"
-	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -57,16 +57,17 @@ func Truncate(name string, size int64) error {
 	return os.Truncate(name, size)
 }
 
-func CopyFile(srcFile, destFile string) (int64, error) {
-	srcfile, err := os.Open(srcFile)
+// io.Copy: The target file cannot be overwritten, if the target file is longer than the source file
+// modify to ioutil.WriteFile
+func CopyFile(srcFile, destFile string) error {
+	input, err := ioutil.ReadFile(srcFile)
 	if err != nil {
-		return 0, err
+		return err
 	}
-	dstfile, err := os.OpenFile(destFile, os.O_WRONLY|os.O_CREATE, os.ModePerm)
+
+	err = ioutil.WriteFile(destFile, input, os.ModePerm)
 	if err != nil {
-		return 0, err
+		return err
 	}
-	defer srcfile.Close()
-	defer dstfile.Close()
-	return io.Copy(dstfile, srcfile)
+	return nil
 }
