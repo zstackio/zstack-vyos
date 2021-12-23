@@ -3,11 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/pkg/errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
-
+	log "github.com/Sirupsen/logrus"
 	"github.com/zstackio/zstack-vyos/plugin"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
@@ -36,6 +38,12 @@ func loadPlugins() {
 	plugin.FirewallEntryPoint()
 	plugin.PerformanceEntryPoint()
 	plugin.MiscEntryPoint()
+}
+
+type nic struct {
+	ip                  string
+	name                string
+	category            string
 }
 
 // Note: there shouldn't be 'daily' etc. in the following config files.
@@ -134,6 +142,116 @@ func getHeartBeatFile(fpath string) string {
 	return filepath.Join(dir, ".zvr.diskmon")
 }
 
+func deleteRemainingIptableRules() {
+	natTable := utils.NewIpTables(utils.NatTable)
+	table := utils.NewIpTables(utils.FirewallTable)
+
+	natTable.DeleteChainByKey("zs.")
+	table.DeleteChainByKey(".zs.")
+
+	var rules []*utils.IpTableRule
+	for _, r := range table.Rules {
+		if !strings.Contains(r.GetAction(), ".zs.") && !strings.Contains(r.GetChainName(), ".zs.") {
+			rules = append(rules, r)
+		}
+	}
+	table.Rules = rules
+
+	var natRules []*utils.IpTableRule
+	for _, r := range natTable.Rules {
+		if !strings.Contains(r.GetAction(), "zs.") && !strings.Contains(r.GetChainName(), "zs.") {
+			natRules = append(natRules, r)
+		}
+	}
+	natTable.Rules = natRules
+
+	err := table.Apply()
+	if err != nil {
+		log.Debugf("Delete remaining filter iptables rule failed, %v", err.Error())
+	}
+
+	err = natTable.Apply()
+	if err != nil {
+		log.Debugf("Delete remaining nat iptables rule failed, %v", err.Error())
+	}
+
+	/*flush raw table to clear NOTRACK rule at startup*/
+	cmd := utils.Bash{
+		Command: "sudo iptables -t raw -D PREROUTING -p vrrp -j NOTRACK;" +
+			"sudo iptables -t raw -D OUTPUT -p vrrp -j NOTRACK",
+	}
+	_,_,_, err = cmd.RunWithReturn()
+	if err != nil {
+		log.Debugf("Delete remaining raw iptables rule failed, %v", err.Error())
+	}
+}
+
+func checkIptablesRules()  {
+	if !utils.IsSkipVyosIptables() {
+		return
+	}
+
+	table := utils.NewIpTables(utils.FirewallTable)
+	//low version will create ethx.zs.local chain if configure firewall with iptables
+	if !table.CheckChain("eth0.zs.local") {
+		return
+	}
+
+	deleteRemainingIptableRules()
+
+	var nics map[string]*nic = make(map[string]*nic)
+	mgmtNic := utils.BootstrapInfo["managementNic"].(map[string]interface{})
+	if mgmtNic == nil {
+		panic(errors.New("no field 'managementNic' in bootstrap info"))
+	}
+
+	eth0 := &nic{name: "eth0"}
+	var ok bool
+	eth0.ip, ok = mgmtNic["ip"].(string)
+	_, ok = mgmtNic["ip"].(string)
+	_, ok6 := mgmtNic["ip6"].(string)
+	utils.PanicIfError(ok || ok6, fmt.Errorf("cannot find 'ip' field for the nic[name:%s]", eth0.name))
+
+	if mgmtNic["l2type"] != nil {
+		eth0.category = mgmtNic["category"].(string)
+	}
+
+	nics[eth0.name] = eth0
+
+	otherNics := utils.BootstrapInfo["additionalNics"].([]interface{})
+	if otherNics != nil {
+		for _, o := range otherNics {
+			onic := o.(map[string]interface{})
+			n := &nic{}
+			n.name, ok = onic["deviceName"].(string)
+			utils.PanicIfError(ok, fmt.Errorf("cannot find 'deviceName' field for the nic"))
+
+			n.ip, ok = onic["ip"].(string)
+			_, ok := onic["ip"].(string)
+			_, ok6 := onic["ip6"].(string)
+			utils.PanicIfError(ok || ok6, fmt.Errorf("cannot find 'ip' field for the nic[name:%s]", n.name))
+
+			if onic["l2type"] != nil {
+				n.category = onic["category"].(string)
+			}
+
+			nics[n.name] = n
+		}
+	}
+
+	for _, nic := range nics {
+		var err error
+		if nic.category == "Private" {
+			err = utils.InitNicFirewall(nic.name, nic.ip, false, utils.IPTABLES_ACTION_REJECT)
+		} else {
+			err = utils.InitNicFirewall(nic.name, nic.ip, true, utils.IPTABLES_ACTION_REJECT)
+		}
+		if err != nil {
+			log.Debugf("InitNicFirewall for nic: %s failed", err.Error())
+		}
+	}
+}
+
 func main() {
 	parseCommandOptions()
 	if st, err := utils.DiskUsage(getHeartBeatDir(options.LogFile)); err == nil && st.Avail == 0 {
@@ -145,6 +263,7 @@ func main() {
 	utils.InitLog(options.LogFile, false)
 	utils.InitBootStrapInfo()
 	utils.InitVyosVersion()
+	checkIptablesRules()
 	plugin.InitHaNicState()
 	utils.InitNatRule()
 	loadPlugins()
