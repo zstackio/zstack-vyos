@@ -216,10 +216,22 @@ func (t *IpTables) DeleteChain(chainName string) {
 	
 	for _, c := range t.Chains {
 		if c.Name != chainName {
-			chains = append(chains, NewIpTablesChain(chainName))
+			chains = append(chains, NewIpTablesChain(c.Name))
 		}
 	}
 	
+	t.Chains = chains
+}
+
+func (t *IpTables) DeleteChainByKey(key string) {
+	var chains []*IpTableChain
+
+	for _, c := range t.Chains {
+		if !strings.Contains(c.Name, key) {
+			chains = append(chains, NewIpTablesChain(c.Name))
+		} 
+	}
+
 	t.Chains = chains
 }
 
