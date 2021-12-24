@@ -57,6 +57,10 @@ func SetFileOwner(fpath, owner, group string) error {
 	return exec.Command("sudo", "/bin/chown", fmt.Sprintf("%s:%s", owner, group), fpath).Run()
 }
 
+func SetFolderOwner(folderPath, owner, group string) error {
+	return exec.Command("sudo", "/bin/chown",  "-R", fmt.Sprintf("%s:%s", owner, group), folderPath).Run()
+}
+
 func Truncate(name string, size int64) error {
 	return os.Truncate(name, size)
 }
