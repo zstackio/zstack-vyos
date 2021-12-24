@@ -54,6 +54,7 @@ var _ = Describe("vyosha_iptables_test", func() {
 		utils.ReleaseMgtIp(vipIp)
 		utils.ReleaseMgtIp(vipIp1)
 		utils.SetSkipVyosIptablesForUT(false)
+		deleteKeepalived()
 		utils.DestroyNicFirewall(utils.MgtNicForUT.Name)
 	})
 
@@ -84,4 +85,13 @@ func checkVyosConfigByIptables(cmd *setVyosHaCmd) {
 	natRule.SetProto(utils.IPTABLES_PROTO_VRRP)
 	res = natTable.Check(natRule)
 	gomega.Expect(res).To(gomega.BeTrue(), fmt.Sprintf("nat rule [%s] check failed", natRule.String()))
+}
+
+func deleteKeepalived() error {
+	bash := utils.Bash{
+		Command: "sudo pkill -9 keepalived",
+	}
+	bash.Run()
+
+	return nil
 }
