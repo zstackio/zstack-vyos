@@ -55,14 +55,7 @@ var _ = Describe("vyosHa_test", func() {
 		utils.ReleaseMgtIp(peerIp)
 		utils.ReleaseMgtIp(vipIp)
 		utils.ReleaseMgtIp(vipIp1)
-		tree := server.NewParserFromShowConfiguration().Tree
-		tree.DetachFirewallFromInterface(utils.MgtNicForUT.Name, "in")
-		tree.DetachFirewallFromInterface(utils.MgtNicForUT.Name, "local")
-		tree.Apply(false)
-		tree = server.NewParserFromShowConfiguration().Tree
-		tree.Deletef("firewall name %s.in", utils.MgtNicForUT.Name)
-		tree.Deletef("firewall name %s.local", utils.MgtNicForUT.Name)
-		tree.Apply(false)
+		deleteMgtNicFirewall(false)
 	})
 })
 
