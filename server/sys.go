@@ -66,10 +66,7 @@ function atexit() {
 
 trap atexit EXIT SIGHUP SIGINT SIGTERM
 
-session_env=$($API getSessionEnv $PPID)
-echo $session_env
-eval $session_env
-$API setupSession
+%s
 
 $DISCARD
 %s
@@ -78,18 +75,27 @@ if [ $? -ne 0 ]; then
 	echo "fail to commit"
 	exit 1
 fi
-
+sleep 4
 `
 	env_1_2 := `export vyos_libexec_dir=/usr/libexec/vyos
 export vyos_validators_dir=/usr/libexec/vyos/validators
 export vyos_conf_scripts_dir=/usr/libexec/vyos/conf_mode`
 	env_1_1_7 := ``
 	env := env_1_2
+
+	session_env_1_2 := ``
+	session_env_1_1_7 := `session_env=$($API getSessionEnv $PPID)
+echo $session_env
+eval $session_env
+$API setupSession`
+	session_env := session_env_1_2
+
 	if utils.Vyos_version == utils.VYOS_1_1_7 {
 		env = env_1_1_7
+		session_env = session_env_1_1_7
 	}
 
-	command = fmt.Sprintf(template, env, command)
+	command = fmt.Sprintf(template, env, session_env, command)
 	tmpfile, err := ioutil.TempFile("", "zvr"); utils.PanicOnError(err)
 	defer os.Remove(tmpfile.Name())
 
@@ -127,6 +133,8 @@ function atexit() {
 
 trap atexit EXIT SIGHUP SIGINT SIGTERM
 
+%s
+
 $DISCARD
 %s
 $COMMIT
@@ -134,20 +142,28 @@ if [ $? -ne 0 ]; then
 	echo "fail to commit"
 	exit 1
 fi
-
+sleep 4
 `
 	env_1_2 := `export vyos_libexec_dir=/usr/libexec/vyos
 export vyos_validators_dir=/usr/libexec/vyos/validators
 export vyos_conf_scripts_dir=/usr/libexec/vyos/conf_mode`
 	env_1_1_7 := ``
-
 	env := env_1_2
+
+	session_env_1_2 := ``
+	session_env_1_1_7 := `session_env=$($API getSessionEnv $PPID)
+echo $session_env
+eval $session_env
+$API setupSession`
+	session_env := session_env_1_2
+
 	if utils.Vyos_version == utils.VYOS_1_1_7 {
 		env = env_1_1_7
+		session_env = session_env_1_1_7
 	}
 
 	bash := &utils.Bash{
-		Command: fmt.Sprintf(template, env, command),
+		Command: fmt.Sprintf(template, env, session_env, command),
 		Arguments: args,
 		NoLog: true,
 	}
