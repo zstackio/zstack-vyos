@@ -319,8 +319,8 @@ func createEip(cmd *setEipCmd) interface{} {
 	/* before eip is enabled, delete existed connection */
 	t := utils.ConnectionTrackTuple{IsNat: false, IsDst: true, Ip: eip.VipIp, Protocol: "", PortStart: 0, PortEnd: 0}
 	t.CleanConnTrackConnection()
-	
-	return nil
+
+        return nil
 }
 
 func removeEipHandler(ctx *server.CommandContext) interface{} {
