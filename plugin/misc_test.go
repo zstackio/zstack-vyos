@@ -9,22 +9,17 @@ import (
 
 var _ = Describe("misc_test", func() {
 	var nicCmd *configureNicCmd
-	BeforeEach(func() {
-		nicCmd = &configureNicCmd{}
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"misc_test.log", false)
-	})
 
-	AfterEach(func() {
-		removeNic(nicCmd)
+	It("prepare env ...", func() {
+		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"misc_test.log", false)
+		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
+		nicCmd = &configureNicCmd{}
+		nicCmd.Nics = append(nicCmd.Nics, utils.MgtNicForUT)
+		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+		configureNic(nicCmd)
 	})
 
 	It("test add callback route", func() {
-		nicCmd := &configureNicCmd{}
-		nicCmd.Nics = append(nicCmd.Nics, utils.MgtNicForUT)
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
-		configureNic(nicCmd)
-
 		ipInPubL3, _ := utils.GetFreePubL3Ip()
 		defer utils.ReleasePubL3Ip(ipInPubL3)
 
@@ -43,5 +38,12 @@ var _ = Describe("misc_test", func() {
 		addRouteIfCallbackIpChanged(false)
 		gomega.Expect(utils.CheckZStackRouteExists(server.CALLBACK_IP)).To(gomega.BeFalse(),
 			"route should not be added this time.")
+	})
+
+	It("destroy env ...", func() {
+		nicCmd = &configureNicCmd{}
+		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+		removeNic(nicCmd)
+		deleteMgtNicFirewall(true)
 	})
 })

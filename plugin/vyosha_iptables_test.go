@@ -6,6 +6,7 @@ import (
     . "github.com/onsi/ginkgo"
     "github.com/onsi/gomega"
     "github.com/zstackio/zstack-vyos/utils"
+    "github.com/zstackio/zstack-vyos/server"
 )
 
 var _ = Describe("vyosha_iptables_test", func() {
@@ -55,7 +56,7 @@ var _ = Describe("vyosha_iptables_test", func() {
 		utils.ReleaseMgtIp(vipIp1)
 		utils.SetSkipVyosIptablesForUT(false)
 		deleteKeepalived()
-		utils.DestroyNicFirewall(utils.MgtNicForUT.Name)
+		deleteMgtNicFirewall(true)
 	})
 
 })
@@ -92,6 +93,22 @@ func deleteKeepalived() error {
 		Command: "sudo pkill -9 keepalived",
 	}
 	bash.Run()
+
+	return nil
+}
+func deleteMgtNicFirewall(isSkipIptables bool) error {
+	if isSkipIptables {
+		utils.DestroyNicFirewall(utils.MgtNicForUT.Name)
+	}
+
+	tree := server.NewParserFromShowConfiguration().Tree
+	tree.DetachFirewallFromInterface(utils.MgtNicForUT.Name, "in")
+	tree.DetachFirewallFromInterface(utils.MgtNicForUT.Name, "local")
+	tree.Apply(false)
+	tree = server.NewParserFromShowConfiguration().Tree
+	tree.Deletef("firewall name %s.in", utils.MgtNicForUT.Name)
+	tree.Deletef("firewall name %s.local", utils.MgtNicForUT.Name)
+	tree.Apply(false)
 
 	return nil
 }
