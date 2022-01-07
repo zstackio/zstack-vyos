@@ -270,11 +270,7 @@ func SyncRouteEntries(currTables []ZStackRouteTable, entryMap map[int][]ZStackRo
 		Command: strings.Join(newCmds, ";"),
 	}
 	ret, _, e, err := bash.RunWithReturn()
-	if err != nil {
-		return err
-	}
-
-	if ret != 0 {
+	if err != nil || e != "" || ret != 0 {
 		return fmt.Errorf("sync ip route: %s, error: %s, ret: %d", strings.Join(newCmds, ";"), e, ret)
 	}
 

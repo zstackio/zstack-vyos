@@ -121,11 +121,8 @@ func SyncZStackIpRules(currRules, rules []ZStackIpRule) error  {
 		Command: strings.Join(newCmds, ";"),
 	}
 	ret, _, e, err := bash.RunWithReturn()
-	if err != nil {
-		return err
-	}
-
-	if ret != 0 {
+	
+	if err != nil || e != "" || ret != 0 {
 		return fmt.Errorf("sync ip rules: %s, error: %s, ret: %d", strings.Join(newCmds, ";"), e, ret)
 	}
 
