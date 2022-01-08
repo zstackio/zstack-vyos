@@ -5,6 +5,7 @@ import (
         . "github.com/onsi/ginkgo"
         . "github.com/onsi/gomega"
         "github.com/zstackio/zstack-vyos/utils"
+    "time"
 )
 
 var _ = Describe("lb_iptables", func() {
@@ -60,11 +61,21 @@ var _ = Describe("lb_iptables", func() {
                         "unhealthyThreshold::2")
 
                 setLb(*lb)
-                /* TODO: check lb command */
                 checkLbIptablesRules(*lb, false)
+                
+                pid1, _ := utils.ReadPid(haproxyListeners[lb.ListenerUuid].pidPath)
+                lb.NicIps = append(lb.NicIps, "192.168.100.11")
+                setLb(*lb)
+                
+                time.Sleep(1 * time.Second)
+                pid2, _ := utils.ReadPid(haproxyListeners[lb.ListenerUuid].pidPath)
+                Expect(pid2 != pid1).To(BeTrue(), "haproxy process should be changed")
+    
+                time.Sleep(1 * time.Second)
+                pids3, _ := utils.ReadPid(haproxyListeners[lb.ListenerUuid].pidPath)
+                Expect(pid2 == pids3).To(BeTrue(), "haproxy process should NOT change")
 
                 delLb(*lb)
-                /* TODO: check lb command */
                 checkLbIptablesRules(*lb, true)
 
                 defer func() {

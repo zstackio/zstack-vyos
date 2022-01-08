@@ -367,10 +367,8 @@ func getListenerMaxCocurrenceSocket(maxConnect string) (string) {
 
 func (this *HaproxyListener) startPidMonitor()  {
 	if _, ok := haproxyListeners[this.lb.ListenerUuid]; !ok {
-		pids := this.getPids()
-		if len(pids) > 0 {
-			sort.Strings(pids)
-			pid, _ := strconv.Atoi(pids[0])
+		pid, err := utils.ReadPid(this.pidPath)
+		if err == nil {
 			this.pm = utils.NewPidMon(pid, func() int {
 				log.Warnf("start haproxy in PidMon for %s", this.lb.ListenerUuid)
 				_, err := this.startListenerService()
@@ -378,21 +376,20 @@ func (this *HaproxyListener) startPidMonitor()  {
 					log.Warnf("failed to respawn haproxy: %s", err)
 					return -1
 				}
-
-				pids = this.getPids()
-				if len(pids) == 0 {
+				
+				pid, err := utils.ReadPid(this.pidPath)
+				if err != nil {
 					log.Warnf("failed to read haproxy pid: %s", err)
 					return -1
 				}
-
-				pid, _ := strconv.Atoi(pids[0])
+				
 				return pid
 			})
 			log.Debugf("created haproxy PidMon for %s", this.lb.ListenerUuid)
 			haproxyListeners[this.lb.ListenerUuid] = this
 			this.pm.Start()
 		} else {
-			log.Warnf("failed to get haproxy pid")
+			log.Warnf("failed to get haproxy pid: %s", err)
 			return
 		}
 	} else {
@@ -1357,6 +1354,7 @@ func setLb(lb lbInfo) {
 
 	err = listener.preActionListenerServiceStart(); utils.PanicOnError(err)
 	//time.Sleep(time.Duration(1) * time.Second)
+	listener.stopPidMonitor()
 	if ret, err := listener.startListenerService(); ret != 0 || err != nil {
 		log.Errorf("start listener fail %v \n", lb.ListenerUuid)
 		listener.rollbackPreActionListenerServiceStart()
