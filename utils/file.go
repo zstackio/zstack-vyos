@@ -1,11 +1,15 @@
 package utils
 
 import (
+	"bufio"
 	"fmt"
+	log "github.com/Sirupsen/logrus"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
+	"strings"
 )
 
 func MkdirForFile(filepath string, perm os.FileMode) error {
@@ -70,4 +74,33 @@ func CopyFile(srcFile, destFile string) error {
 		return err
 	}
 	return nil
+}
+
+func ReadLine(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Errorf("file: %s open failed, because: %s", filePath, err)
+		return "", err
+	}
+	defer file.Close()
+	
+	reader := bufio.NewReader(file)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		log.Errorf("file: %s read failed, because: %s", filePath, err)
+		return "", err
+	}
+	
+	return line, nil
+}
+
+func ReadPid(pidPath string) (int, error) {
+	pid, err := ReadLine(pidPath)
+	if err != nil {
+		return 0, err
+	}
+	
+	pid = strings.TrimSpace(pid)
+	log.Debugf("haproxy pid: %s", pid)
+	return strconv.Atoi(pid)
 }
