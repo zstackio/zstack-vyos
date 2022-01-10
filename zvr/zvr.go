@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/pkg/errors"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -52,14 +53,40 @@ var logfiles = []string{
 	"/etc/logrotate.d/cpu-monitor",
 }
 
+var logrotateFolder string = "/etc/logrotate.d/"
+
 func doLogRotate(fpath string) {
 	exec.Command("sudo", "/usr/sbin/logrotate", fpath).Run()
 }
 
-func setupRotates() {
-	for _, cfgfile := range logfiles {
-		utils.SetFileOwner(cfgfile, "root", "root")
+func setJournalLogRotate() {
+	journaldConfigPath := "/etc/systemd/journald.conf"
+	journalLogDirExist, _ := utils.PathExists("/var/log/journal")
+	journalConfigExist, _ := utils.PathExists(journaldConfigPath)
+	if (journalLogDirExist == false) || (journalConfigExist == false) {
+		//No need to set journal log rotate
+		return
 	}
+	journaldConfFile, err := ioutil.TempFile("/tmp", "tmpJournald.conf")
+	utils.PanicOnError(err)
+	journalConf := `[Journal]
+Storage=none
+ForwardToSyslog=yes
+MaxLevelSyslog=debug
+`
+
+	_, err = journaldConfFile.Write([]byte(journalConf))
+	utils.PanicOnError(err)
+
+	utils.SudoMoveFile(journaldConfFile.Name(), journaldConfigPath)
+	utils.SetFileOwner(journaldConfigPath, "root", "root")
+	exec.Command("sudo", "journalctl", "--vacuum-size=50M").Run()
+	exec.Command("sudo", "systemctl", "restart", "systemd-journald").Run()
+}
+
+func setupRotates() {
+	utils.SetFolderOwner(logrotateFolder, "root", "root")
+	go setJournalLogRotate()
 
 	go func() {
 		if utils.IsRuingUT() {
