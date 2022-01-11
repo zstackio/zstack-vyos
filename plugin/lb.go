@@ -408,7 +408,8 @@ func (this *HaproxyListener) stopPidMonitor() {
 }
 
 func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo) (err error) {
-	conf := `global
+	conf := ` # This file is auto-generated, edit with caution!
+    global
     maxconn {{.MaxConnection}}
     log 127.0.0.1 local1
     #user vyos
