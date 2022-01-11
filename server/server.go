@@ -1,21 +1,21 @@
 package server
 
 import (
-	"net/http"
-	"fmt"
-	"github.com/zstackio/zstack-vyos/utils"
-	"time"
+	"bytes"
 	"encoding/json"
+	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
-	"bytes"
+	"github.com/zstackio/zstack-vyos/utils"
 	"io/ioutil"
+	"net/http"
+	"time"
 )
 
 type commandHandlerWrap struct {
-	path string
+	path    string
 	handler http.HandlerFunc
-	async bool
+	async   bool
 }
 
 type Options struct {
@@ -26,15 +26,14 @@ type Options struct {
 	LogFile      string
 }
 
-
 type CommandResponseHeader struct {
-	Success bool `json:"success"`
-	Error string `json:"error"`
+	Success bool   `json:"success"`
+	Error   string `json:"error"`
 }
 
 type CommandContext struct {
 	responseWriter http.ResponseWriter
-	request *http.Request
+	request        *http.Request
 }
 
 func (ctx *CommandContext) GetCommand(cmd interface{}) {
@@ -48,24 +47,23 @@ type CommandHandler func(ctx *CommandContext) interface{}
 type HttpInterceptor func(http.HandlerFunc) http.HandlerFunc
 
 var (
-	commandHandlers map[string]*commandHandlerWrap = make(map[string]*commandHandlerWrap)
-	rawHandlers map[string]http.HandlerFunc = make(map[string]http.HandlerFunc)
-	CommandOptions Options
-	CALLBACK_IP = ""
+	commandHandlers     map[string]*commandHandlerWrap = make(map[string]*commandHandlerWrap)
+	rawHandlers         map[string]http.HandlerFunc    = make(map[string]http.HandlerFunc)
+	CommandOptions      Options
+	CALLBACK_IP         = ""
 	CURRENT_CALLBACK_IP = ""
 )
 
 const (
 	CALLBACK_URL = "callbackurl"
-	TASK_UUID = "taskuuid"
+	TASK_UUID    = "taskuuid"
 )
-
 
 func SetOptions(o Options) {
 	CommandOptions = o
 }
 
-func RegisterSyncCommandHandler(path string, chandler CommandHandler)  {
+func RegisterSyncCommandHandler(path string, chandler CommandHandler) {
 	registerCommandHandler(path, chandler, false)
 }
 
@@ -86,7 +84,7 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 	}
 
 	w := &commandHandlerWrap{
-		path: path,
+		path:  path,
 		async: async,
 	}
 
@@ -114,7 +112,7 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 		taskUuid := req.Header.Get(TASK_UUID)
 		err := utils.Retry(func() error {
 			if e := utils.HttpPostForObject(callbackURL, map[string]string{
-				TASK_UUID: taskUuid,
+				TASK_UUID:                taskUuid,
 				utils.HEADER_TRIGGER_URL: req.URL.String(),
 			}, rsp, nil); e != nil {
 				if he, ok := e.(utils.HttpPostError); ok {
@@ -129,19 +127,20 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 			} else {
 				return nil
 			}
-		}, 60, 1); utils.LogError(err)
+		}, 60, 1)
+		utils.LogError(err)
 	}
 
 	handler := func(w http.ResponseWriter, req *http.Request) {
 		ctx := &CommandContext{
 			responseWriter: w,
-			request: req,
+			request:        req,
 		}
 
 		if !async {
 			rsp := chandler(ctx)
 			if rsp == nil {
-				rsp = CommandResponseHeader{ Success: true }
+				rsp = CommandResponseHeader{Success: true}
 			}
 
 			syncReply(rsp, w, req)
@@ -160,7 +159,7 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 				if err := recover(); err != nil {
 					reply := CommandResponseHeader{
 						Success: false,
-						Error: fmt.Sprintf("%v", err),
+						Error:   fmt.Sprintf("%v", err),
 					}
 
 					if e, ok := err.(error); ok {
@@ -169,14 +168,13 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 						log.Warnf("%+v\n", errors.Wrap(errors.New(err.(string)), fmt.Sprintf("command[path:%s] failed", path)))
 					}
 
-
 					asyncReply(reply, req)
 				}
 			}()
 
 			rsp := chandler(ctx)
 			if rsp == nil {
-				rsp = CommandResponseHeader{Success: true }
+				rsp = CommandResponseHeader{Success: true}
 			}
 
 			asyncReply(rsp, req)
@@ -191,10 +189,10 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 
 			reply := CommandResponseHeader{
 				Success: false,
-				Error: fmt.Sprintf("%v", err),
+				Error:   fmt.Sprintf("%v", err),
 			}
 
-			if async  {
+			if async {
 				asyncReply(reply, req)
 			} else {
 				syncReply(reply, w, req)
@@ -205,8 +203,8 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 
 		log.WithFields(log.Fields{
 			CALLBACK_URL: req.Header.Get(CALLBACK_URL),
-			TASK_UUID: req.Header.Get(TASK_UUID),
-			"Host": req.Header.Get("Host"),
+			TASK_UUID:    req.Header.Get(TASK_UUID),
+			"Host":       req.Header.Get("Host"),
 		}).Debugf("[RECV] %v, body: %s", req.URL, string(body))
 
 		// re-fill the body
@@ -218,9 +216,7 @@ func registerCommandHandler(path string, chandler CommandHandler, async bool) {
 	commandHandlers[path] = w
 }
 
-
-
-func Start()  {
+func Start() {
 	startServer()
 }
 
@@ -255,8 +251,8 @@ func dispatch(w http.ResponseWriter, req *http.Request) {
 	// async command
 	callbackURL := req.Header.Get(CALLBACK_URL)
 	if callbackURL == "" {
-		err := fmt.Sprintf("no field '%s' found in the HTTP header but the plugin registers the path[%s]" +
-				" as an async command", CALLBACK_URL, path)
+		err := fmt.Sprintf("no field '%s' found in the HTTP header but the plugin registers the path[%s]"+
+			" as an async command", CALLBACK_URL, path)
 		log.Warn(err)
 		w.WriteHeader(http.StatusBadRequest)
 		utils.LogError(fmt.Fprint(w, err))
@@ -266,8 +262,8 @@ func dispatch(w http.ResponseWriter, req *http.Request) {
 
 	taskUuid := req.Header.Get(TASK_UUID)
 	if taskUuid == "" {
-		err := fmt.Sprintf("no field '%s' found in the HTTP header but the plugin registers the path[%s]" +
-				" as an async command", TASK_UUID, path)
+		err := fmt.Sprintf("no field '%s' found in the HTTP header but the plugin registers the path[%s]"+
+			" as an async command", TASK_UUID, path)
 		log.Warn(err)
 		w.WriteHeader(http.StatusBadRequest)
 		utils.LogError(fmt.Fprint(w, err))
@@ -279,10 +275,10 @@ func dispatch(w http.ResponseWriter, req *http.Request) {
 
 func startServer() {
 	server := &http.Server{
-		Addr: fmt.Sprintf("%v:%v", CommandOptions.Ip, CommandOptions.Port),
-		ReadTimeout: time.Duration(CommandOptions.ReadTimeout) * time.Second,
+		Addr:         fmt.Sprintf("%v:%v", CommandOptions.Ip, CommandOptions.Port),
+		ReadTimeout:  time.Duration(CommandOptions.ReadTimeout) * time.Second,
 		WriteTimeout: time.Duration(CommandOptions.WriteTimeout) * time.Second,
-		Handler: dispatcher(dispatch),
+		Handler:      dispatcher(dispatch),
 	}
 
 	log.Debugln("everything looks good, the agent starts ...")

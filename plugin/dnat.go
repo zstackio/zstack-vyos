@@ -1,9 +1,9 @@
 package plugin
 
 import (
-	"github.com/zstackio/zstack-vyos/server"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
 	"strings"
 )
@@ -11,23 +11,23 @@ import (
 const (
 	CREATE_PORT_FORWARDING_PATH = "/createportforwarding"
 	REVOKE_PORT_FORWARDING_PATH = "/revokeportforwarding"
-	SYNC_PORT_FORWARDING_PATH = "/syncportforwarding"
-	PortForwardingInfoMaxSize = 512
+	SYNC_PORT_FORWARDING_PATH   = "/syncportforwarding"
+	PortForwardingInfoMaxSize   = 512
 )
 
 type dnatInfo struct {
-	Uuid         string `json:"uuid"`
-	VipPortStart int `json:"vipPortStart"`
-	VipPortEnd int `json:"vipPortEnd"`
-	PrivatePortStart int `json:"privatePortStart"`
-	PrivatePortEnd int `json:"privatePortEnd"`
-	ProtocolType string `json:"protocolType"`
-	VipIp string `json:"vipIp"`
-	PublicMac string `json:"publicMac"`
-	PrivateIp string `json:"privateIp"`
-	PrivateMac string `json:"privateMac"`
-	AllowedCidr string `json:"allowedCidr"`
-	SnatInboundTraffic bool `json:"snatInboundTraffic"`
+	Uuid               string `json:"uuid"`
+	VipPortStart       int    `json:"vipPortStart"`
+	VipPortEnd         int    `json:"vipPortEnd"`
+	PrivatePortStart   int    `json:"privatePortStart"`
+	PrivatePortEnd     int    `json:"privatePortEnd"`
+	ProtocolType       string `json:"protocolType"`
+	VipIp              string `json:"vipIp"`
+	PublicMac          string `json:"publicMac"`
+	PrivateIp          string `json:"privateIp"`
+	PrivateMac         string `json:"privateMac"`
+	AllowedCidr        string `json:"allowedCidr"`
+	SnatInboundTraffic bool   `json:"snatInboundTraffic"`
 }
 
 type setDnatCmd struct {
@@ -47,16 +47,17 @@ var pfMap map[string]dnatInfo
 func syncPortForwardingRules() error {
 	table := utils.NewIpTables(utils.FirewallTable)
 	natTable := utils.NewIpTables(utils.NatTable)
-	
+
 	var filterRules []*utils.IpTableRule
 	var dnatRules []*utils.IpTableRule
 
 	table.RemoveIpTableRuleByComments(utils.PortFordingRuleComment)
 	natTable.RemoveIpTableRuleByComments(utils.PortFordingRuleComment)
-	
+
 	for _, r := range pfMap {
-		pubNicName, err := utils.GetNicNameByMac(r.PublicMac); utils.PanicOnError(err)
-		
+		pubNicName, err := utils.GetNicNameByMac(r.PublicMac)
+		utils.PanicOnError(err)
+
 		protocol := utils.IPTABLES_PROTO_TCP
 		if strings.ToLower(r.ProtocolType) != utils.IPTABLES_PROTO_TCP {
 			protocol = utils.IPTABLES_PROTO_UDP
@@ -85,7 +86,7 @@ func syncPortForwardingRules() error {
 		rule.SetDstIp(fmt.Sprintf("%s/32", r.PrivateIp))
 		rule.SetProto(protocol).SetDstPort(portRange).SetState([]string{utils.IPTABLES_STATE_NEW})
 		filterRules = append(filterRules, rule)
-		
+
 		rule = utils.NewIpTableRule(utils.RULESET_DNAT.String())
 		rule.SetAction(utils.IPTABLES_ACTION_DNAT)
 		rule.SetComment(utils.PortFordingRuleComment)
@@ -94,14 +95,14 @@ func syncPortForwardingRules() error {
 		rule.SetDnatTargetIp(r.PrivateIp).SetDnatTargetPort(strings.Replace(portRange, ":", "-", -1))
 		dnatRules = append(dnatRules, rule)
 	}
-	
+
 	table.AddIpTableRules(filterRules)
 	if err := table.Apply(); err != nil {
 		log.Warnf("sync portforwarding firewall table failed %s", err.Error())
 		utils.PanicOnError(err)
 		return err
 	}
-	
+
 	natTable.AddIpTableRules(dnatRules)
 	if err := natTable.Apply(); err != nil {
 		log.Warnf("sync portforwarding nat table failed %s", err.Error())
@@ -115,7 +116,7 @@ func syncPortForwardingRules() error {
 func syncDnatHandler(ctx *server.CommandContext) interface{} {
 	cmd := &syncDnatCmd{}
 	ctx.GetCommand(cmd)
-	
+
 	return syncDnat(cmd)
 }
 
@@ -141,7 +142,8 @@ func syncDnat(cmd *syncDnatCmd) interface{} {
 		}
 
 		if len(cmd.Rules) > 1 {
-			pubNicName, err := utils.GetNicNameByMac(cmd.Rules[0].PublicMac); utils.PanicOnError(err)
+			pubNicName, err := utils.GetNicNameByMac(cmd.Rules[0].PublicMac)
+			utils.PanicOnError(err)
 			for {
 				if r := tree.FindFirewallRuleByDescriptionRegex(
 					pubNicName, "in", dnatRegex, utils.StringRegCompareFn); r != nil {
@@ -206,8 +208,9 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 			dport = fmt.Sprintf("%v-%v", r.PrivatePortStart, r.PrivatePortEnd)
 		}
 
-		pubNicName, err := utils.GetNicNameByMac(r.PublicMac); utils.PanicOnError(err)
-		
+		pubNicName, err := utils.GetNicNameByMac(r.PublicMac)
+		utils.PanicOnError(err)
+
 		existed := false
 		if currentRule := getRule(tree, des); currentRule != nil {
 			if pip := currentRule.Getf("translation address %v", r.PrivateIp); pip == nil {
@@ -229,7 +232,7 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 		} else {
 			log.Debugf("dnat rule %s exists, skip it", des)
 		}
-		
+
 		reject := makeAllowCidrRejectDescription(r)
 		existed = false
 		if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", reject); fr != nil {
@@ -239,10 +242,10 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 				existed = true
 			}
 		}
-		
+
 		if !existed {
 			if r.AllowedCidr != "" && r.AllowedCidr != "0.0.0.0/0" {
-				tree.SetZStackFirewallRuleOnInterface(pubNicName, "behind","in",
+				tree.SetZStackFirewallRuleOnInterface(pubNicName, "behind", "in",
 					"action reject",
 					fmt.Sprintf("source address !%v", r.AllowedCidr),
 					fmt.Sprintf("description %v", reject),
@@ -267,10 +270,10 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 				existed = true
 			}
 		}
-		
+
 		if !existed {
 			if r.AllowedCidr != "" && r.AllowedCidr != "0.0.0.0/0" {
-				tree.SetZStackFirewallRuleOnInterface(pubNicName, "behind","in",
+				tree.SetZStackFirewallRuleOnInterface(pubNicName, "behind", "in",
 					"action accept",
 					fmt.Sprintf("source address %v", r.AllowedCidr),
 					fmt.Sprintf("description %v", des),
@@ -282,7 +285,7 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 					"state new enable",
 				)
 			} else {
-				tree.SetZStackFirewallRuleOnInterface(pubNicName, "behind","in",
+				tree.SetZStackFirewallRuleOnInterface(pubNicName, "behind", "in",
 					"action accept",
 					fmt.Sprintf("description %v", des),
 					fmt.Sprintf("destination address %v", r.PrivateIp),
@@ -302,7 +305,7 @@ func setRuleInTree(tree *server.VyosConfigTree, rules []dnatInfo) {
 func setDnatHandler(ctx *server.CommandContext) interface{} {
 	cmd := &setDnatCmd{}
 	ctx.GetCommand(cmd)
-	
+
 	return setDnat(cmd)
 }
 
@@ -324,7 +327,7 @@ func setDnat(cmd *setDnatCmd) interface{} {
 func removeDnatHandler(ctx *server.CommandContext) interface{} {
 	cmd := &removeDnatCmd{}
 	ctx.GetCommand(cmd)
-	
+
 	return removeDnat(cmd)
 }
 
@@ -333,7 +336,8 @@ func removeDnat(cmd *removeDnatCmd) interface{} {
 		for _, r := range cmd.Rules {
 			delete(pfMap, r.Uuid)
 		}
-		err := syncPortForwardingRules(); utils.PanicOnError(err)
+		err := syncPortForwardingRules()
+		utils.PanicOnError(err)
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
 		for _, r := range cmd.Rules {
@@ -347,7 +351,8 @@ func removeDnat(cmd *removeDnatCmd) interface{} {
 				}
 			}
 
-			pubNicName, err := utils.GetNicNameByMac(r.PublicMac); utils.PanicOnError(err)
+			pubNicName, err := utils.GetNicNameByMac(r.PublicMac)
+			utils.PanicOnError(err)
 			if fr := tree.FindFirewallRuleByDescription(pubNicName, "in", des); fr != nil {
 				fr.Delete()
 			}
@@ -365,14 +370,14 @@ func removeDnat(cmd *removeDnatCmd) interface{} {
 		if r.ProtocolType != utils.IPTABLES_PROTO_UDP {
 			proto = utils.IPTABLES_PROTO_TCP
 		}
-		t := utils.ConnectionTrackTuple{IsNat:false, IsDst: true, Ip: r.VipIp, Protocol: proto,
+		t := utils.ConnectionTrackTuple{IsNat: false, IsDst: true, Ip: r.VipIp, Protocol: proto,
 			PortStart: r.VipPortStart, PortEnd: r.VipPortEnd}
 		t.CleanConnTrackConnection()
 	}
 	return nil
 }
 
-func init()  {
+func init() {
 	pfMap = make(map[string]dnatInfo, PortForwardingInfoMaxSize)
 }
 

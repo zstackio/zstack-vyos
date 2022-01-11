@@ -1,13 +1,13 @@
 package utils
 
 type Stack struct {
-	top *node
+	top  *node
 	size int
 }
 
 type node struct {
 	value interface{}
-	next *node
+	next  *node
 }
 
 func (s *Stack) Len() int {

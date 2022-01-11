@@ -1,13 +1,13 @@
 package utils
 
 import (
-	"net/http"
-	"encoding/json"
-	"github.com/pkg/errors"
-	"fmt"
 	"bytes"
-	"io/ioutil"
+	"encoding/json"
+	"fmt"
 	"github.com/Sirupsen/logrus"
+	"github.com/pkg/errors"
+	"io/ioutil"
+	"net/http"
 )
 
 var (
@@ -53,7 +53,7 @@ func HttpPost(url string, headers map[string]string, obj interface{}) ([]byte, e
 	var b []byte
 	var err error
 
-	if (obj != nil) {
+	if obj != nil {
 		b, err = json.Marshal(obj)
 		if err != nil {
 			return nil, errors.Wrap(err, fmt.Sprintf("unable to do HTTP post to %v", url))
@@ -67,7 +67,7 @@ func HttpPost(url string, headers map[string]string, obj interface{}) ([]byte, e
 		return nil, errors.Wrap(err, fmt.Sprintf("unable to do HTTP post to %v", url))
 	}
 
-	if (headers != nil) {
+	if headers != nil {
 		for k, v := range headers {
 			req.Header.Add(k, v)
 		}

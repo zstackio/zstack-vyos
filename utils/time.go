@@ -1,9 +1,9 @@
 package utils
 
 import (
-	"time"
 	"fmt"
 	"github.com/pkg/errors"
+	"time"
 )
 
 func LoopRunUntilSuccessOrTimeout(fn func() bool, timeout, interval time.Duration) error {

@@ -1,8 +1,8 @@
 package server
 
 import (
-    "testing"
 	"github.com/zstackio/zstack-vyos/utils"
+	"testing"
 )
 
 func TestFindNicNameByMac(t *testing.T) {
@@ -40,4 +40,3 @@ interfaces {
 	name, ok = FindNicNameByMac("fa:da:21:1f:fa:11")
 	utils.Assert(!ok, "wrong found")
 }
-

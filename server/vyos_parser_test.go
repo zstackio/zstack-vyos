@@ -1,9 +1,9 @@
 package server
 
 import (
-    "testing"
 	"fmt"
 	"github.com/zstackio/zstack-vyos/utils"
+	"testing"
 )
 
 func TestSetFirewall(t *testing.T) {
@@ -160,7 +160,8 @@ ABC E
 	addr = tree.Get("interfaces ethernet eth0")
 	utils.Assert(addr != nil, "fail")
 
-	value := tree.Get("ABC"); utils.Assert(value.Value() == "E", "E")
+	value := tree.Get("ABC")
+	utils.Assert(value.Value() == "E", "E")
 
 	tree.Set("interfaces ethernet eth1 address 172.20.14.209/16")
 	tree.Set("interfaces ethernet eth1 address 172.20.14.209/16")
@@ -330,10 +331,10 @@ nat {
 	tree := p.Parse(text)
 	tree.SetSnatWithRuleNumber(2,
 		"outbound-interface 1",
-			  "description 2",
-			  "source address 3",
-			  "translation address 4",
-			  "exclude")
+		"description 2",
+		"source address 3",
+		"translation address 4",
+		"exclude")
 	fmt.Printf("\nTest_SwapSNATRule1: \n")
 	fmt.Println(tree.String())
 	tree.SwapSnatRule(1, 2)

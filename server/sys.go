@@ -1,18 +1,18 @@
 package server
 
 import (
-	"strings"
-	"github.com/zstackio/zstack-vyos/utils"
 	"fmt"
-	"sync"
+	"github.com/Sirupsen/logrus"
+	"github.com/zstackio/zstack-vyos/utils"
 	"io/ioutil"
 	"os"
-	"github.com/Sirupsen/logrus"
+	"strings"
+	"sync"
 )
 
 var (
 	vyosScriptLock = &sync.Mutex{}
-	fileLockPath = "/home/vyos/zvr/.vyosfilelock"
+	fileLockPath   = "/home/vyos/zvr/.vyosfilelock"
 )
 
 func FindNicNameByMacFromConfiguration(mac, configuration string) (string, bool) {
@@ -96,10 +96,12 @@ $API setupSession`
 	}
 
 	command = fmt.Sprintf(template, env, session_env, command)
-	tmpfile, err := ioutil.TempFile("", "zvr"); utils.PanicOnError(err)
+	tmpfile, err := ioutil.TempFile("", "zvr")
+	utils.PanicOnError(err)
 	defer os.Remove(tmpfile.Name())
 
-	err = ioutil.WriteFile(tmpfile.Name(), []byte(command), 0777); utils.PanicOnError(err)
+	err = ioutil.WriteFile(tmpfile.Name(), []byte(command), 0777)
+	utils.PanicOnError(err)
 	tmpfile.Sync()
 	tmpfile.Close()
 	logrus.Debugf("[Configure VYOS]: %s\n", command)
@@ -163,9 +165,9 @@ $API setupSession`
 	}
 
 	bash := &utils.Bash{
-		Command: fmt.Sprintf(template, env, session_env, command),
+		Command:   fmt.Sprintf(template, env, session_env, command),
 		Arguments: args,
-		NoLog: true,
+		NoLog:     true,
 	}
 	logrus.Debugf("[Configure VYOS]: %s\n", command)
 	bash.Run()
@@ -186,7 +188,7 @@ func VyosLock(fn CommandHandler) CommandHandler {
 }
 
 func VyosLockInterface(fn func()) func() {
-	return func()  {
+	return func() {
 		vyosScriptLock.Lock()
 		defer vyosScriptLock.Unlock()
 

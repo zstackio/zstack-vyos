@@ -1,236 +1,236 @@
 package plugin
 
 import (
-    "fmt"
-    log "github.com/Sirupsen/logrus"
-    . "github.com/onsi/ginkgo"
-    "github.com/onsi/gomega"
-    "github.com/zstackio/zstack-vyos/server"
-    "github.com/zstackio/zstack-vyos/utils"
-    "io/ioutil"
-    "strings"
+	"fmt"
+	log "github.com/Sirupsen/logrus"
+	. "github.com/onsi/ginkgo"
+	"github.com/onsi/gomega"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
+	"io/ioutil"
+	"strings"
 )
 
 func setTestLbEnv() {
-    utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"lb_test.log", false)
+	utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"lb_test.log", false)
 }
 
 var _ = Describe("lb_test", func() {
-    var nicCmd *configureNicCmd
+	var nicCmd *configureNicCmd
 
-    BeforeEach(func() {
-        nicCmd = &configureNicCmd{}
-        setTestLbEnv()
-        SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
-    })
+	BeforeEach(func() {
+		nicCmd = &configureNicCmd{}
+		setTestLbEnv()
+		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
+	})
 
-    AfterEach(func() {
-        removeNic(nicCmd)
-    })
+	AfterEach(func() {
+		removeNic(nicCmd)
+	})
 
-    It("LB:test lb will delete firewall rule after start failed", func() {
-        nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-        configureNic(nicCmd)
+	It("LB:test lb will delete firewall rule after start failed", func() {
+		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+		configureNic(nicCmd)
 
-        var vips []vipInfo
-        vip1 := vipInfo{Ip: "100.64.1.200", Netmask: utils.PubNicForUT.Netmask, Gateway: utils.PubNicForUT.Gateway,
-            OwnerEthernetMac: utils.PubNicForUT.Mac}
-        vip2 := vipInfo{Ip: "100.64.1.201", Netmask: utils.PubNicForUT.Netmask, Gateway: utils.PubNicForUT.Gateway,
-            OwnerEthernetMac: utils.PubNicForUT.Mac}
-        vips = append(vips, vip1)
-        vips = append(vips, vip2)
-        ip1 := nicIpInfo{Ip: utils.PubNicForUT.Ip, Netmask: utils.PubNicForUT.Netmask, OwnerEthernetMac: utils.PubNicForUT.Mac}
+		var vips []vipInfo
+		vip1 := vipInfo{Ip: "100.64.1.200", Netmask: utils.PubNicForUT.Netmask, Gateway: utils.PubNicForUT.Gateway,
+			OwnerEthernetMac: utils.PubNicForUT.Mac}
+		vip2 := vipInfo{Ip: "100.64.1.201", Netmask: utils.PubNicForUT.Netmask, Gateway: utils.PubNicForUT.Gateway,
+			OwnerEthernetMac: utils.PubNicForUT.Mac}
+		vips = append(vips, vip1)
+		vips = append(vips, vip2)
+		ip1 := nicIpInfo{Ip: utils.PubNicForUT.Ip, Netmask: utils.PubNicForUT.Netmask, OwnerEthernetMac: utils.PubNicForUT.Mac}
 
-        cmd := &setVipCmd{SyncVip: false, Vips: vips, NicIps: []nicIpInfo{ip1}}
-        setVip(cmd)
+		cmd := &setVipCmd{SyncVip: false, Vips: vips, NicIps: []nicIpInfo{ip1}}
+		setVip(cmd)
 
-        lb := &lbInfo{}
-        lb.SecurityPolicyType = "TLS_CIPHER_POLICY_1_0"
-        lb.LbUuid = "f2c7b2ff2f834e1ea20363f49122a3b4"
-        lb.ListenerUuid = "23fb656e4f324e74a4889582104fcbf0"
-        lb.InstancePort = 433
-        lb.LoadBalancerPort = 433
-        lb.Vip = "100.64.1.201"
-        lb.NicIps = append(lb.NicIps, "192.168.100.10")
-        lb.Mode = "http"
-        lb.PublicNic = utils.PubNicForUT.Mac
-        lb.Parameters = append(lb.Parameters,
-            "balancerWeight::192.168.100.10::100",
-            "connectionIdleTimeout::60",
-            "Nbprocess::1",
-            "balancerAlgorithm::roundrobin",
-            "healthCheckTimeout::2",
-            "healthCheckTarget::tcp:default",
-            "maxConnection::2000000",
-            "httpMode::http-server-close",
-            "accessControlStatus::enable",
-            "healthyThreshold::2",
-            "healthCheckInterval::5",
-            "unhealthyThreshold::2")
+		lb := &lbInfo{}
+		lb.SecurityPolicyType = "TLS_CIPHER_POLICY_1_0"
+		lb.LbUuid = "f2c7b2ff2f834e1ea20363f49122a3b4"
+		lb.ListenerUuid = "23fb656e4f324e74a4889582104fcbf0"
+		lb.InstancePort = 433
+		lb.LoadBalancerPort = 433
+		lb.Vip = "100.64.1.201"
+		lb.NicIps = append(lb.NicIps, "192.168.100.10")
+		lb.Mode = "http"
+		lb.PublicNic = utils.PubNicForUT.Mac
+		lb.Parameters = append(lb.Parameters,
+			"balancerWeight::192.168.100.10::100",
+			"connectionIdleTimeout::60",
+			"Nbprocess::1",
+			"balancerAlgorithm::roundrobin",
+			"healthCheckTimeout::2",
+			"healthCheckTarget::tcp:default",
+			"maxConnection::2000000",
+			"httpMode::http-server-close",
+			"accessControlStatus::enable",
+			"healthyThreshold::2",
+			"healthCheckInterval::5",
+			"unhealthyThreshold::2")
 
-        var bash utils.Bash
-        bash = utils.Bash{
-            Command: fmt.Sprintf("sudo chmod 222 /opt/vyatta/sbin/haproxy"),
-        }
-        _, _, _, _ = bash.RunWithReturn();
-        bash.PanicIfError()
+		var bash utils.Bash
+		bash = utils.Bash{
+			Command: fmt.Sprintf("sudo chmod 222 /opt/vyatta/sbin/haproxy"),
+		}
+		_, _, _, _ = bash.RunWithReturn()
+		bash.PanicIfError()
 
-        defer func() {
-            err := recover()
-            if err != nil {
-                checkLbFirewall(utils.PubNicForUT, *lb, false)
-                bash = utils.Bash{
-                    Command: fmt.Sprintf("sudo chmod 111 /opt/vyatta/sbin/haproxy"),
-                }
-                _, _, _, _ = bash.RunWithReturn();
-                bash.PanicIfError()
+		defer func() {
+			err := recover()
+			if err != nil {
+				checkLbFirewall(utils.PubNicForUT, *lb, false)
+				bash = utils.Bash{
+					Command: fmt.Sprintf("sudo chmod 111 /opt/vyatta/sbin/haproxy"),
+				}
+				_, _, _, _ = bash.RunWithReturn()
+				bash.PanicIfError()
 
-                rcmd := &removeVipCmd{Vips: vips}
-                removeVip(rcmd)
-            }
-        }()
+				rcmd := &removeVipCmd{Vips: vips}
+				removeVip(rcmd)
+			}
+		}()
 
-        setLb(*lb)
-    })
+		setLb(*lb)
+	})
 
-    It("LB: test start lb success", func() {
-        /*
-        1.mock request
-        2.simulate lb start failed
-        3.check firewall is existed
-        4.check haproxy pid
-        5.check haproxy configuration
-        */
-        nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-        configureNic(nicCmd)
+	It("LB: test start lb success", func() {
+		/*
+		   1.mock request
+		   2.simulate lb start failed
+		   3.check firewall is existed
+		   4.check haproxy pid
+		   5.check haproxy configuration
+		*/
+		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+		configureNic(nicCmd)
 
-        var vips []vipInfo
-        vip1 := vipInfo{ Ip: "100.64.1.200", Netmask: utils.PubNicForUT.Netmask, Gateway: utils.PubNicForUT.Gateway,
-            OwnerEthernetMac: utils.PubNicForUT.Mac}
-        vip2 := vipInfo{ Ip: "100.64.1.201", Netmask: utils.PubNicForUT.Netmask, Gateway: utils.PubNicForUT.Gateway,
-            OwnerEthernetMac: utils.PubNicForUT.Mac}
-        vips = append(vips, vip1)
-        vips = append(vips, vip2)
-        ip1 := nicIpInfo{Ip: utils.PubNicForUT.Ip, Netmask: utils.PubNicForUT.Netmask, OwnerEthernetMac: utils.PubNicForUT.Mac}
+		var vips []vipInfo
+		vip1 := vipInfo{Ip: "100.64.1.200", Netmask: utils.PubNicForUT.Netmask, Gateway: utils.PubNicForUT.Gateway,
+			OwnerEthernetMac: utils.PubNicForUT.Mac}
+		vip2 := vipInfo{Ip: "100.64.1.201", Netmask: utils.PubNicForUT.Netmask, Gateway: utils.PubNicForUT.Gateway,
+			OwnerEthernetMac: utils.PubNicForUT.Mac}
+		vips = append(vips, vip1)
+		vips = append(vips, vip2)
+		ip1 := nicIpInfo{Ip: utils.PubNicForUT.Ip, Netmask: utils.PubNicForUT.Netmask, OwnerEthernetMac: utils.PubNicForUT.Mac}
 
-        cmd := &setVipCmd{SyncVip:false, Vips: vips, NicIps: []nicIpInfo{ip1}}
-        log.Debugf("setVip %+v", cmd)
-        setVip(cmd)
-        checkVipConfig(vips, utils.PubNicForUT, utils.NOHA)
+		cmd := &setVipCmd{SyncVip: false, Vips: vips, NicIps: []nicIpInfo{ip1}}
+		log.Debugf("setVip %+v", cmd)
+		setVip(cmd)
+		checkVipConfig(vips, utils.PubNicForUT, utils.NOHA)
 
-        rcmd := &removeVipCmd{Vips:vips}
-        defer func() {
-            removeVip(rcmd)
-            removeNic(nicCmd)
+		rcmd := &removeVipCmd{Vips: vips}
+		defer func() {
+			removeVip(rcmd)
+			removeNic(nicCmd)
 
-        }()
-        testLbSuccess()
-        removeVip(rcmd)
-    })
+		}()
+		testLbSuccess()
+		removeVip(rcmd)
+	})
 
-    It("LB：test refresh lb log", func() {
-        testLbRefreshLbLog()
-    })
+	It("LB：test refresh lb log", func() {
+		testLbRefreshLbLog()
+	})
 
-    It("LB: test operate Certificate", func() {
-        testCreateCertificate()
-    })
+	It("LB: test operate Certificate", func() {
+		testCreateCertificate()
+	})
 })
 
 func testLbSuccess() {
-    lb := &lbInfo{}
-    lb.LbUuid = "f2c7b2ff2f834e1ea20363f49122a3b4"
-    lb.ListenerUuid = "23fb656e4f324e74a4889582104fcbf0"
-    lb.InstancePort = 433
-    lb.LoadBalancerPort = 433
-    lb.Vip = "100.64.1.201"
-    lb.NicIps = append(lb.NicIps, "192.168.100.10")
-    lb.Mode = "http"
-    lb.PublicNic = utils.PubNicForUT.Mac
-    lb.Parameters = append(lb.Parameters,
-        "balancerWeight::192.168.100.10::100",
-        "connectionIdleTimeout::60",
-        "Nbprocess::1",
-        "balancerAlgorithm::roundrobin",
-        "healthCheckTimeout::2",
-        "healthCheckTarget::tcp:default",
-        "maxConnection::2000000",
-        "httpMode::http-server-close",
-        "accessControlStatus::enable",
-        "healthyThreshold::2",
-        "healthCheckInterval::5",
-        "unhealthyThreshold::2")
+	lb := &lbInfo{}
+	lb.LbUuid = "f2c7b2ff2f834e1ea20363f49122a3b4"
+	lb.ListenerUuid = "23fb656e4f324e74a4889582104fcbf0"
+	lb.InstancePort = 433
+	lb.LoadBalancerPort = 433
+	lb.Vip = "100.64.1.201"
+	lb.NicIps = append(lb.NicIps, "192.168.100.10")
+	lb.Mode = "http"
+	lb.PublicNic = utils.PubNicForUT.Mac
+	lb.Parameters = append(lb.Parameters,
+		"balancerWeight::192.168.100.10::100",
+		"connectionIdleTimeout::60",
+		"Nbprocess::1",
+		"balancerAlgorithm::roundrobin",
+		"healthCheckTimeout::2",
+		"healthCheckTarget::tcp:default",
+		"maxConnection::2000000",
+		"httpMode::http-server-close",
+		"accessControlStatus::enable",
+		"healthyThreshold::2",
+		"healthCheckInterval::5",
+		"unhealthyThreshold::2")
 
-    setLb(*lb)
-    checkLbFirewall(utils.PubNicForUT, *lb, true)
-    delLb(*lb)
-    checkLbFirewall(utils.PubNicForUT, *lb, false)
+	setLb(*lb)
+	checkLbFirewall(utils.PubNicForUT, *lb, true)
+	delLb(*lb)
+	checkLbFirewall(utils.PubNicForUT, *lb, false)
 }
 
 func testLbRefreshLbLog() {
-    lbLevel := &lbLogLevelConf{}
-    lbLevel.Level = "debug"
+	lbLevel := &lbLogLevelConf{}
+	lbLevel.Level = "debug"
 
-    doRefreshLogLevel(lbLevel.Level)
-    checkLbLogLevel( lbLevel)
+	doRefreshLogLevel(lbLevel.Level)
+	checkLbLogLevel(lbLevel)
 }
 
-func checkLbLogLevel( conf *lbLogLevelConf) {
-    infoFromFile, err := ioutil.ReadFile("/etc/rsyslog.d/haproxy.conf")
-    gomega.Expect(err).To(gomega.BeNil(), "check lb log level fail, beacause %v", err)
-    gomega.Expect(string(infoFromFile)).To(gomega.ContainSubstring(conf.Level), "check lb log level fail, beacause config file not contain debug")
+func checkLbLogLevel(conf *lbLogLevelConf) {
+	infoFromFile, err := ioutil.ReadFile("/etc/rsyslog.d/haproxy.conf")
+	gomega.Expect(err).To(gomega.BeNil(), "check lb log level fail, beacause %v", err)
+	gomega.Expect(string(infoFromFile)).To(gomega.ContainSubstring(conf.Level), "check lb log level fail, beacause config file not contain debug")
 }
 
 func checkLbFirewall(nic utils.NicInfo, lb lbInfo, started bool) {
-    tree := server.NewParserFromShowConfiguration().Tree
-    rules := tree.Getf("firewall name %s.local rule", nic.Name)
-    var bash utils.Bash
-    bash = utils.Bash{
-        Command: fmt.Sprintf("ps -ef|grep haproxy|grep lb-%v-listener-%v", lb.LbUuid, lb.ListenerUuid),
-    }
-    code, _, _, _ := bash.RunWithReturn()
-    if !started {
-        for _, rule := range rules.Children() {
-            ruleId := rule.Name()
-            if ruleId == "" {
-                continue
-            }
+	tree := server.NewParserFromShowConfiguration().Tree
+	rules := tree.Getf("firewall name %s.local rule", nic.Name)
+	var bash utils.Bash
+	bash = utils.Bash{
+		Command: fmt.Sprintf("ps -ef|grep haproxy|grep lb-%v-listener-%v", lb.LbUuid, lb.ListenerUuid),
+	}
+	code, _, _, _ := bash.RunWithReturn()
+	if !started {
+		for _, rule := range rules.Children() {
+			ruleId := rule.Name()
+			if ruleId == "" {
+				continue
+			}
 
-            cmd := fmt.Sprintf("firewall name %s.local rule %s description %s", nic.Name, ruleId, makeLbFirewallRuleDescription(lb))
-            rule = tree.Get(cmd)
-            if rule != nil {
-                Fail("Failure reason")
-            }
-        }
-    } else {
-        if code == 1 {
-            Fail("Failure reason")
-        }
-        isExistFirewallRule := false
-        cmd := ""
-        for _, rule := range rules.Children() {
+			cmd := fmt.Sprintf("firewall name %s.local rule %s description %s", nic.Name, ruleId, makeLbFirewallRuleDescription(lb))
+			rule = tree.Get(cmd)
+			if rule != nil {
+				Fail("Failure reason")
+			}
+		}
+	} else {
+		if code == 1 {
+			Fail("Failure reason")
+		}
+		isExistFirewallRule := false
+		cmd := ""
+		for _, rule := range rules.Children() {
 
-            ruleId := rule.Name()
-            if ruleId == "" {
-                continue
-            }
+			ruleId := rule.Name()
+			if ruleId == "" {
+				continue
+			}
 
-            cmd = fmt.Sprintf("firewall name %s.local rule %s description %s", nic.Name, ruleId, makeLbFirewallRuleDescription(lb))
-            rule = tree.Get(cmd)
-            if rule == nil {
-                isExistFirewallRule = true
+			cmd = fmt.Sprintf("firewall name %s.local rule %s description %s", nic.Name, ruleId, makeLbFirewallRuleDescription(lb))
+			rule = tree.Get(cmd)
+			if rule == nil {
+				isExistFirewallRule = true
 
-            }
-        }
-        if !isExistFirewallRule {
-            Fail("Failure reason")
-        }
-    }
+			}
+		}
+		if !isExistFirewallRule {
+			Fail("Failure reason")
+		}
+	}
 }
 
-func testCreateCertificate()  {
-    certificate := &certificateInfo{}
-    certificate.Certificate = `
+func testCreateCertificate() {
+	certificate := &certificateInfo{}
+	certificate.Certificate = `
 -----BEGIN CERTIFICATE REQUEST-----
 MIIC1zCCAb8CAQAwgZExCzAJBgNVBAYTAkNOMREwDwYDVQQIDAhzaGFuZ2hhaTER
 MA8GA1UEBwwIc2hhbmdoYWkxETAPBgNVBAoMCG5vd3lvdWdvMQswCQYDVQQLDAJJ
@@ -279,29 +279,29 @@ LILzmcP+euenar2n+ER8IJ34
 -----END PRIVATE KEY-----
 
 `
-    certificate.Uuid = "996ccde3b1b64ac0952bd8002e565d6b"
+	certificate.Uuid = "996ccde3b1b64ac0952bd8002e565d6b"
 
-    createCertificate(certificate)
+	createCertificate(certificate)
 
-    checkCertificateFile(certificate, true)
+	checkCertificateFile(certificate, true)
 
-    cmd := &deleteCertificateCmd{}
-    cmd.Uuid = certificate.Uuid
-    deleteCertificate(cmd)
+	cmd := &deleteCertificateCmd{}
+	cmd.Uuid = certificate.Uuid
+	deleteCertificate(cmd)
 
-    checkCertificateFile(certificate, false)
+	checkCertificateFile(certificate, false)
 }
 
 func checkCertificateFile(cret *certificateInfo, create bool) interface{} {
-    filePath := makeCertificatePath(cret.Uuid)
+	filePath := makeCertificatePath(cret.Uuid)
 
-    contentByte,err := ioutil.ReadFile(filePath)
+	contentByte, err := ioutil.ReadFile(filePath)
 
-    if create {
-        res := strings.Compare(string(contentByte), cret.Certificate)
-        gomega.Expect(res).To(gomega.Equal(0), "create certificate failed")
-    } else {
-        gomega.Expect(err).NotTo(gomega.BeNil(), "delete certificate failed")
-    }
-    return nil
+	if create {
+		res := strings.Compare(string(contentByte), cret.Certificate)
+		gomega.Expect(res).To(gomega.Equal(0), "create certificate failed")
+	} else {
+		gomega.Expect(err).NotTo(gomega.BeNil(), "delete certificate failed")
+	}
+	return nil
 }

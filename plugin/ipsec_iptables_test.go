@@ -48,25 +48,25 @@ var _ = Describe("ipsec_iptables_test", func() {
 		syncIPsecCmd1.AutoRestartVpn = false
 		syncIPsecCmd1.Infos = []ipsecInfo{*info}
 		deleteIPsecCmd1.Infos = []ipsecInfo{*info}
-		
+
 		log.Debugf("#####test create ipsec#######")
 		createIPsecConnection(&createIPsecCmd1)
 		checkSyncIpSecRulesByIptables()
-		
+
 		nicInfo := nicTypeInfo{Mac: utils.PubNicForUT.Mac, NicType: "public"}
 		gcmd := getConfigCmd{NicTypeInfos: []nicTypeInfo{nicInfo}}
 		rsp := getFirewallConfig(&gcmd)
 		grsp, _ := rsp.(getConfigRsp)
-		checkFirewallRuleOfIpSec(*info, nicInfo,  grsp.Refs)
-		
+		checkFirewallRuleOfIpSec(*info, nicInfo, grsp.Refs)
+
 		log.Debugf("#####test sync ipsec#######")
 		syncIPsecConnection(&syncIPsecCmd1)
 		checkSyncIpSecRulesByIptables()
-		
+
 		log.Debugf("#####test delete ipsec#######")
 		deleteIPsecConnection(&deleteIPsecCmd1)
 		checkSyncIpSecRulesByIptables()
-		
+
 		restoreIpRuleForMainRouteTable()
 	})
 
@@ -83,7 +83,7 @@ var _ = Describe("ipsec_iptables_test", func() {
 	})
 })
 
-func checkFirewallRuleOfIpSec(ipsInfo ipsecInfo, nicInfo nicTypeInfo, refs []ethRuleSetRef)  {
+func checkFirewallRuleOfIpSec(ipsInfo ipsecInfo, nicInfo nicTypeInfo, refs []ethRuleSetRef) {
 	for _, ref := range refs {
 		if ref.Forward == "in" {
 			r1 := ref.RuleSetInfo.Rules[1]

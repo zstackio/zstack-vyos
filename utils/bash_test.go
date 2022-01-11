@@ -7,12 +7,12 @@ import (
 	"testing"
 )
 
-func setTestBashTestEnv()  {
-	InitLog(VYOS_UT_LOG_FOLDER+ "bash_test.log", false)
+func setTestBashTestEnv() {
+	InitLog(VYOS_UT_LOG_FOLDER+"bash_test.log", false)
 }
 
 func TestBash(t *testing.T) {
-    setTestBashTestEnv()
+	setTestBashTestEnv()
 	b := NewBash()
 	b.Command = "ls"
 	b.Run()
@@ -79,14 +79,14 @@ func TestSudo(t *testing.T) {
 func TestSudo1(t *testing.T) {
 	b := Bash{
 		Command: "touch /root/gotest.log; echo hello > /root/gotest.log; rm /root/gotest.log",
-		Sudo: false,
+		Sudo:    false,
 	}
-	
+
 	ret, _, _, err := b.RunWithReturn()
 	if err == nil || ret == 0 {
 		t.Fatal("command failed", err)
 	}
-	
+
 	b.Sudo = true
 	ret, _, _, err = b.RunWithReturn()
 	if err != nil || ret != 0 {

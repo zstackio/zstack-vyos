@@ -1,21 +1,21 @@
 package plugin
 
 import (
-    "bytes"
-    "fmt"
-    log "github.com/Sirupsen/logrus"
-    "html/template"
-    "io/ioutil"
-    "os/exec"
-    "strings"
-    "strconv"
-    "github.com/zstackio/zstack-vyos/utils"
+	"bytes"
+	"fmt"
+	log "github.com/Sirupsen/logrus"
+	"github.com/zstackio/zstack-vyos/utils"
+	"html/template"
+	"io/ioutil"
+	"os/exec"
+	"strconv"
+	"strings"
 )
 
 const (
-    uacctd_bin_file = "/opt/vyatta/sbin/uacctd"
-    uacctd_conf_file = "/etc/pmacct/uacctd.conf"
-    uacctd_conf_tmp_file = "/home/vyos/pmacct/pmacctd.conf.tmp"
+	uacctd_bin_file      = "/opt/vyatta/sbin/uacctd"
+	uacctd_conf_file     = "/etc/pmacct/uacctd.conf"
+	uacctd_conf_tmp_file = "/home/vyos/pmacct/pmacctd.conf.tmp"
 )
 
 const tUacctdConf = `# This file is auto-generated, don't edit with !!!
@@ -35,139 +35,143 @@ sampling_rate: {{.SampleRate}}
 `
 
 func (fc *flowConfig) buildPmacctdConf() bool {
-    tmpl, err := template.New("uacctdConf.conf").Parse(tUacctdConf); utils.PanicOnError(err)
+	tmpl, err := template.New("uacctdConf.conf").Parse(tUacctdConf)
+	utils.PanicOnError(err)
 
-    var buf bytes.Buffer
-    fc.NicsNamesStr = strings.Join(fc.NicsNames, ",")
-    err = tmpl.Execute(&buf, fc); utils.PanicOnError(err)
+	var buf bytes.Buffer
+	fc.NicsNamesStr = strings.Join(fc.NicsNames, ",")
+	err = tmpl.Execute(&buf, fc)
+	utils.PanicOnError(err)
 
-    err = ioutil.WriteFile(uacctd_conf_tmp_file, buf.Bytes(), 0644); utils.PanicOnError(err)
-    checksumTemp, _ := getFileChecksum(uacctd_conf_tmp_file)
-    checksum, _ := getFileChecksum(uacctd_conf_file)
+	err = ioutil.WriteFile(uacctd_conf_tmp_file, buf.Bytes(), 0644)
+	utils.PanicOnError(err)
+	checksumTemp, _ := getFileChecksum(uacctd_conf_tmp_file)
+	checksum, _ := getFileChecksum(uacctd_conf_file)
 
-    log.Debugf("netflow old config file checksum %s, new config file checksum %s", checksum, checksumTemp)
-    utils.SudoMoveFile(uacctd_conf_tmp_file, uacctd_conf_file)
+	log.Debugf("netflow old config file checksum %s, new config file checksum %s", checksum, checksumTemp)
+	utils.SudoMoveFile(uacctd_conf_tmp_file, uacctd_conf_file)
 
-    return strings.Compare(checksumTemp, checksum) != 0
+	return strings.Compare(checksumTemp, checksum) != 0
 }
 
-func (fc *flowConfig) startPmacctdServers()  {
-    if len(fc.NicsNames) > 0 && fc.CollectorIp != "" {
-        fc.setupFlowIpTables(true)
-        changed := fc.buildPmacctdConf()
-        if changed {
-            bash := utils.Bash{
-                Command: fmt.Sprintf("pkill -9 uacctd; %s -f %s -d", uacctd_bin_file, uacctd_conf_file),
-                Sudo: true,
-            }
-            bash.Run()
-            writeFlowHaScript(true)
-        } else {
-            log.Debugf("netflow config file not changed")
-            if pid := getUacctdPid(); pid == PID_ERROR {
-                bash := utils.Bash{
-                    Command: fmt.Sprintf("%s -f %s -d", uacctd_bin_file, uacctd_conf_file),
-                    Sudo: true,
-                }
-                bash.Run()
-            }
-        }
-    } else {
-        fc.setupFlowIpTables(false)
-        bash := utils.Bash{
-            Command: fmt.Sprintf("truncate -s 0 %s; pkill -9 uacctd", uacctd_conf_file),
-            Sudo: true,
-        }
-        bash.Run()
-        writeFlowHaScript(false)
-    }
+func (fc *flowConfig) startPmacctdServers() {
+	if len(fc.NicsNames) > 0 && fc.CollectorIp != "" {
+		fc.setupFlowIpTables(true)
+		changed := fc.buildPmacctdConf()
+		if changed {
+			bash := utils.Bash{
+				Command: fmt.Sprintf("pkill -9 uacctd; %s -f %s -d", uacctd_bin_file, uacctd_conf_file),
+				Sudo:    true,
+			}
+			bash.Run()
+			writeFlowHaScript(true)
+		} else {
+			log.Debugf("netflow config file not changed")
+			if pid := getUacctdPid(); pid == PID_ERROR {
+				bash := utils.Bash{
+					Command: fmt.Sprintf("%s -f %s -d", uacctd_bin_file, uacctd_conf_file),
+					Sudo:    true,
+				}
+				bash.Run()
+			}
+		}
+	} else {
+		fc.setupFlowIpTables(false)
+		bash := utils.Bash{
+			Command: fmt.Sprintf("truncate -s 0 %s; pkill -9 uacctd", uacctd_conf_file),
+			Sudo:    true,
+		}
+		bash.Run()
+		writeFlowHaScript(false)
+	}
 
-    return
+	return
 }
 
-func (fc *flowConfig) setupFlowIpTables(enable bool)  {
-    if utils.Kernel_version == utils.Kernel_3_13_11 {
-        setupFlowIpTablesForKernel3(fc.NicsNames, enable)
-    } else {
-        setupFlowIpTablesForKernel5_4_80(fc.NicsNames, enable)
-    }
+func (fc *flowConfig) setupFlowIpTables(enable bool) {
+	if utils.Kernel_version == utils.Kernel_3_13_11 {
+		setupFlowIpTablesForKernel3(fc.NicsNames, enable)
+	} else {
+		setupFlowIpTablesForKernel5_4_80(fc.NicsNames, enable)
+	}
 }
 
-func setupFlowIpTablesForKernel3(nics []string, enable bool)  {
-    var cmds []string
-    if enable {
-        cmds = append(cmds, fmt.Sprintf("sudo iptables -t raw  -F VYATTA_CT_PREROUTING_HOOK"))
-        for _, nicName := range nics {
-            cmds = append(cmds, fmt.Sprintf("sudo iptables -t raw -A VYATTA_CT_PREROUTING_HOOK -i %s -j ULOG --ulog-nlgroup 2 "+
-                "--ulog-cprange 64 --ulog-qthreshold 10", nicName))
-        }
-    } else {
-        cmds = append(cmds, fmt.Sprintf("sudo iptables -t raw  -F VYATTA_CT_PREROUTING_HOOK"))
-    }
+func setupFlowIpTablesForKernel3(nics []string, enable bool) {
+	var cmds []string
+	if enable {
+		cmds = append(cmds, fmt.Sprintf("sudo iptables -t raw  -F VYATTA_CT_PREROUTING_HOOK"))
+		for _, nicName := range nics {
+			cmds = append(cmds, fmt.Sprintf("sudo iptables -t raw -A VYATTA_CT_PREROUTING_HOOK -i %s -j ULOG --ulog-nlgroup 2 "+
+				"--ulog-cprange 64 --ulog-qthreshold 10", nicName))
+		}
+	} else {
+		cmds = append(cmds, fmt.Sprintf("sudo iptables -t raw  -F VYATTA_CT_PREROUTING_HOOK"))
+	}
 
-    bash := utils.Bash{
-        Command: strings.Join(cmds, ";"),
-    }
-    bash.Run()
+	bash := utils.Bash{
+		Command: strings.Join(cmds, ";"),
+	}
+	bash.Run()
 }
 
-func setupFlowIpTablesForKernel5_4_80(nics []string, enable bool)  {
-    var cmds []string
-    if enable {
-        cmds = append(cmds, fmt.Sprintf("sudo iptables -t raw  -F VYATTA_CT_PREROUTING_HOOK"))
-        for _, nicName := range nics {
-            cmds = append(cmds, fmt.Sprintf("sudo iptables -t raw -A VYATTA_CT_PREROUTING_HOOK -i %s -j NFLOG --nflog-group 2 " +
-                "--nflog-range 64 --nflog-threshold 10", nicName))
-        }
-    } else {
-        cmds = append(cmds, fmt.Sprintf("sudo iptables -t raw  -F VYATTA_CT_PREROUTING_HOOK"))
-    }
+func setupFlowIpTablesForKernel5_4_80(nics []string, enable bool) {
+	var cmds []string
+	if enable {
+		cmds = append(cmds, fmt.Sprintf("sudo iptables -t raw  -F VYATTA_CT_PREROUTING_HOOK"))
+		for _, nicName := range nics {
+			cmds = append(cmds, fmt.Sprintf("sudo iptables -t raw -A VYATTA_CT_PREROUTING_HOOK -i %s -j NFLOG --nflog-group 2 "+
+				"--nflog-range 64 --nflog-threshold 10", nicName))
+		}
+	} else {
+		cmds = append(cmds, fmt.Sprintf("sudo iptables -t raw  -F VYATTA_CT_PREROUTING_HOOK"))
+	}
 
-    bash := utils.Bash{
-        Command: strings.Join(cmds, ";"),
-    }
-    bash.Run()
+	bash := utils.Bash{
+		Command: strings.Join(cmds, ";"),
+	}
+	bash.Run()
 }
 
-func writeFlowHaScript(enable bool)  {
-    if !utils.IsHaEnabled() {
-        return
-    }
+func writeFlowHaScript(enable bool) {
+	if !utils.IsHaEnabled() {
+		return
+	}
 
-    var conent string
-    if enable {
-        conent = fmt.Sprintf("sudo pkill -9 uacctd; sudo %s -f %s", uacctd_bin_file, uacctd_conf_file)
-    } else {
-        conent = fmt.Sprintf("sudo truncate -s 0 %s; sudo pkill -9 uacctd", uacctd_conf_file)
-    }
+	var conent string
+	if enable {
+		conent = fmt.Sprintf("sudo pkill -9 uacctd; sudo %s -f %s", uacctd_bin_file, uacctd_conf_file)
+	} else {
+		conent = fmt.Sprintf("sudo truncate -s 0 %s; sudo pkill -9 uacctd", uacctd_conf_file)
+	}
 
-    err := ioutil.WriteFile(VYOSHA_FLOW_SCRIPT, []byte(conent), 0755); utils.PanicOnError(err)
+	err := ioutil.WriteFile(VYOSHA_FLOW_SCRIPT, []byte(conent), 0755)
+	utils.PanicOnError(err)
 }
 
 func getUacctdPid() int {
-    stdout, err := exec.Command("pidof", "-x", uacctd_bin_file).Output()
-    if err != nil {
-        log.Debugf("get uacctd pid failed %v", err)
-        return PID_ERROR
-    }
-    
-    /* when uacctd is running, the output will be: 3657, 3656, 3655
-       when uacctd not runing, the output will be empty */
-    out := strings.TrimSpace(string(stdout))
-    if out == "" {
-        log.Debugf("uacctd is not running")
-        return PID_ERROR
-    }
-    
-    pids := strings.Fields(out)
-    if n, err := strconv.Atoi(pids[len(pids)-1]); err != nil {
-        log.Debugf("unexpected %s pid: %v", uacctd_bin_file, pids)
-        return PID_ERROR
-    } else {
-        return n
-    }
+	stdout, err := exec.Command("pidof", "-x", uacctd_bin_file).Output()
+	if err != nil {
+		log.Debugf("get uacctd pid failed %v", err)
+		return PID_ERROR
+	}
+
+	/* when uacctd is running, the output will be: 3657, 3656, 3655
+	   when uacctd not runing, the output will be empty */
+	out := strings.TrimSpace(string(stdout))
+	if out == "" {
+		log.Debugf("uacctd is not running")
+		return PID_ERROR
+	}
+
+	pids := strings.Fields(out)
+	if n, err := strconv.Atoi(pids[len(pids)-1]); err != nil {
+		log.Debugf("unexpected %s pid: %v", uacctd_bin_file, pids)
+		return PID_ERROR
+	} else {
+		return n
+	}
 }
 
-func init()  {
-    utils.MkdirForFile(uacctd_conf_tmp_file, 0755)
+func init() {
+	utils.MkdirForFile(uacctd_conf_tmp_file, 0755)
 }

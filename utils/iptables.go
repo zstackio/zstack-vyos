@@ -31,7 +31,7 @@ type IpTableRule struct {
 	priority      int
 	ruleNumber    int
 	compareTarget bool
-	
+
 	IpTableMatcher
 	IpTableTarget
 }
@@ -44,7 +44,7 @@ func NewIpTableRule(chainName string) *IpTableRule {
 
 /* firewall comment format: "system rule@eth1.in-1001 " */
 func (r *IpTableRule) GetRuleNumber() int {
-    return r.ruleNumber
+	return r.ruleNumber
 }
 
 func (r *IpTableRule) Copy() *IpTableRule {
@@ -62,23 +62,23 @@ func (r *IpTableRule) IsRuleEqual(o *IpTableRule) error {
 	if err := r.isMatcherEqual(o); err != nil {
 		return err
 	}
-	
+
 	/* for some case, private ip can be nat to multiple public ip
 	   only first rule work, secondary will work after 1st is deleted */
-	if r.compareTarget || o.compareTarget  {
+	if r.compareTarget || o.compareTarget {
 		if err := r.IsTargetEqual(o); err != nil {
 			return err
 		} else {
 			return nil
 		}
 	}
-	
+
 	return nil
 }
 
 func (r *IpTableRule) SetPriority(priority int) *IpTableRule {
-        r.priority = priority
-        return r
+	r.priority = priority
+	return r
 }
 
 type IpTableChain struct {
@@ -98,16 +98,17 @@ type IpTables struct {
 	Name   string
 	Chains []*IpTableChain
 	Rules  []*IpTableRule
-	
+
 	/* these fields only used for parse rules from iptables-save*/
 	lastChainName      string
 	priorityOfLastRule int
 }
 
 func NewIpTables(name string) *IpTables {
-	table := &IpTables{Name: name, priorityOfLastRule: 0, lastChainName:""}
-	err := table.save();PanicOnError(err)
-	
+	table := &IpTables{Name: name, priorityOfLastRule: 0, lastChainName: ""}
+	err := table.save()
+	PanicOnError(err)
+
 	return table
 }
 
@@ -116,29 +117,29 @@ func (t *IpTables) parseIpTablesRule(line string) (*IpTableRule, error) {
 		log.Debugf("iptables rule prefix error %s", line)
 		return nil, fmt.Errorf("iptables rule prefix error %s", line)
 	}
-	
+
 	if !strings.Contains(line, "-j") {
 		log.Debugf("iptables rule target error %s", line)
 		return nil, fmt.Errorf("iptables rule target error %s", line)
 	}
-	
+
 	var rule IpTableRule
 	items := strings.Split(line, "-j")
 	if _, err := rule.parseIpTablesMatcher(items[0], t.Chains); err != nil {
 		return nil, err
 	}
-	
+
 	if _, err := rule.parseIptablesTarget("-j " + items[1]); err != nil {
 		return nil, err
 	}
-	
-	if t.lastChainName != rule.chainName  {
+
+	if t.lastChainName != rule.chainName {
 		t.priorityOfLastRule = 0
 	}
 	t.lastChainName = rule.chainName
 	vyosIptableHelper.parseIpTableRule(&rule, t)
 	t.priorityOfLastRule = rule.priority
-	
+
 	t.Rules = append(t.Rules, &rule)
 	return &rule, nil
 }
@@ -193,7 +194,7 @@ func (t *IpTables) CheckChain(chainName string) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -205,7 +206,7 @@ func (t *IpTables) AddChain(chainName string) {
 			break
 		}
 	}
-	
+
 	if !found {
 		t.Chains = append(t.Chains, NewIpTablesChain(chainName))
 	}
@@ -213,13 +214,13 @@ func (t *IpTables) AddChain(chainName string) {
 
 func (t *IpTables) DeleteChain(chainName string) {
 	var chains []*IpTableChain
-	
+
 	for _, c := range t.Chains {
 		if c.Name != chainName {
 			chains = append(chains, NewIpTablesChain(c.Name))
 		}
 	}
-	
+
 	t.Chains = chains
 }
 
@@ -229,37 +230,37 @@ func (t *IpTables) DeleteChainByKey(key string) {
 	for _, c := range t.Chains {
 		if !strings.Contains(c.Name, key) {
 			chains = append(chains, NewIpTablesChain(c.Name))
-		} 
+		}
 	}
 
 	t.Chains = chains
 }
 
 func (t *IpTables) GetChain(chainName string) *IpTableChain {
-        for _, c := range t.Chains {
-                if c.Name == chainName {
-                        return c
-                }
-        }
+	for _, c := range t.Chains {
+		if c.Name == chainName {
+			return c
+		}
+	}
 
-        return nil
+	return nil
 }
 
 func (t *IpTables) addIpTableRule(rule *IpTableRule) {
 	var rules []*IpTableRule
 	added := false
-	
+
 	rule.ruleNumber = vyosIptableHelper.getNextRuleNumber(t, rule)
 	if rule.ruleNumber != 0 {
 		rule.comment = getComment(rule)
 	}
-	
+
 	for _, r := range t.Rules {
 		if r.chainName != rule.chainName {
 			rules = append(rules, r)
 			continue
 		}
-		
+
 		if r.priority < rule.priority {
 			rules = append(rules, r)
 			continue
@@ -278,11 +279,11 @@ func (t *IpTables) addIpTableRule(rule *IpTableRule) {
 			rules = append(rules, r)
 		}
 	}
-	
+
 	if !added {
 		rules = append(rules, rule)
 	}
-	
+
 	t.Rules = rules
 }
 
@@ -362,7 +363,6 @@ func (t *IpTables) RemoveIpTableRule(newRules []*IpTableRule) {
 	t.Rules = rules
 }
 
-
 func (t *IpTables) RemoveIpTableRuleByComments(comment string) {
 	var rules []*IpTableRule
 	for _, r := range t.Rules {
@@ -377,7 +377,7 @@ func (t *IpTables) RemoveIpTableRuleByComments(comment string) {
 func (t *IpTables) Check(rule *IpTableRule) bool {
 	temp2 := rule.Copy()
 	temp2.comment = ""
-	
+
 	for _, r := range t.Rules {
 		temp1 := r.Copy()
 		temp1.comment = ""
@@ -386,7 +386,7 @@ func (t *IpTables) Check(rule *IpTableRule) bool {
 		sort.Strings(temp2.states)
 		sort.Strings(temp1.tcpFlags)
 		sort.Strings(temp2.tcpFlags)
-		
+
 		if strings.ToLower(temp1.String()) == strings.ToLower(temp2.String()) {
 			return true
 		}
@@ -434,7 +434,7 @@ func (t *IpTables) restore() error {
 
 	defer os.Remove(tmpFile.Name())
 
-	content := []string{"*" + t.Name +"\n"}
+	content := []string{"*" + t.Name + "\n"}
 	for _, chain := range t.Chains {
 		content = append(content, chain.String())
 	}
@@ -457,14 +457,14 @@ func (t *IpTables) restore() error {
 		Command: fmt.Sprintf("iptables-restore  --table=%s < %s", t.Name, tmpFile.Name()),
 		Sudo:    true,
 	}
-	
+
 	log.Debugf("iptables-restore content: %s", content)
 	_, _, _, err = cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("iptables-restore failed %s", err.Error())
-		bash := Bash {
+		bash := Bash{
 			Command: fmt.Sprintf("iptables-restore  --table=%s < %s 2>&1 | grep 'Error occurred at line' | awk '{print $(NF)}' | xargs -i sed -n '{}p' %s", t.Name, tmpFile.Name(), tmpFile.Name()),
-			Sudo: true,
+			Sudo:    true,
 		}
 		_, outStr, _, err := bash.RunWithReturn()
 		if err != nil {

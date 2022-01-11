@@ -5,13 +5,12 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/fatih/structs"
-	"html/template"
-	"io/ioutil"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
+	"html/template"
+	"io/ioutil"
 	"strings"
-	/*log "github.com/Sirupsen/logrus"*/
-)
+	/*log "github.com/Sirupsen/logrus"*/)
 
 const (
 	ENABLE_PIMD_PATH  = "/pimd/enable"
@@ -116,19 +115,19 @@ func (pimd *pimdAddNic) AddNic(nic string) error {
 
 	if utils.IsSkipVyosIptables() {
 		table := utils.NewIpTables(utils.FirewallTable)
-		
+
 		var rules []*utils.IpTableRule
-		
+
 		rule := utils.NewIpTableRule(utils.GetRuleSetName(nic, utils.RULESET_LOCAL))
 		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
 		rule.SetProto(utils.IPTABLES_PROTO_PIMD).SetInNic(nic)
 		rules = append(rules, rule)
-		
+
 		rule = utils.NewIpTableRule(utils.GetRuleSetName(nic, utils.RULESET_LOCAL))
 		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
 		rule.SetProto(utils.IPTABLES_PROTO_IGMP).SetInNic(nic)
 		rules = append(rules, rule)
-		
+
 		table.AddIpTableRules(rules)
 		return table.Apply()
 	} else {
@@ -202,10 +201,10 @@ func addPimdFirewallByIptables(nics map[string]utils.Nic) error {
 	table := utils.NewIpTables(utils.FirewallTable)
 	oldRules := utils.GetPimdIpTableRule(table)
 	table.RemoveIpTableRule(oldRules)
-	
+
 	var rules []*utils.IpTableRule
 	rules = getPimdFirewallByNic(nics)
-	
+
 	if len(rules) > 0 {
 		table.AddIpTableRules(rules)
 		return table.Apply()
@@ -221,11 +220,11 @@ func restartPimd(force bool) {
 		if !force {
 			return
 		}
-		
+
 		utils.KillProcess(pid)
 	}
 
-	bash := utils.Bash {
+	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo %s -c %s", PIMD_BINARY_PATH, PIMD_CONF_PATH),
 	}
 

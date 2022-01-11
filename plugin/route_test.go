@@ -16,7 +16,7 @@ var _ = Describe("route_test", func() {
 	var nextHopInmgt string
 	var r0, r1, r2, r3, r4, r5, r6, r7, r8 routeInfo
 	var nicCmd *configureNicCmd
-	
+
 	It("prepare for route set", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"route_test.log", false)
 		utils.InitVyosVersion()
@@ -26,7 +26,7 @@ var _ = Describe("route_test", func() {
 		nextHopInPubL3, _ = utils.GetFreePubL3Ip()
 		nextHopInPubL32, _ = utils.GetFreePubL3Ip()
 		nextHopInmgt, _ = utils.GetFreeMgtIp()
-		
+
 		r0 = routeInfo{Destination: "172.16.0.0/12", Target: utils.GetMgtGateway(), Distance: 1}
 		r1 = routeInfo{Destination: "1.1.1.0/24", Target: nextHopInPubL3, Distance: 100}
 		r2 = routeInfo{Destination: "1.1.2.0/24", Target: nextHopInPubL3, Distance: 110}
@@ -78,8 +78,8 @@ var _ = Describe("route_test", func() {
 		setRoutes(routes1)
 		checkRoutes(routes1, []routeInfo{r1, r2, r3, r4, r5, r6})
 	})
-	
-	It("release after route delte",func() {
+
+	It("release after route delte", func() {
 		utils.ReleasePubL3Ip(nextHopInPubL3)
 		utils.ReleasePubL3Ip(nextHopInPubL32)
 		utils.ReleaseMgtIp(nextHopInmgt)

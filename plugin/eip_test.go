@@ -1,12 +1,12 @@
 package plugin
 
 import (
-    "fmt"
-    log "github.com/Sirupsen/logrus"
-    . "github.com/onsi/ginkgo"
-    gomega "github.com/onsi/gomega"
-    "github.com/zstackio/zstack-vyos/server"
-    "github.com/zstackio/zstack-vyos/utils"
+	"fmt"
+	log "github.com/Sirupsen/logrus"
+	. "github.com/onsi/ginkgo"
+	gomega "github.com/onsi/gomega"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 var _ = Describe("eip_test", func() {

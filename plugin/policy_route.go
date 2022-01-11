@@ -194,7 +194,7 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd) {
 		rule.SetAction(utils.IPTABLES_ACTION_CONNMARK_RESTORE).SetComment(utils.PolicyRouteComment)
 		rule.SetMarkType(utils.IptablesMarkUnset)
 		rules = append(rules, rule)
-		
+
 		rule = utils.NewIpTableRule(utils.PREROUTING.String())
 		rule.SetAction(utils.IPTABLES_ACTION_ACCEPT).SetComment(utils.PolicyRouteComment)
 		rule.SetMarkType(utils.IptablesMarkNotMatch)
@@ -204,12 +204,12 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd) {
 	for _, table := range cmd.TableNumbers {
 		chainName := getPolicyRouteTableChainName(table)
 		mangleTable.AddChain(chainName)
-		
+
 		rule := utils.NewIpTableRule(chainName)
 		rule.SetAction(utils.IPTABLES_ACTION_MARK).SetTargetMark(table)
 		rule.SetComment(utils.PolicyRouteComment).SetMarkType(utils.IptablesMarkMatch).SetMark(0)
 		rules = append(rules, rule)
-		
+
 		if cmd.MarkConntrack {
 			rule := utils.NewIpTableRule(chainName)
 			rule.SetAction(utils.IPTABLES_ACTION_CONNMARK).SetTargetMark(table)
@@ -226,13 +226,14 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd) {
 	}
 
 	for _, ref := range cmd.Refs {
-		nicname, err := utils.GetNicNameByMac(ref.Mac);utils.PanicOnError(err)
+		nicname, err := utils.GetNicNameByMac(ref.Mac)
+		utils.PanicOnError(err)
 		chainName := getPolicyRouteSetChainName(ref.RuleSetName)
 		rule := utils.NewIpTableRule(utils.PREROUTING.String())
 		rule.SetAction(chainName).SetComment(utils.PolicyRouteComment)
 		rule.SetMarkType(utils.IptablesMarkUnset).SetMark(0).SetInNic(nicname)
 		rules = append(rules, rule)
-		
+
 		if systemRuleSetMap[ref.RuleSetName] {
 			items := strings.Split(ref.RuleSetName, "-")
 			routeTableChainName := getPolicyRouteTableChainNameByString(items[len(items)-1])
@@ -261,28 +262,31 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd) {
 			if strings.Contains(r.SourceIp, "/") {
 				rule.SetSrcIp(r.SourceIp)
 			} else {
-				rule.SetSrcIp(r.SourceIp+"/32")
+				rule.SetSrcIp(r.SourceIp + "/32")
 			}
-			
+
 		}
 		if r.DestIp != "" {
 			if strings.Contains(r.DestIp, "/") {
 				rule.SetDstIp(r.DestIp)
 			} else {
-				rule.SetDstIp(r.DestIp+"/32")
+				rule.SetDstIp(r.DestIp + "/32")
 			}
 		}
 		rule.SetMarkType(utils.IptablesMarkUnset).SetMark(0)
 		rules = append(rules, rule)
 	}
-	
-	err := utils.SyncZStackRouteTables(rts);utils.PanicOnError(err)
-	err = utils.SyncZStackIpRules(currRules, ipRules); utils.PanicOnError(err)
+
+	err := utils.SyncZStackRouteTables(rts)
+	utils.PanicOnError(err)
+	err = utils.SyncZStackIpRules(currRules, ipRules)
+	utils.PanicOnError(err)
 	if err = utils.SyncRouteEntries(currTables, entriesMap); err != nil && IsMaster() {
 		utils.PanicOnError(err)
 	}
 	mangleTable.AddIpTableRules(rules)
-	err = mangleTable.Apply(); utils.PanicOnError(err)
+	err = mangleTable.Apply()
+	utils.PanicOnError(err)
 }
 
 func PolicyRouteEntryPoint() {

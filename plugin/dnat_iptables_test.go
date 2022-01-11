@@ -1,12 +1,12 @@
 package plugin
 
 import (
-    "fmt"
-    log "github.com/Sirupsen/logrus"
-    . "github.com/onsi/ginkgo"
-    "github.com/onsi/gomega"
-    "github.com/zstackio/zstack-vyos/utils"
-    "strings"
+	"fmt"
+	log "github.com/Sirupsen/logrus"
+	. "github.com/onsi/ginkgo"
+	"github.com/onsi/gomega"
+	"github.com/zstackio/zstack-vyos/utils"
+	"strings"
 )
 
 var _ = Describe("dnat_iptables_test", func() {
@@ -26,7 +26,7 @@ var _ = Describe("dnat_iptables_test", func() {
 		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
 		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
 		configureNic(nicCmd)
-		
+
 		ipInPubL3, _ = utils.GetFreePubL3Ip()
 		ipInPubL32, _ = utils.GetFreePubL3Ip()
 

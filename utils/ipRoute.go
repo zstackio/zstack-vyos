@@ -101,15 +101,15 @@ func (e ZStackRouteEntry) Equal(b ZStackRouteEntry) error {
 	if e.TableId != b.TableId {
 		return fmt.Errorf("tableId is different, %d:%d", e.TableId, b.TableId)
 	}
-	
+
 	if e.DestinationCidr != b.DestinationCidr {
 		return fmt.Errorf("destinationCidr is different, %s:%s", e.DestinationCidr, b.DestinationCidr)
 	}
-	
+
 	if e.Distance != b.Distance {
 		return fmt.Errorf("distance is different, %d:%d", e.Distance, b.Distance)
 	}
-	
+
 	if e.NicName != "" {
 		if e.NicName != b.NicName {
 			return fmt.Errorf("nicName is different, %s:%s", e.NicName, b.NicName)
@@ -119,7 +119,7 @@ func (e ZStackRouteEntry) Equal(b ZStackRouteEntry) error {
 			return fmt.Errorf("nextHopIp is different, %s:%s", e.NextHopIp, b.NextHopIp)
 		}
 	}
-	
+
 	return nil
 }
 

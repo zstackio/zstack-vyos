@@ -16,23 +16,23 @@ import (
 )
 
 type Bash struct {
-	Command string
-	PipeFail bool
+	Command   string
+	PipeFail  bool
 	Arguments map[string]string
-	NoLog bool
-	Timeout int
-	Sudo bool
+	NoLog     bool
+	Timeout   int
+	Sudo      bool
 
 	retCode int
-	stdout string
-	stderr string
-	err error
+	stdout  string
+	stderr  string
+	err     error
 }
 
 func (b *Bash) build() error {
 	Assert(b.Command != "", "Command cannot be emptry string")
 
-	if (b.Arguments != nil) {
+	if b.Arguments != nil {
 		tmpl, err := template.New("script").Parse(b.Command)
 		if err != nil {
 			return err
@@ -61,7 +61,7 @@ func (b *Bash) build() error {
 func (b *Bash) Run() error {
 	ret, so, se, err := b.RunWithReturn()
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("failed to execute the command[%s] because of an internal errro",  b.Command))
+		return errors.Wrap(err, fmt.Sprintf("failed to execute the command[%s] because of an internal errro", b.Command))
 	}
 
 	if ret != 0 {
@@ -84,20 +84,24 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 
 	var so, se bytes.Buffer
 	var cmd *exec.Cmd
-	tmpfile, err := ioutil.TempFile("/home/vyos", "zvrcommand"); PanicOnError(err)
+	tmpfile, err := ioutil.TempFile("/home/vyos", "zvrcommand")
+	PanicOnError(err)
 	defer os.Remove(tmpfile.Name())
 
 	cmdstr := b.Command
 
-	if len(b.Command) > 1024* 4 {
+	if len(b.Command) > 1024*4 {
 		func() {
 			content := []byte(b.Command)
-			err = tmpfile.Chmod(0775); PanicOnError(err)
-			_, err = tmpfile.Write(content); PanicOnError(err)
-			err = tmpfile.Close(); PanicOnError(err)
+			err = tmpfile.Chmod(0775)
+			PanicOnError(err)
+			_, err = tmpfile.Write(content)
+			PanicOnError(err)
+			err = tmpfile.Close()
+			PanicOnError(err)
 			cmd = exec.Command("bash", "-c", tmpfile.Name())
-		        cmdstr = tmpfile.Name()
-	        }()
+			cmdstr = tmpfile.Name()
+		}()
 	}
 
 	if b.Sudo {
@@ -117,23 +121,23 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 
 	after := time.After(time.Duration(b.Timeout) * time.Second)
 	select {
-		case <-after:
-			cmd.Process.Signal(syscall.SIGTERM)
-			err = fmt.Errorf("bash command %s timeout in 120 sec", b.Command)
-			retCode = -1
-		case err = <-done:
-			var waitStatus syscall.WaitStatus
-			if err != nil {
-				if exitError, ok := err.(*exec.ExitError); ok {
-					waitStatus = exitError.Sys().(syscall.WaitStatus)
-					retCode = waitStatus.ExitStatus()
-				} else {
-					panic(errors.Errorf("unable to get return code, %s", err))
-				}
-			} else {
-				waitStatus = cmd.ProcessState.Sys().(syscall.WaitStatus)
+	case <-after:
+		cmd.Process.Signal(syscall.SIGTERM)
+		err = fmt.Errorf("bash command %s timeout in 120 sec", b.Command)
+		retCode = -1
+	case err = <-done:
+		var waitStatus syscall.WaitStatus
+		if err != nil {
+			if exitError, ok := err.(*exec.ExitError); ok {
+				waitStatus = exitError.Sys().(syscall.WaitStatus)
 				retCode = waitStatus.ExitStatus()
+			} else {
+				panic(errors.Errorf("unable to get return code, %s", err))
 			}
+		} else {
+			waitStatus = cmd.ProcessState.Sys().(syscall.WaitStatus)
+			retCode = waitStatus.ExitStatus()
+		}
 	}
 
 	stdout = string(so.Bytes())
@@ -146,9 +150,9 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 	if !b.NoLog {
 		logrus.WithFields(logrus.Fields{
 			"return code": fmt.Sprintf("%v", retCode),
-			"stdout": stdout,
-			"stderr": stderr,
-			"err": fmt.Sprintf("%v", err),
+			"stdout":      stdout,
+			"stderr":      stderr,
+			"err":         fmt.Sprintf("%v", err),
 		}).Debugf("shell done: %s", b.Command)
 	}
 
@@ -170,5 +174,3 @@ func (bash *Bash) PanicIfError() {
 func NewBash() *Bash {
 	return &Bash{}
 }
-
-

@@ -2,9 +2,9 @@ package plugin
 
 import (
 	"fmt"
+	"github.com/zstackio/zstack-vyos/utils"
 	"strconv"
 	"strings"
-	"github.com/zstackio/zstack-vyos/utils"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -33,7 +33,7 @@ func setConntrackTable(buckets int, max int) {
 
 	bash := &utils.Bash{
 		Command: fmt.Sprintf("cat %s", CONNTRACK_MAX_PATH),
-		Sudo: true,
+		Sudo:    true,
 	}
 
 	_, currentSize, _, err := bash.RunWithReturn()
@@ -57,7 +57,7 @@ func setConntrackTable(buckets int, max int) {
 
 	b := &utils.Bash{
 		Command: fmt.Sprintf("echo %d > %s && echo %d > %s", buckets, bucketsPath, max, CONNTRACK_MAX_PATH),
-		Sudo: true,
+		Sudo:    true,
 	}
 
 	b.Run()

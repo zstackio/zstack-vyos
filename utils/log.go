@@ -3,16 +3,16 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
-	"os"
-	"io"
 	log "github.com/Sirupsen/logrus"
+	"io"
+	"os"
+	"strings"
 )
 
 type logFormatter struct {
 }
 
-const timeFormat  = "2006-01-02 15:04:05" //"Jan 2, 2006 at 3:04pm (MST)"
+const timeFormat = "2006-01-02 15:04:05" //"Jan 2, 2006 at 3:04pm (MST)"
 
 func (f *logFormatter) Format(entry *log.Entry) ([]byte, error) {
 	//timestampFormat := log.DefaultTimestampFormat
@@ -47,7 +47,8 @@ func (f *logFormatter) Format(entry *log.Entry) ([]byte, error) {
 func InitLog(logpath string, stdout bool) {
 	log.SetLevel(log.DebugLevel)
 	log.SetFormatter(&logFormatter{})
-	logFile, err := CreateFileIfNotExists(logpath, os.O_WRONLY | os.O_APPEND, 0666); PanicOnError(err)
+	logFile, err := CreateFileIfNotExists(logpath, os.O_WRONLY|os.O_APPEND, 0666)
+	PanicOnError(err)
 	if stdout {
 		multi := io.MultiWriter(logFile, os.Stdout)
 		log.SetOutput(multi)

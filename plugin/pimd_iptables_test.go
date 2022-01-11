@@ -1,18 +1,18 @@
 package plugin
 
 import (
-    "fmt"
-    log "github.com/Sirupsen/logrus"
-    . "github.com/onsi/ginkgo"
-    . "github.com/onsi/gomega"
-    "github.com/zstackio/zstack-vyos/utils"
+	"fmt"
+	log "github.com/Sirupsen/logrus"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 var _ = Describe("pimd_iptables_test", func() {
 	var nicCmd *configureNicCmd
 
 	It("[IPTABLES]pimd : test preparing", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER + "pimd_iptables_test.log", false)
+		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"pimd_iptables_test.log", false)
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)
 		nicCmd = &configureNicCmd{}
@@ -33,17 +33,17 @@ var _ = Describe("pimd_iptables_test", func() {
 			checkRegisterAddNicCallback(name)
 			nics[name] = utils.Nic{
 				Name: nic.Name,
-				Mac: nic.Mac,
+				Mac:  nic.Mac,
 			}
 		}
 		log.Debugf("[IPTABLES]pimd : test add pimd ###########")
 		addPimdFirewallByIptables(nics)
 		checkAddPimdFirewallByIptables(nics)
-		
+
 		log.Debugf("[IPTABLES]pimd : test remove pimd ###########")
 		removePimdFirewallByIptables(nics)
 		checkRemovePimdFirewallByIptables(nics)
-		
+
 		pimdEnable = false
 	})
 
@@ -74,12 +74,11 @@ func checkRegisterAddNicCallback(nic string) {
 	Expect(res).To(BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
 }
 
-
 func checkAddPimdFirewallByIptables(nics map[string]utils.Nic) {
 	table := utils.NewIpTables(utils.FirewallTable)
 	for _, nic := range nics {
 		rules := table.Found(utils.GetRuleSetName(nic.Name, utils.RULESET_LOCAL), utils.SystemTopRule)
-		for _, rule := range rules{
+		for _, rule := range rules {
 			if rule.GetProto() == utils.IPTABLES_PROTO_PIMD {
 				Expect(rule.GetRuleNumber() < 1000).To(BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
 			}
@@ -88,7 +87,7 @@ func checkAddPimdFirewallByIptables(nics map[string]utils.Nic) {
 			}
 		}
 		rules = table.Found(utils.GetRuleSetName(nic.Name, utils.RULESET_IN), utils.SystemTopRule)
-		for _, rule := range rules{
+		for _, rule := range rules {
 			if rule.GetDstIp() == "224.0.0.0/4" {
 				Expect(rule.GetRuleNumber() < 1000).To(BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
 			}

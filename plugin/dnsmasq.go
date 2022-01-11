@@ -72,8 +72,8 @@ func (d *DnsmasqConf) RestartDnsmasq() error {
 	err = bash.Run()
 	utils.PanicOnError(err)
 
-	err = utils.Retry(func () error {
-		bash = utils.Bash {
+	err = utils.Retry(func() error {
+		bash = utils.Bash{
 			Command: fmt.Sprintf("sudo pkill -9 dnsmasq; sudo %s", DNSMASQ_BIN_PATH),
 		}
 		return bash.Run()

@@ -1,10 +1,10 @@
 package utils
 
 import (
-	"time"
 	log "github.com/Sirupsen/logrus"
-	"runtime"
 	"reflect"
+	"runtime"
+	"time"
 )
 
 func Retry(fn func() error, retryTimes uint, interval uint) error {
@@ -22,6 +22,6 @@ func Retry(fn func() error, retryTimes uint, interval uint) error {
 		log.Warnf("failed to execute a function %v, sleep %d seconds and will retry %v times, %v",
 			runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name(), interval, retryTimes, err)
 		time.Sleep(time.Duration(interval) * time.Second)
-		retryTimes --
+		retryTimes--
 	}
 }
