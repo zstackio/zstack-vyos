@@ -1,23 +1,23 @@
 package server
 
 import (
-	"testing"
-	"github.com/zstackio/zstack-vyos/utils"
 	"fmt"
 	"github.com/pkg/errors"
+	"github.com/zstackio/zstack-vyos/utils"
 	"net/http"
+	"testing"
 	"time"
 )
 
-func startMockServer()  {
+func startMockServer() {
 	CommandOptions.Ip = "127.0.0.1"
 	CommandOptions.Port = 8989
 	go func() {
 		startServer()
 	}()
-	
-	utils.InitLog(utils.VYOS_UT_LOG_FOLDER + "server_test.log", false)
-	
+
+	utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"server_test.log", false)
+
 	time.Sleep(time.Duration(2) * time.Second)
 }
 
@@ -29,7 +29,7 @@ func makeURL(path string) string {
 	return fmt.Sprintf("http://127.0.0.1:8989%s", path)
 }
 
-func TestSyncCommand(t *testing.T)  {
+func TestSyncCommand(t *testing.T) {
 	startMockServer()
 
 	testCmd := syncCmd{
@@ -38,7 +38,7 @@ func TestSyncCommand(t *testing.T)  {
 
 	success := false
 	path := "/testsync"
-	RegisterSyncCommandHandler(path, func (ctx *CommandContext) interface{} {
+	RegisterSyncCommandHandler(path, func(ctx *CommandContext) interface{} {
 		cmd := &syncCmd{}
 		ctx.GetCommand(cmd)
 		success = cmd.Greeting == testCmd.Greeting
@@ -52,25 +52,24 @@ func TestSyncCommand(t *testing.T)  {
 	}
 }
 
-func TestCommandHandlerPanic(t *testing.T)  {
+func TestCommandHandlerPanic(t *testing.T) {
 	//startMockServer()
 
 	path := "/testpanic1"
-	RegisterSyncCommandHandler(path, func (ctx *CommandContext) interface{} {
+	RegisterSyncCommandHandler(path, func(ctx *CommandContext) interface{} {
 		panic(errors.New("on purpose"))
 	})
 	utils.HttpPostWithoutHeaders(makeURL(path), nil)
 
 	path = "/testpanic2"
 	s := false
-	RegisterSyncCommandHandler(path, func (ctx *CommandContext) interface{} {
+	RegisterSyncCommandHandler(path, func(ctx *CommandContext) interface{} {
 		s = true
 		return nil
 	})
 	utils.HttpPostWithoutHeaders(makeURL(path), nil)
 	utils.Assert(s, "not working")
 }
-
 
 type asyncCmd struct {
 	Say string
@@ -103,7 +102,7 @@ func TestAsyncCommand(t *testing.T) {
 
 	s3 := false
 	path := "/testasync"
-	RegisterAsyncCommandHandler(path, func (ctx *CommandContext) interface{} {
+	RegisterAsyncCommandHandler(path, func(ctx *CommandContext) interface{} {
 		cmd := &asyncCmd{}
 		ctx.GetCommand(cmd)
 		s3 = cmd.Say == "hi"
@@ -115,8 +114,8 @@ func TestAsyncCommand(t *testing.T) {
 
 	utils.HttpPost(makeURL(path), map[string]string{
 		CALLBACK_URL: callbackURL,
-		TASK_UUID: taskUuid,
-	}, &asyncCmd{ Say: "hi"})
+		TASK_UUID:    taskUuid,
+	}, &asyncCmd{Say: "hi"})
 
 	time.Sleep(time.Duration(2) * time.Second)
 	utils.Assert(s1, "s1")
@@ -128,7 +127,7 @@ func TestAsyncCommandNoTaskUUID(t *testing.T) {
 	//startMockServer()
 
 	path := "/testasync1"
-	RegisterAsyncCommandHandler(path, func (ctx *CommandContext) interface{} {
+	RegisterAsyncCommandHandler(path, func(ctx *CommandContext) interface{} {
 		// pass
 		return nil
 	})
@@ -137,7 +136,7 @@ func TestAsyncCommandNoTaskUUID(t *testing.T) {
 	callbackURL := fmt.Sprintf("http://127.0.0.1:9090%s", "abcde")
 	_, err := utils.HttpPost(makeURL(path), map[string]string{
 		CALLBACK_URL: callbackURL,
-	}, &asyncCmd{ Say: "hi"})
+	}, &asyncCmd{Say: "hi"})
 
 	time.Sleep(time.Duration(2) * time.Second)
 	utils.Assert(err != nil, err.Error())
@@ -148,7 +147,7 @@ func TestAsyncCommandNoCallbackURL(t *testing.T) {
 	//startMockServer()
 
 	path := "/testasync2"
-	RegisterAsyncCommandHandler(path, func (ctx *CommandContext) interface{} {
+	RegisterAsyncCommandHandler(path, func(ctx *CommandContext) interface{} {
 		// pass
 		return nil
 	})
@@ -156,7 +155,7 @@ func TestAsyncCommandNoCallbackURL(t *testing.T) {
 	// no callback URL
 	_, err := utils.HttpPost(makeURL(path), map[string]string{
 		TASK_UUID: "abc",
-	}, &asyncCmd{ Say: "hi"})
+	}, &asyncCmd{Say: "hi"})
 
 	time.Sleep(time.Duration(2) * time.Second)
 	utils.Assert(err != nil, err.Error())

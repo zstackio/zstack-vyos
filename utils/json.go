@@ -1,11 +1,11 @@
 package utils
 
 import (
-	"io/ioutil"
-	"fmt"
 	"encoding/json"
-	"net/http"
+	"fmt"
 	"github.com/pkg/errors"
+	"io/ioutil"
+	"net/http"
 )
 
 func JsonDecodeHttpRequest(req *http.Request, val interface{}) (err error) {

@@ -58,7 +58,7 @@ func SetFileOwner(fpath, owner, group string) error {
 }
 
 func SetFolderOwner(folderPath, owner, group string) error {
-	return exec.Command("sudo", "/bin/chown",  "-R", fmt.Sprintf("%s:%s", owner, group), folderPath).Run()
+	return exec.Command("sudo", "/bin/chown", "-R", fmt.Sprintf("%s:%s", owner, group), folderPath).Run()
 }
 
 func Truncate(name string, size int64) error {
@@ -87,14 +87,14 @@ func ReadLine(filePath string) (string, error) {
 		return "", err
 	}
 	defer file.Close()
-	
+
 	reader := bufio.NewReader(file)
 	line, err := reader.ReadString('\n')
 	if err != nil {
 		log.Errorf("file: %s read failed, because: %s", filePath, err)
 		return "", err
 	}
-	
+
 	return line, nil
 }
 
@@ -103,7 +103,7 @@ func ReadPid(pidPath string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	
+
 	pid = strings.TrimSpace(pid)
 	log.Debugf("haproxy pid: %s", pid)
 	return strconv.Atoi(pid)

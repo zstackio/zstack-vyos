@@ -2,20 +2,20 @@ package plugin
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
-	"strings"
 	log "github.com/Sirupsen/logrus"
+	"github.com/pkg/errors"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
+	"strings"
 )
 
 const (
-	VR_CONFIGURE_NIC = "/configurenic"
+	VR_CONFIGURE_NIC                              = "/configurenic"
 	VR_CONFIGURE_NIC_FIREWALL_DEFAULT_ACTION_PATH = "/configurenicdefaultaction"
-	VR_REMOVE_NIC_PATH = "/removenic"
-	VR_CHANGE_DEFAULT_NIC_PATH = "/changeDefaultNic"
-	RA_MAX_INTERVAL = 60
-	RA_MIN_INTERVAL = 15
+	VR_REMOVE_NIC_PATH                            = "/removenic"
+	VR_CHANGE_DEFAULT_NIC_PATH                    = "/changeDefaultNic"
+	RA_MAX_INTERVAL                               = 60
+	RA_MIN_INTERVAL                               = 15
 )
 
 type addNicCallback interface {
@@ -44,11 +44,11 @@ func getNicIp(nicName string) string {
 	}
 }
 
-func RegisterAddNicCallback(cb addNicCallback)  {
+func RegisterAddNicCallback(cb addNicCallback) {
 	addNicCallbacks = append(addNicCallbacks, cb)
 }
 
-func RegisterRemoveNicCallback(cb removeNicCallback)  {
+func RegisterRemoveNicCallback(cb removeNicCallback) {
 	removeNicCallbacks = append(removeNicCallbacks, cb)
 }
 
@@ -57,24 +57,24 @@ type configureNicCmd struct {
 }
 
 type ChangeDefaultNicCmd struct {
-	NewNic utils.NicInfo    `json:"newNic"`
-	Snats  []snatInfo `json:"snats"`
+	NewNic utils.NicInfo `json:"newNic"`
+	Snats  []snatInfo    `json:"snats"`
 }
 
 func makeNicFirewallDescription(nicname, ip string) string {
 	return fmt.Sprintf("nic-%s-secondary-ip-%s", nicname, ip)
 }
 
-func addSecondaryIpFirewall(nicname, ip string,  tree *server.VyosConfigTree)  {
+func addSecondaryIpFirewall(nicname, ip string, tree *server.VyosConfigTree) {
 	if utils.IsSkipVyosIptables() {
 		rule := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
 		rule.SetComment(utils.SystemTopRule).SetAction(utils.IPTABLES_ACTION_ACCEPT)
-		rule.SetDstIp(ip+"/32").SetState([]string{utils.IPTABLES_STATE_RELATED, utils.IPTABLES_STATE_ESTABLISHED})
-		
+		rule.SetDstIp(ip + "/32").SetState([]string{utils.IPTABLES_STATE_RELATED, utils.IPTABLES_STATE_ESTABLISHED})
+
 		rule1 := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
 		rule1.SetComment(utils.SystemTopRule).SetAction(utils.IPTABLES_ACTION_ACCEPT)
-		rule1.SetDstIp(ip+"/32").SetProto(utils.IPTABLES_PROTO_ICMP)
-		
+		rule1.SetDstIp(ip + "/32").SetProto(utils.IPTABLES_PROTO_ICMP)
+
 		table := utils.NewIpTables(utils.FirewallTable)
 		table.AddIpTableRules([]*utils.IpTableRule{rule, rule1})
 		err := table.Apply()
@@ -119,7 +119,7 @@ func configureLBFirewallRuleByVyos(tree *server.VyosConfigTree, dev string) (err
 			break
 		}
 	}
-	
+
 	if rs := tree.FindFirewallRulesByDescriptionRegex(sourceNic, "local", des, utils.StringRegCompareFn); rs != nil {
 		for _, r := range rs {
 			prefix := r.String()
@@ -132,7 +132,7 @@ func configureLBFirewallRuleByVyos(tree *server.VyosConfigTree, dev string) (err
 			tree.SetFirewallOnInterface(dev, "local", rule...)
 		}
 	}
-	
+
 	if utils.IsSkipVyosIptables() {
 		/*find := false
 		for _, priNic := range priNics {
@@ -173,7 +173,7 @@ func configureLBFirewallRuleByVyos(tree *server.VyosConfigTree, dev string) (err
 		}*/
 		//removeDnsFirewallRules(priNic)
 	} else {
-	
+
 	}
 
 	return
@@ -188,26 +188,26 @@ func configureLBFirewallRuleByIpTables(dev string) error {
 			break
 		}
 	}
-	
+
 	if sourceNic == "" {
 		log.Debugf("this is the first private nic %s", dev)
 		return nil
 	}
-	
+
 	table := utils.NewIpTables(utils.FirewallTable)
 	rules := table.Found(utils.GetRuleSetName(sourceNic, utils.RULESET_LOCAL), utils.LbRuleComment)
 	if len(rules) == 0 {
 		log.Debugf("there is no private loadBalancer configure for nic: %s", sourceNic)
 		return nil
 	}
-	
+
 	newChainName := utils.GetRuleSetName(dev, utils.RULESET_LOCAL)
 	for _, r := range rules {
 		r.SetChainName(newChainName)
 	}
 	log.Debugf("add private lb rules for nic: %s, rules %+v", dev, rules)
 	table.AddIpTableRules(rules)
-	
+
 	return table.Apply()
 }
 
@@ -223,11 +223,13 @@ func configureNicFirewall(nics []utils.NicInfo) {
 		for _, nic := range nics {
 			nicname, _ := utils.GetNicNameByMac(nic.Mac)
 			if nic.Category == "Private" {
-				err := utils.InitNicFirewall(nicname, nic.Ip, false, utils.IPTABLES_ACTION_REJECT); utils.PanicOnError(err)
+				err := utils.InitNicFirewall(nicname, nic.Ip, false, utils.IPTABLES_ACTION_REJECT)
+				utils.PanicOnError(err)
 			} else {
-				err := utils.InitNicFirewall(nicname, nic.Ip, true, utils.IPTABLES_ACTION_REJECT); utils.PanicOnError(err)
+				err := utils.InitNicFirewall(nicname, nic.Ip, true, utils.IPTABLES_ACTION_REJECT)
+				utils.PanicOnError(err)
 			}
-			
+
 			if nic.Category == "Private" {
 				log.Debug("start configure LB firewall rule for new added nic")
 				configureLBFirewallRuleByIpTables(nicname)
@@ -241,7 +243,7 @@ func configureNicFirewall(nics []utils.NicInfo) {
 			tree.SetFirewallDefaultAction(nicname, "in", "reject")
 		}
 		tree.Apply(false)
-		
+
 		tree = server.NewParserFromShowConfiguration().Tree
 		for _, nic := range nics {
 			nicname, _ := utils.GetNicNameByMac(nic.Mac)
@@ -249,7 +251,7 @@ func configureNicFirewall(nics []utils.NicInfo) {
 			tree.AttachFirewallToInterface(nicname, "in")
 		}
 		tree.Apply(false)
-		
+
 		tree = server.NewParserFromShowConfiguration().Tree
 		for _, nic := range nics {
 			nicname, _ := utils.GetNicNameByMac(nic.Mac)
@@ -264,13 +266,13 @@ func configureNicFirewall(nics []utils.NicInfo) {
 				"protocol icmp",
 				fmt.Sprintf("destination address %v", nic.Ip),
 			)
-			
-			tree.SetZStackFirewallRuleOnInterface(nicname, "behind","in",
+
+			tree.SetZStackFirewallRuleOnInterface(nicname, "behind", "in",
 				"action accept",
 				"state established enable",
 				"state related enable",
 			)
-				
+
 			tree.SetFirewallWithRuleNumber(nicname, "in", utils.IPTABLES_RULENUMBER_9999,
 				"action accept",
 				"state new enable",
@@ -292,13 +294,13 @@ func configureNicFirewall(nics []utils.NicInfo) {
 					"action reject",
 				)
 			}
-			
+
 			if nic.Category == "Private" {
 				log.Debug("start configure LB firewall rule")
 				configureLBFirewallRuleByVyos(tree, nicname)
 			}
 		}
-		
+
 		tree.Apply(false)
 	}
 }
@@ -315,14 +317,16 @@ func configureNic(cmd *configureNicCmd) interface{} {
 			} else {
 				return nil
 			}
-		}, 5, 1); utils.PanicOnError(err)
+		}, 5, 1)
+		utils.PanicOnError(err)
 		err = utils.Retry(func() error {
 			bash := utils.Bash{
 				Command: fmt.Sprintf("sudo /sbin/ethtool %s", nicname),
 			}
 			_, _, _, e := bash.RunWithReturn()
 			return e
-		}, 30, 1); utils.PanicOnError(err)
+		}, 30, 1)
+		utils.PanicOnError(err)
 		if nic.Ip != "" {
 			cidr, err := utils.NetmaskToCIDR(nic.Netmask)
 			utils.PanicOnError(err)
@@ -342,7 +346,7 @@ func configureNic(cmd *configureNicCmd) interface{} {
 		}
 		tree.SetNicMtu(nicname, mtu)
 
-		if nic.Ip6 != "" && nic.Category == "Private"{
+		if nic.Ip6 != "" && nic.Category == "Private" {
 			switch nic.AddressMode {
 			case "Stateful-DHCP":
 				tree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag true", nicname)
@@ -362,7 +366,7 @@ func configureNic(cmd *configureNicCmd) interface{} {
 			tree.Setf("interfaces ethernet %s ipv6 router-advert min-interval %d", nicname, RA_MIN_INTERVAL)
 			tree.Setf("interfaces ethernet %s ipv6 router-advert send-advert true", nicname)
 		}
-		
+
 		if nic.L2Type != "" {
 			tree.Setf("interfaces ethernet %s description '%s'", nicname, makeAlias(nic))
 		}
@@ -373,13 +377,13 @@ func configureNic(cmd *configureNicCmd) interface{} {
 	}
 
 	tree.Apply(false)
-	
+
 	configureNicFirewall(cmd.Nics)
 
 	if IsMaster() {
-		bash := utils.Bash {
+		bash := utils.Bash{
 			Command: fmt.Sprintf("ip link set up dev %s", nicname),
-			Sudo: true,
+			Sudo:    true,
 		}
 		bash.Run()
 
@@ -408,8 +412,8 @@ func configureNic(cmd *configureNicCmd) interface{} {
 			cb.AddNic(nicname)
 		}
 
-		nicsMap[nicname] = utils.Nic{Name:nicname, Mac: nic.Mac, Ip:nic.Ip, Ip6: nic.Ip6,
-			Gateway:nic.Gateway, Gateway6:nic.Gateway6}
+		nicsMap[nicname] = utils.Nic{Name: nicname, Mac: nic.Mac, Ip: nic.Ip, Ip6: nic.Ip6,
+			Gateway: nic.Gateway, Gateway6: nic.Gateway6}
 	}
 
 	/* this is for debug, will be deleted */
@@ -426,7 +430,7 @@ func checkNicIsUp(nicname string, panicIfDown bool) error {
 	var retryInterval uint = 1
 
 	bash := utils.Bash{
-		Command:fmt.Sprintf("sudo ip link show dev %s | grep 'state UP'", nicname),
+		Command: fmt.Sprintf("sudo ip link show dev %s | grep 'state UP'", nicname),
 	}
 	err := utils.Retry(func() error {
 		ret, o, _, err := bash.RunWithReturn()
@@ -436,7 +440,7 @@ func checkNicIsUp(nicname string, panicIfDown bool) error {
 			return nil
 		}
 	}, retryTimes, retryInterval)
-	error := errors.New(fmt.Sprintf("nic %s still down after %d secondes", nicname, retryTimes * retryInterval))
+	error := errors.New(fmt.Sprintf("nic %s still down after %d secondes", nicname, retryTimes*retryInterval))
 
 	if err != nil && panicIfDown == true {
 		utils.PanicOnError(error)
@@ -466,10 +470,12 @@ func removeNic(cmd *configureNicCmd) interface{} {
 			} else {
 				return nil
 			}
-		}, 5, 1); utils.PanicOnError(err)
+		}, 5, 1)
+		utils.PanicOnError(err)
 		tree.Deletef("interfaces ethernet %s", nicname)
 		if utils.IsSkipVyosIptables() {
-			err := utils.DestroyNicFirewall(nicname); utils.PanicOnError(err)
+			err := utils.DestroyNicFirewall(nicname)
+			utils.PanicOnError(err)
 		} else {
 			tree.Deletef("firewall name %s.in", nicname)
 			tree.Deletef("firewall name %s.local", nicname)
@@ -480,7 +486,7 @@ func removeNic(cmd *configureNicCmd) interface{} {
 	generateNotityScripts()
 
 	for _, nic := range cmd.Nics {
-		nicName, _:= utils.GetNicNameByMac(nic.Mac)
+		nicName, _ := utils.GetNicNameByMac(nic.Mac)
 		for _, cb := range removeNicCallbacks {
 			cb.RemoveNic(nicName)
 		}
@@ -516,10 +522,12 @@ func configureNicDefaultAction(cmd *configureNicCmd) interface{} {
 			} else {
 				return nil
 			}
-		}, 5, 1); utils.PanicOnError(err)
+		}, 5, 1)
+		utils.PanicOnError(err)
 
 		if utils.IsSkipVyosIptables() {
-			err := utils.SetNicDefaultFirewallRule(nicname, nic.FirewallDefaultAction); utils.PanicOnError(err)
+			err := utils.SetNicDefaultFirewallRule(nicname, nic.FirewallDefaultAction)
+			utils.PanicOnError(err)
 		} else {
 			if strings.Compare(strings.ToLower(nic.FirewallDefaultAction), "reject") == 0 {
 				tree.SetFirewallDefaultAction(nicname, "local", "reject")
@@ -545,7 +553,8 @@ func changeDefaultNicHandler(ctx *server.CommandContext) interface{} {
 func changeDefaultNic(cmd *ChangeDefaultNicCmd) interface{} {
 	tree := server.NewParserFromShowConfiguration().Tree
 	/* change default gateway */
-	pubNic, err := utils.GetNicNameByMac(cmd.NewNic.Mac); utils.PanicOnError(err)
+	pubNic, err := utils.GetNicNameByMac(cmd.NewNic.Mac)
+	utils.PanicOnError(err)
 	tree.Deletef("protocols static route 0.0.0.0/0")
 	tree.Deletef("protocols static route6 ::/0")
 	tree.Deletef("system gateway-address")
@@ -558,37 +567,44 @@ func changeDefaultNic(cmd *ChangeDefaultNicCmd) interface{} {
 
 	if utils.IsSkipVyosIptables() {
 		table := utils.NewIpTables(utils.NatTable)
-		
+
 		/* delete all snat rules */
 		table.RemoveIpTableRuleByComments(utils.SNATComment)
 
 		var rules []*utils.IpTableRule
 		for _, s := range cmd.Snats {
-			outNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
-			inNic, err := utils.GetNicNameByMac(s.PrivateNicMac); utils.PanicOnError(err)
-			address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
+			outNic, err := utils.GetNicNameByMac(s.PublicNicMac)
+			utils.PanicOnError(err)
+			inNic, err := utils.GetNicNameByMac(s.PrivateNicMac)
+			utils.PanicOnError(err)
+			address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask)
+			utils.PanicOnError(err)
 
 			rule := utils.NewIpTableRule(utils.RULESET_SNAT.String())
 			rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
 			rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(outNic).SetSnatTargetIp(s.PublicIp)
 			rules = append(rules, rule)
-			
+
 			rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
 			rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
 			rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
 			rules = append(rules, rule)
 		}
-		
+
 		table.AddIpTableRules(rules)
 		if err := table.Apply(); err != nil {
 			return err
 		}
 	} else {
 		for _, s := range cmd.Snats {
-			outNic, err := utils.GetNicNameByMac(s.PublicNicMac); utils.PanicOnError(err)
-			inNic, err := utils.GetNicNameByMac(s.PrivateNicMac); utils.PanicOnError(err)
-			nicNumber, err := utils.GetNicNumber(inNic); utils.PanicOnError(err)
-			address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask); utils.PanicOnError(err)
+			outNic, err := utils.GetNicNameByMac(s.PublicNicMac)
+			utils.PanicOnError(err)
+			inNic, err := utils.GetNicNameByMac(s.PrivateNicMac)
+			utils.PanicOnError(err)
+			nicNumber, err := utils.GetNicNumber(inNic)
+			utils.PanicOnError(err)
+			address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask)
+			utils.PanicOnError(err)
 
 			pubNicRuleNo, priNicRuleNo := getNicSNATRuleNumber(nicNumber)
 			if rs := tree.Getf("nat source rule %v", pubNicRuleNo); rs != nil {
@@ -619,12 +635,12 @@ func changeDefaultNic(cmd *ChangeDefaultNicCmd) interface{} {
 
 	/* delete snat connection on old gateway */
 	if len(cmd.Snats) > 0 {
-		t := utils.ConnectionTrackTuple{IsNat:true, IsDst: true, Ip: cmd.Snats[0].PublicIp, Protocol: "",
+		t := utils.ConnectionTrackTuple{IsNat: true, IsDst: true, Ip: cmd.Snats[0].PublicIp, Protocol: "",
 			PortStart: 0, PortEnd: 0}
 		t.CleanConnTrackConnection()
 	}
 
-	defaultNic := &utils.Nic{Name: pubNic, Gateway: cmd.NewNic.Gateway, Gateway6:cmd.NewNic.Gateway6, Mac:cmd.NewNic.Mac,
+	defaultNic := &utils.Nic{Name: pubNic, Gateway: cmd.NewNic.Gateway, Gateway6: cmd.NewNic.Gateway6, Mac: cmd.NewNic.Mac,
 		Ip: cmd.NewNic.Ip, Ip6: cmd.NewNic.Ip6}
 	if utils.IsHaEnabled() {
 		utils.WriteDefaultHaScript(defaultNic)
@@ -648,9 +664,9 @@ func makeAlias(nic utils.NicInfo) string {
 	return result
 }
 
-func ConfigureNicEntryPoint()  {
+func ConfigureNicEntryPoint() {
 	nicIps := utils.GetBootStrapNicInfo()
-	for _, nic := range nicIps{
+	for _, nic := range nicIps {
 		nicsMap[nic.Name] = nic
 	}
 

@@ -3,12 +3,12 @@ package plugin
 import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 	"io/ioutil"
 	"strconv"
 	"strings"
 	"time"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (
@@ -41,7 +41,7 @@ var (
 func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 	cmd := &setVyosHaCmd{}
 	ctx.GetCommand(cmd)
-	
+
 	return setVyosHa(cmd)
 }
 
@@ -49,36 +49,36 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 	if cmd.PeerIp == "" {
 		cmd.PeerIp = cmd.LocalIp
 	}
-	
+
 	heartbeatNicNme, _ := utils.GetNicNameByMac(cmd.HeartbeatNic)
 	/* add firewall */
 	tree := server.NewParserFromShowConfiguration().Tree
 	if utils.IsSkipVyosIptables() {
 		table := utils.NewIpTables(utils.FirewallTable)
 		var rules []*utils.IpTableRule
-		
+
 		rule := utils.NewIpTableRule(utils.GetRuleSetName(heartbeatNicNme, utils.RULESET_LOCAL))
 		rule.SetAction(utils.IPTABLES_ACTION_ACCEPT).SetComment(utils.SystemTopRule)
-		rule.SetProto(utils.IPTABLES_PROTO_VRRP).SetSrcIp(cmd.PeerIp+"/32")
+		rule.SetProto(utils.IPTABLES_PROTO_VRRP).SetSrcIp(cmd.PeerIp + "/32")
 		rules = append(rules, rule)
-		
+
 		rule = utils.NewIpTableRule(utils.GetRuleSetName(heartbeatNicNme, utils.RULESET_LOCAL))
 		rule.SetAction(utils.IPTABLES_ACTION_ACCEPT).SetComment(utils.SystemTopRule)
-		rule.SetProto(utils.IPTABLES_PROTO_UDP).SetSrcIp(cmd.PeerIp+"/32").SetDstPort("3780")
+		rule.SetProto(utils.IPTABLES_PROTO_UDP).SetSrcIp(cmd.PeerIp + "/32").SetDstPort("3780")
 		rules = append(rules, rule)
 		table.AddIpTableRules(rules)
-		
+
 		if err := table.Apply(); err != nil {
 			log.Debugf("apply vrrp firewall table failed")
 			return err
 		}
-		
+
 		natTable := utils.NewIpTables(utils.NatTable)
 		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
 		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
 		rule.SetProto(utils.IPTABLES_PROTO_VRRP)
 		natTable.AddIpTableRules([]*utils.IpTableRule{rule})
-		
+
 		if err := natTable.Apply(); err != nil {
 			log.Debugf("apply vrrp nat table failed")
 			return err
@@ -119,10 +119,12 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 
 	pairs := []nicVipPair{}
 	for _, p := range cmd.Vips {
-		nicname, err := utils.GetNicNameByMac(p.NicMac); utils.PanicOnError(err)
-		cidr, err := utils.NetmaskToCIDR(p.Netmask); utils.PanicOnError(err)
-		pairs = append(pairs, nicVipPair{NicName: nicname, Vip: p.NicVip, Prefix:cidr})
-		
+		nicname, err := utils.GetNicNameByMac(p.NicMac)
+		utils.PanicOnError(err)
+		cidr, err := utils.NetmaskToCIDR(p.Netmask)
+		utils.PanicOnError(err)
+		pairs = append(pairs, nicVipPair{NicName: nicname, Vip: p.NicVip, Prefix: cidr})
+
 		/* if vip is same to nic Ip, there is no need to add firewall again */
 		if nicIp := getNicIp(nicname); nicIp == p.NicVip {
 			continue
@@ -229,7 +231,7 @@ func getKeepAlivedStatusTask() {
 	if utils.IsRuingUT() {
 		return
 	}
-	
+
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	defer func() { getKeepAlivedStatusStart = false; log.Errorf("!!!!!!!!!keepalived status check task exited") }()
@@ -268,7 +270,7 @@ func keepAlivedCheckTask() {
 	if utils.IsRuingUT() {
 		return
 	}
-	
+
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	defer func() { keepAlivedCheckStart = false; log.Errorf("!!!!!!!!!keepalived process check task exited") }()
@@ -363,10 +365,10 @@ func InitHaNicState() {
 	/* disable conntrackd at current time */
 	b := utils.Bash{
 		Command: "pkill -9 conntrackd",
-		Sudo: true,
+		Sudo:    true,
 	}
 	b.Run()
-	
+
 	/* if ha is enable, shutdown all interface except eth0 */
 	var cmds []string
 	cmds = append(cmds, fmt.Sprintf("sudo sysctl -w net.ipv4.ip_nonlocal_bind=1"))

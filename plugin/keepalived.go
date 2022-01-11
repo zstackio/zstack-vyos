@@ -1,11 +1,11 @@
 package plugin
 
 import (
-	"github.com/zstackio/zstack-vyos/utils"
-	"github.com/zstackio/zstack-vyos/server"
 	"bytes"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 	"html/template"
 	"io/ioutil"
 	"os"
@@ -24,6 +24,7 @@ const (
 )
 
 type KeepAlivedProcessAction int
+
 const (
 	KeepAlivedProcess_Reload KeepAlivedProcessAction = iota
 	KeepAlivedProcess_Restart
@@ -403,12 +404,13 @@ func doRestartKeepalived(action KeepAlivedProcessAction) error {
 		bash := utils.Bash{
 			Command: fmt.Sprintf("sudo pkill -9 keepalived; sudo %s -D -S 2 -f %s -p %s", KeepalivedBinaryFile, KeepalivedConfigFile, KeepalivedPidFile),
 		}
-		bash.RunWithReturn(); bash.PanicIfError()
+		bash.RunWithReturn()
+		bash.PanicIfError()
 	} else {
 		/* keepalived is running, restart it only if force restart */
 		switch action {
 		case KeepAlivedProcess_Restart:
-			bash := utils.Bash {
+			bash := utils.Bash{
 				Command: fmt.Sprintf("kill -TERM %d; %s -D -S 2 -f %s -p %s", pid, KeepalivedBinaryFile, KeepalivedConfigFile, KeepalivedPidFile),
 				Sudo:    true,
 			}
@@ -430,7 +432,7 @@ func doRestartKeepalived(action KeepAlivedProcessAction) error {
 }
 
 func (k *KeepalivedConf) RestartKeepalived(action KeepAlivedProcessAction) error {
-        return doRestartKeepalived(action)
+	return doRestartKeepalived(action)
 }
 
 func enableKeepalivedLog() {
@@ -534,7 +536,7 @@ func getKeepAlivedStatus() KeepAlivedStatus {
 	if utils.IsRuingUT() {
 		return keepAlivedStatus
 	}
-	
+
 	pid := getKeepalivedPid()
 	if pid == PID_ERROR {
 		log.Debugf("Error occurs while get keepalived pid, return keepalived status as unkdonw")
@@ -590,7 +592,7 @@ func KeepalivedEntryPoint() {
 			s := time.Now().Format(time.RFC3339) + " " + e.Error() + "\n"
 			ioutil.WriteFile(_zvr_shm, []byte(s), 0640)
 			doRestartKeepalived(KeepAlivedProcess_Restart)
-			
+
 			/* when disk is full, keepalived will restart and zvr process will exit, peer vpc will become the master vpc,
 			   when keepalived start again, it will enter backup state, then call back script, but there are 2 issues:
 			   1. peer become master, but current still has the master config, leads to traffic issue
@@ -605,8 +607,7 @@ func KeepalivedEntryPoint() {
 
 var keepAlivedStatus KeepAlivedStatus
 
-
-func SetKeepalivedStatusForUt(status KeepAlivedStatus)  {
+func SetKeepalivedStatusForUt(status KeepAlivedStatus) {
 	utils.SetHaStatus(utils.HABACKUP)
 	keepAlivedStatus = status
 }

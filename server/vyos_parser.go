@@ -5,9 +5,9 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
+	"github.com/zstackio/zstack-vyos/utils"
 	"strconv"
 	"strings"
-	"github.com/zstackio/zstack-vyos/utils"
 )
 
 type VyosParser struct {
@@ -346,12 +346,12 @@ func (t *VyosConfigTree) HasChanges() bool {
 }
 
 func (t *VyosConfigTree) Apply(asVyosUser bool) {
-	if (UNIT_TEST) {
+	if UNIT_TEST {
 		fmt.Println(strings.Join(t.changeCommands, "\n"))
 		return
 	}
 
-	if (len(t.changeCommands) == 0) {
+	if len(t.changeCommands) == 0 {
 		log.Debug("[Vyos Configuration] no changes to apply")
 		return
 	}
@@ -626,7 +626,7 @@ func (t *VyosConfigTree) CreateFirewallRuleSet(ruleSetName string, rules []strin
 func (t *VyosConfigTree) SetDnat(rules ...string) int {
 	currentRuleNum := -1
 
-	for i := 1; i <= 9999; i ++ {
+	for i := 1; i <= 9999; i++ {
 		if c := t.Getf("nat destination rule %v", i); c == nil {
 			currentRuleNum = i
 			break
@@ -692,7 +692,7 @@ func (t *VyosConfigTree) SetSnatWithRuleNumber(ruleNum int, rules ...string) {
 func (t *VyosConfigTree) SetSnatWithStartRuleNumber(startNum int, rules ...string) int {
 	currentRuleNum := -1
 
-	for i := startNum; i <= 9999; i ++ {
+	for i := startNum; i <= 9999; i++ {
 		if c := t.Getf("nat source rule %v", i); c == nil {
 			currentRuleNum = i
 			break
@@ -715,9 +715,9 @@ func (t *VyosConfigTree) SetSnatExclude(rules ...string) int {
 }
 
 /*now the SNAT rule is splited 3 parts,
-	[1, 1023] exclude rule, call SetSnatExclude
-	[1024,xxxx-1] normal rules (such as eip), call SetSnat
-	[xxxx, 9999] in snat (call SetSnatWithRuleNumber),
+[1, 1023] exclude rule, call SetSnatExclude
+[1024,xxxx-1] normal rules (such as eip), call SetSnat
+[xxxx, 9999] in snat (call SetSnatWithRuleNumber),
 */
 func (t *VyosConfigTree) SetSnat(rules ...string) int {
 	var SNAT_RULE_NUMBER_FOR_EIP = 1024
@@ -804,7 +804,7 @@ func (t *VyosConfigTree) Set(config string) bool {
 	if keyNode != nil && keyNode.ValueSize() > 0 {
 		// the key found
 		cvalue := keyNode.Value()
-		if (value != cvalue) {
+		if value != cvalue {
 			keyNode.deleteNode(cvalue)
 			keyNode.addNode(value)
 			// the value is changed, delete the old one
@@ -826,7 +826,6 @@ func (t *VyosConfigTree) Set(config string) bool {
 	}
 }
 
-
 // do not check value is exist
 func (t *VyosConfigTree) SetGroupValuef(f string, args ...interface{}) bool {
 	if args != nil {
@@ -843,7 +842,7 @@ func (t *VyosConfigTree) SetGroupValue(config string) bool {
 	key := strings.Join(cs[:len(cs)-1], " ")
 	value := cs[len(cs)-1]
 	keyNode := t.Get(key)
-	if keyNode != nil  {
+	if keyNode != nil {
 		keyNode.addNode(value)
 		t.changeCommands = append(t.changeCommands, fmt.Sprintf("$SET %s", config))
 		return true
@@ -858,9 +857,8 @@ func (t *VyosConfigTree) SetGroupValue(config string) bool {
 	}
 }
 
-
 func (t *VyosConfigTree) SetMultiple(config ...string) bool {
-	for _, c := range (config) {
+	for _, c := range config {
 		t.SetWithoutCheckExisting(c)
 	}
 	return true
@@ -945,7 +943,7 @@ func (t *VyosConfigTree) String() string {
 	return strings.Join(strs, "\n")
 }
 
-func (t *VyosConfigTree) SetNicSmpAffinity(nicName, val string)  {
+func (t *VyosConfigTree) SetNicSmpAffinity(nicName, val string) {
 	if utils.Vyos_version == utils.VYOS_1_2 {
 		t.Setf("interfaces ethernet %s smp-affinity %s", nicName, val)
 	} else {
@@ -953,7 +951,7 @@ func (t *VyosConfigTree) SetNicSmpAffinity(nicName, val string)  {
 	}
 }
 
-func (t *VyosConfigTree) SetNicMtu(nicName string, mtu int)  {
+func (t *VyosConfigTree) SetNicMtu(nicName string, mtu int) {
 	/* in vyos 1.2.0, mtu can not set before other nic configure are finished */
 	if utils.Vyos_version == utils.VYOS_1_2 {
 		t.Setf("interfaces ethernet %s mtu %d", nicName, mtu)

@@ -1,13 +1,13 @@
 package plugin
 
 import (
-    "fmt"
-    "github.com/zstackio/zstack-vyos/server"
-    "github.com/zstackio/zstack-vyos/utils"
-    
-    log "github.com/Sirupsen/logrus"
-    . "github.com/onsi/ginkgo"
-    . "github.com/onsi/gomega"
+	"fmt"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
+
+	log "github.com/Sirupsen/logrus"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("vyosHa_test", func() {
@@ -17,7 +17,7 @@ var _ = Describe("vyosHa_test", func() {
 	var vip macVipPair
 	var cmd *setVyosHaCmd
 	var nicCmd *configureNicCmd
-	
+
 	It("vyosHa test preparing", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"vyosha_test.log", false)
 		peerIp, _ = utils.GetFreeMgtIp()
@@ -35,14 +35,14 @@ var _ = Describe("vyosHa_test", func() {
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		configureNic(nicCmd)
 	})
-	
+
 	It("enable vyos", func() {
 		log.Debugf("vyosHa it enable vyos")
 		setVyosHa(cmd)
 		err := checkVyosConfig(cmd)
 		Expect(err).To(BeNil(), "vyosHa check failed %+s", err)
 	})
-	
+
 	It("change vyosHa peer address", func() {
 		log.Debugf("vyosHa it change vyos peer address")
 		cmd.PeerIp = vipIp1
@@ -50,7 +50,7 @@ var _ = Describe("vyosHa_test", func() {
 		err := checkVyosConfig(cmd)
 		Expect(err).To(BeNil(), "vyosHa check failed %+s", err)
 	})
-	
+
 	It("vyosHa test destroying", func() {
 		utils.ReleaseMgtIp(peerIp)
 		utils.ReleaseMgtIp(vipIp)

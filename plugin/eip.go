@@ -3,26 +3,26 @@ package plugin
 import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
-	"strings"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
+	"strings"
 )
 
 const (
-	VR_CREATE_EIP = "/createeip"
-	VR_REMOVE_EIP = "/removeeip"
-	VR_SYNC_EIP = "/synceip"
+	VR_CREATE_EIP  = "/createeip"
+	VR_REMOVE_EIP  = "/removeeip"
+	VR_SYNC_EIP    = "/synceip"
 	EipInfoMaxSize = 512
 	EIP_IPSET_NAME = "eip-group"
 )
 
 type eipInfo struct {
-	VipIp string `json:"vipIp"`
-	PrivateMac string `json:"privateMac"`
-	GuestIp string `json:"guestIp"`
-	PublicMac string `json:"publicMac"`
-	SnatInboundTraffic bool `json:"snatInboundTraffic"`
-	NeedCleanGuestIp bool `json:"needCleanGuestIp"`
+	VipIp              string `json:"vipIp"`
+	PrivateMac         string `json:"privateMac"`
+	GuestIp            string `json:"guestIp"`
+	PublicMac          string `json:"publicMac"`
+	SnatInboundTraffic bool   `json:"snatInboundTraffic"`
+	NeedCleanGuestIp   bool   `json:"needCleanGuestIp"`
 }
 
 var eipMap map[string]eipInfo
@@ -47,7 +47,7 @@ func makeEipDescription(info eipInfo) string {
 }
 
 func makeEipDescriptionForGw(info eipInfo) string {
-        return fmt.Sprintf("EIP-%v-%v-%v-gw", info.VipIp, info.GuestIp, info.PrivateMac)
+	return fmt.Sprintf("EIP-%v-%v-%v-gw", info.VipIp, info.GuestIp, info.PrivateMac)
 }
 
 func makeEipDescriptionReg(info eipInfo) string {
@@ -93,21 +93,21 @@ func checkEipIpTableRules(eip eipInfo) error {
 	if err != nil {
 		return err
 	}
-	
+
 	rule := utils.NewIpTableRule(utils.RULESET_DNAT.String())
 	rule.SetAction(utils.IPTABLES_ACTION_DNAT)
-	rule.SetDstIp(eip.VipIp+"/32").SetDnatTargetIp(eip.GuestIp)
+	rule.SetDstIp(eip.VipIp + "/32").SetDnatTargetIp(eip.GuestIp)
 	if natTable.Check(rule) == false {
 		return fmt.Errorf("dnat rule[%s] check failed", rule.String())
 	}
-	
+
 	rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
 	rule.SetAction(utils.IPTABLES_ACTION_SNAT)
-	rule.SetOutNic(nicName).SetSrcIp(eip.GuestIp+"/32").SetSnatTargetIp(eip.VipIp)
+	rule.SetOutNic(nicName).SetSrcIp(eip.GuestIp + "/32").SetSnatTargetIp(eip.VipIp)
 	if natTable.Check(rule) == false {
 		return fmt.Errorf("snat rule[%s] check failed", rule.String())
 	}
-	
+
 	return nil
 }
 
@@ -130,7 +130,8 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	}
 	utils.PanicOnError(err)
 
-	prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
+	prinicname, err := utils.GetNicNameByMac(eip.PrivateMac)
+	utils.PanicOnError(err)
 
 	/* delete old rule in case deleted failed when delete EIP */
 	cleanupOldEip(tree, eip)
@@ -144,18 +145,19 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 		)
 	}
 
-        if eip.SnatInboundTraffic {
-                snatGwDes := makeEipDescriptionForGw(eip)
-                gwip, err := utils.GetIpByNicName(prinicname); utils.PanicOnError(err)
-                if r := tree.FindSnatRuleDescription(snatGwDes); r == nil {
-                        tree.SetSnat(
-                                fmt.Sprintf("description %v", snatGwDes),
-                                fmt.Sprintf("outbound-interface %v", prinicname),
-                                fmt.Sprintf("destination address %v", eip.GuestIp),
-                                fmt.Sprintf("translation address %v", gwip),
-                        )
-                }
-        }
+	if eip.SnatInboundTraffic {
+		snatGwDes := makeEipDescriptionForGw(eip)
+		gwip, err := utils.GetIpByNicName(prinicname)
+		utils.PanicOnError(err)
+		if r := tree.FindSnatRuleDescription(snatGwDes); r == nil {
+			tree.SetSnat(
+				fmt.Sprintf("description %v", snatGwDes),
+				fmt.Sprintf("outbound-interface %v", prinicname),
+				fmt.Sprintf("destination address %v", eip.GuestIp),
+				fmt.Sprintf("translation address %v", gwip),
+			)
+		}
+	}
 
 	if r := tree.FindDnatRuleDescription(des); r == nil {
 		tree.SetDnat(
@@ -173,7 +175,7 @@ func setEip(tree *server.VyosConfigTree, eip eipInfo) {
 	eipPubMacFirewallDes := "zstack-pub-eip-firewall-rule"
 	eipPriMacFirewallDes := "zstack-pri-eip-firewall-rule"
 	if r := tree.FindFirewallRuleByDescription(nicname, "in", eipPubMacFirewallDes); r == nil {
-		tree.SetZStackFirewallRuleOnInterface(nicname, "behind","in",
+		tree.SetZStackFirewallRuleOnInterface(nicname, "behind", "in",
 			fmt.Sprintf("description %v", eipPubMacFirewallDes),
 			fmt.Sprintf("destination group address-group %s", eipAddressGroup),
 			"state new enable",
@@ -227,7 +229,7 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 	eipAddressGroup := "eip-group"
 	priDes := makeEipDescriptionForPrivateMac(eip)
 	snatGwDes := makeEipDescriptionForGw(eip)
-	nicname, err :=  utils.GetNicNameByMac(eip.PublicMac)
+	nicname, err := utils.GetNicNameByMac(eip.PublicMac)
 	if err != nil && eip.PublicMac != "" {
 		err = utils.Retry(func() error {
 			var e error
@@ -240,7 +242,6 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 		}, 5, 1)
 	}
 	utils.PanicOnError(err)
-
 
 	if r := tree.FindSnatRuleDescription(des); r != nil {
 		r.Delete()
@@ -258,7 +259,8 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 		r.Delete()
 	}
 
-	prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
+	prinicname, err := utils.GetNicNameByMac(eip.PrivateMac)
+	utils.PanicOnError(err)
 	if r := tree.FindFirewallRuleByDescription(prinicname, "in", des); r != nil {
 		r.Delete()
 	}
@@ -266,7 +268,7 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 	if r := tree.FindFirewallRuleByDescription(nicname, "in", des); r != nil {
 		r.Delete()
 	}
-	
+
 	cleanAddressGroup := true
 	rules := tree.Get("nat source rule")
 	if rules != nil {
@@ -278,7 +280,7 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 			}
 		}
 	}
-	
+
 	if cleanAddressGroup {
 		if r := tree.FindGroupByNameValue(eip.GuestIp, eipAddressGroup, "address"); r != nil {
 			r.Delete()
@@ -289,7 +291,7 @@ func deleteEip(tree *server.VyosConfigTree, eip eipInfo) {
 func createEipHandler(ctx *server.CommandContext) interface{} {
 	cmd := &setEipCmd{}
 	ctx.GetCommand(cmd)
-	
+
 	return createEip(cmd)
 }
 
@@ -298,7 +300,7 @@ func createEip(cmd *setEipCmd) interface{} {
 
 	if utils.IsSkipVyosIptables() {
 		eipMap[eip.VipIp] = eip
-		if err := syncEipByIptables(); err != nil{
+		if err := syncEipByIptables(); err != nil {
 			return err
 		}
 	} else {
@@ -320,13 +322,13 @@ func createEip(cmd *setEipCmd) interface{} {
 	t := utils.ConnectionTrackTuple{IsNat: false, IsDst: true, Ip: eip.VipIp, Protocol: "", PortStart: 0, PortEnd: 0}
 	t.CleanConnTrackConnection()
 
-        return nil
+	return nil
 }
 
 func removeEipHandler(ctx *server.CommandContext) interface{} {
 	cmd := &removeEipCmd{}
 	ctx.GetCommand(cmd)
-	
+
 	return removeEip(cmd)
 }
 
@@ -344,8 +346,9 @@ func removeEip(cmd *removeEipCmd) interface{} {
 			deleteEip(tree, eip)
 			tree.Apply(false)
 
-			return checkEipExists(eip);
-		}, 3, 1); utils.LogError(err)
+			return checkEipExists(eip)
+		}, 3, 1)
+		utils.LogError(err)
 	}
 
 	/* before eip is disabled, delete existed connections */
@@ -370,7 +373,7 @@ func syncEipByIptables() error {
 	for _, member := range eipIpset.Member {
 		ipsetMemberMap[member] = member
 	}
-	
+
 	var toAddMemeber []string
 	var toDelMemeber []string
 	for _, eip := range eipMap {
@@ -384,73 +387,76 @@ func syncEipByIptables() error {
 			toDelMemeber = append(toDelMemeber, member)
 		}
 	}
-	
+
 	if len(toAddMemeber) != 0 {
 		if err := eipIpset.AddMember(toAddMemeber); err != nil {
 			log.Debugf("add member %s to eip ipset failed %v", toAddMemeber, err)
 			return err
 		}
 	}
-	
+
 	if len(toDelMemeber) != 0 {
 		if err := eipIpset.DeleteMember(toDelMemeber); err != nil {
 			log.Debugf("remove member %s from eip ipset failed %v", toDelMemeber, err)
 			return err
 		}
 	}
-	
-	
+
 	table := utils.NewIpTables(utils.FirewallTable)
 	natTable := utils.NewIpTables(utils.NatTable)
 	table.RemoveIpTableRuleByComments(utils.EipRuleComment)
 	natTable.RemoveIpTableRuleByComments(utils.EipRuleComment)
-	
+
 	var natRules []*utils.IpTableRule
 	var filterRule []*utils.IpTableRule
-	
+
 	for _, eip := range eipMap {
 		/* nat rule */
 		nicname, err := utils.GetNicNameByMac(eip.PublicMac)
 		rule := utils.NewIpTableRule(utils.RULESET_DNAT.String())
 		rule.SetAction(utils.IPTABLES_ACTION_DNAT).SetComment(utils.EipRuleComment)
-		rule.SetDstIp(eip.VipIp+"/32").SetDnatTargetIp(eip.GuestIp)
+		rule.SetDstIp(eip.VipIp + "/32").SetDnatTargetIp(eip.GuestIp)
 		rule.SetCompareTarget(true)
 		natRules = append(natRules, rule)
-		
+
 		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
 		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.EipRuleComment)
-		rule.SetOutNic(nicname).SetSrcIp(eip.GuestIp+"/32").SetSnatTargetIp(eip.VipIp)
+		rule.SetOutNic(nicname).SetSrcIp(eip.GuestIp + "/32").SetSnatTargetIp(eip.VipIp)
 		rule.SetCompareTarget(true)
 		natRules = append(natRules, rule)
 
-		prinicname, err := utils.GetNicNameByMac(eip.PrivateMac); utils.PanicOnError(err)
+		prinicname, err := utils.GetNicNameByMac(eip.PrivateMac)
+		utils.PanicOnError(err)
 
 		if eip.SnatInboundTraffic {
-			gwip, err := utils.GetIpByNicName(prinicname); utils.PanicOnError(err)
-			
+			gwip, err := utils.GetIpByNicName(prinicname)
+			utils.PanicOnError(err)
+
 			rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
 			rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.EipRuleComment)
-			rule.SetOutNic(prinicname).SetDstIp(eip.GuestIp+"/32").SetSnatTargetIp(gwip)
+			rule.SetOutNic(prinicname).SetDstIp(eip.GuestIp + "/32").SetSnatTargetIp(gwip)
 			natRules = append(natRules, rule)
 		}
-		
+
 		/* firewall rule */
 		rule = utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_IN))
 		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.EipRuleComment)
 		rule.SetDstIpset(EIP_IPSET_NAME).SetState([]string{utils.IPTABLES_STATE_NEW, utils.IPTABLES_STATE_RELATED, utils.IPTABLES_STATE_ESTABLISHED})
 		filterRule = append(filterRule, rule)
-		
+
 		rule = utils.NewIpTableRule(utils.GetRuleSetName(prinicname, utils.RULESET_IN))
 		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.EipRuleComment)
 		rule.SetSrcIpset(EIP_IPSET_NAME).SetState([]string{utils.IPTABLES_STATE_NEW, utils.IPTABLES_STATE_RELATED, utils.IPTABLES_STATE_ESTABLISHED})
 		filterRule = append(filterRule, rule)
 	}
-	
+
 	table.AddIpTableRules(filterRule)
-	err := table.Apply(); utils.PanicOnError(err)
-	
+	err := table.Apply()
+	utils.PanicOnError(err)
+
 	natTable.AddIpTableRules(natRules)
-	err = natTable.Apply(); utils.PanicOnError(err)
+	err = natTable.Apply()
+	utils.PanicOnError(err)
 
 	return nil
 }
@@ -458,7 +464,7 @@ func syncEipByIptables() error {
 func syncEipHandler(ctx *server.CommandContext) interface{} {
 	cmd := &syncEipCmd{}
 	ctx.GetCommand(cmd)
-	
+
 	return syncEip(cmd)
 }
 
@@ -528,7 +534,7 @@ func EipEntryPoint() {
 			break
 		}
 	}
-	
+
 	server.RegisterAsyncCommandHandler(VR_CREATE_EIP, server.VyosLock(createEipHandler))
 	server.RegisterAsyncCommandHandler(VR_REMOVE_EIP, server.VyosLock(removeEipHandler))
 	server.RegisterAsyncCommandHandler(VR_SYNC_EIP, server.VyosLock(syncEipHandler))

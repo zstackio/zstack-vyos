@@ -18,10 +18,9 @@ const (
 	IPTABLES_ACTION_CONNMARK         = "CONNMARK"
 	IPTABLES_ACTION_CONNMARK_RESTORE = "CONNMARK_RESTORE"
 	IPTABLES_ACTION_LOG              = "LOG"
-	
+
 	REJECT_TYPE_ICMP_UNREACHABLE = "icmp-port-unreachable"
 )
-
 
 type IpTableTarget struct {
 	action         string
@@ -91,27 +90,27 @@ func (r *IpTableRule) IsTargetEqual(o *IpTableRule) error {
 	if r.action != o.action {
 		return fmt.Errorf("iptables target is different, action %s:%s", r.action, o.action)
 	}
-	
+
 	if r.dnatTargetIp != o.dnatTargetIp {
 		return fmt.Errorf("iptables target is different, dnatTargetIp %s:%s", r.dnatTargetIp, o.dnatTargetIp)
 	}
-	
+
 	if r.dnatTargetPort != o.dnatTargetPort {
 		return fmt.Errorf("iptables target is different, action %s:%s", r.dnatTargetPort, o.dnatTargetPort)
 	}
-	
+
 	if r.snatTargetIp != o.snatTargetIp {
 		return fmt.Errorf("iptables target is different, action %s:%s", r.snatTargetIp, o.snatTargetIp)
 	}
-	
+
 	if r.rejectType != o.rejectType {
 		return fmt.Errorf("iptables target is different, action %s:%s", r.rejectType, o.rejectType)
 	}
-	
+
 	if r.targetMark != o.targetMark {
 		return fmt.Errorf("iptables target is different, action %d:%d", r.targetMark, o.targetMark)
 	}
-	
+
 	if r.logPrefix != o.logPrefix {
 		return fmt.Errorf("iptables target is different, action %s:%s", r.logPrefix, o.logPrefix)
 	}
@@ -121,7 +120,7 @@ func (r *IpTableRule) IsTargetEqual(o *IpTableRule) error {
 
 func (r *IpTableRule) targetString() string {
 	var rules []string
-	
+
 	switch r.action {
 	case IPTABLES_ACTION_REJECT:
 		if r.rejectType != "" {
@@ -187,11 +186,11 @@ func (r *IpTableRule) parseIptablesTarget(line string) (*IpTableRule, error) {
 			i++
 			r.rejectType = items[i]
 			break
-		
+
 		case "--set-xmark": /* --set-xmark 0xb5/0xffffffff */
 			i++
 			fields := strings.Split(items[i], "/")
-			v, _:= strconv.ParseInt(fields[0], 0, 64)
+			v, _ := strconv.ParseInt(fields[0], 0, 64)
 			r.targetMark = int(v)
 			break
 

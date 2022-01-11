@@ -13,23 +13,23 @@ import (
 var _ = Describe("zvrboot_test TestInitFirewall", func() {
 	It("zvrboot_test", func() {
 		/*
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER + "zvrboot_test.log", false)
-		waitIptablesServiceOnline()
-		content := ``
-		if err := json.Unmarshal([]byte(content), &bootstrapInfo); err != nil {
-			panic(errors.Wrap(err, fmt.Sprintf("unable to JSON parse:\n %s", string(content))))
-		}
-		utils.InitVyosVersion()
-		configureVyos()
+			utils.InitLog(utils.VYOS_UT_LOG_FOLDER + "zvrboot_test.log", false)
+			waitIptablesServiceOnline()
+			content := ``
+			if err := json.Unmarshal([]byte(content), &bootstrapInfo); err != nil {
+				panic(errors.Wrap(err, fmt.Sprintf("unable to JSON parse:\n %s", string(content))))
+			}
+			utils.InitVyosVersion()
+			configureVyos()
 
-		log.Debugf("############### TestConfigureVyos ###############")
-		checkNicFirewall(utils.MgtNicForUT)
-		checkNicFirewall(utils.PubNicForUT)
-		 */
+			log.Debugf("############### TestConfigureVyos ###############")
+			checkNicFirewall(utils.MgtNicForUT)
+			checkNicFirewall(utils.PubNicForUT)
+		*/
 	})
 })
 
-func checkNicFirewall(nic utils.NicInfo)  {
+func checkNicFirewall(nic utils.NicInfo) {
 	tree := server.NewParserFromShowConfiguration().Tree
 	cmd := fmt.Sprintf("firewall name %s.local default-action %s", nic.Name, nic.FirewallDefaultAction)
 	rule := tree.Get(cmd)
@@ -98,7 +98,6 @@ func checkNicFirewall(nic utils.NicInfo)  {
 	cmd = fmt.Sprintf("firewall name %s.in rule 4000 action accept", nic.Name)
 	rule = tree.Get(cmd)
 	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
-
 
 	cmd = fmt.Sprintf("firewall name %s.in rule 9999 action accept", nic.Name)
 	rule = tree.Get(cmd)

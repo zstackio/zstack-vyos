@@ -1,11 +1,11 @@
 package plugin
 
 import (
-    "fmt"
-    log "github.com/Sirupsen/logrus"
-    . "github.com/onsi/ginkgo"
-    gomega "github.com/onsi/gomega"
-    "github.com/zstackio/zstack-vyos/utils"
+	"fmt"
+	log "github.com/Sirupsen/logrus"
+	. "github.com/onsi/ginkgo"
+	gomega "github.com/onsi/gomega"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 var _ = Describe("eip_iptables_test", func() {
@@ -65,16 +65,16 @@ var _ = Describe("eip_iptables_test", func() {
 	It("[IPTABLES]EIP : test ipset add delete", func() {
 		ipInPubL3, _ := utils.GetFreePubL3Ip()
 		eip1 := eipInfo{VipIp: ipInPubL3, PublicMac: utils.PubNicForUT.Mac,
-				GuestIp: "192.168.1.100", PrivateMac: utils.PrivateNicsForUT[0].Mac,
-				SnatInboundTraffic: false,
+			GuestIp: "192.168.1.100", PrivateMac: utils.PrivateNicsForUT[0].Mac,
+			SnatInboundTraffic: false,
 		}
 		cmd1 := setEipCmd{Eip: eip1}
 		rcmd1 := &removeEipCmd{Eip: eip1}
 
 		ipInPubL3_2, _ := utils.GetFreePubL3Ip()
 		eip2 := eipInfo{VipIp: ipInPubL3_2, PublicMac: utils.PubNicForUT.Mac,
-				GuestIp: "192.168.1.200", PrivateMac: utils.PrivateNicsForUT[0].Mac,
-				SnatInboundTraffic: false,
+			GuestIp: "192.168.1.200", PrivateMac: utils.PrivateNicsForUT[0].Mac,
+			SnatInboundTraffic: false,
 		}
 		cmd2 := setEipCmd{Eip: eip2}
 		rcmd2 := &removeEipCmd{Eip: eip2}
@@ -109,16 +109,16 @@ var _ = Describe("eip_iptables_test", func() {
 
 func checkEipIpsetRule(eipList []eipInfo, flag bool) {
 	for _, eip := range eipList {
-			bash := utils.Bash {
-					Command: fmt.Sprintf("ipset test %s %s", EIP_IPSET_NAME, eip.GuestIp),
-					Sudo: true,
-			}
-			_, _, _, err := bash.RunWithReturn()
-			if flag == true {
-					gomega.Expect(err).To(gomega.BeNil(), fmt.Sprintf("Ipset add rule [%s] check failed", eip.GuestIp))
-			} else {
-					gomega.Expect(err).NotTo(gomega.BeNil(), fmt.Sprintf("Ipset del rule [%s] check failed", eip.GuestIp))
-			}
+		bash := utils.Bash{
+			Command: fmt.Sprintf("ipset test %s %s", EIP_IPSET_NAME, eip.GuestIp),
+			Sudo:    true,
+		}
+		_, _, _, err := bash.RunWithReturn()
+		if flag == true {
+			gomega.Expect(err).To(gomega.BeNil(), fmt.Sprintf("Ipset add rule [%s] check failed", eip.GuestIp))
+		} else {
+			gomega.Expect(err).NotTo(gomega.BeNil(), fmt.Sprintf("Ipset del rule [%s] check failed", eip.GuestIp))
+		}
 	}
 }
 

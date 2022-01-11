@@ -10,4 +10,3 @@ func TestPlugin(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Plugin Suite")
 }
-

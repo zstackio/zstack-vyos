@@ -4,11 +4,11 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/zstackio/zstack-vyos/utils"
 	"io/ioutil"
 	"regexp"
 	"strconv"
 	"strings"
-	"github.com/zstackio/zstack-vyos/utils"
 )
 
 // the name of metric data label
@@ -175,8 +175,8 @@ func getVPCMemInfo() *memInfo {
 	}
 
 	memInfos.kb_Available = memInfos.kb_Memfree - memInfos.watermark_low +
-		memInfos.kb_InactiveFile + memInfos.kb_ActiveFile + min((memInfos.kb_ActiveFile + memInfos.kb_InactiveFile)/2, memInfos.watermark_low)+
-		memInfos.kb_SlabReclaimable + min(memInfos.kb_SlabReclaimable / 2, memInfos.watermark_low)
+		memInfos.kb_InactiveFile + memInfos.kb_ActiveFile + min((memInfos.kb_ActiveFile+memInfos.kb_InactiveFile)/2, memInfos.watermark_low) +
+		memInfos.kb_SlabReclaimable + min(memInfos.kb_SlabReclaimable/2, memInfos.watermark_low)
 
 	memInfos.kb_MemUsed = memInfos.kb_Memtotal - memInfos.kb_Available
 
@@ -186,16 +186,16 @@ func getVPCMemInfo() *memInfo {
 type cpuInfo struct {
 	cpu string
 
-	user    float64
-	nice    float64
-	system  float64
-	idle    float64
-	iowait  float64
-	irq     float64
-	softirq float64
-	steal   float64
-	guest   float64
-	guest_nice   float64
+	user       float64
+	nice       float64
+	system     float64
+	idle       float64
+	iowait     float64
+	irq        float64
+	softirq    float64
+	steal      float64
+	guest      float64
+	guest_nice float64
 
 	total float64
 }

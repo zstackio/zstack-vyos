@@ -2,7 +2,7 @@ package utils
 
 import (
 	"fmt"
-        "strconv"
+	"strconv"
 	"strings"
 )
 
@@ -30,29 +30,29 @@ const (
 )
 
 const (
-	VYOS_INPUT_ROOT_CHAIN   = "VYATTA_FW_LOCAL_HOOK"
-	VYATTA_PRE_FW_IN_HOOK   = "VYATTA_PRE_FW_IN_HOOK"
-	VYATTA_POST_FW_IN_HOOK   = "VYATTA_POST_FW_IN_HOOK"
+	VYOS_INPUT_ROOT_CHAIN  = "VYATTA_FW_LOCAL_HOOK"
+	VYATTA_PRE_FW_IN_HOOK  = "VYATTA_PRE_FW_IN_HOOK"
+	VYATTA_POST_FW_IN_HOOK = "VYATTA_POST_FW_IN_HOOK"
 
-        VYOS_PRE_FW_FWD_HOOK = "VYATTA_PRE_FW_FWD_HOOK"
+	VYOS_PRE_FW_FWD_HOOK    = "VYATTA_PRE_FW_FWD_HOOK"
 	VYOS_FWD_ROOT_CHAIN     = "VYATTA_FW_IN_HOOK"
 	VYOS_FWD_OUT_ROOT_CHAIN = "VYATTA_FW_OUT_HOOK"
-        VYOS_POST_FW_FWD_HOOK = "VYATTA_POST_FW_FWD_HOOK"
-	
+	VYOS_POST_FW_FWD_HOOK   = "VYATTA_POST_FW_FWD_HOOK"
+
 	LOCAL_CHAIN_SYSTEM_RULE_RULE_NUMBER_MIN = 1
 	LOCAL_CHAIN_SYSTEM_RULE_RULE_NUMBER_MAX = 1000
-	LOCAL_CHAIN_SERVICE_RULE_NUMBER_MIN = 5001
-	LOCAL_CHAIN_SERVICE_RULE_NUMBER_MAX = 9000
+	LOCAL_CHAIN_SERVICE_RULE_NUMBER_MIN     = 5001
+	LOCAL_CHAIN_SERVICE_RULE_NUMBER_MAX     = 9000
 
 	FORWARD_CHAIN_SYSTEM_RULE_RULE_NUMBER_MIN = 1
 	FORWARD_CHAIN_SYSTEM_RULE_RULE_NUMBER_MAX = 1000
-	FORWARD_CHAIN_SERVICE_RULE_NUMBER_MIN = 5001
-	FORWARD_CHAIN_SERVICE_RULE_NUMBER_MAX = 9000
+	FORWARD_CHAIN_SERVICE_RULE_NUMBER_MIN     = 5001
+	FORWARD_CHAIN_SERVICE_RULE_NUMBER_MAX     = 9000
 )
 
 const (
-        ACTION = "action"
-        COMMNET  = "comment"
+	ACTION  = "action"
+	COMMNET = "comment"
 )
 
 var filterLocalRulesPriority = map[string]int{
@@ -94,16 +94,16 @@ var dnatRulesPriority = map[string]int{
 	PolicyRouteComment:     800, /* policy route is in mangle table, put code here for a moment */
 }
 
-var filterFORWARDRulesPriority = map[string]int {
-        VYOS_PRE_FW_FWD_HOOK: 0,
-        VYOS_FWD_ROOT_CHAIN: 1,
-        VYOS_FWD_OUT_ROOT_CHAIN: 2,
-        VYOS_POST_FW_FWD_HOOK: 3,
+var filterFORWARDRulesPriority = map[string]int{
+	VYOS_PRE_FW_FWD_HOOK:    0,
+	VYOS_FWD_ROOT_CHAIN:     1,
+	VYOS_FWD_OUT_ROOT_CHAIN: 2,
+	VYOS_POST_FW_FWD_HOOK:   3,
 }
 
-var INPUTRulesPriority = map[string]int {
-	VYATTA_PRE_FW_IN_HOOK: 0,
-	VYOS_INPUT_ROOT_CHAIN: 1,
+var INPUTRulesPriority = map[string]int{
+	VYATTA_PRE_FW_IN_HOOK:  0,
+	VYOS_INPUT_ROOT_CHAIN:  1,
 	VYATTA_POST_FW_IN_HOOK: 2,
 }
 
@@ -134,8 +134,8 @@ func (d RuleSetDirection) String() string {
 		return "PREROUTING"
 	case RULESET_SNAT:
 		return "POSTROUTING"
-        case FORWARD:
-                return "FORWARD"
+	case FORWARD:
+		return "FORWARD"
 	case PREROUTING:
 		return "PREROUTING"
 	case POSTROUTING:
@@ -152,49 +152,50 @@ func GetRuleSetName(nic string, ch RuleSetDirection) string {
 }
 
 func (d RuleSetDirection) getPriorityByAction(action string) (int, bool) {
-        var m *map[string]int
-        switch d {
-		case INPUT:
-			m = &INPUTRulesPriority
-        case FORWARD:
-        	m = &filterFORWARDRulesPriority
-        default:
-                return 0, false
-        }
+	var m *map[string]int
+	switch d {
+	case INPUT:
+		m = &INPUTRulesPriority
+	case FORWARD:
+		m = &filterFORWARDRulesPriority
+	default:
+		return 0, false
+	}
 
-        p, ok := (*m)[action]
-        return p, ok
+	p, ok := (*m)[action]
+	return p, ok
 }
 
 func (d RuleSetDirection) getPriorityByComment(comment string) (int, bool) {
-        var m *map[string]int
-        switch d {
-        case RULESET_IN:
-                m = &filterForwardRulesPriority
-        case RULESET_LOCAL:
-                m = &filterLocalRulesPriority
-        case RULESET_OUT:
-                m = &filterOutRulesPriority
-        case RULESET_DNAT:
-                m = &dnatRulesPriority
-        case RULESET_SNAT:
-                m =  &snatRulesPriority
-        default:
-                return 0, false
-        }
+	var m *map[string]int
+	switch d {
+	case RULESET_IN:
+		m = &filterForwardRulesPriority
+	case RULESET_LOCAL:
+		m = &filterLocalRulesPriority
+	case RULESET_OUT:
+		m = &filterOutRulesPriority
+	case RULESET_DNAT:
+		m = &dnatRulesPriority
+	case RULESET_SNAT:
+		m = &snatRulesPriority
+	default:
+		return 0, false
+	}
 
-        p, ok := (*m)[comment]
-        return p, ok
+	p, ok := (*m)[comment]
+	return p, ok
 }
 
-type VyosIpTableHelper struct {}
+type VyosIpTableHelper struct{}
+
 func (p VyosIpTableHelper) parseIpTableRule(rule *IpTableRule, t *IpTables) *IpTableRule {
 	priority, err := getPriority(rule)
 	if priority == 0 || err != nil {
 		rule.priority = t.priorityOfLastRule
 		return rule
 	}
-	
+
 	rule.priority = priority
 	/* firewall rule priority is same to rulenum */
 	if strings.Contains(rule.GetComment(), FirewallRule) {
@@ -205,7 +206,7 @@ func (p VyosIpTableHelper) parseIpTableRule(rule *IpTableRule, t *IpTables) *IpT
 		if ruleNum != 0 && err == nil {
 			rule.ruleNumber = ruleNum
 		}
-		
+
 		return rule
 	}
 }
@@ -215,17 +216,17 @@ func (p VyosIpTableHelper) getNextRuleNumber(t *IpTables, rule *IpTableRule) int
 	if rule.ruleNumber != 0 {
 		return rule.ruleNumber
 	}
-	
+
 	/* no comment, priority is 0 */
 	if rule.comment == "" {
 		return 0
 	}
-	
+
 	/* TODO: only rule in filter table need rule No. */
 	if t.Name != FirewallTable {
 		return 0
 	}
-	
+
 	existed := map[int]int{}
 	for _, r := range t.Rules {
 		if r.chainName == rule.chainName {
@@ -234,18 +235,18 @@ func (p VyosIpTableHelper) getNextRuleNumber(t *IpTables, rule *IpTableRule) int
 			}
 		}
 	}
-	
+
 	ruleNo := 0
 	if strings.Contains(rule.chainName, RULESET_LOCAL.String()) {
 		if strings.Contains(rule.comment, SystemTopRule) {
-			for i := LOCAL_CHAIN_SYSTEM_RULE_RULE_NUMBER_MIN; i <= LOCAL_CHAIN_SYSTEM_RULE_RULE_NUMBER_MAX; i ++ {
+			for i := LOCAL_CHAIN_SYSTEM_RULE_RULE_NUMBER_MIN; i <= LOCAL_CHAIN_SYSTEM_RULE_RULE_NUMBER_MAX; i++ {
 				if _, ok := existed[i]; !ok {
 					ruleNo = i
 					break
 				}
 			}
 		} else {
-			for i := LOCAL_CHAIN_SERVICE_RULE_NUMBER_MIN; i <= LOCAL_CHAIN_SERVICE_RULE_NUMBER_MAX; i ++ {
+			for i := LOCAL_CHAIN_SERVICE_RULE_NUMBER_MIN; i <= LOCAL_CHAIN_SERVICE_RULE_NUMBER_MAX; i++ {
 				if _, ok := existed[i]; !ok {
 					ruleNo = i
 					break
@@ -254,14 +255,14 @@ func (p VyosIpTableHelper) getNextRuleNumber(t *IpTables, rule *IpTableRule) int
 		}
 	} else if strings.Contains(rule.chainName, RULESET_IN.String()) {
 		if strings.Contains(rule.comment, SystemTopRule) {
-			for i := FORWARD_CHAIN_SYSTEM_RULE_RULE_NUMBER_MIN; i <= FORWARD_CHAIN_SYSTEM_RULE_RULE_NUMBER_MAX; i ++ {
+			for i := FORWARD_CHAIN_SYSTEM_RULE_RULE_NUMBER_MIN; i <= FORWARD_CHAIN_SYSTEM_RULE_RULE_NUMBER_MAX; i++ {
 				if _, ok := existed[i]; !ok {
 					ruleNo = i
 					break
 				}
 			}
 		} else {
-			for i := FORWARD_CHAIN_SERVICE_RULE_NUMBER_MIN; i <= FORWARD_CHAIN_SERVICE_RULE_NUMBER_MAX; i ++ {
+			for i := FORWARD_CHAIN_SERVICE_RULE_NUMBER_MIN; i <= FORWARD_CHAIN_SERVICE_RULE_NUMBER_MAX; i++ {
 				if _, ok := existed[i]; !ok {
 					ruleNo = i
 					break
@@ -269,11 +270,11 @@ func (p VyosIpTableHelper) getNextRuleNumber(t *IpTables, rule *IpTableRule) int
 			}
 		}
 	}
-	
+
 	return ruleNo
 }
 
-func getComment(rule *IpTableRule) string  {
+func getComment(rule *IpTableRule) string {
 	items := strings.Split(rule.GetComment(), "@")
 	if rule.ruleNumber != 0 {
 		return fmt.Sprintf("%s@%s-%d", items[0], rule.chainName, rule.ruleNumber)
@@ -283,37 +284,37 @@ func getComment(rule *IpTableRule) string  {
 }
 
 func getPriority(rule *IpTableRule) (int, error) {
-	    c := CHAIN_ERROR
-        /* if chain is default chain */
-        if rule.chainName == FORWARD.String() {
-        	c = FORWARD
-        } else if rule.chainName == INPUT.String() {
-			c = INPUT
-		}
-        
-        if c != CHAIN_ERROR {
-			p, ok := c.getPriorityByAction(rule.action)
-			if ok {
-				return p, nil
-			}
-		}
+	c := CHAIN_ERROR
+	/* if chain is default chain */
+	if rule.chainName == FORWARD.String() {
+		c = FORWARD
+	} else if rule.chainName == INPUT.String() {
+		c = INPUT
+	}
 
-        return getPriorityFromComment(rule)
+	if c != CHAIN_ERROR {
+		p, ok := c.getPriorityByAction(rule.action)
+		if ok {
+			return p, nil
+		}
+	}
+
+	return getPriorityFromComment(rule)
 }
 
 func getPriorityFromComment(rule *IpTableRule) (int, error) {
 	/* if rule is added by customer, no comment or comment format error,
 	   it priority is same to last priority */
 	if rule.comment == "" {
-                rule.priority = 0
-                return 0, fmt.Errorf("no comment for priotity [%s]", rule.comment)
+		rule.priority = 0
+		return 0, fmt.Errorf("no comment for priotity [%s]", rule.comment)
 	}
-	
+
 	comment, _, ruleNum, err := parseRuleNumberFromComment(rule.GetComment())
 	if err == nil && strings.Contains(rule.GetComment(), FirewallRule) {
 		return ruleNum, nil
 	}
-	
+
 	c := PREROUTING
 	if strings.Contains(rule.GetChainName(), RULESET_LOCAL.String()) {
 		c = RULESET_LOCAL
@@ -328,7 +329,7 @@ func getPriorityFromComment(rule *IpTableRule) (int, error) {
 	} else {
 		return 0, fmt.Errorf("no define priority for chainname [%s]", rule.GetChainName())
 	}
-	
+
 	p, ok := c.getPriorityByComment(comment)
 	if !ok {
 		return 0, fmt.Errorf("no define priority for comment [%s]", comment)
@@ -342,14 +343,14 @@ func (r *IpTableRule) SetComment(comment string) *IpTableRule {
 	r.setComment(comment)
 	r.priority, _ = getPriorityFromComment(r)
 	r.comment = getComment(r)
-	
+
 	return r
 }
 
 /* this api is called before add rule to iptables */
 func (r *IpTableRule) SetCompareTarget(compare bool) *IpTableRule {
 	r.compareTarget = compare
-	
+
 	return r
 }
 
@@ -361,7 +362,7 @@ func NewDefaultIpTableRule(ruleSetName string, ruleNumber int) *IpTableRule {
 		c = SystemLastLastRule
 		rule.SetState([]string{IPTABLES_STATE_NEW})
 	}
-	
+
 	rule.comment = c
 	rule.comment = getComment(&rule)
 	if strings.Contains(ruleSetName, RULESET_OUT.String()) {
@@ -370,23 +371,23 @@ func NewDefaultIpTableRule(ruleSetName string, ruleNumber int) *IpTableRule {
 		rule.priority = filterForwardRulesPriority[c]
 	}
 	rule.ruleNumber = ruleNumber
-	
+
 	return &rule
 }
 
 /* firewall comment format: "system rule@eth1.in-1001"
    return comment, chain name, rule number when success */
-func parseRuleNumberFromComment(comment string) (string, string, int, error){
+func parseRuleNumberFromComment(comment string) (string, string, int, error) {
 	fields := strings.Split(comment, "@")
 	if len(fields) < 2 {
 		return fields[0], "", 0, fmt.Errorf("comment format error: %s", comment)
 	}
-	
+
 	items := strings.Split(fields[1], "-")
 	if len(items) < 2 {
 		return fields[0], items[0], 0, nil
 	}
-	
+
 	v, err := strconv.Atoi(items[1])
 	return fields[0], items[0], v, err
 }
@@ -507,7 +508,7 @@ func DestroyNicFirewall(nic string) error {
 
 func InitNicFirewall(nic string, ip string, pubNic bool, defaultAction string) error {
 	InitVyattaFilterTable()
-	
+
 	table := NewIpTables(FirewallTable)
 	localChain := GetRuleSetName(nic, RULESET_LOCAL)
 	forwardChain := GetRuleSetName(nic, RULESET_IN)
@@ -539,7 +540,7 @@ func InitNicFirewall(nic string, ip string, pubNic bool, defaultAction string) e
 	rule = NewDefaultIpTableRule(forwardChain, IPTABLES_RULENUMBER_9999)
 	rule.SetAction(IPTABLES_ACTION_RETURN)
 	rules = append(rules, rule)
-	
+
 	rule = NewDefaultIpTableRule(forwardChain, IPTABLES_RULENUMBER_MAX)
 	rule.SetAction(defaultAction)
 	rules = append(rules, rule)
@@ -601,15 +602,15 @@ func InitVyattaFilterTable() {
 	if !IsSkipVyosIptables() {
 		return
 	}
-	
+
 	/* INPT chain rule
-		rule sequence:
-	
-		-A INPUT -j VYATTA_PRE_FW_IN_HOOK
-		-A INPUT -j VYATTA_FW_LOCAL_HOOK
-		-A INPUT -j VYATTA_POST_FW_IN_HOOK
+	rule sequence:
+
+	-A INPUT -j VYATTA_PRE_FW_IN_HOOK
+	-A INPUT -j VYATTA_FW_LOCAL_HOOK
+	-A INPUT -j VYATTA_POST_FW_IN_HOOK
 	*/
-	
+
 	table := NewIpTables(FirewallTable)
 	table.AddChain(VYOS_INPUT_ROOT_CHAIN)
 	table.AddChain(VYOS_FWD_ROOT_CHAIN)
@@ -620,21 +621,21 @@ func InitVyattaFilterTable() {
 	table.addIpTableRule(rule)
 
 	/*add FORWARD chain rule
-	rule sequence:
+		rule sequence:
 
-	-A FORWARD -j VYATTA_PRE_FW_FWD_HOOK
-        -A FORWARD -j VYATTA_FW_IN_HOOK
-        -A FORWARD -j VYATTA_FW_OUT_HOOK
-        -A FORWARD -j VYATTA_POST_FW_FWD_HOOK
+		-A FORWARD -j VYATTA_PRE_FW_FWD_HOOK
+	        -A FORWARD -j VYATTA_FW_IN_HOOK
+	        -A FORWARD -j VYATTA_FW_OUT_HOOK
+	        -A FORWARD -j VYATTA_POST_FW_FWD_HOOK
 	*/
 	rule = NewIpTableRule("FORWARD")
 	rule.SetAction(VYOS_FWD_ROOT_CHAIN).SetCompareTarget(true).SetPriority(1)
 	table.addIpTableRule(rule)
-	
+
 	rule = NewIpTableRule("FORWARD")
 	rule.SetAction(VYOS_FWD_OUT_ROOT_CHAIN).SetCompareTarget(true).SetPriority(2)
 	table.addIpTableRule(rule)
-	
+
 	table.Apply()
 
 	return

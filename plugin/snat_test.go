@@ -1,11 +1,11 @@
 package plugin
 
 import (
-    "fmt"
-    . "github.com/onsi/ginkgo"
-    "github.com/onsi/gomega"
-    "github.com/zstackio/zstack-vyos/server"
-    "github.com/zstackio/zstack-vyos/utils"
+	"fmt"
+	. "github.com/onsi/ginkgo"
+	"github.com/onsi/gomega"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 var sinfo1 snatInfo

@@ -1,13 +1,13 @@
 package plugin
 
 import (
-    "fmt"
-    log "github.com/Sirupsen/logrus"
-    . "github.com/onsi/ginkgo"
-    "github.com/onsi/gomega"
-    "github.com/zstackio/zstack-vyos/server"
-    "github.com/zstackio/zstack-vyos/utils"
-    "strings"
+	"fmt"
+	log "github.com/Sirupsen/logrus"
+	. "github.com/onsi/ginkgo"
+	"github.com/onsi/gomega"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
+	"strings"
 )
 
 var _ = Describe("dnat_test", func() {
@@ -18,7 +18,7 @@ var _ = Describe("dnat_test", func() {
 	var rule2 dnatInfo
 	var rule3 dnatInfo
 	var setCmd *setDnatCmd
-	
+
 	It("config nic for dnat test", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"dnat_test.log", false)
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
@@ -97,13 +97,13 @@ var _ = Describe("dnat_test", func() {
 		checkDnatConfigDelete(rule2)
 		checkDnatConfigDelete(rule3)
 	})
-	
+
 	It("release ip after test", func() {
 		nicCmd = &configureNicCmd{}
 		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
 		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
 		removeNic(nicCmd)
-		
+
 		utils.ReleasePubL3Ip(ipInPubL3)
 		utils.ReleasePubL3Ip(ipInPubL32)
 	})

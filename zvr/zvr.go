@@ -3,17 +3,17 @@ package main
 import (
 	"flag"
 	"fmt"
+	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
+	"github.com/zstackio/zstack-vyos/plugin"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
-	log "github.com/Sirupsen/logrus"
-	"github.com/zstackio/zstack-vyos/plugin"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
 )
 
 func loadPlugins() {
@@ -42,9 +42,9 @@ func loadPlugins() {
 }
 
 type nic struct {
-	ip                  string
-	name                string
-	category            string
+	ip       string
+	name     string
+	category string
 }
 
 // Note: there shouldn't be 'daily' etc. in the following config files.
@@ -92,7 +92,7 @@ func setupRotates() {
 		if utils.IsRuingUT() {
 			return
 		}
-		
+
 		for {
 			time.Sleep(time.Minute)
 			for _, cfgfile := range logfiles {
@@ -105,6 +105,7 @@ func setupRotates() {
 func restartRsyslog() {
 	exec.Command("sudo", "/etc/init.d/rsyslog", "restart").Run()
 }
+
 var options server.Options
 
 func abortOnWrongOption(msg string) {
@@ -207,13 +208,13 @@ func deleteRemainingIptableRules() {
 		Command: "sudo iptables -t raw -D PREROUTING -p vrrp -j NOTRACK;" +
 			"sudo iptables -t raw -D OUTPUT -p vrrp -j NOTRACK",
 	}
-	_,_,_, err = cmd.RunWithReturn()
+	_, _, _, err = cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("Delete remaining raw iptables rule failed, %v", err.Error())
 	}
 }
 
-func checkIptablesRules()  {
+func checkIptablesRules() {
 	if !utils.IsSkipVyosIptables() {
 		return
 	}

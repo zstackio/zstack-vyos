@@ -7,8 +7,8 @@ import (
 )
 
 type ZStackIpRule struct {
-	Fwmark uint64
-	From string
+	Fwmark  uint64
+	From    string
 	TableId uint64
 }
 
@@ -16,7 +16,7 @@ func getIpRouteTableAlias(tableId uint64) string {
 	return fmt.Sprintf("%s%d", PolicyRouteChainPrefix, tableId)
 }
 
-func (a ZStackIpRule) Equal(b ZStackIpRule)  bool {
+func (a ZStackIpRule) Equal(b ZStackIpRule) bool {
 	if a.TableId != b.TableId {
 		return false
 	}
@@ -50,7 +50,7 @@ func (a ZStackIpRule) delBashCommand() string {
 
 func GetZStackIpRules() []ZStackIpRule {
 	var rules []ZStackIpRule
-	bash := Bash {
+	bash := Bash{
 		Command: fmt.Sprintf("ip rule | grep %s", PolicyRouteChainPrefix),
 	}
 	ret, o, _, err := bash.RunWithReturn()
@@ -80,7 +80,7 @@ func GetZStackIpRules() []ZStackIpRule {
 	return rules
 }
 
-func SyncZStackIpRules(currRules, rules []ZStackIpRule) error  {
+func SyncZStackIpRules(currRules, rules []ZStackIpRule) error {
 	var newCmds []string
 
 	/* delete ip rules that is not in new rules */
@@ -117,11 +117,11 @@ func SyncZStackIpRules(currRules, rules []ZStackIpRule) error  {
 		return nil
 	}
 
-	bash := Bash {
+	bash := Bash{
 		Command: strings.Join(newCmds, ";"),
 	}
 	ret, _, e, err := bash.RunWithReturn()
-	
+
 	if err != nil || e != "" || ret != 0 {
 		return fmt.Errorf("sync ip rules: %s, error: %s, ret: %d", strings.Join(newCmds, ";"), e, ret)
 	}

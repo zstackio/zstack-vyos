@@ -1,13 +1,13 @@
 package plugin
 
 import (
-    "fmt"
-    log "github.com/Sirupsen/logrus"
-    . "github.com/onsi/ginkgo"
-    "github.com/onsi/gomega"
-    "github.com/zstackio/zstack-vyos/server"
-    "github.com/zstackio/zstack-vyos/utils"
-    "strings"
+	"fmt"
+	log "github.com/Sirupsen/logrus"
+	. "github.com/onsi/ginkgo"
+	"github.com/onsi/gomega"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
+	"strings"
 )
 
 var _ = Describe("vip_test", func() {
@@ -35,7 +35,7 @@ var _ = Describe("vip_test", func() {
 		log.Debugf("setvip %+v", cmd)
 		setVip(cmd)
 		checkVipConfig(vips, utils.PubNicForUT, utils.NOHA)
-		
+
 		log.Debugf("setvip %+v", cmd)
 		setVip(cmd)
 		checkVipConfig(vips, utils.PubNicForUT, utils.NOHA)
@@ -150,7 +150,7 @@ var _ = Describe("vip_test", func() {
 		log.Debugf("TestSetVipForBackupOnMgt start cmd %+v", cmd)
 		setVip(cmd)
 		checkVipConfig(vips, utils.MgtNicForUT, utils.HABACKUP)
-		
+
 		log.Debugf("TestSetVipForBackupOnMgt start again cmd %+v", cmd)
 		setVip(cmd)
 		checkVipConfig(vips, utils.MgtNicForUT, utils.HABACKUP)
@@ -159,7 +159,7 @@ var _ = Describe("vip_test", func() {
 		log.Debugf("TestSetVipForBackupOnMgt removeVip cmd %+v", rcmd)
 		removeVip(rcmd)
 		checkVipDelete(vips, utils.MgtNicForUT)
-		
+
 		log.Debugf("TestSetVipForBackupOnMgt removeVip cmd %+v", rcmd)
 		removeVip(rcmd)
 		checkVipDelete(vips, utils.MgtNicForUT)
@@ -192,7 +192,7 @@ var _ = Describe("vip_test", func() {
 		log.Debugf("TestSetVipForMasterOnMgt start cmd %+v", cmd)
 		setVip(cmd)
 		checkVipConfig(vips, utils.MgtNicForUT, utils.HAMASTER)
-		
+
 		log.Debugf("TestSetVipForMasterOnMgt start again cmd %+v", cmd)
 		setVip(cmd)
 		checkVipConfig(vips, utils.MgtNicForUT, utils.HAMASTER)
@@ -201,7 +201,7 @@ var _ = Describe("vip_test", func() {
 		log.Debugf("TestSetVipForMasterOnMgt removeVipCmd %+v", rcmd)
 		removeVip(rcmd)
 		checkVipDelete(vips, utils.MgtNicForUT)
-		
+
 		log.Debugf("TestSetVipForMasterOnMgt removeVipCmd %+v", rcmd)
 		removeVip(rcmd)
 		checkVipDelete(vips, utils.MgtNicForUT)

@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 	"html/template"
 	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (
@@ -198,35 +198,35 @@ func addDhcpHandler(ctx *server.CommandContext) interface{} {
 	cmd := &addDhcpCmd{}
 	ctx.GetCommand(cmd)
 
-    return addDhcp(cmd)
+	return addDhcp(cmd)
 }
 
 func addDhcp(cmd *addDhcpCmd) interface{} {
-    for _, entry := range cmd.DhcpEntries {
-        nicName, err := utils.GetNicNameByMac(entry.VrNicMac)
-        utils.PanicOnError(err)
-        omApiPort := getNicOmApiPort(nicName)
-        group := GROUP_FULL
-        if !entry.IsDefaultL3Network {
-            group = GROUP_PARTIAL
-        }
+	for _, entry := range cmd.DhcpEntries {
+		nicName, err := utils.GetNicNameByMac(entry.VrNicMac)
+		utils.PanicOnError(err)
+		omApiPort := getNicOmApiPort(nicName)
+		group := GROUP_FULL
+		if !entry.IsDefaultL3Network {
+			group = GROUP_PARTIAL
+		}
 
-        /* add a entry by OMAPI */
-        hostName := entry.Hostname
-        if hostName == "" {
-            hostName = strings.Replace(entry.Ip, ".", "-", -1)
-            entry.Hostname = hostName
-        }
+		/* add a entry by OMAPI */
+		hostName := entry.Hostname
+		if hostName == "" {
+			hostName = strings.Replace(entry.Ip, ".", "-", -1)
+			entry.Hostname = hostName
+		}
 
-        if _, ok := DhcpServerEntries[entry.VrNicMac]; ok {
-            /* delete the entry which has same ip but different mac  */
-            for _, e := range DhcpServerEntries[entry.VrNicMac].DhcpInfos {
-                /* for some reason, MN node may send 2 entries with same ip but different macs
-                so delete old entry if existed */
-                if e.Ip == entry.Ip {
-                    log.Errorf("[vyos dhcp] found 2 entries with same ip, old: %+v, new: %+v", e, entry)
-                    b := &utils.Bash{
-                        Command: fmt.Sprintf(`omshell << EOF
+		if _, ok := DhcpServerEntries[entry.VrNicMac]; ok {
+			/* delete the entry which has same ip but different mac  */
+			for _, e := range DhcpServerEntries[entry.VrNicMac].DhcpInfos {
+				/* for some reason, MN node may send 2 entries with same ip but different macs
+				   so delete old entry if existed */
+				if e.Ip == entry.Ip {
+					log.Errorf("[vyos dhcp] found 2 entries with same ip, old: %+v, new: %+v", e, entry)
+					b := &utils.Bash{
+						Command: fmt.Sprintf(`omshell << EOF
 server localhost
 port %d
 connect
@@ -235,28 +235,28 @@ set hardware-address = %s
 open
 remove
 EOF`, omApiPort, e.Mac),
-                        NoLog: true}
-                    if err = b.Run(); err != nil {
-                        log.Errorf("[vyos dhcp] delete old entry [mac: %s] failed, %s", e.Mac, err)
-                    }
-                    delete(DhcpServerEntries[entry.VrNicMac].DhcpInfos, e.Mac)
-                }
-                /* duplicated hostname */
-                if e.Hostname == hostName {
-                    hostName = getHostNameFromIpMac(entry.Ip, entry.Mac)
-                    entry.Hostname = hostName
-                }
-            }
-            DhcpServerEntries[entry.VrNicMac].DhcpInfos[entry.Mac] = entry
-        } else {
-            log.Errorf("[vyos dhcp] can not save dhcp entry[%+v] to buffer", entry)
-            continue
-        }
+						NoLog: true}
+					if err = b.Run(); err != nil {
+						log.Errorf("[vyos dhcp] delete old entry [mac: %s] failed, %s", e.Mac, err)
+					}
+					delete(DhcpServerEntries[entry.VrNicMac].DhcpInfos, e.Mac)
+				}
+				/* duplicated hostname */
+				if e.Hostname == hostName {
+					hostName = getHostNameFromIpMac(entry.Ip, entry.Mac)
+					entry.Hostname = hostName
+				}
+			}
+			DhcpServerEntries[entry.VrNicMac].DhcpInfos[entry.Mac] = entry
+		} else {
+			log.Errorf("[vyos dhcp] can not save dhcp entry[%+v] to buffer", entry)
+			continue
+		}
 
-        /* add a entry by OMAPI */
-        if entry.IsDefaultL3Network {
-            b := &utils.Bash{
-                Command: fmt.Sprintf(`omshell << EOF
+		/* add a entry by OMAPI */
+		if entry.IsDefaultL3Network {
+			b := &utils.Bash{
+				Command: fmt.Sprintf(`omshell << EOF
 server localhost
 port %d
 connect
@@ -268,13 +268,13 @@ set ip-address = %s
 set group = "%s"
 create
 EOF`, omApiPort, hostName, entry.Mac, entry.Ip, group),
-                NoLog: true}
-            if err = b.Run(); err != nil {
-                log.Errorf("[vyos dhcp] add new entry [mac: %+v] failed, %s", entry, err)
-            }
-        } else {
-            b := &utils.Bash{
-                Command: fmt.Sprintf(`omshell << EOF
+				NoLog: true}
+			if err = b.Run(); err != nil {
+				log.Errorf("[vyos dhcp] add new entry [mac: %+v] failed, %s", entry, err)
+			}
+		} else {
+			b := &utils.Bash{
+				Command: fmt.Sprintf(`omshell << EOF
 server localhost
 port %d
 connect
@@ -286,15 +286,15 @@ set ip-address = %s
 set group = "%s"
 create
 EOF`, omApiPort, hostName, entry.Mac, entry.Ip, group),
-                NoLog: true}
-            if err = b.Run(); err != nil {
-                log.Errorf("[vyos dhcp] add new entry [mac: %+v] failed, %s", entry, err)
-            }
-        }
-    }
+				NoLog: true}
+			if err = b.Run(); err != nil {
+				log.Errorf("[vyos dhcp] add new entry [mac: %+v] failed, %s", entry, err)
+			}
+		}
+	}
 
-    writeDhcpScriptFile()
-    return nil
+	writeDhcpScriptFile()
+	return nil
 }
 
 func stopAllDhcpServers() {
@@ -453,29 +453,29 @@ shared-network {{.SubnetName}} {
 
 func setDhcpFirewallRules(nicName string) error {
 	table := utils.NewIpTables(utils.FirewallTable)
-	
+
 	var rules []*utils.IpTableRule
-	
+
 	rule := utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
 	rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
 	rule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("67")
 	rules = append(rules, rule)
-	
+
 	rule = utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
 	rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
 	rule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("68")
 	rules = append(rules, rule)
-	
+
 	rule = utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
 	rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
 	rule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("53")
 	rules = append(rules, rule)
-	
+
 	rule = utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
 	rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
 	rule.SetProto(utils.IPTABLES_PROTO_TCP).SetDstPort("68")
 	rules = append(rules, rule)
-	
+
 	table.AddIpTableRules(rules)
 	return table.Apply()
 }

@@ -6,8 +6,8 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"io/ioutil"
 	"net"
-	"strings"
 	"os"
+	"strings"
 )
 
 const (
@@ -23,11 +23,11 @@ const (
 
 	APPLIANCETYPE_SLB = "SLB"
 	APPLIANCETYPE_VPC = "vpcvrouter"
-	
-	NIC_TYPE_PRIVATE = "Private"
-	NIC_TYPE_PUBLIC = "Public"
 
-	VYOS_UT_LOG_FOLDER="/home/vyos/vyos_ut/testLog/"
+	NIC_TYPE_PRIVATE = "Private"
+	NIC_TYPE_PUBLIC  = "Public"
+
+	VYOS_UT_LOG_FOLDER = "/home/vyos/vyos_ut/testLog/"
 )
 
 type NicInfo struct {
@@ -78,11 +78,11 @@ func IsSkipVyosIptables() bool {
 	if !ok {
 		return false
 	}
-	
+
 	return SkipVyosIptables
 }
 
-func SetSkipVyosIptablesForUT(enable bool)  {
+func SetSkipVyosIptablesForUT(enable bool) {
 	if enable {
 		BootstrapInfo["SkipVyosIptables"] = true
 	} else {
@@ -122,14 +122,13 @@ func IsHaEnabled() bool {
 	return false
 }
 
-func GetVirtualRouterUuid()  string {
+func GetVirtualRouterUuid() string {
 	if _, ok := BootstrapInfo["uuid"]; ok {
 		return BootstrapInfo["uuid"].(string)
 	}
 
 	return ""
 }
-
 
 func IsInManagementCidr(vipStr string) bool {
 	mgmtNic := BootstrapInfo["managementNic"].(map[string]interface{})
@@ -187,35 +186,35 @@ func IsSLB() bool {
 }
 
 func GetBootStrapNicInfo() map[string]Nic {
-    bootstrapNics := make(map[string]Nic)
-    mgmtNic := BootstrapInfo["managementNic"].(map[string]interface{})
-    if mgmtNic != nil {
-        name, ok1 := mgmtNic["deviceName"].(string)
-        mac, ok2 := mgmtNic["mac"].(string)
-        ip, ok3 := mgmtNic["ip"].(string)
-        if ok1 && ok2 && ok3 {
-            mnic := Nic{Name: name, Mac: mac, Ip: ip}
+	bootstrapNics := make(map[string]Nic)
+	mgmtNic := BootstrapInfo["managementNic"].(map[string]interface{})
+	if mgmtNic != nil {
+		name, ok1 := mgmtNic["deviceName"].(string)
+		mac, ok2 := mgmtNic["mac"].(string)
+		ip, ok3 := mgmtNic["ip"].(string)
+		if ok1 && ok2 && ok3 {
+			mnic := Nic{Name: name, Mac: mac, Ip: ip}
 			mnic.Catatory, _ = mgmtNic["category"].(string)
-            bootstrapNics[mnic.Name] = mnic
-        }
-    }
+			bootstrapNics[mnic.Name] = mnic
+		}
+	}
 
-    otherNics := BootstrapInfo["additionalNics"].([]interface{})
-    if otherNics != nil {
-        for _, o := range otherNics {
-            onic := o.(map[string]interface{})
-            name, ok1 := onic["deviceName"].(string)
-            mac, ok2 := onic["mac"].(string)
-            ip, ok3 := onic["ip"].(string)
-            if ok1 && ok2 && ok3 {
-                additionalNic := Nic{Name: name, Mac: mac, Ip: ip}
+	otherNics := BootstrapInfo["additionalNics"].([]interface{})
+	if otherNics != nil {
+		for _, o := range otherNics {
+			onic := o.(map[string]interface{})
+			name, ok1 := onic["deviceName"].(string)
+			mac, ok2 := onic["mac"].(string)
+			ip, ok3 := onic["ip"].(string)
+			if ok1 && ok2 && ok3 {
+				additionalNic := Nic{Name: name, Mac: mac, Ip: ip}
 				additionalNic.Catatory, _ = mgmtNic["category"].(string)
-                bootstrapNics[additionalNic.Name] = additionalNic
-            }
-        }
-    }
+				bootstrapNics[additionalNic.Name] = additionalNic
+			}
+		}
+	}
 
-    return bootstrapNics
+	return bootstrapNics
 }
 
 func SetHaStatus(status string) {
@@ -226,6 +225,6 @@ func GetHaStatus() (status string) {
 	return BootstrapInfo["haStatus"].(string)
 }
 
-func IsRuingUT() bool  {
+func IsRuingUT() bool {
 	return strings.Contains(os.Args[0], "/home/vyos/vyos_ut/zstack-vyos/")
 }

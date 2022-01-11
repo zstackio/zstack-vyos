@@ -1,17 +1,17 @@
 package plugin
 
 import (
-    "fmt"
-    . "github.com/onsi/ginkgo"
-    . "github.com/onsi/gomega"
-    "github.com/zstackio/zstack-vyos/utils"
+	"fmt"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 var _ = Describe("ospf_iptables_test", func() {
 	var nicCmd *configureNicCmd
 
 	It("[IPTABLES]ospf : test preparing", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER + "ospf_iptables_test.log", false)
+		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"ospf_iptables_test.log", false)
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)
 		nicCmd = &configureNicCmd{}
@@ -53,7 +53,7 @@ func checkSyncOspfRulesByIptables(NetworkInfos []networkInfo) {
 	natTable := utils.NewIpTables(utils.NatTable)
 
 	for _, info := range NetworkInfos {
-		nicname, err := utils.GetNicNameByMac(info.NicMac);
+		nicname, err := utils.GetNicNameByMac(info.NicMac)
 		utils.PanicOnError(err)
 		rule := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
 		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)

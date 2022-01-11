@@ -1,16 +1,16 @@
 package plugin
 
 import (
-    "fmt"
-    . "github.com/onsi/ginkgo"
-    . "github.com/onsi/gomega"
-    "github.com/zstackio/zstack-vyos/utils"
+	"fmt"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 var _ = Describe("dns_iptables_test", func() {
 	var nicCmd *configureNicCmd
 	It("[IPTABLES]dns : test preparing", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER + "dns_iptables_test.log", false)
+		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"dns_iptables_test.log", false)
 		utils.SetSkipVyosIptablesForUT(true)
 		nicCmd = &configureNicCmd{}
 	})
@@ -57,8 +57,8 @@ var _ = Describe("dns_iptables_test", func() {
 	})
 })
 
-func checkDnsFirewallIpTables(nicMac string)  {
-	nicName,_ := utils.GetNicNameByMac(nicMac)
+func checkDnsFirewallIpTables(nicMac string) {
+	nicName, _ := utils.GetNicNameByMac(nicMac)
 	table := utils.NewIpTables(utils.FirewallTable)
 
 	rule := utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))

@@ -1,10 +1,10 @@
 package plugin
 
 import (
-    "fmt"
-    . "github.com/onsi/ginkgo"
-    . "github.com/onsi/gomega"
-    "github.com/zstackio/zstack-vyos/utils"
+	"fmt"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 var _ = Describe("snat_iptables_test", func() {
@@ -14,7 +14,7 @@ var _ = Describe("snat_iptables_test", func() {
 	var nicCmd *configureNicCmd
 
 	It("[IPTABLES]snat : test preparing", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER + "snat_iptables_test.log", false)
+		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"snat_iptables_test.log", false)
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)
 		sinfo1 = snatInfo{
@@ -78,7 +78,7 @@ var _ = Describe("snat_iptables_test", func() {
 		for i, _ := range nicCmd.Nics {
 			checkNicFirewallDeleteByIpTables(nicCmd.Nics[i])
 		}
-		
+
 		utils.SetSkipVyosIptablesForUT(false)
 	})
 })
@@ -112,7 +112,8 @@ func checkSnatRuleDelIptables(cmd *removeSnatCmd) {
 		utils.PanicOnError(err)
 		priNic, err := utils.GetNicNameByMac(s.PrivateNicMac)
 		utils.PanicOnError(err)
-		address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask);utils.PanicOnError(err)
+		address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask)
+		utils.PanicOnError(err)
 
 		rule := utils.NewIpTableRule(utils.RULESET_SNAT.String())
 		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)

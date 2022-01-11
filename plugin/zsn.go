@@ -1,30 +1,30 @@
 package plugin
 
 import (
-	"os"
-	"github.com/zstackio/zstack-vyos/server"
-	"fmt"
-	"io/ioutil"
 	"encoding/json"
+	"fmt"
 	log "github.com/Sirupsen/logrus"
-	"net/http"
-	"time"
+	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"time"
 )
 
 const (
-	ZSN_SET_DR_PATH = "/zsn/dr"
-	ZSN_STATUS_PATH = "/zsn/status"
+	ZSN_SET_DR_PATH     = "/zsn/dr"
+	ZSN_STATUS_PATH     = "/zsn/status"
 	ZSN_CONNECTION_PATH = "/zsn/connections"
 
-	zsn_status_uri = "/"
+	zsn_status_uri     = "/"
 	zsn_connection_uri = "/conn"
-	zsn_enable_uri = "/enable"
-	zsn_disable_uri = "/disable"
+	zsn_enable_uri     = "/enable"
+	zsn_disable_uri    = "/disable"
 
-	zsn_state_file = "/tmp/dr"
+	zsn_state_file         = "/tmp/dr"
 	ZSN_STATE_FILE_DISABLE = "-960"
-	ZSN_STATE_FILE_ENABLE = "960"
+	ZSN_STATE_FILE_ENABLE  = "960"
 )
 
 type setDistributedRoutingReq struct {
@@ -37,7 +37,7 @@ type zsnAgent struct {
 
 func (z zsnAgent) init(uri string) string {
 	z.addr = "http://127.0.0.1:7274"
-	client := http.Client{Timeout:2*time.Second}
+	client := http.Client{Timeout: 2 * time.Second}
 	addr := fmt.Sprintf("%s%s", z.addr, uri)
 
 	rsp, err := client.Get(addr)
@@ -90,12 +90,12 @@ type zsnsetDistributedRoutingRsp struct {
 
 func getStatus(ctx *server.CommandContext) interface{} {
 	z := zsnAgent{}
-	return getStatusRsp{ RawStatus:z.getStatus() }
+	return getStatusRsp{RawStatus: z.getStatus()}
 }
 
 func getConnections(ctx *server.CommandContext) interface{} {
 	z := zsnAgent{}
-	return getConnRsp{ RawConnections:z.getConnections() }
+	return getConnRsp{RawConnections: z.getConnections()}
 }
 
 func setDistributedRouting(ctx *server.CommandContext) interface{} {
@@ -105,15 +105,15 @@ func setDistributedRouting(ctx *server.CommandContext) interface{} {
 	var r string
 	var z zsnAgent
 	t := &zsnsetDistributedRoutingRsp{}
-	
+
 	tree := server.NewParserFromShowConfiguration().Tree
-	
-	fd, _ := utils.CreateFileIfNotExists(zsn_state_file, os.O_WRONLY | os.O_TRUNC, os.ModePerm)
+
+	fd, _ := utils.CreateFileIfNotExists(zsn_state_file, os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	fd.Truncate(0)
 	if cmd.Enabled {
 		r = z.enable()
 		fd.Write([]byte(ZSN_STATE_FILE_ENABLE))
-		
+
 		if node := tree.Get("system task-scheduler task zsn interval 1"); node == nil {
 			/* create a cronjob to check zsn */
 			tree.Set("system task-scheduler task zsn interval 1")
@@ -122,27 +122,27 @@ func setDistributedRouting(ctx *server.CommandContext) interface{} {
 	} else {
 		r = z.disable()
 		fd.Write([]byte(ZSN_STATE_FILE_DISABLE))
-		
+
 		tree.Delete("system task-scheduler task zsn")
 	}
 	fd.Close()
-	
+
 	tree.Apply(false)
 
 	err := json.Unmarshal([]byte(r), &t)
-	if  err != nil {
+	if err != nil {
 		log.Warnf("can not unmarshal json from %s, return empty", r)
 		return setDistributedRoutingRsp{}
 	}
 
 	if t.DistributedRouting == "true" {
-		return setDistributedRoutingRsp{Enabled:"true"}
+		return setDistributedRoutingRsp{Enabled: "true"}
 	} else {
-		return setDistributedRoutingRsp{Enabled:"false"}
+		return setDistributedRoutingRsp{Enabled: "false"}
 	}
 }
 
-func ZsnEntryPoint()  {
+func ZsnEntryPoint() {
 	server.RegisterAsyncCommandHandler(ZSN_SET_DR_PATH, server.VyosLock(setDistributedRouting))
 	server.RegisterAsyncCommandHandler(ZSN_STATUS_PATH, getStatus)
 	server.RegisterAsyncCommandHandler(ZSN_CONNECTION_PATH, getConnections)
