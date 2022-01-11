@@ -6,7 +6,7 @@ terminal_output gfxterm console serial
 
 
 menuentry "VyOS 1.1.7 (KVM console)" {
-	linux /boot/vmlinuz quiet root=UUID=a7c15b19-1162-4cfa-8ac9-9fc8a340b84c ro console=ttyS0,9600
+	linux /boot/vmlinuz quiet root=UUID=a7c15b19-1162-4cfa-8ac9-9fc8a340b84c ro console=tty0 console=ttyS0,9600
 	initrd /boot/initrd.img
 }
 
