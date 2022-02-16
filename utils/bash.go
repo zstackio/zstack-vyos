@@ -52,7 +52,7 @@ func (b *Bash) build() error {
 	}
 
 	if b.Timeout == 0 {
-		b.Timeout = 120
+		b.Timeout = 300
 	}
 
 	return nil
@@ -123,7 +123,7 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 	select {
 	case <-after:
 		cmd.Process.Signal(syscall.SIGTERM)
-		err = fmt.Errorf("bash command %s timeout in 120 sec", b.Command)
+		err = fmt.Errorf("bash command %s timeout after %d sec", b.Command, b.Timeout)
 		retCode = -1
 	case err = <-done:
 		var waitStatus syscall.WaitStatus
