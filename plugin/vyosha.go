@@ -81,7 +81,7 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 
 		if err := natTable.Apply(); err != nil {
 			log.Debugf("apply vrrp nat table failed")
-			return err
+			panic(err)
 		}
 	} else {
 		des := "Vyos-HA"

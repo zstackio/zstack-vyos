@@ -593,7 +593,7 @@ func changeDefaultNic(cmd *ChangeDefaultNicCmd) interface{} {
 
 		table.AddIpTableRules(rules)
 		if err := table.Apply(); err != nil {
-			return err
+			panic(err)
 		}
 	} else {
 		for _, s := range cmd.Snats {
@@ -646,7 +646,7 @@ func changeDefaultNic(cmd *ChangeDefaultNicCmd) interface{} {
 		utils.WriteDefaultHaScript(defaultNic)
 	}
 
-	return err
+	panic(err)
 }
 
 func makeAlias(nic utils.NicInfo) string {
