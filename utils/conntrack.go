@@ -9,6 +9,7 @@ type ConnectionTrackTuple struct {
 	PortEnd   int
 	IsNat     bool
 	IsDst     bool
+	State     string
 }
 
 func (t ConnectionTrackTuple) CleanConnTrackConnection() error {
@@ -52,6 +53,12 @@ func (t ConnectionTrackTuple) CleanConnTrackConnection() error {
 			command = fmt.Sprintf("sudo conntrack -n %s -p %s --sport %d -D", t.Ip, t.Protocol, t.PortStart)
 		} else {
 			command = fmt.Sprintf("sudo conntrack -n %s -p %s --sport %d-%d -D", t.Ip, t.Protocol, t.PortStart, t.PortEnd)
+		}
+	}
+
+	if t.State != "" {
+		if t.Protocol != "" {
+			command = command + " --state " + t.State
 		}
 	}
 
