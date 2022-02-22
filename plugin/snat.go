@@ -131,7 +131,8 @@ func setSnat(cmd *setSnatCmd) interface{} {
 		rules = append(rules, rule)
 
 		table.AddIpTableRules(rules)
-		return table.Apply()
+		err := table.Apply()
+		utils.PanicOnError(err)
 	} else {
 		// make source nat rule as the latest rule
 		// in case there are EIP rules
@@ -196,7 +197,8 @@ func removeSnat(cmd *removeSnatCmd) interface{} {
 			table.RemoveIpTableRule([]*utils.IpTableRule{rule})
 		}
 
-		return table.Apply()
+		err := table.Apply()
+		utils.PanicOnError(err)
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
 

@@ -239,7 +239,8 @@ func enablePimdHandler(ctx *server.CommandContext) interface{} {
 	/* enable firewall */
 	nics, _ := utils.GetAllNics()
 	if utils.IsSkipVyosIptables() {
-		addPimdFirewallByIptables(nics)
+		err := addPimdFirewallByIptables(nics)
+		utils.PanicOnError(err)
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
 		for _, nic := range nics {

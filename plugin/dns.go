@@ -102,7 +102,8 @@ func setDns(cmd *setDnsCmd) interface{} {
 		nicNames[eth] = eth
 
 		if utils.IsSkipVyosIptables() {
-			setDnsFirewallRules(eth)
+			err := setDnsFirewallRules(eth)
+			utils.PanicOnError(err)
 		} else {
 			des := makeDnsFirewallRuleDescription(eth)
 			if r := tree.FindFirewallRuleByDescription(eth, "local", des); r == nil {
@@ -180,7 +181,8 @@ func setVpcDns(cmd *setVpcDnsCmd) interface{} {
 	for _, nic := range nics {
 		nicNames[nic] = nic
 		if utils.IsSkipVyosIptables() {
-			setDnsFirewallRules(nic)
+			err := setDnsFirewallRules(nic)
+			utils.PanicOnError(err)
 		} else {
 			des := makeDnsFirewallRuleDescription(nic)
 			if r := tree.FindFirewallRuleByDescription(nic, "local", des); r == nil {

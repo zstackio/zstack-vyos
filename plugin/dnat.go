@@ -127,7 +127,8 @@ func syncDnat(cmd *syncDnatCmd) interface{} {
 		for _, rule := range cmd.Rules {
 			pfMap[rule.Uuid] = rule
 		}
-		return syncPortForwardingRules()
+		err := syncPortForwardingRules()
+		utils.PanicOnError(err)
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
 		dnatRegex := ".*(\\w.){3}\\w-\\w{1,}-\\w{1,}-(\\w{2}:){5}\\w{2}-\\w{1,}-\\w{1,}-\\w{1,}"
@@ -314,7 +315,9 @@ func setDnat(cmd *setDnatCmd) interface{} {
 		for _, r := range cmd.Rules {
 			pfMap[r.Uuid] = r
 		}
-		return syncPortForwardingRules()
+		err := syncPortForwardingRules()
+		utils.PanicOnError(err)
+
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
 		setRuleInTree(tree, cmd.Rules)

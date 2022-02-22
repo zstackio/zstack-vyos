@@ -301,7 +301,7 @@ func createEip(cmd *setEipCmd) interface{} {
 	if utils.IsSkipVyosIptables() {
 		eipMap[eip.VipIp] = eip
 		if err := syncEipByIptables(); err != nil {
-			return err
+			panic(err)
 		}
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
@@ -338,7 +338,7 @@ func removeEip(cmd *removeEipCmd) interface{} {
 	if utils.IsSkipVyosIptables() {
 		delete(eipMap, eip.VipIp)
 		if err := syncEipByIptables(); err != nil {
-			return err
+			panic(err)
 		}
 	} else {
 		err := utils.Retry(func() error {
@@ -474,7 +474,8 @@ func syncEip(cmd *syncEipCmd) interface{} {
 		for _, eip := range cmd.Eips {
 			eipMap[eip.VipIp] = eip
 		}
-		return syncEipByIptables()
+		err := syncEipByIptables()
+		utils.PanicOnError(err)
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
 

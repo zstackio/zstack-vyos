@@ -314,7 +314,8 @@ func attachRuleSet(cmd *attachRuleSetCmd) interface{} {
 	utils.PanicOnError(err)
 	ruleSetName := buildRuleSetName(nic, ref.Forward)
 	if utils.IsSkipVyosIptables() {
-		return attachRuleSetOnInterfaceByIptables(ref)
+		err := attachRuleSetOnInterfaceByIptables(ref)
+		utils.PanicOnError(err)
 	} else {
 		tree.AttachRuleSetOnInterface(nic, ref.Forward, ruleSetName)
 		tree.Apply(false)
@@ -376,7 +377,8 @@ func deleteRule(cmd *deleteRuleCmd) interface{} {
 	utils.PanicOnError(err)
 	ruleSetName := buildRuleSetName(nic, ref.Forward)
 	if utils.IsSkipVyosIptables() {
-		return deleteRuleByIpTables(ruleSetName, ref)
+		err := deleteRuleByIpTables(ruleSetName, ref)
+		utils.PanicOnError(err)
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
 		for _, rule := range ref.RuleSetInfo.Rules {
@@ -405,7 +407,8 @@ func applyRuleSetChanges(cmd *applyRuleSetChangesCmd) interface{} {
 	tree := server.NewParserFromShowConfiguration().Tree
 	refs := cmd.Refs
 	if utils.IsSkipVyosIptables() {
-		return applyRuleSetChangesByIpTables(cmd)
+		err := applyRuleSetChangesByIpTables(cmd)
+		utils.PanicOnError(err)
 	}
 	for _, ref := range refs {
 		nic, err := utils.GetNicNameByMac(ref.Mac)
@@ -454,7 +457,8 @@ func createRule(cmd *createRuleCmd) interface{} {
 	utils.PanicOnError(err)
 	ruleSetName := buildRuleSetName(nic, ref.Forward)
 	if utils.IsSkipVyosIptables() {
-		return createRuleByIptables(nic, ruleSetName, ref)
+		err :=  createRuleByIptables(nic, ruleSetName, ref)
+		utils.PanicOnError(err)
 	}
 	if rs := tree.Get(fmt.Sprintf("firewall name %s", ruleSetName)); rs == nil {
 		tree.CreateFirewallRuleSet(ruleSetName, []string{"default-action accept"})
@@ -496,7 +500,8 @@ func changeRuleState(cmd *changeRuleStateCmd) interface{} {
 	utils.PanicOnError(err)
 	ruleSetName := buildRuleSetName(nic, cmd.Forward)
 	if utils.IsSkipVyosIptables() {
-		return changeRuleStateByIpTables(ruleSetName, rule, cmd.State)
+		err := changeRuleStateByIpTables(ruleSetName, rule, cmd.State)
+		utils.PanicOnError(err)
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
 		tree.ChangeFirewallRuleState(ruleSetName, rule.RuleNumber, cmd.State)
@@ -639,7 +644,8 @@ func updateRuleSet(cmd *updateRuleSetCmd) interface{} {
 	utils.PanicOnError(err)
 	ruleSetName := buildRuleSetName(nic, cmd.Forward)
 	if utils.IsSkipVyosIptables() {
-		return updateRuleSetByIptables(ruleSetName, cmd.ActionType)
+		err := updateRuleSetByIptables(ruleSetName, cmd.ActionType)
+		utils.PanicOnError(err)
 	} else {
 		tree.SetFirewalRuleSetAction(ruleSetName, cmd.ActionType)
 		tree.Apply(false)
@@ -658,7 +664,8 @@ func deleteUserRuleHandler(ctx *server.CommandContext) interface{} {
 func deleteUserRule(cmd *getConfigCmd) interface{} {
 
 	if utils.IsSkipVyosIptables() {
-		return deleteUserRuleByIpTables(cmd)
+		err := deleteUserRuleByIpTables(cmd)
+		utils.PanicOnError(err)
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
 		deleteOldRules(tree)
@@ -677,7 +684,8 @@ func applyUserRulesHandler(ctx *server.CommandContext) interface{} {
 func applyUserRules(cmd *applyUserRuleCmd) interface{} {
 
 	if utils.IsSkipVyosIptables() {
-		return applyUserRulesByIpTables(cmd)
+		err := applyUserRulesByIpTables(cmd)
+		utils.PanicOnError(err)
 	}
 
 	tree := server.NewParserFromShowConfiguration().Tree
