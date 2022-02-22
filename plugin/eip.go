@@ -521,6 +521,12 @@ func syncEip(cmd *syncEipCmd) interface{} {
 		}
 	}
 
+	for _, eip := range cmd.Eips {
+		//clean wrong conntrack entries
+		t := utils.ConnectionTrackTuple{IsNat: false, IsDst: true, Ip: eip.VipIp, Protocol: "tcp", PortStart: 0, PortEnd: 0, State: "SYN_SENT"}
+		t.CleanConnTrackConnection()
+	}
+
 	return nil
 }
 
