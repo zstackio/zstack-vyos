@@ -646,7 +646,7 @@ func changeDefaultNic(cmd *ChangeDefaultNicCmd) interface{} {
 		utils.WriteDefaultHaScript(defaultNic)
 	}
 
-	panic(err)
+	return nil
 }
 
 func makeAlias(nic utils.NicInfo) string {

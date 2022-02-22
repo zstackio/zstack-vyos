@@ -575,7 +575,7 @@ func startDhcpServer(dhcp dhcpServer) {
 
 	if utils.IsSkipVyosIptables() {
 		err = setDhcpFirewallRules(nicname)
-		panic(err)
+		utils.PanicOnError(err)
 	} else {
 		des := makeDhcpFirewallRuleDescription(nicname)
 		if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
