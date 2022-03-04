@@ -55,16 +55,37 @@ var _ = Describe("lb_iptables", func() {
 			"healthCheckTarget::tcp:default",
 			"maxConnection::2000000",
 			"httpMode::http-server-close",
-			"accessControlStatus::enable",
+			"accessControlStatus::disable",
 			"healthyThreshold::2",
 			"healthCheckInterval::5",
 			"unhealthyThreshold::2")
+		bs := backendServerInfo{
+			Ip: "192.168.100.10",
+			Weight: 100,
+		}
+		sg := serverGroupInfo{Name:"default-server-group",
+			ServerGroupUuid: "8e52bcc526074521894162aa8db73c24",
+		    BackendServers: []backendServerInfo{bs},
+			IsDefault: false,
+		}
+		lb.ServerGroups = []serverGroupInfo {sg}
+		lb.RedirectRules = nil
 
 		setLb(*lb)
 		checkLbIptablesRules(*lb, false)
 
 		pid1, _ := utils.ReadPid(haproxyListeners[lb.ListenerUuid].pidPath)
 		lb.NicIps = append(lb.NicIps, "192.168.100.11")
+		bs2 := backendServerInfo{
+			Ip: "192.168.100.11",
+			Weight: 100,
+		}
+		sg = serverGroupInfo{Name:"default-server-group",
+			ServerGroupUuid: "8e52bcc526074521894162aa8db73c24",
+			BackendServers: []backendServerInfo{bs, bs2},
+			IsDefault: false,
+		}
+		lb.ServerGroups = []serverGroupInfo {sg}
 		setLb(*lb)
 
 		time.Sleep(1 * time.Second)

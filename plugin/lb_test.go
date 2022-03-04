@@ -67,6 +67,18 @@ var _ = Describe("lb_test", func() {
 			"healthyThreshold::2",
 			"healthCheckInterval::5",
 			"unhealthyThreshold::2")
+		
+		bs := backendServerInfo{
+			Ip: "192.168.100.10",
+			Weight: 100,
+		}
+		sg := serverGroupInfo{Name:"default-server-group",
+			ServerGroupUuid: "8e52bcc526074521894162aa8db73c24",
+			BackendServers: []backendServerInfo{bs},
+			IsDefault: false,
+		}
+		lb.ServerGroups = []serverGroupInfo {sg}
+		lb.RedirectRules = nil
 
 		var bash utils.Bash
 		bash = utils.Bash{

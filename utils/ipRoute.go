@@ -11,7 +11,6 @@ import (
 const (
 	POLICY_ROUTE_TABLE_FILE      = "/etc/iproute2/rt_tables"
 	POLICY_ROUTE_TABLE_FILE_TEMP = "/home/vyos/zvr/.zs_rt_tables"
-	VYOSHA_POLICY_ROUTE_SCRIPT   = "/home/vyos/zvr/keepalived/script/policyRoutes.sh"
 )
 
 type ZStackRouteTable struct {
@@ -106,18 +105,16 @@ func (e ZStackRouteEntry) Equal(b ZStackRouteEntry) error {
 		return fmt.Errorf("destinationCidr is different, %s:%s", e.DestinationCidr, b.DestinationCidr)
 	}
 
-	if e.Distance != b.Distance {
+	if e.Distance != 0 && e.Distance != b.Distance {
 		return fmt.Errorf("distance is different, %d:%d", e.Distance, b.Distance)
 	}
+	
+	if e.NextHopIp != "" && e.NextHopIp != b.NextHopIp {
+		return fmt.Errorf("nextHopIp is different, %s:%s", e.NextHopIp, b.NextHopIp)
+	}
 
-	if e.NicName != "" {
-		if e.NicName != b.NicName {
-			return fmt.Errorf("nicName is different, %s:%s", e.NicName, b.NicName)
-		}
-	} else {
-		if e.NextHopIp != b.NextHopIp {
-			return fmt.Errorf("nextHopIp is different, %s:%s", e.NextHopIp, b.NextHopIp)
-		}
+	if e.NicName != "" && e.NicName != b.NicName {
+		return fmt.Errorf("nicName is different, %s:%s", e.NicName, b.NicName)
 	}
 
 	return nil
@@ -126,17 +123,20 @@ func (e ZStackRouteEntry) Equal(b ZStackRouteEntry) error {
 func (e ZStackRouteEntry) addCommand() string {
 	if e.NextHopIp != "" {
 		if e.Distance != 0 {
-			return fmt.Sprintf("sudo ip route add %s metric %d via %s table %d",
-				e.DestinationCidr, e.Distance, e.NextHopIp, e.TableId)
+			return fmt.Sprintf("ip route %s %s table %d %d", e.DestinationCidr, e.NextHopIp, e.TableId, e.Distance)
 		} else {
-			return fmt.Sprintf("sudo ip route add %s via %s table %d",
-				e.DestinationCidr, e.NextHopIp, e.TableId)
+			return fmt.Sprintf("ip route %s %s table %d", e.DestinationCidr, e.NextHopIp, e.TableId)
 		}
 	} else if e.NicName != "" {
-		return fmt.Sprintf("sudo ip route add %s dev %s table %d",
-			e.DestinationCidr, e.NicName, e.TableId)
+		if e.Distance != 0 {
+			return fmt.Sprintf("ip route %s %s table %d %d",
+				e.DestinationCidr, e.NicName, e.TableId, e.Distance)
+		} else {
+			return fmt.Sprintf("ip route %s %s table %d",
+				e.DestinationCidr, e.NicName, e.TableId)
+		}
 	} else {
-		log.Debugf("can not add route entry,because nexthopIp or nicName is null")
+		log.Debugf("can not add route entry,because nexthopIp and nicName is null")
 		return ""
 	}
 }
@@ -144,27 +144,44 @@ func (e ZStackRouteEntry) addCommand() string {
 func (e ZStackRouteEntry) deleteCommand() string {
 	if e.NextHopIp != "" {
 		if e.Distance != 0 {
-			return fmt.Sprintf("sudo ip route del %s metric %d via %s table %d",
-				e.DestinationCidr, e.Distance, e.NextHopIp, e.TableId)
+			return fmt.Sprintf("no ip route %s %s table %d %d", e.DestinationCidr, e.NextHopIp, e.TableId, e.Distance)
 		} else {
-			return fmt.Sprintf("sudo ip route del %s via %s table %d",
-				e.DestinationCidr, e.NextHopIp, e.TableId)
+			return fmt.Sprintf("no ip route %s %s table %d", e.DestinationCidr, e.NextHopIp, e.TableId)
 		}
 	} else if e.NicName != "" {
-		return fmt.Sprintf("sudo ip route del %s dev %s table %d",
-			e.DestinationCidr, e.NicName, e.TableId)
+		if e.Distance != 0 {
+			return fmt.Sprintf("no ip route %s %s table %d %d",
+				e.DestinationCidr, e.NicName, e.TableId, e.Distance)
+		} else {
+			return fmt.Sprintf("no ip route %s %s table %d",
+				e.DestinationCidr, e.NicName, e.TableId)
+		}
 	} else {
-		log.Debugf("can not del route entry,because nexthopIp or nicName is null")
+		log.Debugf("can not del route entry,because nexthopIp and nicName is null")
 		return ""
 	}
-
 }
 
 func GetCurrentRouteEntries(tableId int) []ZStackRouteEntry {
 	var entries []ZStackRouteEntry
 	bash := Bash{
-		Command: fmt.Sprintf("ip route show table %d", tableId),
+		Command: fmt.Sprintf("vtysh -c 'show ip route table %d' | grep ^S", tableId),
 	}
+	/*
+	  output format:
+	  $ vtysh -c "show ip route table 2"  | grep "^S"
+	  S>* 3.2.4.0/24 [100/0] is directly connected, eth1
+	  S>* 3.2.5.0/24 [1/0] is directly connected, eth1
+	  S>* 3.3.3.0/24 [200/0] via 1.1.1.2, eth2
+	  $ vtysh -c "show ip route"  | grep "^S"
+	   S>* 0.0.0.0/0 [1/0] via 172.25.0.1, eth1
+	   S   2.2.2.0/24 [200/0] via 1.1.2.101
+	   S>* 2.2.2.0/24 [128/0] via 1.1.2.100 (recursive via 172.25.0.1)
+	   S>* 2.2.3.0/24 [128/0] is directly connected, Null0, bh
+	   S>* 2.2.4.0/24 [120/0] via 1.1.2.104 (recursive via 172.25.0.1)
+	   S>* 2.2.5.0/24 [120/0] via 1.1.2.104 (recursive via 172.25.0.1)
+	   S>* 3.2.4.0/24 [2/0] via 1.1.1.104, eth2
+	*/
 	ret, result, _, err := bash.RunWithReturn()
 	if err == nil && ret == 0 {
 		result = strings.TrimSpace(result)
@@ -175,39 +192,33 @@ func GetCurrentRouteEntries(tableId int) []ZStackRouteEntry {
 			}
 
 			items := strings.Fields(line)
-			distance := 0
-			nicName := ""
-			for i, item := range items {
-				if item == "metric" {
-					distance, _ = strconv.Atoi(items[i+1])
-				}
-			}
 
-			if items[0] == "default" {
+			distances := strings.Split(items[2], "/")
+			distance, _ := strconv.Atoi(distances[0][1:])
+
+			if items[3] == "via" {
+				nicName := ""
+				if items[5] != "(recursive" {
+					nicName = items[len(items)-1]
+				}
+
 				e := ZStackRouteEntry{
 					TableId:         tableId,
-					DestinationCidr: "0.0.0.0/0",
-					NextHopIp:       items[2],
-					Distance:        distance,
-				}
-				entries = append(entries, e)
-			} else if items[1] == "via" {
-				if items[3] == "dev" {
-					nicName = items[4]
-				}
-				e := ZStackRouteEntry{
-					TableId:         tableId,
-					DestinationCidr: items[0],
-					NextHopIp:       items[2],
+					DestinationCidr: items[1],
+					NextHopIp:       strings.TrimRight(items[4], ","), /* 1.1.1.2, */
 					NicName:         nicName,
 					Distance:        distance,
 				}
 				entries = append(entries, e)
-			} else if items[1] == "dev" {
+			} else {
+				nicName := items[len(items)-1] /* ethx or bh */
+				if nicName == "bh" {
+					nicName = "null0"
+				}
 				e := ZStackRouteEntry{
 					TableId:         tableId,
-					DestinationCidr: items[0],
-					NicName:         items[2],
+					DestinationCidr: items[1],
+					NicName:         nicName,
 					Distance:        distance,
 				}
 				entries = append(entries, e)
@@ -218,12 +229,52 @@ func GetCurrentRouteEntries(tableId int) []ZStackRouteEntry {
 	return entries
 }
 
+func deleteRouteEntries(entries []ZStackRouteEntry) interface{} {
+	cmds := []string{"vtysh -c 'configure terminal'"}
+	for _, r := range entries {
+		cmds = append(cmds, fmt.Sprintf("-c '%s'", r.deleteCommand()))
+	}
+
+	bash := Bash{
+		Command: fmt.Sprintf("%s", strings.Join(cmds, " ")),
+	}
+
+	ret, _, e, err := bash.RunWithReturn()
+	if err != nil || ret != 0 {
+		return fmt.Errorf("delete ip route: %s failed, because: %s", strings.Join(cmds, " "), e)
+	}
+
+	return nil
+}
+
+func addRouteEntries(entries []ZStackRouteEntry) interface{} {
+	cmds := []string{"vtysh -c 'configure terminal'"}
+	for _, r := range entries {
+		cmds = append(cmds, fmt.Sprintf("-c '%s'", r.addCommand()))
+	}
+
+	bash := Bash{
+		Command: fmt.Sprintf("%s", strings.Join(cmds, " ")),
+	}
+
+	ret, _, e, err := bash.RunWithReturn()
+	if err != nil || ret != 0 {
+		return fmt.Errorf("add ip route: %s failed, because: %s", strings.Join(cmds, " "), e)
+	}
+
+	return nil
+}
+
 func SyncRouteEntries(currTables []ZStackRouteTable, entryMap map[int][]ZStackRouteEntry) error {
-	var newCmds []string
+	var toDeleted []ZStackRouteEntry
+	var toAdded []ZStackRouteEntry
 	/* delete route tables */
 	for _, table := range currTables {
 		if _, ok := entryMap[table.TableId]; !ok {
-			newCmds = append(newCmds, table.flushCommand())
+			currEntries := GetCurrentRouteEntries(table.TableId)
+			for _, r := range currEntries {
+				toDeleted = append(toDeleted, r)
+			}
 		}
 	}
 
@@ -240,7 +291,7 @@ func SyncRouteEntries(currTables []ZStackRouteTable, entryMap map[int][]ZStackRo
 			}
 
 			if !exist {
-				newCmds = append(newCmds, oe.deleteCommand())
+				toDeleted = append(toDeleted, oe)
 			}
 		}
 
@@ -255,39 +306,18 @@ func SyncRouteEntries(currTables []ZStackRouteTable, entryMap map[int][]ZStackRo
 			}
 
 			if !exist {
-				newCmds = append(newCmds, ne.addCommand())
+				toAdded = append(toAdded, ne)
 			}
 		}
 	}
 
-	if len(newCmds) == 0 {
-		return nil
+	if len(toDeleted) != 0 {
+		deleteRouteEntries(toDeleted)
 	}
 
-	writePolicyRouteHaScript(entryMap)
-
-	bash := Bash{
-		Command: strings.Join(newCmds, ";"),
-	}
-	ret, _, e, err := bash.RunWithReturn()
-	if err != nil || e != "" || ret != 0 {
-		return fmt.Errorf("sync ip route: %s, error: %s, ret: %d", strings.Join(newCmds, ";"), e, ret)
+	if len(toAdded) != 0 {
+		addRouteEntries(toAdded)
 	}
 
 	return nil
-}
-
-func writePolicyRouteHaScript(entryMap map[int][]ZStackRouteEntry) error {
-	if !IsHaEnabled() {
-		return nil
-	}
-
-	var routes []string
-	for _, entries := range entryMap {
-		for _, ne := range entries {
-			routes = append(routes, ne.addCommand())
-		}
-	}
-
-	return ioutil.WriteFile(VYOSHA_POLICY_ROUTE_SCRIPT, []byte(strings.Join(routes, "\n")), 0755)
 }
