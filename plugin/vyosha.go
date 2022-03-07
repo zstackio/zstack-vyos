@@ -145,6 +145,7 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 	utils.PanicOnError(err)
 
 	keepalivedConf := NewKeepalivedConf(heartbeatNicNme, cmd.LocalIp, cmd.PeerIp, cmd.Monitors, cmd.Keepalive)
+	keepalivedConf.BuildCheckScript()
 	keepalivedConf.BuildConf()
 	newCheckSum, err := getFileChecksum(KeepalivedConfigFile)
 	utils.PanicOnError(err)

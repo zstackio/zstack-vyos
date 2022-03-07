@@ -346,32 +346,40 @@ func getMrouteHandler(ctx *server.CommandContext) interface{} {
 		return getMrouteRsp{Routes: nil}
 	}
 
-	/* line of mroute: (10.86.5.99, 239.1.1.1)          Iif: eth0       Oifs: eth1 pimreg */
+	/* in different version of ip
+	line of mroute is: 
+	(10.86.5.99, 239.1.1.1)          Iif: eth0       Oifs: eth1 pimreg
+	or
+	(172.24.202.204,239.255.255.250) Iif: eth0       Oifs: pimreg  State: resolved
+	*/
 	routes := []mRouteInfo{}
 	lines := strings.Split(out, "\n")
 	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		
 		var ingress, egress []string
-		src := ""
-		group := ""
+		src := strings.Split(line, ",")[0]
+		src = strings.TrimSpace(src)
+		src = strings.TrimPrefix(src, "(")
+		remain := strings.Split(line, ",")[1]
+
+		group := strings.Split(remain, ")")[0]
+		group = strings.TrimSpace(group)
+		remain = strings.Split(remain, ")")[1]
+		
 		in := false
 		out := false
-		items := strings.Split(line, " ")
+		items := strings.Split(remain, " ")
 
 		for _, item := range items {
 			if item == " " || item == "" {
 				continue
 			}
-
-			if strings.Contains(item, "(") {
-				src = strings.Trim(item, " ")
-				src = strings.TrimPrefix(src, "(")
-				src = strings.TrimSuffix(src, ",")
-				continue
-			}
-
-			if strings.Contains(item, ")") {
-				group = strings.TrimSuffix(item, ")")
-				continue
+			
+			if item == "pimreg" {
+				break
 			}
 
 			if item == "Iif:" {
@@ -391,15 +399,10 @@ func getMrouteHandler(ctx *server.CommandContext) interface{} {
 			}
 
 			if out {
-				if item != "pimreg" {
-					item = strings.TrimSuffix(item, ",")
-					egress = append(egress, item)
-				}
+				item = strings.TrimSuffix(item, ",")
+				egress = append(egress, item)
+				continue
 			}
-		}
-
-		if group == "" {
-			continue
 		}
 
 		route := mRouteInfo{SourceAddress: src, GroupAddress: group, IngressInterfaces: strings.Join(ingress, " "),

@@ -327,7 +327,7 @@ global_defs {
 }
 
 vrrp_script monitor_zvr {
-       script "/usr/bin/pgrep -u vyos -f /opt/vyatta/sbin/zvr > /dev/null"        # cheaper than pidof
+       script "/home/vyos/zvr/keepalived/script/check_zvr.sh"        # cheaper than pidof
        interval 2                      # check every 2 seconds
        fall 2                          # require 2 failures for KO
        rise 2                          # require 2 successes for OK
@@ -335,7 +335,7 @@ vrrp_script monitor_zvr {
 
 {{ range .MonitorIps }}
 vrrp_script monitor_{{.}} {
-	script "/bin/ping {{.}} -w 1 -c 1 > /dev/null"
+	script "/home/vyos/zvr/keepalived/script/check_monitor_{{.}}.sh"
 	interval 2
 	weight -2
 	fall 3
@@ -368,6 +368,20 @@ vrrp_instance vyos-ha {
 	notify_fault "{{.BackupScript}} FAULT"
 }
 `
+func (k *KeepalivedConf) BuildCheckScript() (error) {
+	check_zvr := `#! /bin/bash
+sudo /usr/bin/pgrep -u vyos -f /opt/vyatta/sbin/zvr > /dev/null
+`
+	err := ioutil.WriteFile(KeepalivedSciptPath + "check_zvr.sh", []byte(check_zvr), 0644); utils.PanicOnError(err)
+
+	for _, ip := range k.MonitorIps {
+		check_monitor := fmt.Sprintf("#! /bin/bash\nsudo /bin/ping %s -w 1 -c 1 > /dev/null", ip)
+		script_name := fmt.Sprintf("check_monitor_%s.sh", ip)
+		err := ioutil.WriteFile(KeepalivedSciptPath + script_name, []byte(check_monitor), 0644); utils.PanicOnError(err)
+	}
+	return nil
+}
+
 
 func (k *KeepalivedConf) BuildConf() error {
 	tmpl, err := template.New("keepalived.conf").Parse(tKeepalivedConf)
