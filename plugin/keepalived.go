@@ -113,9 +113,6 @@ sudo ip link set up dev {{$name}} || true
 #reload pimd config
 (/bin/bash /home/vyos/zvr/keepalived/script/pimd.sh) &
 
-#add policy route
-(/bin/bash /home/vyos/zvr/keepalived/script/policyRoutes.sh) &
-
 #start dhcp server
 (/bin/bash /home/vyos/zvr/keepalived/script/dhcpd.sh) &
 
