@@ -11,6 +11,10 @@ import (
 const (
 	POLICY_ROUTE_TABLE_FILE      = "/etc/iproute2/rt_tables"
 	POLICY_ROUTE_TABLE_FILE_TEMP = "/home/vyos/zvr/.zs_rt_tables"
+
+	ROUTETABLE_ID_MIN  = 1
+	ROUTETABLE_ID_MAX  = 250
+	ROUTETABLE_ID_MAIN = 254
 )
 
 type ZStackRouteTable struct {
@@ -108,7 +112,7 @@ func (e ZStackRouteEntry) Equal(b ZStackRouteEntry) error {
 	if e.Distance != 0 && e.Distance != b.Distance {
 		return fmt.Errorf("distance is different, %d:%d", e.Distance, b.Distance)
 	}
-	
+
 	if e.NextHopIp != "" && e.NextHopIp != b.NextHopIp {
 		return fmt.Errorf("nextHopIp is different, %s:%s", e.NextHopIp, b.NextHopIp)
 	}
@@ -121,6 +125,27 @@ func (e ZStackRouteEntry) Equal(b ZStackRouteEntry) error {
 }
 
 func (e ZStackRouteEntry) addCommand() string {
+	if e.TableId == ROUTETABLE_ID_MAIN {
+		if e.NextHopIp != "" {
+			if e.Distance != 0 {
+				return fmt.Sprintf("ip route %s %s %d", e.DestinationCidr, e.NextHopIp, e.Distance)
+			} else {
+				return fmt.Sprintf("ip route %s %s", e.DestinationCidr, e.NextHopIp)
+			}
+		} else if e.NicName != "" {
+			if e.Distance != 0 {
+				return fmt.Sprintf("ip route %s %s %d",
+					e.DestinationCidr, e.NicName, e.Distance)
+			} else {
+				return fmt.Sprintf("ip route %s %s",
+					e.DestinationCidr, e.NicName)
+			}
+		} else {
+			log.Debugf("can not add route entry,because nexthopIp and nicName is null")
+			return ""
+		}
+	}
+
 	if e.NextHopIp != "" {
 		if e.Distance != 0 {
 			return fmt.Sprintf("ip route %s %s table %d %d", e.DestinationCidr, e.NextHopIp, e.TableId, e.Distance)
@@ -142,6 +167,27 @@ func (e ZStackRouteEntry) addCommand() string {
 }
 
 func (e ZStackRouteEntry) deleteCommand() string {
+	if e.TableId == ROUTETABLE_ID_MAIN {
+		if e.NextHopIp != "" {
+			if e.Distance != 0 {
+				return fmt.Sprintf("no ip route %s %s %d", e.DestinationCidr, e.NextHopIp, e.Distance)
+			} else {
+				return fmt.Sprintf("no ip route %s %s", e.DestinationCidr, e.NextHopIp)
+			}
+		} else if e.NicName != "" {
+			if e.Distance != 0 {
+				return fmt.Sprintf("no ip route %s %s %d",
+					e.DestinationCidr, e.NicName, e.Distance)
+			} else {
+				return fmt.Sprintf("no ip route %s %s",
+					e.DestinationCidr, e.NicName)
+			}
+		} else {
+			log.Debugf("can not del route entry,because nexthopIp and nicName is null")
+			return ""
+		}
+	}
+
 	if e.NextHopIp != "" {
 		if e.Distance != 0 {
 			return fmt.Sprintf("no ip route %s %s table %d %d", e.DestinationCidr, e.NextHopIp, e.TableId, e.Distance)
@@ -163,9 +209,43 @@ func (e ZStackRouteEntry) deleteCommand() string {
 }
 
 func GetCurrentRouteEntries(tableId int) []ZStackRouteEntry {
+	/* some table can not be operate
+	vyos@vyos:~/vyos_ut/zstack-vyos$ vtysh -c 'show ip route table 0'
+	% Unknown command.
+	vyos@vyos:~/vyos_ut/zstack-vyos$ vtysh -c 'show ip route table 1'
+	table 1:
+
+	Codes: K - kernel route, C - connected, S - static, R - RIP, O - OSPF,
+	       I - ISIS, B - BGP, > - selected route, * - FIB route
+
+	S>* 1.1.1.0/24 [1/0] via 172.16.1.1 (recursive via 172.25.0.1)
+	vyos@vyos:~/vyos_ut/zstack-vyos$ vtysh -c 'show ip route table 250'
+	table 250:
+
+	vyos@vyos:~/vyos_ut/zstack-vyos$ vtysh -c 'show ip route table 251'
+	% Unknown command.
+	vyos@vyos:~/vyos_ut/zstack-vyos$ vtysh -c 'show ip route table 252'
+	% Unknown command.
+	vyos@vyos:~/vyos_ut/zstack-vyos$ vtysh -c 'show ip route table 253'
+	% Unknown command.
+	vyos@vyos:~/vyos_ut/zstack-vyos$ vtysh -c 'show ip route table 254'
+	% Unknown command.
+	vyos@vyos:~/vyos_ut/zstack-vyos$ vtysh -c 'show ip route table 255'
+	% Unknown command.
+	**/
+
+	if (tableId > ROUTETABLE_ID_MAX || tableId < ROUTETABLE_ID_MIN) && tableId != ROUTETABLE_ID_MAIN {
+		panic("valid route table id range [1, 250]")
+	}
+
 	var entries []ZStackRouteEntry
+	cmd := fmt.Sprintf("vtysh -c 'show ip route table %d' | grep ^S", tableId)
+	if tableId == ROUTETABLE_ID_MAIN {
+		cmd = fmt.Sprintf("vtysh -c 'show ip route' | grep ^S")
+	}
+
 	bash := Bash{
-		Command: fmt.Sprintf("vtysh -c 'show ip route table %d' | grep ^S", tableId),
+		Command: cmd,
 	}
 	/*
 	  output format:
