@@ -2,12 +2,13 @@ package utils
 
 import (
 	"fmt"
+	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"sort"
 )
 
-var _ = Describe("set&remove zstack route test", func() {
+var _ = Describe("iproute_test SetZStackRoute", func() {
 	BeforeEach(func() {
 		InitLog(VYOS_UT_LOG_FOLDER+"iproute_test.log", false)
 	})
@@ -40,7 +41,7 @@ var _ = Describe("set&remove zstack route test", func() {
 	})
 })
 
-var _ = Describe("linux ip route table test", func() {
+var _ = Describe("iproute_test SyncZStackRouteTables", func() {
 	BeforeEach(func() {
 		InitLog(VYOS_UT_LOG_FOLDER+"iproute_test.log", false)
 	})
@@ -74,13 +75,56 @@ var _ = Describe("linux ip route table test", func() {
 	})
 })
 
-var _ = Describe("linux ip route entry test", func() {
+var _ = Describe("iproute_test SyncRouteEntries", func() {
 	BeforeEach(func() {
 		InitLog(VYOS_UT_LOG_FOLDER+"iproute_test.log", false)
 	})
 
-	It("test ip route entry", func() {
+	It("test default ip route", func() {
+		t1 := ZStackRouteTable{TableId: 254, Alias: "main"}
+		setTables := []ZStackRouteTable{t1}
+		routeTableMain := GetCurrentRouteEntries(254)
 
+		/* nexthop is in direct network */
+		entry1 := ZStackRouteEntry{
+			TableId:         254,
+			DestinationCidr: "2.2.2.0/24",
+			NextHopIp:       MgtNicForUT.Gateway,
+			Distance:        128,
+		}
+
+		entry2 := ZStackRouteEntry{
+			TableId:         254,
+			DestinationCidr: "2.2.3.0/24",
+			NextHopIp:       PubNicForUT.Gateway,
+			Distance:        128,
+		}
+
+		/* nexthop is not in direct network */
+		entry3 := ZStackRouteEntry{
+			TableId:         254,
+			DestinationCidr: "3.2.2.0/24",
+			NextHopIp:       "2.2.2.1",
+			Distance:        128,
+		}
+
+		/* blackhole is not in direct network */
+		entry4 := ZStackRouteEntry{
+			TableId:         254,
+			DestinationCidr: "3.2.2.0/24",
+			NicName:         "null0",
+			Distance:        128,
+		}
+
+		routeTableMain1 := append(routeTableMain, []ZStackRouteEntry{entry1, entry2, entry3, entry4}...)
+		SyncRouteEntries(setTables, map[int][]ZStackRouteEntry{254: routeTableMain1})
+
+		routeTableMain2 := GetCurrentRouteEntries(254)
+		checkRouteEntry(routeTableMain2, routeTableMain1)
+
+		SyncRouteEntries(setTables, map[int][]ZStackRouteEntry{254: routeTableMain})
+		routeTableMain3 := GetCurrentRouteEntries(254)
+		checkRouteEntry(routeTableMain3, routeTableMain)
 	})
 })
 
@@ -99,5 +143,32 @@ func checkRouteTables(setTables, getTables []ZStackRouteTable) {
 	for i := 0; i < len(setTables); i++ {
 		Expect(setTables[i] != getTables[i]).NotTo(BeTrue(),
 			fmt.Sprintf("table in set [%+v] are different from get [%+v]", setTables[i], getTables[i]))
+	}
+}
+
+func checkRouteEntry(newEntries, oldEntries []ZStackRouteEntry) {
+	for _, ne := range newEntries {
+		found := false
+		for _, oe := range oldEntries {
+			if ne.Equal(oe) != nil {
+				found = true
+			}
+		}
+
+		Expect(found).To(BeTrue(),
+			fmt.Sprintf("new entry: %+v should not be added", ne))
+	}
+
+	log.Debugf("new entries: %+v", newEntries)
+	for _, ne := range oldEntries {
+		found := false
+		for _, oe := range newEntries {
+			if ne.Equal(oe) != nil {
+				found = true
+			}
+		}
+
+		Expect(found).To(BeTrue(),
+			fmt.Sprintf("old entry: %+v should be added", ne))
 	}
 }
