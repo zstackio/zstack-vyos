@@ -14,6 +14,11 @@ NEED_REPORT_MN="false"
 sizeFilesMap=""
 retJson=""
 
+ProcNumber=`ps -ef |grep -w 'file-monitor'|grep -v grep|wc -l`
+if [ $ProcNumber -gt 2 ];then
+   exit
+fi
+
 managementNodeIp=$(grep "managementNodeIp" $BOOTSTRAPINFO | awk '{print $2}')
 if [ x$managementNodeIp = x"" ]; then
     echo "$(date '+%Y-%m-%d %H:%M:%S') get managementNodeIp failed " >> $LOGFILE
