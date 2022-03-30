@@ -3,14 +3,15 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/pkg/errors"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
 	"io/ioutil"
 	"os"
 	"strings"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/pkg/errors"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (
@@ -152,6 +153,7 @@ func resetVyos() {
 	// reload default configuration
 	//server.RunVyosScriptAsUserVyos("load /opt/vyatta/etc/config.boot.default\nsave")
 	cleanUpTmpDir()
+	cleanUpConfigDir()
 }
 
 func cleanUpTmpDir() {
@@ -159,6 +161,14 @@ func cleanUpTmpDir() {
 		Command: "sudo rm -rf /tmp/tmp-log",
 	}
 	b.Run()
+}
+
+func cleanUpConfigDir() {
+	bash := utils.Bash{
+		Command: "rm -rf /home/vyos/zvr/.zstack_config/*",
+		Sudo:    true,
+	}
+	bash.Run()
 }
 
 func checkIpDuplicate() {
