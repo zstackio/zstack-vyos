@@ -107,8 +107,8 @@ if [[ ! -f $TARGET_MAIL_ROTATE || $(diff mail-monitor $TARGET_MAIL_ROTATE) ]]; t
     yes | mkdir -p `dirname $TARGET_MAIL_ROTATE`
     yes | cp -f mail-monitor $TARGET_MAIL_ROTATE
 fi
-sudo chmod -R +r /var/mail/
-sudo chown root:root /var/mail/mail
+sudo chmod -R +r /var/mail
+sudo chown -R root:root /var/mail
 
 TARGET_ZSN=/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 if [[ ! -f $TARGET_ZSN || $(diff zsn-crontab.sh $TARGET_ZSN) ]]; then
