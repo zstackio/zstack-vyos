@@ -102,6 +102,14 @@ if [[ ! -f $TARGET_CPUMONITOR || $(diff cpu-monitor $TARGET_CPUMONITOR) ]]; then
     yes | cp -f cpu-monitor $TARGET_CPUMONITOR
 fi
 
+TARGET_MAIL_ROTATE=/etc/logrotate.d/mail-monitor
+if [[ ! -f $TARGET_MAIL_ROTATE || $(diff mail-monitor $TARGET_MAIL_ROTATE) ]]; then
+    yes | mkdir -p `dirname $TARGET_MAIL_ROTATE`
+    yes | cp -f mail-monitor $TARGET_MAIL_ROTATE
+fi
+sudo chmod -R +r /var/mail/
+sudo chown root:root /var/mail/mail
+
 TARGET_ZSN=/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
 if [[ ! -f $TARGET_ZSN || $(diff zsn-crontab.sh $TARGET_ZSN) ]]; then
     yes | mkdir -p `dirname $TARGET_ZSN`

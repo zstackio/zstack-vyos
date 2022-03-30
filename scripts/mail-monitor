@@ -1,0 +1,9 @@
+/var/mail/mail {
+size 100M
+#daily
+rotate 3
+compress
+copytruncate
+notifempty
+missingok
+}

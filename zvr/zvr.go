@@ -51,6 +51,7 @@ type nic struct {
 var logfiles = []string{
 	"/etc/logrotate.d/haproxy",
 	"/etc/logrotate.d/cpu-monitor",
+	"/etc/logrotate.d/mail-monitor",
 }
 
 var logrotateFolder string = "/etc/logrotate.d/"

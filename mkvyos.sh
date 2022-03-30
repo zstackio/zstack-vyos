@@ -96,6 +96,7 @@ ZVRMONITOR=$tmpdir/zvr-monitor.sh
 FILEMONITOR=$tmpdir/file-monitor.sh
 ZVRREBOOT=$tmpdir/zvr-reboot.sh
 CPUMONITOR=$tmpdir/cpu-monitor
+MAILMONITOR=$tmpdir/mail-monitor
 SYSCTL=$tmpdir/sysctl.conf
 CONNTRACKD=$tmpdir/conntrackd.conf
 ZSN=$tmpdir/zsn-crontab.sh
@@ -128,6 +129,7 @@ upload $ZVRMONITOR $ROOTPATH/home/vyos/zvr/ssh/zvr-monitor.sh
 upload $FILEMONITOR $ROOTPATH/home/vyos/zvr/ssh/file-monitor.sh
 upload $ZVRREBOOT $ROOTPATH/home/vyos/zvr/ssh/zvr-reboot.sh
 upload $CPUMONITOR $ROOTPATH/etc/logrotate.d/cpu-monitor
+upload $MAILMONITOR $ROOTPATH/etc/logrotate.d/mail-monitor
 upload $SYSCTL $ROOTPATH/etc/sysctl.conf
 mkdir-p $ROOTPATH/etc/conntrackd
 upload $CONNTRACKD $ROOTPATH/etc/conntrackd/conntrackd.conf
