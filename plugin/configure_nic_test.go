@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"fmt"
+
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	gomega "github.com/onsi/gomega"
@@ -140,6 +141,36 @@ var _ = Describe("configure_nic_test", func() {
 		checkSecondaryIpFirewall(utils.PubNicForUT, ipPubL3)
 
 		utils.ReleasePubL3Ip(ipPubL3)
+	})
+
+	It("Test Add Ipv6 Nic and Delete", func() {
+		log.Debugf("############### Test Add Ipv6 Nic and Delete ###############")
+		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
+		cmd := &configureNicCmd{}
+		pubNic := utils.PubNicForUT
+		privNic0 := utils.PrivateNicsForUT[0]
+		privNic1 := utils.PrivateNicsForUT[1]
+
+		pubNic.Ip6 = "2001::1"
+		pubNic.AddressMode = "Stateless-DHCP"
+		privNic0.Ip6 = "2001::2"
+		privNic0.AddressMode = "Stateful-DHCP"
+		privNic1.Ip6 = "2001::3"
+		privNic1.AddressMode = "SLAAC"
+		cmd.Nics = append(cmd.Nics, pubNic)
+		cmd.Nics = append(cmd.Nics, privNic0)
+		cmd.Nics = append(cmd.Nics, privNic1)
+		cleanUpConfig()
+		configureNic(cmd)
+		checkRadvdStatus(cmd, false)
+		isRunning := checkRadvdProcess()
+		gomega.Expect(isRunning).To(gomega.BeTrue(), "radvd service should running")
+
+		removeNic(cmd)
+		checkRadvdStatus(cmd, true)
+		isRunning = checkRadvdProcess()
+		gomega.Expect(isRunning).To(gomega.BeFalse(), "radvd service should stop")
+		cleanUpConfig()
 	})
 
 	It("configure_nic_test destroying", func() {
@@ -295,6 +326,44 @@ func checkSecondaryIpFirewall(nic utils.NicInfo, ip string) {
 	}
 
 	gomega.Expect(num).To(gomega.Equal(2), fmt.Sprintf("nic [%s] secondary ip [%s] check failed, num = %d", nic.Name, ip, num))
+}
+
+func checkRadvdStatus(cmd *configureNicCmd, isDelete bool) {
+	testMap := make(utils.RadvdAttrsMap)
+	err := utils.JsonLoadConfig(utils.RADVD_JSON_FILE, &testMap)
+	gomega.Expect(err).To(gomega.BeNil(), "load radvd json error: %s", err)
+
+	for _, nic := range cmd.Nics {
+		if nic.Ip6 != "" && nic.Category == "Private" {
+			_, ok := testMap[nic.Name]
+			if isDelete {
+				gomega.Expect(ok).To(gomega.BeFalse(), "nic[%s] should not in json file", nic.Name)
+			} else {
+				gomega.Expect(ok).To(gomega.BeTrue(), "nic[%s] should in json file", nic.Name)
+			}
+
+		} else {
+			_, ok := testMap[nic.Name]
+			gomega.Expect(ok).To(gomega.BeFalse(), "public nic[%s] should not in json file", nic.Name)
+		}
+	}
+}
+
+func cleanUpConfig() {
+	bash := utils.Bash{
+		Command: "rm -f /home/vyos/zvr/.zstack_config/radvd; pkill -9 radvd",
+		Sudo:    true,
+	}
+	bash.Run()
+}
+
+func checkRadvdProcess() bool {
+	bash := utils.Bash{
+		Command: fmt.Sprintf("ps -ef | grep '%s' | grep -v grep", utils.RADVD_BIN_PATH),
+	}
+	ret, _, _, _ := bash.RunWithReturn()
+
+	return ret == 0
 }
 
 /*

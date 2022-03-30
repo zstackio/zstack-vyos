@@ -2,11 +2,12 @@ package plugin
 
 import (
 	"fmt"
+	"strings"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
-	"strings"
 )
 
 const (
@@ -306,9 +307,9 @@ func configureNicFirewall(nics []utils.NicInfo) {
 }
 
 func configureNic(cmd *configureNicCmd) interface{} {
-	tree := server.NewParserFromShowConfiguration().Tree
 	var nicname string
 	for _, nic := range cmd.Nics {
+		tree := server.NewParserFromShowConfiguration().Tree
 		err := utils.Retry(func() error {
 			var e error
 			nicname, e = utils.GetNicNameByMac(nic.Mac)
@@ -346,27 +347,6 @@ func configureNic(cmd *configureNicCmd) interface{} {
 		}
 		tree.SetNicMtu(nicname, mtu)
 
-		if nic.Ip6 != "" && nic.Category == "Private" {
-			switch nic.AddressMode {
-			case "Stateful-DHCP":
-				tree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag true", nicname)
-				tree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag true", nicname)
-				tree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag false", nicname, nic.Ip6, nic.PrefixLength)
-			case "Stateless-DHCP":
-				tree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag false", nicname)
-				tree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag true", nicname)
-				tree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag true", nicname, nic.Ip6, nic.PrefixLength)
-			case "SLAAC":
-				tree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag false", nicname)
-				tree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag false", nicname)
-				tree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag true", nicname, nic.Ip6, nic.PrefixLength)
-			}
-			tree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d on-link-flag true", nicname, nic.Ip6, nic.PrefixLength)
-			tree.Setf("interfaces ethernet %s ipv6 router-advert max-interval %d", nicname, RA_MAX_INTERVAL)
-			tree.Setf("interfaces ethernet %s ipv6 router-advert min-interval %d", nicname, RA_MIN_INTERVAL)
-			tree.Setf("interfaces ethernet %s ipv6 router-advert send-advert true", nicname)
-		}
-
 		if nic.L2Type != "" {
 			tree.Setf("interfaces ethernet %s description '%s'", nicname, makeAlias(nic))
 		}
@@ -374,20 +354,31 @@ func configureNic(cmd *configureNicCmd) interface{} {
 		if !IsMaster() {
 			tree.Setf("interfaces ethernet %s disable", nicname)
 		}
+		tree.Apply(false)
+
+		if IsMaster() {
+			bash := utils.Bash{
+				Command: fmt.Sprintf("ip link set up dev %s", nicname),
+				Sudo:    true,
+			}
+			bash.Run()
+
+			checkNicIsUp(nicname, true)
+		}
 	}
-
-	tree.Apply(false)
-
 	configureNicFirewall(cmd.Nics)
 
-	if IsMaster() {
-		bash := utils.Bash{
-			Command: fmt.Sprintf("ip link set up dev %s", nicname),
-			Sudo:    true,
+	radvdMap := make(utils.RadvdAttrsMap)
+	for _, nic := range cmd.Nics {
+		if nic.Ip6 != "" && nic.PrefixLength > 0 && nic.Category == "Private" {
+			nicname, err := utils.GetNicNameByMac(nic.Mac)
+			utils.PanicOnError(err)
+			radvdAttr := utils.NewRadvdAttrs().SetNicName(nicname).SetIp6(nic.Ip6, nic.PrefixLength).SetMode(nic.AddressMode)
+			radvdMap[nicname] = radvdAttr
 		}
-		bash.Run()
-
-		checkNicIsUp(nicname, true)
+	}
+	if err := radvdMap.ConfigService(); err != nil {
+		return err
 	}
 
 	generateNotityScripts()
@@ -482,6 +473,17 @@ func removeNic(cmd *configureNicCmd) interface{} {
 		}
 	}
 	tree.Apply(false)
+
+	radvdMap := make(utils.RadvdAttrsMap)
+	for _, nic := range cmd.Nics {
+		nicname, err := utils.GetNicNameByMac(nic.Mac)
+		utils.PanicOnError(err)
+		delRadvd := utils.NewRadvdAttrs().SetNicName(nicname).SetDelete()
+		radvdMap[nicname] = delRadvd
+	}
+	if err := radvdMap.ConfigService(); err != nil {
+		return err
+	}
 
 	generateNotityScripts()
 

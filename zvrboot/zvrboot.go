@@ -423,28 +423,6 @@ func configureVyos() {
 		if haStatus != utils.NOHA && nic.name != "eth0" {
 			setNicTree.Setf("interfaces ethernet %s disable", nic.name)
 		}
-
-		if nic.ip6 != "" && nic.category == "Private" {
-			switch nic.addressMode {
-			case "Stateful-DHCP":
-				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag true", nic.name)
-				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag true", nic.name)
-				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag false", nic.name, nic.ip6, nic.prefixLength)
-			case "Stateless-DHCP":
-				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag false", nic.name)
-				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag true", nic.name)
-				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag true", nic.name, nic.ip6, nic.prefixLength)
-			case "SLAAC":
-				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert managed-flag false", nic.name)
-				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert other-config-flag false", nic.name)
-				setNicTree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d autonomous-flag true", nic.name, nic.ip6, nic.prefixLength)
-			}
-			setNicTree.Setf("interfaces ethernet %s ipv6 router-advert prefix %s/%d on-link-flag true", nic.name, nic.ip6, nic.prefixLength)
-			setNicTree.Setf("interfaces ethernet %s ipv6 router-advert max-interval 60", nic.name)
-			setNicTree.Setf("interfaces ethernet %s ipv6 router-advert min-interval 15", nic.name)
-			setNicTree.Setf("interfaces ethernet %s ipv6 router-advert send-advert true", nic.name)
-		}
-
 	}
 
 	sshport := bootstrapInfo["sshPort"].(float64)
@@ -540,6 +518,16 @@ func configureVyos() {
 	}
 
 	setNicTree.Apply(true)
+	log.Debugf("[configure: radvd service]")
+	radvdMap := make(utils.RadvdAttrsMap)
+	for _, nic := range nics {
+		if nic.ip6 != "" && nic.prefixLength > 0 && nic.category == "Private" {
+			radvdAttr := utils.NewRadvdAttrs().SetNicName(nic.name).SetIp6(nic.ip6, nic.prefixLength).SetMode(nic.addressMode)
+			radvdMap[nic.name] = radvdAttr
+		}
+	}
+	err := radvdMap.ConfigService()
+	log.Debugf("configure radvd service error: %+v", err)
 	log.Debugf("[configure: ssh service]")
 	setSshTree := server.NewParserFromShowConfiguration().Tree
 	utils.Assert(sshport != 0, "sshport not found in bootstrap info")
