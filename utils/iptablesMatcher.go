@@ -53,6 +53,54 @@ type IpTableMatcher struct {
 	dstIpSet         string
 }
 
+var icmpTypeToCode = map[string]string{
+	"echo-reply":              "0",
+	"echo-request":            "8",
+	"destination-unreachable": "3",
+	"source-quench":           "4",
+	"redirect":                "5",
+	"router-advertisement":    "9",
+	"router-solicitation":     "10",
+	"time-exceeded":           "11",
+	"parameter-problem":       "12",
+	"timestamp-request":       "13",
+	"timestamp-reply":         "14",
+	"address-mask-request":    "17",
+	"address-mask-reply":      "18",
+}
+
+var icmpCodeToType = map[string]string{
+	"0":  "echo-reply",
+	"8":  "echo-request",
+	"3":  "destination-unreachable",
+	"4":  "source-quench",
+	"5":  "redirect",
+	"9":  "router-advertisement",
+	"10": "router-solicitation",
+	"11": "time-exceeded",
+	"12": "parameter-problem",
+	"13": "timestamp-request",
+	"14": "timestamp-reply",
+	"17": "address-mask-request",
+	"18": "address-mask-reply",
+}
+
+func formatIcmpType(icmpType string) string {
+	if v, ok := icmpTypeToCode[icmpType]; ok {
+		return v
+	} else {
+		return icmpType
+	}
+}
+
+func formatIcmpCode(icmpCode string) string {
+	if v, ok := icmpCodeToType[icmpCode]; ok {
+		return v
+	} else {
+		return icmpCode
+	}
+}
+
 func (r *IpTableRule) SetChainName(chainName string) *IpTableRule {
 	r.chainName = chainName
 	return r
@@ -64,7 +112,7 @@ func (r *IpTableRule) SetProto(proto string) *IpTableRule {
 }
 
 func (r *IpTableRule) SetIcmpType(icmpType string) *IpTableRule {
-	r.icmpType = icmpType
+	r.icmpType = formatIcmpType(icmpType)
 	return r
 }
 
@@ -142,7 +190,7 @@ func (r *IpTableRule) GetProto() string {
 }
 
 func (r *IpTableRule) GetIcmpType() string {
-	return r.icmpType
+	return formatIcmpCode(r.icmpType)
 }
 
 func (r *IpTableRule) GetSrcIp() string {
@@ -288,7 +336,7 @@ func (r *IpTableRule) isMatcherEqual(o *IpTableRule) error {
 			}
 		}
 	}
-	
+
 	if r.priority != 0 && o.priority != 0 && r.priority != o.priority {
 		return fmt.Errorf("not match, old priority: %d, new priority: %d", o.priority, r.priority)
 	}
@@ -623,7 +671,7 @@ func (r *IpTableRule) parseIpTablesMatcher(line string, chains []*IpTableChain) 
 
 			break
 
-		case "-m": //-m comment, -m tcp, -m state, -m mark
+		case "-m": //-m comment, -m tcp, -m state, -m mark, -m icmp
 			i++
 			break
 
@@ -694,6 +742,12 @@ func (r *IpTableRule) parseIpTablesMatcher(line string, chains []*IpTableChain) 
 				r.markType = IptablesMarkMatch
 			}
 			r.mark = int(v)
+			i++
+			break
+
+		case "--icmp-type": /* --icmp-type 0 */
+			i++
+			r.icmpType = items[i]
 			i++
 			break
 
