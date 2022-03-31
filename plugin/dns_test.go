@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	"github.com/zstackio/zstack-vyos/server"
@@ -57,6 +58,69 @@ var _ = Describe("dns_test", func() {
 		gomega.Expect(checkDnsProcess()).NotTo(gomega.BeTrue(), "dnsmasq start failed")
 
 		checkFirewall(utils.PubNicForUT, false)
+	})
+
+	It("test add vpcdns and check config", func() {
+		removeNic(nicCmd)
+		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
+		configureNic(nicCmd)
+		vpcCmd1 := &setVpcDnsCmd{
+			Dns:    []string{"223.5.5.5"},
+			NicMac: []string{utils.PubNicForUT.Mac, utils.PrivateNicsForUT[0].Mac},
+		}
+		err := setVpcDns(vpcCmd1)
+		gomega.Expect(err).To(gomega.BeNil(), fmt.Sprintf("setVpcDns() should reture nil, but %+v", err))
+
+		pid1, err := utils.ReadPidFromFile(DNSMASQ_PID_FILE)
+		gomega.Expect(err).To(gomega.BeNil(), fmt.Sprintf("read dnsmasq pid file error: %+v", err))
+		gomega.Expect(checkDnsProcess()).To(gomega.BeTrue(), "dnsmasq should be running")
+		gomega.Expect(diffConfigFile(DNSMASQ_PID_FILE_TEMP, DNSMASQ_PID_FILE)).To(gomega.BeTrue(), "dnsmasq pid file should be exist")
+
+		vpcCmd2 := &setVpcDnsCmd{
+			Dns:    []string{"8.8.8.8", "223.5.5.5"},
+			NicMac: []string{utils.PubNicForUT.Mac, utils.PrivateNicsForUT[0].Mac},
+		}
+		err = setVpcDns(vpcCmd2)
+		gomega.Expect(err).To(gomega.BeNil(), fmt.Sprintf("setVpcDns() should reture nil, but %+v", err))
+		pid2, err := utils.ReadPidFromFile(DNSMASQ_PID_FILE)
+		gomega.Expect(err).To(gomega.BeNil(), fmt.Sprintf("read dnsmasq pid file error: %+v", err))
+		gomega.Expect(checkDnsProcess()).To(gomega.BeTrue(), "dnsmasq should be running")
+		gomega.Expect(diffConfigFile(DNSMASQ_PID_FILE_TEMP, DNSMASQ_PID_FILE)).To(gomega.BeTrue(), "dnsmasq pid file should be exist")
+
+		gomega.Expect(pid1).To(gomega.Equal(pid2), fmt.Sprintf("pid1[%d] should equal pid2[%d], but not", pid1, pid2))
+
+		vpcCmd3 := &setVpcDnsCmd{
+			Dns:    []string{},
+			NicMac: []string{utils.PubNicForUT.Mac, utils.PrivateNicsForUT[0].Mac},
+		}
+		err = setVpcDns(vpcCmd3)
+		gomega.Expect(err).To(gomega.BeNil(), fmt.Sprintf("setVpcDns() should reture nil, but %+v", err))
+		pid3, err := utils.ReadPidFromFile(DNSMASQ_PID_FILE)
+		gomega.Expect(err).To(gomega.BeNil(), fmt.Sprintf("read dnsmasq pid file error: %+v", err))
+		gomega.Expect(checkDnsProcess()).To(gomega.BeTrue(), "dnsmasq should be running")
+
+		gomega.Expect(pid2).To(gomega.Equal(pid3), fmt.Sprintf("pid2[%d] should equal pid3[%d], but not", pid2, pid3))
+
+		vpcCmd4 := &setVpcDnsCmd{
+			Dns:    []string{"8.8.8.8", "223.5.5.5"},
+			NicMac: []string{utils.PubNicForUT.Mac},
+		}
+		err = setVpcDns(vpcCmd4)
+		gomega.Expect(err).To(gomega.BeNil(), fmt.Sprintf("setVpcDns() should reture nil, but %+v", err))
+		pid4, err := utils.ReadPidFromFile(DNSMASQ_PID_FILE)
+		gomega.Expect(err).To(gomega.BeNil(), fmt.Sprintf("read dnsmasq pid file error: %+v", err))
+		gomega.Expect(checkDnsProcess()).To(gomega.BeTrue(), "dnsmasq should be running")
+
+		gomega.Expect(pid3).NotTo(gomega.Equal(pid4), fmt.Sprintf("pid3[%d] should not equal pid4[%d]", pid3, pid4))
+
+		vpcCmd5 := &setVpcDnsCmd{
+			Dns:    []string{"8.8.8.8", "223.5.5.5"},
+			NicMac: []string{},
+		}
+		err = setVpcDns(vpcCmd5)
+		gomega.Expect(err).To(gomega.BeNil(), fmt.Sprintf("setVpcDns() should reture nil, but %+v", err))
+		gomega.Expect(checkDnsProcess()).NotTo(gomega.BeTrue(), "dnsmasq should be stop")
 	})
 
 	It("dns test destroying", func() {
