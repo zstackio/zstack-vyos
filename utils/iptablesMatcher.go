@@ -288,6 +288,10 @@ func (r *IpTableRule) isMatcherEqual(o *IpTableRule) error {
 			}
 		}
 	}
+	
+	if r.priority != 0 && o.priority != 0 && r.priority != o.priority {
+		return fmt.Errorf("not match, old priority: %d, new priority: %d", o.priority, r.priority)
+	}
 
 	return nil
 }
