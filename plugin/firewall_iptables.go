@@ -234,8 +234,23 @@ func detachRuleSetOnInterfaceByIptables(nicName, forward string) {
 	utils.PanicOnError(fmt.Errorf("this api is not supported"))
 }
 
+func getDefaultRule(ruleSetName string) bool {
+	table := utils.NewIpTables(utils.FirewallTable)
+	for _, r := range table.Rules {
+		if r.GetChainName() != ruleSetName {
+			continue
+		}
+
+		if utils.IsDefaultRule(r) {
+			return true
+		}
+	}
+	return false
+}
+
 func updateRuleSetByIptables(ruleSetName, defaultAction string) error {
 	table := utils.NewIpTables(utils.FirewallTable)
+	var rules []*utils.IpTableRule
 
 	for _, r := range table.Rules {
 		if r.GetChainName() != ruleSetName {
@@ -247,6 +262,12 @@ func updateRuleSetByIptables(ruleSetName, defaultAction string) error {
 		}
 	}
 
+	// add default rule for chain out if not exist when change rule default action
+	if !getDefaultRule(ruleSetName) {
+		rule := utils.NewDefaultIpTableRule(ruleSetName, utils.IPTABLES_RULENUMBER_MAX)
+		rule.SetAction(getIptablesRuleActionFromRuleAction(defaultAction))
+		rules = append(rules, rule)
+	}
 	return table.Apply()
 }
 
@@ -273,9 +294,8 @@ func createRuleByIptables(nicName, ruleSetName string, ref ethRuleSetRef) error 
 
 	// add default rule for chain out if not exist when add a rule on chain out
 	if ref.Forward == FIREWALL_DIRECTION_OUT {
-		rule := utils.NewDefaultIpTableRule(ruleSetName, utils.IPTABLES_RULENUMBER_MAX)
-		defaultRules := table.Found(rule.GetChainName(), rule.GetComment())
-		if len(defaultRules) == 0 {
+		if !getDefaultRule(ruleSetName) {
+			rule := utils.NewDefaultIpTableRule(ruleSetName, utils.IPTABLES_RULENUMBER_MAX)
 			rule.SetAction(utils.IPTABLES_ACTION_RETURN)
 			rules = append(rules, rule)
 		}
