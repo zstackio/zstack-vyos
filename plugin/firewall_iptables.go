@@ -268,6 +268,7 @@ func updateRuleSetByIptables(ruleSetName, defaultAction string) error {
 		rule.SetAction(getIptablesRuleActionFromRuleAction(defaultAction))
 		rules = append(rules, rule)
 	}
+	table.AddIpTableRules(rules)
 	return table.Apply()
 }
 
