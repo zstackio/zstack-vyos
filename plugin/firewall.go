@@ -609,7 +609,8 @@ func getFirewallConfig(cmd *getConfigCmd) interface{} {
 	}
 }
 
-func deleteOldRules(tree *server.VyosConfigTree) {
+func deleteOldRules() {
+	tree := server.NewParserFromShowConfiguration().Tree
 	rs := tree.Get("firewall name")
 	if ruleSetNodes := rs.Children(); ruleSetNodes != nil {
 		for _, ruleSetNode := range ruleSetNodes {
@@ -662,17 +663,29 @@ func deleteUserRuleHandler(ctx *server.CommandContext) interface{} {
 }
 
 func deleteUserRule(cmd *getConfigCmd) interface{} {
-
 	if utils.IsSkipVyosIptables() {
 		err := deleteUserRuleByIpTables(cmd)
 		utils.PanicOnError(err)
 	} else {
-		tree := server.NewParserFromShowConfiguration().Tree
-		deleteOldRules(tree)
+		deleteOldRules()
+		deleteDefaultRuleOnChainOut(cmd.NicTypeInfos)
 		allowNewStateTrafficOnPubNic(cmd.NicTypeInfos)
 	}
 
 	return nil
+}
+
+func deleteDefaultRuleOnChainOut(nicInfos []nicTypeInfo) {
+	tree := server.NewParserFromShowConfiguration().Tree
+	for _, nicInfo := range nicInfos {
+		nicName, err := utils.GetNicNameByMac(nicInfo.Mac)
+		utils.PanicOnError(err)
+		tree.Deletef("firewall name %v.out default-action accept", nicName)
+		tree.Deletef("firewall name %v.out default-action reject", nicName)
+		tree.Deletef("firewall name %v.out default-action drop", nicName)
+		tree.Deletef("firewall name %v.out", nicName)
+	}
+	tree.Apply(false)
 }
 
 func applyUserRulesHandler(ctx *server.CommandContext) interface{} {
@@ -688,9 +701,9 @@ func applyUserRules(cmd *applyUserRuleCmd) interface{} {
 		utils.PanicOnError(err)
 	}
 
-	tree := server.NewParserFromShowConfiguration().Tree
-	deleteOldRules(tree)
+	deleteOldRules()
 
+	tree := server.NewParserFromShowConfiguration().Tree
 	for _, ref := range cmd.Refs {
 		nic, err := utils.GetNicNameByMac(ref.Mac)
 		utils.PanicOnError(err)
