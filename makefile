@@ -5,6 +5,7 @@ endif
 export GO=$(GOROOT)/bin/go
 #export GOPATH=$(shell pwd)
 export GO111MODULE=on
+export TestEnv=devTestEnv.json
 
 TARGET_DIR=target
 PKG_ZVR_DIR=$(TARGET_DIR)/pkg-zvr
@@ -119,4 +120,4 @@ test: clean package
 	virtualenv -p $$python newenv;\
 	source newenv/bin/activate;\
 	pip install -r test/requirements.txt;\
-	python3 test/ut.py test/devTestEnv.json
+	python3 test/ut.py test/$(TestEnv)

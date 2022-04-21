@@ -1,0 +1,19 @@
+{
+    "testName": "vyos-devTest",
+    "mgtGateway": "172.25.0.1",
+    "hostName": "172.25.15.33",
+    "accessKeyId": "y2sSRXz5jiBHULwQEFy3",
+    "accessKeySecret": "sRONbMQ7uFamZ4z1w7i6hDuw3lF1wVIdS1gvJpKQ",
+    "zoneUuid": "b7c403a63e994e3e98cf82ec41507284",
+    "instanceOfferingUuid": "38f7c0cce0b74f97a0d3c288f5f1136e",
+    "vyosImageUuid_1_1_7_5_4_80": "e54239167a7d461d9005a258e75b7972",
+    "vyosImageUuid_1_1_7_3_13": "a1a91175715a47479c197a4132cb6b8a",
+    "vyosImageUuid_1_2_0_5_4_80": "0b77f71ebd1b462bb70dec10f0699038",
+    "mgtL3NetworkUuid": "a8f41a2ddb4342519d698a1d64ab5447",
+    "pubL3Uuid_1": "c1fe1efb82904accaff6e9462af8fe6a",
+    "pubL3Uuid_2": "76db6b5716a84a8cb11b726902c1fdba",
+    "privateL3Uuid_1": "a0a3333c0cbf4aacace73a94b4c8e896",
+    "privateL3Uuid_2": "755a71d53769404f80c0de3a6c66ac14",
+    "deleteTestVm": true,
+    "testLogFolder": ""
+}
