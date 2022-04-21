@@ -343,7 +343,7 @@ func createRuleByIptables(nicName, ruleSetName string, ref ethRuleSetRef) error 
 		rules = append(rules, rule)
 	}
 
-	removeIptablesRulesByFirewallRuleNumber(table, oldRules)
+	removeIptablesRulesByFirewallRuleNumber(table, oldRules, true)
 	table.AddIpTableRules(rules)
 	if err := table.Apply(); err != nil {
 		deleteIpsetMap(newIpsets)
@@ -371,7 +371,7 @@ func deleteRuleByIpTables(ruleSetName string, ref ethRuleSetRef) error {
 		rules = append(rules, getIpTableRuleFromRule(ruleSetName, r))
 	}
 	//table.RemoveIpTableRule(rules)
-	removeIptablesRulesByFirewallRuleNumber(table, rules)
+	removeIptablesRulesByFirewallRuleNumber(table, rules, true)
 	if err := table.Apply(); err != nil {
 		return err
 	}
@@ -463,7 +463,7 @@ func applyRuleSetChangesByIpTables(cmd *applyRuleSetChangesCmd) error {
 		}
 	}
 
-	table = removeIptablesRulesByFirewallRuleNumber(table, deleteRules)
+	table = removeIptablesRulesByFirewallRuleNumber(table, deleteRules, true)
 	table.AddIpTableRules(addRules)
 
 	if err := table.Apply(); err != nil {
@@ -565,7 +565,6 @@ ERROR_OUT:
 func deleteUserRuleByIpTables(cmd *getConfigCmd) error {
 	table := utils.NewIpTables(utils.FirewallTable)
 	table = deleteFirewallUserRule(table)
-
 	/* only public nic has rule number: 9999 */
 	nics := utils.GetBootStrapNicInfo()
 	for _, nic := range nics {
@@ -573,10 +572,19 @@ func deleteUserRuleByIpTables(cmd *getConfigCmd) error {
 			continue
 		}
 
-		rulsetName := buildRuleSetName(nic.Name, "in")
-		rule := utils.NewDefaultIpTableRule(rulsetName, utils.IPTABLES_RULENUMBER_9999)
+		rulesetName := buildRuleSetName(nic.Name, FIREWALL_DIRECTION_IN)
+		rule := utils.NewDefaultIpTableRule(rulesetName, utils.IPTABLES_RULENUMBER_9999)
 		rule.SetAction(utils.IPTABLES_ACTION_RETURN)
 		table.AddIpTableRules([]*utils.IpTableRule{rule})
+	}
+
+	/* only delete chain out's default rule with number: 10000 */
+	for _, nic := range nics {
+		rulesetName := buildRuleSetName(nic.Name, FIREWALL_DIRECTION_OUT)
+		if getDefaultRule(rulesetName) {
+			rule := utils.NewDefaultIpTableRule(rulesetName, utils.IPTABLES_RULENUMBER_MAX)
+			removeIptablesRulesByFirewallRuleNumber(table, []*utils.IpTableRule{rule}, false)
+		}
 	}
 	return table.Apply()
 }
@@ -584,7 +592,7 @@ func deleteUserRuleByIpTables(cmd *getConfigCmd) error {
 /* 1 vpc router only has 1 vpc firewall */
 func deleteFirewallUserRule(table *utils.IpTables) *utils.IpTables {
 	rules := utils.GetFirewallIpTableRule(table)
-	removeIptablesRulesByFirewallRuleNumber(table, rules)
+	removeIptablesRulesByFirewallRuleNumber(table, rules, true)
 
 	for _, r := range rules {
 		if r.GetSrcIpset() != "" {
@@ -619,10 +627,10 @@ func getIptablesRuleActionFromRuleAction(action string) string {
 	return strings.ToUpper(action)
 }
 
-func removeIptablesRulesByFirewallRuleNumber(tables *utils.IpTables, rules []*utils.IpTableRule) *utils.IpTables {
+func removeIptablesRulesByFirewallRuleNumber(tables *utils.IpTables, rules []*utils.IpTableRule, ignoreDefaultRule bool) *utils.IpTables {
 	var newRules []*utils.IpTableRule
 	for _, nr := range tables.Rules {
-		if !strings.Contains(nr.GetComment(), utils.FirewallRule) {
+		if !strings.Contains(nr.GetComment(), utils.FirewallRule) && ignoreDefaultRule {
 			newRules = append(newRules, nr)
 			continue
 		}

@@ -664,12 +664,19 @@ func checkCreateRuleByIptables(nicName, ruleSetName string, ref ethRuleSetRef) {
 func checkDeleteUserRuleByIpTables() {
 	table := utils.NewIpTables(utils.FirewallTable)
 
-	chainNames := utils.GetFirewallInputChains(table)
-	for _, name := range chainNames {
+	inChainNames := utils.GetFirewallInputChains(table)
+	for _, name := range inChainNames {
 		rule := utils.NewDefaultIpTableRule(name, utils.IPTABLES_RULENUMBER_9999)
 		rule.SetAction(utils.IPTABLES_ACTION_RETURN)
 		res := table.Check(rule)
 		gomega.Expect(res).To(gomega.BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
+	}
+
+	outChainNames := utils.GetFirewallOutputChains(table)
+	for _, name := range outChainNames {
+		rule := utils.NewDefaultIpTableRule(name, utils.IPTABLES_RULENUMBER_MAX)
+		res := table.Check(rule)
+		gomega.Expect(res).To(gomega.BeFalse(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
 	}
 }
 

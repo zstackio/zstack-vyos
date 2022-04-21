@@ -467,6 +467,17 @@ func GetFirewallInputChains(t *IpTables) []string {
 	return chains
 }
 
+func GetFirewallOutputChains(t *IpTables) []string {
+	var chains []string
+	for _, c := range t.Chains {
+		if strings.Contains(c.Name, RULESET_OUT.String()) {
+			chains = append(chains, c.Name)
+		}
+	}
+
+	return chains
+}
+
 func SetNicDefaultFirewallRule(nic string, defaultAction string) error {
 	t := NewIpTables(FirewallTable)
 
