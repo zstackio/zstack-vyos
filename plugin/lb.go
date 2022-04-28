@@ -6,13 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	cidrman "github.com/EvilSuperstars/go-cidrman"
-	log "github.com/Sirupsen/logrus"
-	haproxy "github.com/bcicen/go-haproxy"
-	"github.com/fatih/structs"
-	prom "github.com/prometheus/client_golang/prometheus"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
 	"html/template"
 	"io/ioutil"
 	"net/http"
@@ -24,6 +17,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	cidrman "github.com/EvilSuperstars/go-cidrman"
+	log "github.com/Sirupsen/logrus"
+	haproxy "github.com/bcicen/go-haproxy"
+	"github.com/fatih/structs"
+	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (
@@ -56,6 +57,7 @@ var (
 	haproxyVersion     = HAPROXY_VERSION_1_6_9
 	gobetweenListeners map[string]*GBListener
 	haproxyListeners   map[string]*HaproxyListener
+	EnableHaproxyLog   = true
 )
 
 const (
@@ -411,7 +413,9 @@ func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo) (err erro
 	conf := ` # This file is auto-generated, edit with caution!
     global
     maxconn {{.MaxConnection}}
+{{if .EnableHaproxyLog}}
     log 127.0.0.1 local1
+{{end}}
     #user vyos
     #group users
     uid {{.uid}}
@@ -548,6 +552,7 @@ backend {{ .ServerGroupUuid}}
 		m["Nbprocess"] = "1"
 	}
 	m["HaproxyVersion"] = haproxyVersion
+	m["EnableHaproxyLog"] = EnableHaproxyLog
 
 	if mode, exist := m["Mode"]; exist && (mode == "http" || mode == "https") {
 		if _, exist := m["HttpMode"]; !exist {
@@ -1357,7 +1362,8 @@ func makeLbSocketPath(lb lbInfo) string {
 }
 
 type refreshLbCmd struct {
-	Lbs []lbInfo `json:"lbs"`
+	Lbs              []lbInfo `json:"lbs"`
+	EnableHaproxyLog bool     `json:"enableHaproxyLog"`
 }
 
 type deleteLbCmd struct {
@@ -1484,6 +1490,7 @@ func refreshLogLevel(ctx *server.CommandContext) interface{} {
 func refreshLb(ctx *server.CommandContext) interface{} {
 	cmd := &refreshLbCmd{}
 	ctx.GetCommand(cmd)
+	EnableHaproxyLog = cmd.EnableHaproxyLog
 	for _, lb := range cmd.Lbs {
 		if len(lb.NicIps) == 0 {
 			delLb(lb)
