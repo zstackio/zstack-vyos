@@ -600,6 +600,7 @@ func InitNatRule() {
 	/*flush raw table to clear NOTRACK rule at startup*/
 	cmd := Bash{
 		Command: "sudo iptables -t raw -C DNAT -j NOTRACK && sudo iptables -t raw -D DNAT -j NOTRACK;" +
+			"sudo iptables -t raw -C PREROUTING -j NOTRACK && sudo iptables -t raw -D PREROUTING -j NOTRACK;" +
 			"sudo iptables -t raw -C OUTPUT -j NOTRACK && sudo iptables -t raw -D OUTPUT -j NOTRACK;" +
 			"sudo iptables -t raw -A DNAT -p vrrp -j NOTRACK;" + // do not track VRRP
 			"sudo iptables -t raw -A OUTPUT -p vrrp -j NOTRACK",
