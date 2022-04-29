@@ -75,7 +75,10 @@ if [ $? -ne 0 ]; then
 	echo "fail to commit"
 	exit 1
 fi
-sleep 4
+
+if [ x$(uname -m) != x"x86_64" ];then
+	sleep 4
+fi
 `
 	env_1_2 := `export vyos_libexec_dir=/usr/libexec/vyos
 export vyos_validators_dir=/usr/libexec/vyos/validators
@@ -144,7 +147,10 @@ if [ $? -ne 0 ]; then
 	echo "fail to commit"
 	exit 1
 fi
-sleep 4
+
+if [ x$(uname -m) != x"x86_64" ];then
+	sleep 4
+fi
 `
 	env_1_2 := `export vyos_libexec_dir=/usr/libexec/vyos
 export vyos_validators_dir=/usr/libexec/vyos/validators
