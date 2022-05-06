@@ -2,13 +2,14 @@ package plugin
 
 import (
 	"fmt"
+	"io/ioutil"
+	"strings"
+
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
-	"io/ioutil"
-	"strings"
 )
 
 func setTestLbEnv() {
@@ -67,17 +68,17 @@ var _ = Describe("lb_test", func() {
 			"healthyThreshold::2",
 			"healthCheckInterval::5",
 			"unhealthyThreshold::2")
-		
+
 		bs := backendServerInfo{
-			Ip: "192.168.100.10",
+			Ip:     "192.168.100.10",
 			Weight: 100,
 		}
-		sg := serverGroupInfo{Name:"default-server-group",
+		sg := serverGroupInfo{Name: "default-server-group",
 			ServerGroupUuid: "8e52bcc526074521894162aa8db73c24",
-			BackendServers: []backendServerInfo{bs},
-			IsDefault: false,
+			BackendServers:  []backendServerInfo{bs},
+			IsDefault:       false,
 		}
-		lb.ServerGroups = []serverGroupInfo {sg}
+		lb.ServerGroups = []serverGroupInfo{sg}
 		lb.RedirectRules = nil
 
 		var bash utils.Bash
@@ -140,6 +141,66 @@ var _ = Describe("lb_test", func() {
 		removeVip(rcmd)
 	})
 
+	It("LB:test enable or disable haproxy log", func() {
+		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+		configureNic(nicCmd)
+
+		var vips []vipInfo
+		vip1 := vipInfo{Ip: "100.64.1.200", Netmask: utils.PubNicForUT.Netmask, Gateway: utils.PubNicForUT.Gateway,
+			OwnerEthernetMac: utils.PubNicForUT.Mac}
+		vip2 := vipInfo{Ip: "100.64.1.201", Netmask: utils.PubNicForUT.Netmask, Gateway: utils.PubNicForUT.Gateway,
+			OwnerEthernetMac: utils.PubNicForUT.Mac}
+		vips = append(vips, vip1)
+		vips = append(vips, vip2)
+		ip1 := nicIpInfo{Ip: utils.PubNicForUT.Ip, Netmask: utils.PubNicForUT.Netmask, OwnerEthernetMac: utils.PubNicForUT.Mac}
+
+		cmd := &setVipCmd{SyncVip: false, Vips: vips, NicIps: []nicIpInfo{ip1}}
+		setVip(cmd)
+
+		lb := &lbInfo{}
+		lb.SecurityPolicyType = "TLS_CIPHER_POLICY_1_0"
+		lb.LbUuid = "f2c7b2ff2f834e1ea20363f49122a3b4"
+		lb.ListenerUuid = "23fb656e4f324e74a4889582104fcbf0"
+		lb.InstancePort = 433
+		lb.LoadBalancerPort = 433
+		lb.Vip = "100.64.1.201"
+		lb.NicIps = append(lb.NicIps, "192.168.100.10")
+		lb.Mode = "http"
+		lb.PublicNic = utils.PubNicForUT.Mac
+		lb.Parameters = append(lb.Parameters,
+			"balancerWeight::192.168.100.10::100",
+			"connectionIdleTimeout::60",
+			"Nbprocess::1",
+			"balancerAlgorithm::roundrobin",
+			"healthCheckTimeout::2",
+			"healthCheckTarget::tcp:default",
+			"maxConnection::2000000",
+			"httpMode::http-server-close",
+			"accessControlStatus::disable",
+			"healthyThreshold::2",
+			"healthCheckInterval::5",
+			"unhealthyThreshold::2")
+		bs := backendServerInfo{
+			Ip:     "192.168.100.10",
+			Weight: 100,
+		}
+		sg := serverGroupInfo{Name: "default-server-group",
+			ServerGroupUuid: "8e52bcc526074521894162aa8db73c24",
+			BackendServers:  []backendServerInfo{bs},
+			IsDefault:       false,
+		}
+		lb.ServerGroups = []serverGroupInfo{sg}
+		lb.RedirectRules = nil
+
+		EnableHaproxyLog = true
+		setLb(*lb)
+		checkHaproxyLog(*lb, true)
+
+		EnableHaproxyLog = false
+		setLb(*lb)
+		checkHaproxyLog(*lb, false)
+	})
+
 	It("LB：test refresh lb log", func() {
 		testLbRefreshLbLog()
 	})
@@ -148,6 +209,19 @@ var _ = Describe("lb_test", func() {
 		testCreateCertificate()
 	})
 })
+
+func checkHaproxyLog(lb lbInfo, isEnable bool) {
+	confPath := makeLbConfFilePath(lb)
+	bash := utils.Bash{
+		Command: fmt.Sprintf("cat %s | grep 'log 127.0.0.1 local1'", confPath),
+	}
+	ret, _, _, _ := bash.RunWithReturn()
+	if isEnable {
+		gomega.Expect(ret).To(gomega.Equal(0), "haproxy log should enable")
+	} else {
+		gomega.Expect(ret).NotTo(gomega.Equal(0), "haproxy log should disable")
+	}
+}
 
 func testLbSuccess() {
 	lb := &lbInfo{}
