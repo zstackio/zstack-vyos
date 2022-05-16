@@ -649,6 +649,7 @@ func updateRuleSet(cmd *updateRuleSetCmd) interface{} {
 		utils.PanicOnError(err)
 	} else {
 		tree.SetFirewalRuleSetAction(ruleSetName, cmd.ActionType)
+		tree.AttachRuleSetOnInterface(nic, cmd.Forward, ruleSetName)
 		tree.Apply(false)
 	}
 
@@ -668,11 +669,22 @@ func deleteUserRule(cmd *getConfigCmd) interface{} {
 		utils.PanicOnError(err)
 	} else {
 		deleteOldRules()
+		detachRuleSetOnInterface(cmd.NicTypeInfos)
 		deleteDefaultRuleOnChainOut(cmd.NicTypeInfos)
 		allowNewStateTrafficOnPubNic(cmd.NicTypeInfos)
 	}
 
 	return nil
+}
+
+func detachRuleSetOnInterface(nicInfos []nicTypeInfo) {
+	tree := server.NewParserFromShowConfiguration().Tree
+	for _, nicInfo := range nicInfos {
+		nicName, err := utils.GetNicNameByMac(nicInfo.Mac)
+		utils.PanicOnError(err)
+		tree.Deletef("interfaces ethernet %s firewall out name %s.out", nicName, nicName)
+	}
+	tree.Apply(false)
 }
 
 func deleteDefaultRuleOnChainOut(nicInfos []nicTypeInfo) {
