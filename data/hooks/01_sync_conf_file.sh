@@ -2,10 +2,21 @@
 
 . ./hook_function
 
-FILE_CONFIG="${CONFIG_PATH}/file_config"
+ARCH=`uname -m`
+
+if [ "${ARCH}" == "x86_64" ]; then
+    INCLUDE_LISTS="${CONFIG_PATH}/includes-x86.list"
+    INCLUDE_DIR="${FILE_LISTS_PATH}/x86"
+elif [ "${ARCH}" == "aarch64" ]; then
+    INCLUDE_LISTS="${CONFIG_PATH}/includes-arm.list"
+    INCLUDE_DIR="${FILE_LISTS_PATH}/arm"
+else
+    log_info "ARCH:${ARCH} is not recognized, files will not be synced"
+    exit 0
+fi
 
 function sync_file {
-    file_src=${FILE_LISTS_PATH}/$1
+    file_src=${INCLUDE_DIR}/$1
     file_dst=$2/$1
     file_mode=$3
     file_owner=$4
@@ -26,13 +37,13 @@ function sync_file {
 }
 
 log_info "Start sync conf file"
-remove_file_lists=`parse_conf "uninstall" ${FILE_CONFIG} | xargs`
+remove_file_lists=`parse_conf "uninstall" ${INCLUDE_LISTS} | xargs`
 if [ "${remove_file_lists}" != "" ]; then
     log_info "Remove file list: [${remove_file_lists}]"
     rm -f ${remove_file_lists}
 fi
 
-parse_conf "install" ${FILE_CONFIG} | while read line; do
+parse_conf "install" ${INCLUDE_LISTS} | while read line; do
     arg_num=`echo ${line} | awk '{print NF}'`
     if [ ${arg_num} -eq 4 ]; then
         sync_file $line
