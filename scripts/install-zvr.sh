@@ -164,4 +164,10 @@ elif [ "$OSVERSION" = "5.4.80-amd64-vyos" ]; then
   sudo cp  grub.cfg.5.4.80 /boot/grub/grub.cfg
 fi
 
+sudo cp -a data /home/vyos/zvr/
+if [ -f "/home/vyos/zvr/data/hooks/00_exec_hooks.sh" ]; then
+    sudo chmod +x /home/vyos/zvr/data/hooks/00_exec_hooks.sh
+    sudo /bin/bash /home/vyos/zvr/data/hooks/00_exec_hooks.sh
+fi
+
 exit 0

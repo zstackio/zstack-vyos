@@ -1,0 +1,18 @@
+#!/bin/bash
+
+DATA_PATH="/home/vyos/zvr/data"
+FILE_LISTS_PATH="${DATA_PATH}/file-lists"
+CONFIG_PATH="${DATA_PATH}/config"
+HOOKS_PATH="${DATA_PATH}/hooks"
+REPOS_PATH="${DATA_PATH}/repos"
+LOG_FILE="${DATA_PATH}/zvr-config.log"
+
+function log_info() {
+	echo "$(date -d today '+%Y%m%d %H:%M:%S') - $1"  >> ${LOG_FILE} 2>>${LOG_FILE}
+}
+
+function parse_conf() {
+	SECTION=$1
+	CONFIG_FILE=$2
+	cat ${CONFIG_FILE} | sed -n "/^\[${SECTION}\]/,/^\[/p" | sed '/^[#\[]/d;/^$/d'
+}

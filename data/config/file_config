@@ -1,0 +1,8 @@
+[uninstall]
+# Use for delete files
+#
+
+[install]
+# Use for add/sync files
+# default path is data/conf/
+modules             /etc/                      0664    root:root
