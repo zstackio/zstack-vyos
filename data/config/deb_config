@@ -1,8 +1,0 @@
-[uninstall]
-# use for remove deb
-
-[install]
-# use for install deb
-iperf
-strace
-strongswan-zstack
