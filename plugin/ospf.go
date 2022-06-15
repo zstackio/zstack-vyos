@@ -2,13 +2,14 @@ package plugin
 
 import (
 	"fmt"
+	"net"
+	"strings"
+	"unicode"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
-	"net"
-	"strings"
-	"unicode"
 )
 
 const (
@@ -324,22 +325,26 @@ func refreshOspf(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 
 	log.Debugf(fmt.Sprintf("ospf refresh cmd for %v %v %v ", cmd.RouterId, cmd.AreaInfos, cmd.NetworkInfos))
-	p := getProtocol(cmd.RouterId, cmd.AreaInfos, cmd.NetworkInfos)
-	err := p.init(server.NewParserFromShowConfiguration().Tree)
-	utils.PanicOnError(err)
+	if !utils.IsEnableVyosCmd() {
+		configureOspfByVtysh(cmd)
+	} else {
+		p := getProtocol(cmd.RouterId, cmd.AreaInfos, cmd.NetworkInfos)
+		err := p.init(server.NewParserFromShowConfiguration().Tree)
+		utils.PanicOnError(err)
 
-	if cmd.NetworkInfos != nil && len(cmd.NetworkInfos) > 0 {
-		err = p.setRouterId()
-		utils.PanicOnError(err)
-		err = p.setArea()
-		utils.PanicOnError(err)
-		err = p.setNetwork()
-		utils.PanicOnError(err)
-		err = p.setRawCmd("protocols ospf log-adjacency-changes")
-		utils.PanicOnError(err)
+		if cmd.NetworkInfos != nil && len(cmd.NetworkInfos) > 0 {
+			err = p.setRouterId()
+			utils.PanicOnError(err)
+			err = p.setArea()
+			utils.PanicOnError(err)
+			err = p.setNetwork()
+			utils.PanicOnError(err)
+			err = p.setRawCmd("protocols ospf log-adjacency-changes")
+			utils.PanicOnError(err)
+		}
+
+		p.commit()
 	}
-
-	p.commit()
 
 	if utils.IsSkipVyosIptables() {
 		syncOspfRulesByIptables(cmd.NetworkInfos)

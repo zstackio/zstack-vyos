@@ -2,10 +2,11 @@ package plugin
 
 import (
 	"fmt"
+	"strconv"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
-	"strconv"
 )
 
 const (
@@ -231,6 +232,39 @@ func hasRuleNumberForAddress(tree *server.VyosConfigTree, address string, ruleNo
 	return true
 }
 
+func setSnatStateByIptables(Snats []snatInfo, state bool) {
+	table := utils.NewIpTables(utils.NatTable)
+
+	var rules []*utils.IpTableRule
+	for _, s := range Snats {
+		outNic, err := utils.GetNicNameByMac(s.PublicNicMac)
+		utils.PanicOnError(err)
+		inNic, err := utils.GetNicNameByMac(s.PrivateNicMac)
+		utils.PanicOnError(err)
+		address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask)
+		utils.PanicOnError(err)
+
+		rule := utils.NewIpTableRule(utils.RULESET_SNAT.String())
+		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
+		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(outNic).SetSnatTargetIp(s.PublicIp)
+		rules = append(rules, rule)
+
+		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
+		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
+		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
+		rules = append(rules, rule)
+	}
+
+	if state == false {
+		table.RemoveIpTableRule(rules)
+	} else {
+		table.AddIpTableRules(rules)
+	}
+
+	err := table.Apply()
+	utils.PanicOnError(err)
+}
+
 func syncSnatByIptables(Snats []snatInfo, state bool) {
 
 	/* delete all snat rules */
@@ -245,6 +279,9 @@ func syncSnatByIptables(Snats []snatInfo, state bool) {
 
 	var rules []*utils.IpTableRule
 	for _, s := range Snats {
+		if !s.State {
+			continue
+		}
 		outNic, err := utils.GetNicNameByMac(s.PublicNicMac)
 		utils.PanicOnError(err)
 		inNic, err := utils.GetNicNameByMac(s.PrivateNicMac)
@@ -347,7 +384,7 @@ func setSnatStateHandler(ctx *server.CommandContext) interface{} {
 
 func setSnatState(cmd *setSnatStateCmd) interface{} {
 	if utils.IsSkipVyosIptables() {
-		syncSnatByIptables(cmd.Snats, cmd.Enable)
+		setSnatStateByIptables(cmd.Snats, cmd.Enable)
 	} else {
 		update := applySnatRules(cmd.Snats, cmd.Enable)
 		if update && len(cmd.Snats) > 0 {

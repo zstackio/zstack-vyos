@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/xml"
 	"fmt"
+
 	log "github.com/Sirupsen/logrus"
 )
 
@@ -181,6 +182,20 @@ func (s *IpSet) Swap(dst *IpSet) bool {
 	}
 
 	return true
+}
+
+func (s *IpSet) Rename(name string) error {
+	cmd := Bash{
+		Command: fmt.Sprintf("ipset rename %s %s -exist", s.Name, name),
+		Sudo:    true,
+	}
+	ret, _, _, err := cmd.RunWithReturn()
+	if err != nil || ret != 0 {
+		log.Debugf("ipset rename from %s to %s error", s.Name, name)
+		return err
+	}
+
+	return nil
 }
 
 /* for hash:ip, when add a member 1.1.1.0/24, you will get 1.1.1.0 ~ 1.1.1.255 from ipset list

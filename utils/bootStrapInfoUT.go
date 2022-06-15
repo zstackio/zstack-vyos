@@ -286,3 +286,11 @@ func ReleasePubL3Ip(ip string) {
 func GetMgtGateway() string {
 	return BootstrapInfo["mgtGateway"].(string)
 }
+
+func SetEnableVyosCmdForUT(enable bool) {
+	if enable {
+		BootstrapInfo["EnableVyosCmd"] = true
+	} else {
+		BootstrapInfo["EnableVyosCmd"] = false
+	}
+}

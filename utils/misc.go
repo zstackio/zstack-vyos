@@ -2,18 +2,22 @@ package utils
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"io/ioutil"
 	"regexp"
 	"runtime"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 type CompareStringFunc func(string, string) bool
 
 const (
-	VYOS_1_1_7 = "1.1.7"
-	VYOS_1_2   = "1.2"
+	VYOS_1_1_7         = "1.1.7"
+	VYOS_1_2           = "1.2"
+	TIME_ZONE_FILE     = "/etc/timezone"
+	LOCAL_TIME_FILE    = "/etc/localtime"
+	ZSTACK_CONFIG_PATH = "/home/vyos/zvr/.zstack_config"
 )
 
 var (
@@ -76,4 +80,42 @@ func InitVyosVersion() {
 
 func GetCpuNum() int {
 	return runtime.NumCPU()
+}
+
+func Arping(nicname string, ip string, gateway string) {
+	b := Bash{
+		Command: fmt.Sprintf("arping -q -A -w 2 -c 1 -I %s %s > /dev/null", nicname, ip),
+		Sudo:    true,
+	}
+	b.Run()
+}
+
+func SetUserPasswd(user string, password string) error {
+	bash := Bash{
+		Command: fmt.Sprintf("echo '%s:%s' | chpasswd", user, password),
+		Sudo:    true,
+	}
+
+	return bash.Run()
+}
+
+func SetTimeZone(timeZone string) error {
+	Assertf(timeZone != "", "time zone can not be empty")
+
+	bash := Bash{
+		Command: fmt.Sprintf("echo '%s' > %s; cp /usr/share/zoneinfo/%s %s", timeZone, TIME_ZONE_FILE, timeZone, LOCAL_TIME_FILE),
+		Sudo:    true,
+	}
+
+	return bash.Run()
+}
+
+func SetNicOption(devName string) {
+	Assertf(devName != "", "device name can not be empty")
+	bash := Bash{
+		Command: fmt.Sprintf("ethtool -s %s speed 1000 duplex full", devName),
+		Sudo:    true,
+	}
+
+	bash.Run()
 }

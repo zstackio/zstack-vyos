@@ -3,13 +3,14 @@ package plugin
 import (
 	"encoding/json"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (
@@ -98,36 +99,51 @@ func getConnections(ctx *server.CommandContext) interface{} {
 	return getConnRsp{RawConnections: z.getConnections()}
 }
 
-func setDistributedRouting(ctx *server.CommandContext) interface{} {
-	cmd := &setDistributedRoutingReq{}
-	ctx.GetCommand(cmd)
-
+func setDistributedRouting(cmd *setDistributedRoutingReq) interface{} {
 	var r string
 	var z zsnAgent
 	t := &zsnsetDistributedRoutingRsp{}
 
-	tree := server.NewParserFromShowConfiguration().Tree
-
 	fd, _ := utils.CreateFileIfNotExists(zsn_state_file, os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	defer fd.Close()
 	fd.Truncate(0)
-	if cmd.Enabled {
-		r = z.enable()
-		fd.Write([]byte(ZSN_STATE_FILE_ENABLE))
 
-		if node := tree.Get("system task-scheduler task zsn interval 1"); node == nil {
-			/* create a cronjob to check zsn */
-			tree.Set("system task-scheduler task zsn interval 1")
-			tree.Set(fmt.Sprintf("system task-scheduler task zsn executable path '%s'", utils.Cronjob_file_zsn))
+	if !utils.IsEnableVyosCmd() {
+		if cmd.Enabled {
+			r = z.enable()
+			fd.Write([]byte(ZSN_STATE_FILE_ENABLE))
+			zsnJob := utils.NewCronjob().SetId(6).SetCommand(utils.Cronjob_file_zsn).SetMinute("*/1")
+			cronJobMap := utils.CronjobMap{6: zsnJob}
+			err := cronJobMap.ConfigService()
+			utils.PanicOnError(err)
+		} else {
+			r = z.disable()
+			fd.Write([]byte(ZSN_STATE_FILE_DISABLE))
+			zsnJob := utils.NewCronjob().SetId(6).SetCommand(utils.Cronjob_file_zsn).SetMinute("*/1").SetDelete()
+			cronJobMap := utils.CronjobMap{6: zsnJob}
+			err := cronJobMap.ConfigService()
+			utils.PanicOnError(err)
 		}
 	} else {
-		r = z.disable()
-		fd.Write([]byte(ZSN_STATE_FILE_DISABLE))
+		tree := server.NewParserFromShowConfiguration().Tree
+		if cmd.Enabled {
+			r = z.enable()
+			fd.Write([]byte(ZSN_STATE_FILE_ENABLE))
 
-		tree.Delete("system task-scheduler task zsn")
+			if node := tree.Get("system task-scheduler task zsn interval 1"); node == nil {
+				/* create a cronjob to check zsn */
+				tree.Set("system task-scheduler task zsn interval 1")
+				tree.Set(fmt.Sprintf("system task-scheduler task zsn executable path '%s'", utils.Cronjob_file_zsn))
+			}
+		} else {
+			r = z.disable()
+			fd.Write([]byte(ZSN_STATE_FILE_DISABLE))
+
+			tree.Delete("system task-scheduler task zsn")
+		}
+
+		tree.Apply(false)
 	}
-	fd.Close()
-
-	tree.Apply(false)
 
 	err := json.Unmarshal([]byte(r), &t)
 	if err != nil {
@@ -142,8 +158,15 @@ func setDistributedRouting(ctx *server.CommandContext) interface{} {
 	}
 }
 
+func setDistributedRoutingHandler(ctx *server.CommandContext) interface{} {
+	cmd := &setDistributedRoutingReq{}
+	ctx.GetCommand(cmd)
+
+	return setDistributedRouting(cmd)
+}
+
 func ZsnEntryPoint() {
-	server.RegisterAsyncCommandHandler(ZSN_SET_DR_PATH, server.VyosLock(setDistributedRouting))
+	server.RegisterAsyncCommandHandler(ZSN_SET_DR_PATH, server.VyosLock(setDistributedRoutingHandler))
 	server.RegisterAsyncCommandHandler(ZSN_STATUS_PATH, getStatus)
 	server.RegisterAsyncCommandHandler(ZSN_CONNECTION_PATH, getConnections)
 }

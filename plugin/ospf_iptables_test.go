@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/zstackio/zstack-vyos/utils"
@@ -20,6 +21,7 @@ var _ = Describe("ospf_iptables_test", func() {
 	It("[IPTABLES]ospf : test sync ospf", func() {
 		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
 		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
+		removeNic(nicCmd)
 		configureNic(nicCmd)
 
 		info1 := networkInfo{

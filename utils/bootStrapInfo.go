@@ -3,11 +3,12 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"io/ioutil"
 	"net"
 	"os"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -59,6 +60,21 @@ func (n NicArray) Less(i, j int) bool { return n[i].Name < n[j].Name }
 
 var BootstrapInfo map[string]interface{} = make(map[string]interface{})
 
+func MakeIfaceAlias(nic *NicInfo) string {
+	result := ""
+	if nic.L2Type != "" {
+		result += fmt.Sprintf("l2type:%s;", nic.L2Type)
+	}
+	if nic.Category != "" {
+		result += fmt.Sprintf("category:%s;", nic.Category)
+	}
+	if nic.PhysicalInterface != "" {
+		result += fmt.Sprintf("physicalInterface:%s;", nic.PhysicalInterface)
+	}
+	result += fmt.Sprintf("vni:%d;", nic.Vni)
+	return result
+}
+
 func GetSshPortFromBootInfo() float64 {
 	port, ok := BootstrapInfo["sshPort"].(float64)
 	if !ok {
@@ -66,6 +82,22 @@ func GetSshPortFromBootInfo() float64 {
 	}
 
 	return port
+}
+
+func GetSshKey() string {
+	if sshkey, ok := BootstrapInfo["publicKey"]; ok {
+		return sshkey.(string)
+	}
+
+	return ""
+}
+
+func GetAdditionalNic() []interface{} {
+	if additionalNics, ok := BootstrapInfo["additionalNics"]; ok {
+		return additionalNics.([]interface{})
+	}
+
+	return nil
 }
 
 func GetMgmtInfoFromBootInfo() map[string]interface{} {
@@ -80,6 +112,14 @@ func IsSkipVyosIptables() bool {
 	}
 
 	return SkipVyosIptables
+}
+
+func SetSkipVyosIptables(enable bool) {
+	if enable {
+		BootstrapInfo["SkipVyosIptables"] = true
+	} else {
+		BootstrapInfo["SkipVyosIptables"] = false
+	}
 }
 
 func SetSkipVyosIptablesForUT(enable bool) {
@@ -109,6 +149,10 @@ func InitBootStrapInfo() {
 
 	if err := json.Unmarshal(content, &BootstrapInfo); err != nil {
 		log.Debugf("can not parse info from %s, can not get mgmt gateway", BOOTSTRAP_INFO_CACHE)
+	}
+
+	if !IsEnableVyosCmd() {
+		SetSkipVyosIptables(true)
 	}
 }
 
@@ -166,11 +210,11 @@ func WriteDefaultHaScript(defaultNic *Nic) {
 	PanicOnError(err)
 	conent := ""
 	if defaultNic.Gateway != "" {
-		conent += fmt.Sprintln(fmt.Sprintf("ip route add default %s via %s || true", defaultNic.Gateway, defaultNicName))
+		conent += fmt.Sprintln(fmt.Sprintf("ip route add default via %s dev %s || true", defaultNic.Gateway, defaultNicName))
 	}
 
 	if defaultNic.Gateway6 != "" {
-		conent += fmt.Sprintln(fmt.Sprintf("ip -6 route add default %s via %s || true", defaultNic.Gateway6, defaultNicName))
+		conent += fmt.Sprintln(fmt.Sprintf("ip -6 route add default via %s dev %s || true", defaultNic.Gateway6, defaultNicName))
 	}
 
 	err = ioutil.WriteFile(VYOSHA_DEFAULT_ROUTE_SCRIPT, []byte(conent), 0755)
@@ -222,9 +266,23 @@ func SetHaStatus(status string) {
 }
 
 func GetHaStatus() (status string) {
-	return BootstrapInfo["haStatus"].(string)
+	haStatus := NOHA
+	if v, ok := BootstrapInfo["haStatus"]; ok {
+		haStatus = v.(string)
+	}
+
+	return haStatus
 }
 
 func IsRuingUT() bool {
 	return strings.Contains(os.Args[0], "/home/vyos/vyos_ut/zstack-vyos/")
+}
+
+func IsEnableVyosCmd() bool {
+	enableVyosCmd := true
+	if v, ok := BootstrapInfo["EnableVyosCmd"]; ok {
+		enableVyosCmd = v.(bool)
+	}
+
+	return enableVyosCmd
 }

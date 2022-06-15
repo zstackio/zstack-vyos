@@ -164,11 +164,15 @@ func cleanUpTmpDir() {
 }
 
 func cleanUpConfigDir() {
-	bash := utils.Bash{
-		Command: "rm -rf /home/vyos/zvr/.zstack_config/*",
-		Sudo:    true,
+	file_lists := []string{utils.ZSTACK_CONFIG_PATH, utils.CROND_CONFIG_FILE}
+	for _, f := range file_lists {
+		if ok, err := utils.PathExists(f); ok || err != nil {
+			log.Debugf("cleanUpConfigDir: file [%s] will be delete", f)
+			if err := utils.DeleteAllFiles(f); err != nil {
+				log.Debugf("cleanUpConfigDir: delete file [%s] error: %+v", f, err)
+			}
+		}
 	}
-	bash.Run()
 }
 
 func checkIpDuplicate() {
@@ -633,9 +637,13 @@ func main() {
 		parseKvmBootInfo()
 	}
 	log.Debugf("zvrboot main")
-	utils.InitVyosVersion()
 	utils.InitBootStrapInfo()
-	configureVyos()
+	utils.InitVyosVersion()
+	if utils.IsEnableVyosCmd() {
+		configureVyos()
+	} else {
+		configureSystem()
+	}
 	startZvr()
 	log.Debugf("successfully configured the sysmtem and bootstrap the zstack virtual router agents")
 }

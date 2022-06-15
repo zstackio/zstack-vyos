@@ -3,15 +3,16 @@ package plugin
 import (
 	"errors"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
 	"io/ioutil"
 	"os"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (
@@ -33,6 +34,8 @@ const (
 	IPSecRestartInterval        = IPSecIkeRekeyInterval - IPSecIkeRekeyIntervalMargin
 
 	ipsecAddressGroup = "ipsec-group"
+	ipsecGroupTemp    = "ipsec-group-tmp"
+	ipsecGroupType    = "hash:ip"
 
 	ipsecState_disable = "Disabled"
 	ipsecState_enable  = "Enabled"
@@ -133,14 +136,25 @@ func writeIpsecHaScript(enable bool) {
 }
 
 func syncIpSecRulesByIptables() {
+	var (
+		snatRules   []*utils.IpTableRule
+		filterRules []*utils.IpTableRule
+		err         error
+	)
 	table := utils.NewIpTables(utils.FirewallTable)
 	natTable := utils.NewIpTables(utils.NatTable)
 
-	var snatRules []*utils.IpTableRule
-	var filterRules []*utils.IpTableRule
-
 	table.RemoveIpTableRuleByComments(utils.IpsecRuleComment)
 	natTable.RemoveIpTableRuleByComments(utils.IpsecRuleComment)
+
+	ipsetGroup := utils.NewIPSet(ipsecAddressGroup, ipsecGroupType)
+	if !ipsetGroup.IsExist() {
+		err = ipsetGroup.Create()
+		utils.PanicOnError(err)
+	}
+	ipsetGroupTemp := utils.NewIPSet(ipsecGroupTemp, ipsecGroupType)
+	err = ipsetGroupTemp.Create()
+	utils.PanicOnError(err)
 
 	vipNicNameMap := make(map[string]string)
 	for _, info := range ipsecMap {
@@ -152,34 +166,32 @@ func syncIpSecRulesByIptables() {
 		vipNicNameMap[info.Vip] = nicName
 	}
 
-	nicMap := make(map[string]string)
 	for _, info := range ipsecMap {
-		nicName, _ := vipNicNameMap[info.Vip]
-		if _, ok := nicMap[nicName]; ok {
-			continue
-		} else {
-			nicMap[nicName] = nicName
-		}
+		nicName, err := utils.GetNicNameByMac(info.PublicNic)
+		utils.PanicOnError(err)
 
 		rule := utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
 		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.IpsecRuleComment)
-		rule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("500").SetSrcIp(info.PeerAddress + "/32")
+		rule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("500").SetSrcIpset(ipsecAddressGroup)
 		filterRules = append(filterRules, rule)
 
 		rule = utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
 		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.IpsecRuleComment)
-		rule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("4500").SetSrcIp(info.PeerAddress + "/32")
+		rule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("4500").SetSrcIpset(ipsecAddressGroup)
 		filterRules = append(filterRules, rule)
 
 		rule = utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
 		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.IpsecRuleComment)
-		rule.SetProto(utils.IPTABLES_PROTO_ESP).SetSrcIp(info.PeerAddress + "/32")
+		rule.SetProto(utils.IPTABLES_PROTO_ESP).SetSrcIpset(ipsecAddressGroup)
 		filterRules = append(filterRules, rule)
 
 		rule = utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
 		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.IpsecRuleComment)
-		rule.SetProto(utils.IPTABLES_PROTO_AH).SetSrcIp(info.PeerAddress + "/32")
+		rule.SetProto(utils.IPTABLES_PROTO_AH).SetSrcIpset(ipsecAddressGroup)
 		filterRules = append(filterRules, rule)
+
+		err = ipsetGroupTemp.AddMember([]string{info.PeerAddress})
+		utils.PanicOnError(err)
 	}
 
 	for _, info := range ipsecMap {
@@ -218,6 +230,10 @@ func syncIpSecRulesByIptables() {
 		log.Warnf("ipsec add nat rule failed %v", err)
 		utils.PanicOnError(err)
 	}
+
+	_ = ipsetGroupTemp.Swap(ipsetGroup)
+	err = ipsetGroupTemp.Destroy()
+	utils.PanicOnError(err)
 }
 
 func setIPSecRule(tree *server.VyosConfigTree, info *ipsecInfo) {

@@ -1,7 +1,0 @@
-[uninstall]
-# use for remove deb packages
-
-[install]
-# use for install deb packages
-iperf
-strace

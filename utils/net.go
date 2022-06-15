@@ -3,18 +3,21 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/pkg/errors"
 	"io/ioutil"
 	"net"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/pkg/errors"
 )
 
 const (
 	ZSTACK_ROUTE_PROTO            = "zstack"
 	ZSTACK_ROUTE_PROTO_IDENTIFFER = "201"
+	ZVR_ROUTE_PROTO               = "zvr"
+	ZVR_ROUTE_PROTO_IDENTIFFER    = 202
 )
 
 func NetmaskToCIDR(netmask string) (int, error) {
@@ -220,6 +223,7 @@ func DeleteRouteIfExists(ip string) error {
 
 func SetZStackRoute(ip string, nic string, gw string) error {
 	SetZStackRouteProtoIdentifier()
+	SetZvrRouteProtoIdentifier()
 	DeleteRouteIfExists(ip)
 
 	var bash Bash
@@ -274,6 +278,20 @@ func SetZStackRouteProtoIdentifier() {
 		log.Debugf("no route proto zstack in /etc/iproute2/rt_protos")
 		bash = Bash{
 			Command: fmt.Sprintf("sudo bash -c \"echo -e '\n\n# Used by zstack\n%s     zstack' >> /etc/iproute2/rt_protos\"", ZSTACK_ROUTE_PROTO_IDENTIFFER),
+		}
+		bash.Run()
+	}
+}
+
+func SetZvrRouteProtoIdentifier() {
+	bash := Bash{
+		Command: "grep zvr /etc/iproute2/rt_protos",
+	}
+	if check, _, _, _ := bash.RunWithReturn(); check != 0 {
+		log.Debugf("no route proto zvr in /etc/iproute2/rt_protos")
+		bash = Bash{
+			Command: fmt.Sprintf("bash -c \"echo '%d     zvr' >> /etc/iproute2/rt_protos\"", ZVR_ROUTE_PROTO_IDENTIFFER),
+			Sudo:    true,
 		}
 		bash.Run()
 	}

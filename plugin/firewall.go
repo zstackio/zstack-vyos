@@ -409,6 +409,8 @@ func applyRuleSetChanges(cmd *applyRuleSetChangesCmd) interface{} {
 	if utils.IsSkipVyosIptables() {
 		err := applyRuleSetChangesByIpTables(cmd)
 		utils.PanicOnError(err)
+
+		return nil
 	}
 	for _, ref := range refs {
 		nic, err := utils.GetNicNameByMac(ref.Mac)
@@ -459,6 +461,8 @@ func createRule(cmd *createRuleCmd) interface{} {
 	if utils.IsSkipVyosIptables() {
 		err :=  createRuleByIptables(nic, ruleSetName, ref)
 		utils.PanicOnError(err)
+
+		return nil
 	}
 	if rs := tree.Get(fmt.Sprintf("firewall name %s", ruleSetName)); rs == nil {
 		tree.CreateFirewallRuleSet(ruleSetName, []string{"default-action accept"})
@@ -711,6 +715,8 @@ func applyUserRules(cmd *applyUserRuleCmd) interface{} {
 	if utils.IsSkipVyosIptables() {
 		err := applyUserRulesByIpTables(cmd)
 		utils.PanicOnError(err)
+
+		return nil
 	}
 
 	deleteOldRules()

@@ -92,29 +92,10 @@ atexit() {
 trap atexit EXIT SIGHUP SIGINT SIGTERM
 
 tar xzf $2 -C $tmpdir
-ZVR=$tmpdir/zvr
-ZVRBOOT=$tmpdir/zvrboot
-ZVRSCRIPT=$tmpdir/zstack-virtualrouteragent
-HAPROXY=$tmpdir/haproxy
-GOBETWEEN=$tmpdir/gobetween
-KEEPALIVED=$tmpdir/keepalived
-PIMD=$tmpdir/pimd
-UACCTD=$tmpdir/uacctd
-HEALTHCHECK=$tmpdir/healthcheck.sh
-SSHD=$tmpdir/sshd.sh
-RSYSLOGD=$tmpdir/rsyslog.sh
-ZVRMONITOR=$tmpdir/zvr-monitor.sh
-FILEMONITOR=$tmpdir/file-monitor.sh
-ZVRREBOOT=$tmpdir/zvr-reboot.sh
-CPUMONITOR=$tmpdir/cpu-monitor
-SYSCTL=$tmpdir/sysctl.conf
-CONNTRACKD=$tmpdir/conntrackd.conf
-ZSN=$tmpdir/zsn-crontab.sh
-SBIN_DIR=/opt/vyatta/sbin
+
+DATA=$tmpdir/zvr-data.tar.gz
+BOOTSCRIPT=$tmpdir/vyos-postconfig-bootup.script
 VERSION=`date +%Y%m%d`
-ZVR_VERSION=$tmpdir/version
-GOPRLIMIT=$tmpdir/goprlimit
-DATA=$tmpdir/data.tar.gz
 
 bash -c "$3"
 ZSN_DIR=/usr/local/zstack/zsn-agent/bin
@@ -126,82 +107,19 @@ add $imgfile
 run
 mount /dev/sda1 /
 write $ROOTPATH/etc/version $VERSION
+
+mkdir-p $ROOTPATH/home/vyos/zvr/data/
+mkdir-p $ROOTPATH/home/vyos/zvr/keepalived/script
+mkdir-p $ROOTPATH/home/vyos/zvr/ssh
+mkdir-p $ROOTPATH/etc/conntrackd
+mkdir-p $ROOTPATH/opt/vyatta/etc/config/scripts/
 mkdir-p $ROOTPATH/usr/local/zstack/zsn-agent/bin
-upload $ZVR $ROOTPATH$SBIN_DIR/zvr
-upload $ZVRBOOT $ROOTPATH$SBIN_DIR/zvrboot
-upload $ZVRSCRIPT $ROOTPATH/etc/init.d/zstack-virtualrouteragent
+
 upload $tmpdir/zsn-agent $ROOTPATH$ZSN_DIR/zsn-agent
 upload $tmpdir/zstack-network-agent $ROOTPATH/etc/init.d/zstack-network-agent
-upload $HAPROXY $ROOTPATH$SBIN_DIR/haproxy
-upload $GOBETWEEN $ROOTPATH$SBIN_DIR/gobetween
-upload $KEEPALIVED $ROOTPATH/usr/sbin/keepalived
-upload $GOPRLIMIT $ROOTPATH$SBIN_DIR/goprlimit
-mkdir-p $ROOTPATH/home/vyos/zvr/keepalived/script
-upload $PIMD $ROOTPATH/$SBIN_DIR/pimd
-upload $UACCTD $ROOTPATH$SBIN_DIR/uacctd
-upload $ZVR_VERSION $ROOTPATH/home/vyos/zvr/version
-upload $HEALTHCHECK $ROOTPATH/usr/share/healthcheck.sh
-mkdir-p $ROOTPATH/home/vyos/zvr/ssh
-upload $SSHD $ROOTPATH/home/vyos/zvr/ssh/sshd.sh
-upload $RSYSLOGD $ROOTPATH/home/vyos/zvr/ssh/rsyslog.sh
-upload $ZVRMONITOR $ROOTPATH/home/vyos/zvr/ssh/zvr-monitor.sh
-upload $FILEMONITOR $ROOTPATH/home/vyos/zvr/ssh/file-monitor.sh
-upload $ZVRREBOOT $ROOTPATH/home/vyos/zvr/ssh/zvr-reboot.sh
-upload $CPUMONITOR $ROOTPATH/etc/logrotate.d/cpu-monitor
-upload $SYSCTL $ROOTPATH/etc/sysctl.conf
-mkdir-p $ROOTPATH/etc/conntrackd
-upload $CONNTRACKD $ROOTPATH/etc/conntrackd/conntrackd.conf
-upload $ZSN $ROOTPATH/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
-mkdir-p $ROOTPATH/home/vyos/zvr/data/
+upload $BOOTSCRIPT $VyosPostScript
 tar-in $DATA $ROOTPATH/home/vyos/zvr/data/ compress:gzip
-mkdir-p $ROOTPATH/opt/vyatta/etc/config/scripts/
-upload -<<END $VyosPostScript
-#!/bin/bash
-chmod +x $SBIN_DIR/zvrboot
-chmod +x $SBIN_DIR/zvr
-chmod +x /etc/init.d/zstack-virtualrouteragent
-chmod +x $ZSN_DIR/zsn-agent
-chmod +x /etc/init.d/zstack-network-agent
-chmod +x $SBIN_DIR/haproxy
-chmod +x $SBIN_DIR/gobetween
-chmod +x /usr/sbin/keepalived
-chmod +x $SBIN_DIR/goprlimit
-chmod +x $SBIN_DIR/pimd
-chmod +x $SBIN_DIR/uacctd
-chmod +x /usr/share/healthcheck.sh
-chmod +x /home/vyos/zvr/ssh/sshd.sh
-chmod +x /home/vyos/zvr/ssh/rsyslog.sh
-chmod +x /home/vyos/zvr/ssh/zvr-monitor.sh
-chmod +x /home/vyos/zvr/ssh/file-monitor.sh
-chmod +x /home/vyos/zvr/ssh/zvr-reboot.sh
-chmod 644 /etc/sysctl.conf
-chmod 644 /etc/conntrackd/conntrackd.conf
-chmod +x /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
-mkdir -p /home/vyos/zvr
-mkdir -p /home/vyos/zvr/keepalived/script
-chown vyos:users /home/vyos/ -R
-chown vyos:users $SBIN_DIR/zvr
-chown vyos:users $ZSN_DIR/zsn-agent
-chown vyos:users $SBIN_DIR/haproxy
-chown vyos:users $SBIN_DIR/gobetween
-chown vyos:users $SBIN_DIR/pimd
-chown vyos:users $SBIN_DIR/uacctd
-chown vyos:users /usr/share/healthcheck.sh
-chown vyos:users /home/vyos/zvr/ssh/sshd.sh
-chown vyos:users /home/vyos/zvr/ssh/rsyslog.sh
-chown vyos:users /home/vyos/zvr/ssh/zvr-monitor.sh
-chown vyos:users /home/vyos/zvr/ssh/file-monitor.sh
-chown vyos:users /home/vyos/zvr/ssh/zvr-reboot.sh
-chown root:root /etc/sysctl.conf
-chown root:root /etc/conntrackd/conntrackd.conf
-chown vyos:users /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
-ln -s /usr/local/lib/libcrypto.so.1.0.0  /usr/lib/libcrypto.so.1.0.0
-$SBIN_DIR/zvrboot >/home/vyos/zvr/zvrboot.log 2>&1 < /dev/null &
-# disable distributed routing by default
-export ZSNP_TMOUT=-960
-/etc/init.d/zstack-network-agent start
-exit 0
-END
+
 download /boot/grub/grub.cfg /tmp/grub.cfg
 ! sed -e 's/^set[[:space:]]\+timeout[[:space:]]*=[[:space:]]*[[:digit:]]\+/set timeout=0/g' -e '/^echo.*Grub menu/,/^fi$/d' /tmp/grub.cfg > /tmp/grub.cfg.new
 upload /tmp/grub.cfg.new /boot/grub/grub.cfg

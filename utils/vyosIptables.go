@@ -566,10 +566,11 @@ func InitNicFirewall(nic string, ip string, pubNic bool, defaultAction string) e
 	rule.SetDstIp(ip + "/32").SetProto(IPTABLES_PROTO_ICMP)
 	rules = append(rules, rule)
 
+	sshPort := GetSshPortFromBootInfo()
 	if IsMgtNic(nic) {
 		rule = NewIpTableRule(localChain)
 		rule.SetAction(IPTABLES_ACTION_RETURN).SetComment(SystemTopRule)
-		rule.SetDstIp(ip + "/32").SetProto(IPTABLES_PROTO_TCP).SetDstPort("22")
+		rule.SetDstIp(ip + "/32").SetProto(IPTABLES_PROTO_TCP).SetDstPort(strconv.FormatFloat(sshPort, 'f', 0, 64))
 		rules = append(rules, rule)
 
 		rule = NewIpTableRule(localChain)
@@ -579,7 +580,7 @@ func InitNicFirewall(nic string, ip string, pubNic bool, defaultAction string) e
 	} else {
 		rule = NewIpTableRule(localChain)
 		rule.SetAction(IPTABLES_ACTION_REJECT).SetRejectType(REJECT_TYPE_ICMP_UNREACHABLE)
-		rule.SetComment(SystemTopRule).SetDstIp(ip + "/32").SetProto(IPTABLES_PROTO_TCP).SetDstPort("22")
+		rule.SetComment(SystemTopRule).SetDstIp(ip + "/32").SetProto(IPTABLES_PROTO_TCP).SetDstPort(strconv.FormatFloat(sshPort, 'f', 0, 64))
 		rules = append(rules, rule)
 	}
 

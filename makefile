@@ -1,8 +1,17 @@
-ifndef GOROOT
+GO_118_PATH := /usr/lib/golang1.18
+GO_ROOT := $(shell \
+    if [ -d "$(GO_118_PATH)" ]; then \
+        echo "$(GO_118_PATH)"; \
+    else \
+        echo "$(GOROOT)"; \
+    fi)
+
+ifndef GO_ROOT
     $(error GOROOT is not set)
 endif
 
-export GO=$(GOROOT)/bin/go
+export GOROOT=$(GO_ROOT)
+export GO=$(GO_ROOT)/bin/go
 #export GOPATH=$(shell pwd)
 export GO111MODULE=on
 export TestEnv=devTestEnv.json
@@ -11,8 +20,13 @@ TARGET_DIR=target
 PKG_ZVR_DIR=$(TARGET_DIR)/pkg-zvr
 PKG_ZVRBOOT_DIR=$(TARGET_DIR)/pkg-zvrboot
 PKG_TAR_DIR=$(TARGET_DIR)/pkg-tar
+DATA_ZVR_DIR=$(PKG_ZVR_DIR)/data
+DATA_TAR_DIR=$(PKG_TAR_DIR)/data
+FILE_LIST_ZVR=$(DATA_ZVR_DIR)/file-lists
+FILE_LIST_TAR=$(DATA_TAR_DIR)/file-lists
+VERSION_FILE=data/file-lists/version
 
-DEPS=github.com/Sirupsen/logrus github.com/pkg/errors github.com/fatih/structs github.com/prometheus/client_golang/prometheus github.com/bcicen/go-haproxy
+DEPS=github.com/Sirupsen/logrus github.com/pkg/errors github.com/fatih/structs github.com/prometheus/client_golang/prometheus github.com/bcicen/go-haproxy github.com/vishvananda/netlink
 
 .PHONY: zvr
 zvr:
@@ -27,12 +41,12 @@ zvrarm:
 .PHONY: zvrboot
 zvrboot:
 	mkdir -p $(TARGET_DIR)
-	$(GO) build -mod vendor -o $(TARGET_DIR)/zvrboot zvrboot/zvrboot.go
+	$(GO) build -mod vendor -o $(TARGET_DIR)/zvrboot zvrboot/zvrboot.go zvrboot/zvrboot_utils.go
 
 .PHONY: zvrbootarm
 zvrbootarm:
 	mkdir -p $(TARGET_DIR)
-	CGO_ENABLED=0 GOOS="linux" GOARCH="arm64" $(GO) build -mod vendor -o $(TARGET_DIR)/zvrboot_aarch64 zvrboot/zvrboot.go
+	CGO_ENABLED=0 GOOS="linux" GOARCH="arm64" $(GO) build -mod vendor -o $(TARGET_DIR)/zvrboot_aarch64 zvrboot/zvrboot.go zvrboot/zvrboot_utils.go
 
 deps:
 	$(GO) get $(DEPS)
@@ -43,75 +57,31 @@ clean:
 package: clean zvr zvrarm zvrboot zvrbootarm
 	mkdir -p $(PKG_ZVR_DIR)
 	mkdir -p $(PKG_ZVRBOOT_DIR)
-	cp -f $(TARGET_DIR)/zvr $(PKG_ZVR_DIR)
-	cp -f $(TARGET_DIR)/zvr_aarch64 $(PKG_ZVR_DIR)
-	cp -f scripts/ipsec.sh $(PKG_ZVR_DIR)
-	cp -f scripts/zstack-virtualrouteragent $(PKG_ZVR_DIR)
-	cp -f scripts/haproxy $(PKG_ZVR_DIR)
-	cp -f scripts/haproxy_aarch64 $(PKG_ZVR_DIR)
-	cp -f scripts/gobetween $(PKG_ZVR_DIR)
-	cp -f scripts/gobetween_aarch64 $(PKG_ZVR_DIR)
-	cp -f scripts/keepalived $(PKG_ZVR_DIR)
-	cp -f scripts/keepalived_aarch64 $(PKG_ZVR_DIR)
-	cp -f scripts/healthcheck.sh $(PKG_ZVR_DIR)
-	cp -f scripts/pimd $(PKG_ZVR_DIR)
-	cp -f scripts/sshd.sh $(PKG_ZVR_DIR)
-	cp -f scripts/rsyslog.sh $(PKG_ZVR_DIR)
-	cp -f scripts/zvr-monitor.sh $(PKG_ZVR_DIR)
-	cp -f scripts/file-monitor.sh $(PKG_ZVR_DIR)
-	cp -f scripts/zvr-reboot.sh $(PKG_ZVR_DIR)
-	cp -f scripts/cpu-monitor $(PKG_ZVR_DIR)
-	cp -f scripts/mail-monitor $(PKG_ZVR_DIR)
-	cp -f scripts/sysctl.conf $(PKG_ZVR_DIR)
-	cp -f scripts/conntrackd.conf $(PKG_ZVR_DIR)
-	cp -f scripts/zsn-crontab.sh $(PKG_ZVR_DIR)
-	cp -f scripts/pimd_aarch64 $(PKG_ZVR_DIR)
-	cp -f scripts/uacctd $(PKG_ZVR_DIR)
+	cp -f $(VERSION_FILE) $(TARGET_DIR)
+	cp -a data/ $(PKG_ZVR_DIR)
+	cp -f $(TARGET_DIR)/zvr $(FILE_LIST_ZVR)
+	cp -f $(TARGET_DIR)/zvr_aarch64 $(FILE_LIST_ZVR)
 	cp -f $(TARGET_DIR)/zvrboot $(PKG_ZVRBOOT_DIR)
 	cp -f $(TARGET_DIR)/zvrboot_aarch64 $(PKG_ZVRBOOT_DIR)
-	cp -f scripts/version $(TARGET_DIR)
-	cp -f scripts/goprlimit $(PKG_ZVR_DIR)
 	cp -f scripts/grub.cfg.5.4.80 $(PKG_ZVR_DIR)
 	cp -f scripts/grub.cfg.3.13 $(PKG_TAR_DIR)
-	cp -rf data/ $(PKG_ZVR_DIR)
-	tar czf $(PKG_ZVR_DIR)/data.tar.gz -C data/ .
+	tar czf $(PKG_ZVR_DIR)/zvr-data.tar.gz -C $(DATA_ZVR_DIR) .
+	rm -rf $(DATA_ZVR_DIR)
 	$(GO) run -mod vendor package.go -conf package-config.json
 
 tar: zvr zvrarm zvrboot zvrbootarm
 	rm -rf $(PKG_TAR_DIR)
 	mkdir -p $(PKG_TAR_DIR)
-	cp -f $(TARGET_DIR)/zvr $(PKG_TAR_DIR)
-	cp -f $(TARGET_DIR)/zvr_aarch64 $(PKG_ZVR_DIR)
-	cp -f scripts/ipsec.sh $(PKG_TAR_DIR)
-	cp -f scripts/haproxy $(PKG_TAR_DIR)
-	cp -f scripts/haproxy_aarch64 $(PKG_TAR_DIR)
-	cp -f scripts/gobetween $(PKG_TAR_DIR)
-	cp -f scripts/gobetween_aarch64 $(PKG_TAR_DIR)
-	cp -f scripts/keepalived $(PKG_TAR_DIR)
-	cp -f scripts/keepalived_aarch64 $(PKG_TAR_DIR)
-	cp -f scripts/healthcheck.sh $(PKG_TAR_DIR)
-	cp -f scripts/zstack-virtualrouteragent $(PKG_TAR_DIR)
-	cp -f scripts/version $(PKG_TAR_DIR)
-	cp -f scripts/pimd $(PKG_TAR_DIR)
-	cp -f scripts/uacctd $(PKG_TAR_DIR)
-	cp -f scripts/sshd.sh $(PKG_TAR_DIR)
-	cp -f scripts/rsyslog.sh $(PKG_TAR_DIR)
-	cp -f scripts/zvr-monitor.sh $(PKG_TAR_DIR)
-	cp -f scripts/file-monitor.sh $(PKG_TAR_DIR)
-	cp -f scripts/zvr-reboot.sh $(PKG_TAR_DIR)
-	cp -f scripts/cpu-monitor $(PKG_TAR_DIR)
-	cp -f scripts/mail-monitor $(PKG_TAR_DIR)
-	cp -f scripts/sysctl.conf $(PKG_TAR_DIR)
-	cp -f scripts/conntrackd.conf $(PKG_TAR_DIR)
-	cp -f scripts/zsn-crontab.sh $(PKG_TAR_DIR)
-	cp -f scripts/pimd_aarch64 $(PKG_TAR_DIR)
-	cp -f $(TARGET_DIR)/zvrboot $(PKG_TAR_DIR)
-	cp -f $(TARGET_DIR)/zvrboot_aarch64 $(PKG_ZVRBOOT_DIR)
-	cp -f scripts/goprlimit $(PKG_TAR_DIR)
+	cp -a data/ $(PKG_TAR_DIR)
+	cp -f $(TARGET_DIR)/zvr $(FILE_LIST_TAR)
+	cp -f $(TARGET_DIR)/zvr_aarch64 $(FILE_LIST_TAR)
+	cp -f $(TARGET_DIR)/zvrboot $(FILE_LIST_TAR)
+	cp -f $(TARGET_DIR)/zvrboot_aarch64 $(FILE_LIST_TAR)
 	cp -f scripts/grub.cfg.5.4.80 $(PKG_TAR_DIR)
 	cp -f scripts/grub.cfg.3.13 $(PKG_TAR_DIR)
-	cp -rf data/ $(PKG_TAR_DIR)
-	tar czf $(PKG_TAR_DIR)/data.tar.gz -C data/ .
+	cp -f scripts/vyos-postconfig-bootup.script $(PKG_TAR_DIR)
+	tar czf $(PKG_TAR_DIR)/zvr-data.tar.gz -C $(DATA_TAR_DIR) .
+	rm -rf $(DATA_TAR_DIR)
 	tar czf $(TARGET_DIR)/zvr.tar.gz -C $(PKG_TAR_DIR) .
 
 .PHONY: test
