@@ -24,8 +24,7 @@ data
 └── repos
     └── x86  //x86_64架构下预安装deb包
         ├── iperf_2.0.4-5_amd64.deb
-        ├── strace_4.5.20-2_amd64.deb
-        └── strongswan-zstack_5.9.4-1_amd64.deb
+        └── strace_4.5.20-2_amd64.deb
 ```
 
 ### 2. 实际操作
@@ -61,7 +60,6 @@ root@debian:~/zstack-vyos# cat data/config/packages-x86.list
 # use for install deb packages
 iperf
 strace
-strongswan-zstack
 ```
 - **[uninstall]**：表示需要删除的deb包
 
