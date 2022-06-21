@@ -1606,6 +1606,13 @@ type loadBalancerCollector struct {
 	totalSessionNumEntry        *prom.Desc
 	curSessionUsageEntry        *prom.Desc
 	concurrentSessionUsageEntry *prom.Desc
+	// just for l7 layer lb
+	hrsp1xxEntry                *prom.Desc
+	hrsp2xxEntry                *prom.Desc
+	hrsp3xxEntry                *prom.Desc
+	hrsp4xxEntry                *prom.Desc
+	hrsp5xxEntry                *prom.Desc
+	hrspOtherEntry              *prom.Desc
 }
 
 const (
@@ -1657,6 +1664,36 @@ func NewLbPrometheusCollector() MetricCollector {
 			"Backend server session number including active and waiting state session",
 			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
 		),
+		hrsp1xxEntry: prom.NewDesc(
+			"zstack_lb_hrsp1xx",
+			"Backend server http response general status 1xx which means informational message to be skipped",
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
+		),
+		hrsp2xxEntry: prom.NewDesc(
+			"zstack_lb_hrsp2xx",
+			"Backend server http response general status 2xx which means OK, content is following",
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
+		),
+		hrsp3xxEntry: prom.NewDesc(
+			"zstack_lb_concurrent_session_num",
+			"Backend server http response general status 3xx which means OK, no content following",
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
+		),
+		hrsp4xxEntry: prom.NewDesc(
+			"zstack_lb_hrsp4xx",
+			"Backend server http response general status 4xx which means error caused by the client",
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
+		),
+		hrsp5xxEntry: prom.NewDesc(
+			"zstack_lb_hrsp5xx",
+			"Backend server http response general status 5xx which means error caused by the server",
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
+		),
+		hrspOtherEntry: prom.NewDesc(
+			"zstack_lb_hrspOther",
+			"Backend server other http response",
+			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
+		),
 		//vipUUIds: make(map[string]string),
 	}
 }
@@ -1670,6 +1707,12 @@ func (c *loadBalancerCollector) Describe(ch chan<- *prom.Desc) error {
 	ch <- c.refusedSessionNumEntry
 	ch <- c.totalSessionNumEntry
 	ch <- c.concurrentSessionUsageEntry
+	ch <- c.hrsp1xxEntry
+	ch <- c.hrsp2xxEntry
+	ch <- c.hrsp3xxEntry
+	ch <- c.hrsp4xxEntry
+	ch <- c.hrsp5xxEntry
+	ch <- c.hrspOtherEntry
 	return nil
 }
 
@@ -1722,8 +1765,20 @@ func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
 			ch <- prom.MustNewConstMetric(c.totalSessionNumEntry, prom.GaugeValue, float64(cnt.totalSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
 			ch <- prom.MustNewConstMetric(c.concurrentSessionUsageEntry, prom.GaugeValue, float64(cnt.concurrentSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
 		}
-
+		
 		ch <- prom.MustNewConstMetric(c.curSessionUsageEntry, prom.GaugeValue, float64(sessionNum*100/maxSessionNum), listenerUuid, lbUuid)
+
+		if _, ok := listener.(HaproxyListener); ok {
+			for i := 0; i < num; i++ {
+				cnt := counters[i]
+				ch <- prom.MustNewConstMetric(c.hrsp1xxEntry, prom.GaugeValue, float64(cnt.hrsp1xx), cnt.listenerUuid, cnt.ip, lbUuid)
+				ch <- prom.MustNewConstMetric(c.hrsp2xxEntry, prom.GaugeValue, float64(cnt.hrsp2xx), cnt.listenerUuid, cnt.ip, lbUuid)
+				ch <- prom.MustNewConstMetric(c.hrsp3xxEntry, prom.GaugeValue, float64(cnt.hrsp3xx), cnt.listenerUuid, cnt.ip, lbUuid)
+				ch <- prom.MustNewConstMetric(c.hrsp4xxEntry, prom.GaugeValue, float64(cnt.hrsp4xx), cnt.listenerUuid, cnt.ip, lbUuid)
+				ch <- prom.MustNewConstMetric(c.hrsp5xxEntry, prom.GaugeValue, float64(cnt.hrsp5xx), cnt.listenerUuid, cnt.ip, lbUuid)
+				ch <- prom.MustNewConstMetric(c.hrspOtherEntry, prom.GaugeValue, float64(cnt.hrspOther), cnt.listenerUuid, cnt.ip, lbUuid)
+			}
+		}
 	}
 
 	return nil
@@ -1739,6 +1794,13 @@ type LbCounter struct {
 	refusedSessionNumber    uint64
 	totalSessionNumber      uint64
 	concurrentSessionNumber uint64
+	// just for l7 layer lb
+	hrsp1xx                 uint64
+	hrsp2xx                 uint64
+	hrsp3xx                 uint64
+	hrsp4xx                 uint64
+	hrsp5xx                 uint64
+	hrspOther               uint64
 }
 
 func getIpFromLbStat(name string) string {
@@ -1787,6 +1849,12 @@ func (this *HaproxyListener) getLbCounters(listenerUuid string) ([]*LbCounter, i
 		counter.refusedSessionNumber = stat.Dreq
 		counter.concurrentSessionNumber = stat.Scur + stat.Qcur
 		counter.totalSessionNumber = stat.Stot
+		counter.hrsp1xx = stat.Hrsp1xx
+		counter.hrsp2xx = stat.Hrsp2xx
+		counter.hrsp3xx = stat.Hrsp3xx
+		counter.hrsp4xx = stat.Hrsp4xx
+		counter.hrsp5xx = stat.Hrsp5xx
+		counter.hrspOther = stat.HrspOther
 		counters = append(counters, &counter)
 		num++
 	}
