@@ -266,7 +266,7 @@ func enablePimdHandler(ctx *server.CommandContext) interface{} {
 
 			des = makePimdFirewallRuleDescription("multiast", nic.Name)
 			if r := tree.FindFirewallRuleByDescription(nic.Name, "in", des); r == nil {
-				tree.SetZStackFirewallRuleOnInterface(nic.Name, "front", "in",
+				tree.SetZStackFirewallRuleOnInterface(nic.Name, "behind", "in",
 					fmt.Sprintf("description %v", des),
 					"destination address 224.0.0.0/4",
 					"state new enable",
