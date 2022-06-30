@@ -145,6 +145,8 @@ restart_server() {
     trap "rm -f $TMP 2>/dev/null" EXIT
     echo "sleep 3" > $TMP
     sudo -u vyos bash $TMP &
+
+    echo "backgroup pid: $!"
     disown $!
 
     stop_server

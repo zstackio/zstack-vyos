@@ -9,8 +9,15 @@ restart_zvr() {
   if [ x"$UPGRADE_VERSION_FILE" = x"true" ]; then
     cp $HOMDIR/mn_zvr_version $HOMDIR/version
   fi
-  sudo bash /etc/init.d/zstack-virtualrouteragent restart >> /tmp/agentRestart.log 2>&1
+  sudo bash -x /etc/init.d/zstack-virtualrouteragent restart >> /tmp/agentRestart.log 2>&1
+  echo "$(date '+%Y-%m-%d %H:%M:%S') restart zstack virtual router finished  " >> $LOGFILE
 }
+
+if test x$1 = x'true'; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') force restart zstack virtual router " >> $LOGFILE
+    restart_zvr
+    exit
+fi
 
 # if not version file exist,zvr may not be started,restart it
 zvr_version=$(cat $HOMDIR/version)

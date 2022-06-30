@@ -145,6 +145,12 @@ func NewParserFromShowConfiguration() *VyosParser {
 	return p
 }
 
+func GenVyosConfigTree() *VyosConfigTree {
+	p := &VyosParser{}
+	p.Parse(ConfigurationSourceFunc())
+	return p.Tree
+}
+
 func NewParserFromConfiguration(text string) *VyosParser {
 	p := &VyosParser{}
 	p.Parse(text)

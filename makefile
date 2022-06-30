@@ -74,6 +74,7 @@ package: clean zvr zvrarm zvrboot zvrbootarm
 	cp -f scripts/grub.cfg.5.4.80 $(PKG_ZVR_DIR)
 	cp -f scripts/grub.cfg.3.13 $(PKG_TAR_DIR)
 	cp -rf data/ $(PKG_ZVR_DIR)
+	tar czf $(PKG_ZVR_DIR)/data.tar.gz -C data/ .
 	$(GO) run -mod vendor package.go -conf package-config.json
 
 tar: zvr zvrarm zvrboot zvrbootarm
@@ -109,6 +110,8 @@ tar: zvr zvrarm zvrboot zvrbootarm
 	cp -f scripts/goprlimit $(PKG_TAR_DIR)
 	cp -f scripts/grub.cfg.5.4.80 $(PKG_TAR_DIR)
 	cp -f scripts/grub.cfg.3.13 $(PKG_TAR_DIR)
+	cp -rf data/ $(PKG_TAR_DIR)
+	tar czf $(PKG_TAR_DIR)/data.tar.gz -C data/ .
 	tar czf $(TARGET_DIR)/zvr.tar.gz -C $(PKG_TAR_DIR) .
 
 .PHONY: test

@@ -308,7 +308,7 @@ class TestZStackVyos:
 
         test_log("##########runing test case")
         exec_command(ssh, "mkdir -p /home/vyos/vyos_ut/testLog/; chmod 777 /home/vyos/vyos_ut/testLog/")
-        ret = exec_command(ssh, "bash -x /home/vyos/vyos_ut/zstack-vyos/test/run_test.sh")
+        ret = exec_command(ssh, "sudo bash -x /home/vyos/vyos_ut/zstack-vyos/test/run_test.sh")
 
         folder = os.getcwd()
         if self.testEnv.testLogFolder != "":
