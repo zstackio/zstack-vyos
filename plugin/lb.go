@@ -1675,7 +1675,7 @@ func NewLbPrometheusCollector() MetricCollector {
 			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
 		),
 		hrsp3xxEntry: prom.NewDesc(
-			"zstack_lb_concurrent_session_num",
+			"zstack_lb_hrsp3xx",
 			"Backend server http response general status 3xx which means OK, no content following",
 			[]string{LB_LISTENER_UUID, LB_LISTENER_BACKEND_IP, LB_UUID}, nil,
 		),
@@ -1768,7 +1768,7 @@ func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
 		
 		ch <- prom.MustNewConstMetric(c.curSessionUsageEntry, prom.GaugeValue, float64(sessionNum*100/maxSessionNum), listenerUuid, lbUuid)
 
-		if _, ok := listener.(HaproxyListener); ok {
+		if _, ok := listener.(*HaproxyListener); ok {
 			for i := 0; i < num; i++ {
 				cnt := counters[i]
 				ch <- prom.MustNewConstMetric(c.hrsp1xxEntry, prom.GaugeValue, float64(cnt.hrsp1xx), cnt.listenerUuid, cnt.ip, lbUuid)
