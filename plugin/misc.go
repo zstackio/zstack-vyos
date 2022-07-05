@@ -43,6 +43,17 @@ type initRsp struct {
 	ZvrVersion    string `json:"zvrVersion"`
 	VyosVersion   string `json:"vyosVersion"`
 	KernelVersion string `json:"kernelVersion"`
+	//ServiceStatus []*ServiceStatus `json:"serviceStatus"`
+	IpsecCurrentVersion string `json:"ipsecCurrentVersion"`
+	IpsecLatestVersion  string `json:"ipsecLatestVersion"`
+}
+
+type ServiceStatus struct {
+	ServiceName     string   `json:"currentVersion"`
+	CurrentVersion  string   `json:"currentVersion"`
+	LatestVersion   string   `json:"latestVersion"`
+	SupportVersions []string `json:"supportVersions"`
+	// status string `json:"uuid"`
 }
 
 type pingRsp struct {
@@ -225,8 +236,18 @@ func initHandler(ctx *server.CommandContext) interface{} {
 	doRefreshLogLevel(initConfig.LogLevel)
 	configureNtp(initConfig.TimeServers)
 	configure(initConfig.Parms)
+
+	strongswanCurrentVersion, strongswanLatestVersion := GetIpsecVersionInfo()
 	return initRsp{Uuid: initConfig.Uuid, ZvrVersion: VERSION, VyosVersion: utils.Vyos_version,
-		KernelVersion: utils.Kernel_version}
+		KernelVersion:       utils.Kernel_version,
+		IpsecCurrentVersion: strongswanCurrentVersion, IpsecLatestVersion: strongswanLatestVersion}
+}
+
+func setServiceStatus() []*ServiceStatus {
+	var serviceList []*ServiceStatus
+	// get all service status infomation
+	serviceList = append(serviceList, GetIpsecServiceStatus())
+	return serviceList
 }
 
 func pingHandler(ctx *server.CommandContext) interface{} {
@@ -240,6 +261,7 @@ func pingHandler(ctx *server.CommandContext) interface{} {
 	} else {
 		haStatus = utils.HABACKUP
 	}
+
 	return pingRsp{Uuid: initConfig.Uuid, Version: string(VERSION), HaStatus: haStatus,
 		Healthy: healthStatus.Healthy, HealthDetail: healthStatus.HealthDetail}
 }

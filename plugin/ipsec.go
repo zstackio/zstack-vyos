@@ -1,13 +1,15 @@
 package plugin
 
 import (
+	"errors"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
 	"io/ioutil"
+	"os"
+	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -17,18 +19,30 @@ const (
 	DELETE_IPSEC_CONNECTION = "/vyos/deleteipsecconnection"
 	SYNC_IPSEC_CONNECTION   = "/vyos/syncipsecconnection"
 	UPDATE_IPSEC_CONNECTION = "/vyos/updateipsecconnection"
+	UPDATE_IPSEC_VERSION    = "/vyos/updateipsecversion"
 
 	IPSecInfoMaxSize = 256
 
 	VYOSHA_IPSEC_SCRIPT = "/home/vyos/zvr/keepalived/script/ipsec.sh"
 
-	/* because strongswan 4.5.2 rekey will fail with aliyun ipsec vpn,
+	/* because strongswan origin rekey will fail with aliyun ipsec vpn,
 	   a work around method is to restart the vpn before the rekey happened */
 	IPSecIkeRekeyInterval       = 86400 /*  24 * 3600 seconds */
 	IPSecIkeRekeyIntervalMargin = 600   /* restart the vpn 10 mins before rekey */
 	IPSecRestartInterval        = IPSecIkeRekeyInterval - IPSecIkeRekeyIntervalMargin
 
 	ipsecAddressGroup = "ipsec-group"
+
+	ipsecState_disable = "Disabled"
+	ipsecState_enable  = "Enabled"
+
+	strongswanVersion_5_9_4           = "5.9.4"
+	ipsec_driver_strongswan_withipsec = "strongswan_withipsec"
+	ipsec_driver_vyos                 = "vyos"
+	ipsec_strongswan_upgrade_cmd      = "upgrade.sh"
+	ipsec_path_software_data          = "/home/vyos/zvr/data/upgrade/strongswan/"
+	ipsec_path_version                = "/usr/local/etc/ipsec.version"
+	ipsec_vyos_path_cfg               = "/etc/ipsec.conf"
 )
 
 var AutoRestartVpn = false
@@ -39,6 +53,7 @@ type ipsecInfo struct {
 	State                     string   `json:"state"`
 	LocalCidrs                []string `json:"localCidrs"`
 	PeerAddress               string   `json:"peerAddress"`
+	LocalId                   string   `json:"localId"`
 	RemoteId                  string   `json:"remoteId"`
 	AuthMode                  string   `json:"authMode"`
 	AuthKey                   string   `json:"authKey"`
@@ -55,6 +70,10 @@ type ipsecInfo struct {
 	PeerCidrs                 []string `json:"peerCidrs"`
 	ExcludeSnat               bool     `json:"excludeSnat"`
 	ModifiedItems             []string `json:"modifiedItems"`
+	IkeVersion                string   `json:"ikeVersion"`
+	IdType                    string   `json:"idType"`
+	IkeLifeTime               int      `json:"ikeLifeTime"`
+	LifeTime                  int      `json:"lifeTime"`
 }
 
 type createIPsecCmd struct {
@@ -71,137 +90,31 @@ type syncIPsecCmd struct {
 	AutoRestartVpn bool        `json:"autoRestartVpn"`
 }
 
-type updateIPsecReq struct {
+type updateIPsecCmd struct {
 	Infos []ipsecInfo `json:"infos"`
 }
 
-type updateIPsecReply struct {
-	Infos []ipsecInfo `json:"infos"`
+type updateIpsecVersionCmd struct {
+	Infos          []ipsecInfo `json:"infos"`
+	AutoRestartVpn bool        `json:"autoRestartVpn"`
+	Version        string      `json:"targetVersion"`
 }
 
 var ipsecMap map[string]ipsecInfo
 
-func getIPsecPeers() (peers []string) {
-	vyos := server.NewParserFromShowConfiguration()
-	tree := vyos.Tree
-
-	peers = []string{}
-	rs := tree.Getf("vpn ipsec site-to-site peer")
-	if rs == nil {
+func writeIpsecHaScript(enable bool) {
+	if !utils.IsHaEnabled() {
 		return
 	}
 
-	for _, r := range rs.Children() {
-		peerStr := strings.Split(r.String(), " ")
-		peers = append(peers, peerStr[len(peerStr)-1])
-	}
-
-	return
-}
-
-/* /opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl is a tool to display ipsec status, it has options:
-   "show-ipsec-sa!"                 => \$show_ipsec_sa,
-   "show-ipsec-sa-detail!"          => \$show_ipsec_sa_detail,
-   "get-peers-for-cli!"             => \$get_peers_for_cli,
-   "get-conn-for-cli=s"             => \$get_conn_for_cli,
-   "show-ipsec-sa-peer=s"           => \$show_ipsec_sa_peer,
-   "show-ipsec-sa-peer-detail=s"    => \$show_ipsec_sa_peer_detail,
-   "show-ipsec-sa-natt!"            => \$show_ipsec_sa_natt,
-   "show-ipsec-sa-stats!"           => \$show_ipsec_sa_stats,
-   "show-ipsec-sa-stats-peer=s"     => \$show_ipsec_sa_stats_peer,
-   "show-ipsec-sa-stats-conn=s{2}"  => \@show_ipsec_sa_stats_conn,
-   "show-ipsec-sa-conn-detail=s{2}" => \@show_ipsec_sa_conn_detail,
-   "show-ipsec-sa-conn=s{2}"        => \@show_ipsec_sa_conn,
-   "show-ike-sa!"                   => \$show_ike_sa,
-   "show-ike-sa-peer=s"             => \$show_ike_sa_peer,
-   "show-ike-sa-natt!"              => \$show_ike_sa_natt,
-   "show-ike-status!"               => \$show_ike_status,
-   "show-ike-secrets!"              => \$show_ike_secrets);
-*/
-
-/* get vpn peer status */
-func isVpnPeerUp(peer string) (status bool) {
-	/*
-			/opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl --show-ipsec-sa-peer=10.86.0.3
-			Peer ID / IP                            Local ID / IP
-			------------                            -------------
-			10.86.0.3                               10.86.0.2
-
-		    	Tunnel  State  Bytes Out/In   Encrypt  Hash    NAT-T  A-Time  L-Time  Proto
-		    	------  -----  -------------  -------  ----    -----  ------  ------  -----
-		    	1       down   n/a            n/a      n/a     no     0       3600    all
-	*/
-	bash := utils.Bash{
-		Command: fmt.Sprintf("/opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl --show-ipsec-sa-peer=%s | grep -w 'up'", peer),
-	}
-	ret, _, _, err := bash.RunWithReturn()
-	/* command fail, will try again */
-	if err != nil {
-		return false
-	}
-
-	/* ret = 0 means some tunnel is up */
-	if ret == 0 {
-		return true
+	if enable {
+		srcFile := "/home/vyos/zvr/keepalived/temp/ipsec.sh"
+		err := utils.CopyFile(srcFile, VYOSHA_IPSEC_SCRIPT)
+		utils.PanicOnError(err)
 	} else {
-		return false
-	}
-}
-
-func isVpnAllPeersUp() bool {
-	peers := getIPsecPeers()
-	for _, peer := range peers {
-		if !isVpnPeerUp(peer) {
-			return false
-		}
-	}
-
-	return true
-}
-
-/* /opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl is a tool to change ipsec config, it has options:
-clear-vpn-ipsec-process
-show-vpn-debug
-show-vpn-debug-detail
-get-all-peers
-get-tunnels-for-peer
-clear-tunnels-for-peer
-clear-specific-tunnel-for-peer
-clear-vtis-for-peer
-*/
-func restartVpnAfterConfig() {
-	if isVpnAllPeersUp() {
-		restartIPSecVpnTimer()
-		return
-	}
-
-	/* wait 20 seconds to let all peer go up */
-	time.Sleep(20 * time.Second)
-
-	/* it need a log time to make sure checkVpnState can find new created tunnels */
-	err := utils.Retry(func() error {
-		if isVpnAllPeersUp() {
-			return nil
-		}
-
-		if utils.Vyos_version == utils.VYOS_1_1_7 && len(getIPsecPeers()) >= 2 {
-			bash := utils.Bash{
-				Command: "sudo ipsec restart",
-			}
-			bash.Run()
-		} else {
-			b := utils.Bash{
-				Command: "pidof starter; if [ $? -eq 0 ]; then sudo ipsec reload; else sudo ipsec restart; fi",
-			}
-			b.Run()
-		}
-
-		return fmt.Errorf("there is some ipsec peer is not up")
-	}, 3, 20)
-
-	restartIPSecVpnTimer()
-	if err != nil {
-		log.Warn(fmt.Sprintf("setup ip sec tunnel failed: %s", err))
+		conent := "echo 'no ipsec configured'"
+		err := ioutil.WriteFile(VYOSHA_IPSEC_SCRIPT, []byte(conent), 0755)
+		utils.PanicOnError(err)
 	}
 }
 
@@ -293,63 +206,9 @@ func syncIpSecRulesByIptables() {
 	}
 }
 
-func createIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
+func setIPSecRule(tree *server.VyosConfigTree, info *ipsecInfo) {
 	nicname, err := utils.GetNicNameByMac(info.PublicNic)
 	utils.PanicOnError(err)
-
-	tree.Setf("vpn ipsec ipsec-interfaces interface %s", nicname)
-
-	// create ike group
-	tree.Setf("vpn ipsec ike-group %s lifetime %d", info.Uuid, IPSecIkeRekeyInterval)
-	tree.Setf("vpn ipsec ike-group %s proposal 1 dh-group %v", info.Uuid, info.IkeDhGroup)
-	tree.Setf("vpn ipsec ike-group %s proposal 1 encryption %v", info.Uuid, info.IkeEncryptionAlgorithm)
-	tree.Setf("vpn ipsec ike-group %s proposal 1 hash %v", info.Uuid, info.IkeAuthAlgorithm)
-
-	// create esp group
-	if info.Pfs == "" {
-		tree.Setf("vpn ipsec esp-group %s pfs disable", info.Uuid)
-	} else {
-		tree.Setf("vpn ipsec esp-group %s pfs %s", info.Uuid, info.Pfs)
-	}
-	tree.Setf("vpn ipsec esp-group %s proposal 1 encryption %s", info.Uuid, info.PolicyEncryptionAlgorithm)
-	tree.Setf("vpn ipsec esp-group %s proposal 1 hash %s", info.Uuid, info.PolicyAuthAlgorithm)
-	tree.Setf("vpn ipsec esp-group %s mode %s", info.Uuid, info.PolicyMode)
-
-	// create peer connection
-	utils.Assertf(info.AuthMode == "psk", "vyos plugin only supports authMode 'psk', %s is not supported yet", info.AuthMode)
-	tree.Setf("vpn ipsec site-to-site peer %s authentication mode pre-shared-secret", info.PeerAddress)
-	tree.Setf("vpn ipsec site-to-site peer %s authentication pre-shared-secret %s", info.PeerAddress, info.AuthKey)
-	tree.Setf("vpn ipsec site-to-site peer %s authentication id %s", info.PeerAddress, info.Vip)
-	if info.RemoteId != "" {
-		tree.Setf("vpn ipsec site-to-site peer %s authentication remote-id", info.RemoteId)
-	}
-	tree.Setf("vpn ipsec site-to-site peer %s default-esp-group %s", info.PeerAddress, info.Uuid)
-	tree.Setf("vpn ipsec site-to-site peer %s ike-group %s", info.PeerAddress, info.Uuid)
-
-	tree.Setf("vpn ipsec site-to-site peer %s local-address %s", info.PeerAddress, info.Vip)
-
-	tunnelNo := 1
-	sort.Strings(info.LocalCidrs)
-	sort.Strings(info.PeerCidrs)
-	for _, localCidr := range info.LocalCidrs {
-		for _, remoteCidr := range info.PeerCidrs {
-			tree.Setf("vpn ipsec site-to-site peer %v tunnel %v local prefix %v", info.PeerAddress, tunnelNo, localCidr)
-			tree.Setf("vpn ipsec site-to-site peer %v tunnel %v remote prefix %v", info.PeerAddress, tunnelNo, remoteCidr)
-			tunnelNo++
-		}
-	}
-	tunnels := tree.Getf("vpn ipsec site-to-site peer %v tunnel", info.PeerAddress)
-	/* if local cidr or remote cidr decrease, delete old config */
-	for _, t := range tunnels.Children() {
-		num, _ := strconv.Atoi(t.Name())
-		if num >= tunnelNo {
-			tree.Deletef("vpn ipsec site-to-site peer %v tunnel %s", info.PeerAddress, t.Name())
-		}
-	}
-
-	if utils.IsSkipVyosIptables() {
-		return
-	}
 
 	//create eipaddress group
 	tree.SetGroup("address", ipsecAddressGroup, info.PeerAddress)
@@ -449,154 +308,12 @@ func createIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 			}
 		}
 	}
+	return
 }
 
-func openNatTraversal(tree *server.VyosConfigTree) {
-	natT := tree.Get("vpn ipsec nat-traversal")
-	if natT == nil {
-		tree.Setf("vpn ipsec nat-traversal enable")
-	}
-}
-
-func createIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
-	cmd := &createIPsecCmd{}
-	ctx.GetCommand(cmd)
-	return createIPsecConnection(cmd)
-}
-
-func createIPsecConnection(cmd *createIPsecCmd) interface{} {
-	AutoRestartVpn = cmd.AutoRestartVpn
-
-	vyos := server.NewParserFromShowConfiguration()
-	tree := vyos.Tree
-	for _, info := range cmd.Infos {
-		createIPsec(tree, info)
-	}
-
-	openNatTraversal(tree)
-	tree.Apply(false)
-
-	for _, info := range cmd.Infos {
-		ipsecMap[info.Uuid] = info
-	}
-
-	if utils.IsSkipVyosIptables() {
-		syncIpSecRulesByIptables()
-	}
-
-	go restartVpnAfterConfig()
-
-	writeIpsecHaScript(true)
-
-	return nil
-}
-
-func syncIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
-	cmd := &syncIPsecCmd{}
-	ctx.GetCommand(cmd)
-	return syncIPsecConnection(cmd)
-}
-
-func syncIPsecConnection(cmd *syncIPsecCmd) interface{} {
-	AutoRestartVpn = cmd.AutoRestartVpn
-
-	vyos := server.NewParserFromShowConfiguration()
-	tree := vyos.Tree
-	ipsecMap = make(map[string]ipsecInfo, IPSecInfoMaxSize)
-
-	for _, info := range cmd.Infos {
-		ipsecMap[info.Uuid] = info
-		createIPsec(tree, info)
-	}
-
-	if len(cmd.Infos) > 0 {
-		openNatTraversal(tree)
-	}
-	tree.Apply(false)
-
-	if utils.IsSkipVyosIptables() {
-		syncIpSecRulesByIptables()
-	}
-
-	if len(ipsecMap) > 0 {
-		go restartVpnAfterConfig()
-		writeIpsecHaScript(true)
-	} else {
-		writeIpsecHaScript(false)
-	}
-
-	return nil
-}
-
-func restoreIpRuleForMainRouteTable() {
-	bash := utils.Bash{
-		Command: fmt.Sprintf("ip rule list | grep 32766"),
-	}
-	ret, out, _, err := bash.RunWithReturn()
-	if ret != 0 || err != nil || out == "" {
-		bash := utils.Bash{
-			Command: fmt.Sprintf("ip rule add from all table main pref 32766"),
-		}
-		_, _, _, err := bash.RunWithReturn()
-		utils.PanicOnError(err)
-	}
-}
-
-func deleteIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
-	cmd := &deleteIPsecCmd{}
-	ctx.GetCommand(cmd)
-	return deleteIPsecConnection(cmd)
-}
-
-func deleteIPsecConnection(cmd *deleteIPsecCmd) interface{} {
-	vyos := server.NewParserFromShowConfiguration()
-	tree := vyos.Tree
-	for _, info := range cmd.Infos {
-		deleteIPsec(tree, info)
-	}
-	tree.Apply(false)
-
-	for _, info := range cmd.Infos {
-		delete(ipsecMap, info.Uuid)
-	}
-
-	restoreIpRuleForMainRouteTable()
-
-	if utils.IsSkipVyosIptables() {
-		syncIpSecRulesByIptables()
-	}
-
-	if len(ipsecMap) > 0 {
-		writeIpsecHaScript(true)
-	} else {
-		tree := server.NewParserFromShowConfiguration().Tree
-		tree.Deletef("firewall group address-group %s", ipsecAddressGroup)
-		tree.Apply(false)
-		writeIpsecHaScript(false)
-	}
-
-	return nil
-}
-
-func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
+func delIPSecRule(tree *server.VyosConfigTree, info *ipsecInfo) {
 	nicname, err := utils.GetNicNameByMac(info.PublicNic)
 	utils.PanicOnError(err)
-
-	tree.Deletef("vpn ipsec ike-group %s", info.Uuid)
-	tree.Deletef("vpn ipsec esp-group %s", info.Uuid)
-	tree.Deletef("vpn ipsec site-to-site peer %s", info.PeerAddress)
-
-	ipsec := tree.Get("vpn ipsec site-to-site peer")
-	noipsec := false
-	if ipsec == nil || ipsec.Size() == 0 {
-		noipsec = true
-		// no any ipsec connection, delete ipsec related rules
-		tree.Delete("vpn ipsec")
-	}
-
-	if utils.IsSkipVyosIptables() {
-		return
-	}
 
 	/* in sync ipsec, we don't know what is localcidr, remotecidr is missing
 	 * so use reg expression to delete all rules
@@ -629,7 +346,19 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 		}
 	}
 
-	if noipsec {
+	if info.ExcludeSnat {
+		for _, localCidr := range info.LocalCidrs {
+			for _, remoteCidr := range info.PeerCidrs {
+				des = fmt.Sprintf("ipsec-%s-%s-%s", info.Uuid, localCidr, remoteCidr)
+				if r := tree.FindSnatRuleDescription(des); r != nil {
+					r.Delete()
+				}
+			}
+		}
+	}
+
+	ipsec := tree.Get("vpn ipsec site-to-site peer")
+	if ipsec == nil || ipsec.Size() == 0 {
 		// delete firewall
 		if r := tree.FindFirewallRuleByDescription(nicname, "local", "ipsec-500-udp"); r != nil {
 			r.Delete()
@@ -644,151 +373,501 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 			r.Delete()
 		}
 
-		if info.ExcludeSnat {
-			for _, localCidr := range info.LocalCidrs {
-				for _, remoteCidr := range info.PeerCidrs {
-					des = fmt.Sprintf("ipsec-%s-%s-%s", info.Uuid, localCidr, remoteCidr)
-					if r := tree.FindSnatRuleDescription(des); r != nil {
-						r.Delete()
-					}
-				}
-			}
-		}
+		tree.Deletef("firewall group address-group %s", ipsecAddressGroup)
 	}
+
 }
 
-func updateIPsecConnectionState(tree *server.VyosConfigTree, info ipsecInfo) {
-	if info.State == "Disabled" {
-		for i, _ := range info.PeerCidrs {
-			tree.Setf("vpn ipsec site-to-site peer %v tunnel %v disable", info.PeerAddress, i+1)
-		}
-	} else if info.State == "Enabled" {
-		for i, _ := range info.PeerCidrs {
-			tree.Deletef("vpn ipsec site-to-site peer %v tunnel %v disable", info.PeerAddress, i+1)
-		}
-	}
-	tree.Apply(false)
-}
-
-func updateIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
-	cmd := &updateIPsecReq{}
-	ctx.GetCommand(cmd)
-	return updateIPsecConnection(cmd)
-}
-
-func updateIPsecConnection(cmd *updateIPsecReq) interface{} {
-	vyos := server.NewParserFromShowConfiguration()
-	tree := vyos.Tree
-
+func createIPsecConnection(cmd *createIPsecCmd) interface{} {
 	for _, info := range cmd.Infos {
-		for _, item := range info.ModifiedItems {
-			if item == "State" {
-				updateIPsecConnectionState(tree, cmd.Infos[0])
-			}
-		}
+		ipsecMap[info.Uuid] = info
 	}
 
-	restoreIpRuleForMainRouteTable()
+	/* add ipsec iptables rule */
+	if utils.IsSkipVyosIptables() {
+		syncIpSecRulesByIptables()
+	} else {
+		tree := server.GenVyosConfigTree()
+		for _, info := range cmd.Infos {
+			setIPSecRule(tree, &info)
+		}
+		tree.Apply(false)
+	}
+
+	ipsecVerMgr.currentDriver.CreateIpsecConns(cmd)
+
+	writeIpsecHaScript(true)
 
 	return nil
 }
 
-func writeIpsecHaScript(enable bool) {
-	if !utils.IsHaEnabled() {
-		return
+func syncIPsecConnection(cmd *syncIPsecCmd) interface{} {
+	for _, info := range cmd.Infos {
+		ipsecMap[info.Uuid] = info
 	}
 
-	if enable {
-		srcFile := "/home/vyos/zvr/keepalived/temp/ipsec.sh"
-		err := utils.CopyFile(srcFile, VYOSHA_IPSEC_SCRIPT)
-		utils.PanicOnError(err)
+	/* add ipsec iptables rule */
+	if utils.IsSkipVyosIptables() {
+		syncIpSecRulesByIptables()
 	} else {
-		conent := "echo 'no ipsec configured'"
-		err := ioutil.WriteFile(VYOSHA_IPSEC_SCRIPT, []byte(conent), 0755)
-		utils.PanicOnError(err)
+		tree := server.GenVyosConfigTree()
+		for _, info := range cmd.Infos {
+			setIPSecRule(tree, &info)
+		}
+		tree.Apply(false)
 	}
 
+	ipsecVerMgr.currentDriver.SyncIpsecConns(cmd)
+
+	if len(ipsecMap) > 0 {
+		writeIpsecHaScript(true)
+	} else {
+		writeIpsecHaScript(false)
+	}
+
+	return nil
 }
 
-func getIkeUptime(peer string) int {
-	/*
-		* $ /opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl --show-ike-sa-peer=10.86.5.142
-		Peer ID / IP                            Local ID / IP
-		------------                            -------------
-		10.86.5.142                             10.86.5.144
-
-		    State  Encrypt  Hash    D-H Grp  NAT-T  A-Time  L-Time
-		    -----  -------  ----    -------  -----  ------  ------
-		    up     3des     sha1    2        no     5400    86400
-	*/
-	bash := utils.Bash{
-		Command: fmt.Sprintf("/opt/vyatta/bin/sudo-users/vyatta-op-vpn.pl --show-ike-sa-peer=%s | grep -A 2 A-Time | grep up", peer),
-	}
-	ret, o, _, err := bash.RunWithReturn()
-	if ret != 0 || err != nil {
-		return 0
+func deleteIPsecConnection(cmd *deleteIPsecCmd) interface{} {
+	for _, info := range cmd.Infos {
+		delete(ipsecMap, info.Uuid)
 	}
 
-	var atime, ltime int
-	var state, encrypt, hash, dhGrp, nat string
-	o = strings.TrimSpace(o)
-	len, err := fmt.Sscanf(o, "%s %s %s %s %s %d %d", &state, &encrypt, &hash, &dhGrp, &nat, &atime, &ltime)
-	if err != nil || len < 7 {
-		return 0
+	/* del ipsec iptables rule */
+	/* del ipsec iptables rule */
+	if utils.IsSkipVyosIptables() {
+		syncIpSecRulesByIptables()
+	} else {
+		tree := server.GenVyosConfigTree()
+		for _, info := range cmd.Infos {
+			delIPSecRule(tree, &info)
+		}
+		tree.Apply(false)
 	}
-	return ltime - atime
+
+	ipsecVerMgr.currentDriver.DeleteIpsecConns(cmd)
+
+	if len(ipsecMap) > 0 {
+		writeIpsecHaScript(true)
+	} else {
+		writeIpsecHaScript(false)
+	}
+
+	return nil
 }
 
-func restartIPSecVpnTimer() {
-	/* doesn't running in ut */
-	if utils.IsRuingUT() {
-		return
+func updateIPsecConnection(cmd *updateIPsecCmd) interface{} {
+
+	ipsecVerMgr.currentDriver.ModifyIpsecConns(cmd)
+
+	return nil
+}
+
+func createIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
+	cmd := &createIPsecCmd{}
+	ctx.GetCommand(cmd)
+	return createIPsecConnection(cmd)
+}
+
+func syncIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
+	cmd := &syncIPsecCmd{}
+	ctx.GetCommand(cmd)
+	return syncIPsecConnection(cmd)
+}
+
+func deleteIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
+	cmd := &deleteIPsecCmd{}
+	ctx.GetCommand(cmd)
+	return deleteIPsecConnection(cmd)
+}
+
+func updateIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
+	cmd := &updateIPsecCmd{}
+	ctx.GetCommand(cmd)
+	return updateIPsecConnection(cmd)
+}
+
+func updateIPsecVersionHandler(ctx *server.CommandContext) interface{} {
+	cmd := &updateIpsecVersionCmd{}
+	ctx.GetCommand(cmd)
+	return updateIpsecVersion(cmd)
+}
+
+type ipsecVersionMgr struct {
+	currentVersion  string
+	currentDriver   ipsecDriver
+	latestVersion   string
+	supportVersions []string
+	useConfig       bool
+}
+
+type ipsecDriver interface {
+	DriverType() string
+	ExistConnWorking() bool
+	CreateIpsecConns(cmd *createIPsecCmd) error
+	DeleteIpsecConns(cmd *deleteIPsecCmd) error
+	ModifyIpsecConns(cmd *updateIPsecCmd) error
+	SyncIpsecConns(cmd *syncIPsecCmd) error
+}
+
+var (
+	ipsecVerMgr     = &ipsecVersionMgr{}
+	ipsecDriverList = map[string]ipsecDriver{}
+)
+
+func getStrongswanSoftwareVersion() (string, error) {
+	bash := &utils.Bash{Command: ipsecVersion, Sudo: true}
+	_, out, _, err := bash.RunWithReturn()
+	if err != nil {
+		return "", errors.New("get ipsec version failed, " + err.Error())
 	}
 
-	if AutoRestartThreadCreated {
-		return
+	compile := regexp.MustCompile(`U([\d]+.[\d]+.[\d]+)`)
+	versionInfo := compile.FindStringSubmatch(out)
+	if len(versionInfo) > 1 {
+		return versionInfo[1], nil
+	}
+	return "", errors.New("get ipsec version failed")
+}
+
+/*
+   the ipsec version that comes with vyos:
+      vyos117=4.5.2, vyos12=5.7.2
+*/
+func updateOriginVersion(version string) error {
+	log.Infof("TEMP: updateOriginVersion for version=%s.", version)
+
+	versionPath := ipsec_path_software_data + version
+	if exist, _ := utils.PathExists(versionPath); exist {
+		log.Infof("TEMP: updateOriginVersion version has existed.")
+		return nil
 	}
 
-	AutoRestartThreadCreated = true
+	originPath := ipsec_path_software_data + "origin"
+	if exist, _ := utils.PathExists(originPath); !exist {
+		return errors.New("no origin version in " + ipsec_path_software_data)
+	}
 
-	peers := getIPsecPeers()
-	ikeUpTime := 0
-	for _, peer := range peers {
-		t := getIkeUptime(peer)
-		if t > ikeUpTime {
-			ikeUpTime = t
+	if err := os.MkdirAll(versionPath, 0755); err != nil {
+		return err
+	}
+
+	if err := utils.CopyFile(originPath+"/"+ipsec_strongswan_upgrade_cmd,
+		versionPath+"/"+ipsec_strongswan_upgrade_cmd); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func getCurrentVersionInuse() (string, error) {
+
+	version, err := getStrongswanSoftwareVersion()
+	if err != nil {
+		return "", err
+	}
+
+	if _, ret := utils.CompareVersion(version, strongswanVersion_5_9_4); ret < 0 {
+		if err = updateOriginVersion(version); err != nil {
+			return "", err
 		}
 	}
 
-	log.Debugf("ike uptime %d", ikeUpTime)
-	interval := ikeUpTime - IPSecIkeRekeyIntervalMargin
-	if interval <= 0 {
-		interval = 1
+	log.Infof("TEMP: getCurrentVersionInuse version=%s.", version)
+	return version, nil
+}
+
+func versionInSupport(version string) bool {
+	for _, v := range ipsecVerMgr.supportVersions {
+		if v == version {
+			return true
+		}
+	}
+	return false
+}
+
+func getVersionSupport() []string {
+	var supports []string
+	if exist, _ := utils.PathExists(ipsec_path_software_data); !exist {
+		return supports
+	}
+	dir, err := ioutil.ReadDir(ipsec_path_software_data)
+	if err != nil {
+		return supports
 	}
 
-	restartTicker := time.NewTicker(time.Duration(interval) * time.Second)
-	go func() {
-		for {
-			select {
-			case <-restartTicker.C:
-				if !AutoRestartVpn {
-					return
-				}
+	for _, fi := range dir {
+		name := fi.Name()
+		if fi.IsDir() && utils.ValidVersionString(name) { // 目录, 递归遍历
+			supports = append(supports, name)
+			os.Chmod(ipsec_path_software_data+name+"/"+ipsec_strongswan_upgrade_cmd, 0777)
+		}
+	}
 
-				log.Debugf("restart vpn process because config flag: AutoRestartVpn ")
-				utils.Retry(func() error {
-					bash := utils.Bash{
-						Command: "pidof starter; if [ $? -eq 0 ]; then sudo ipsec reload; else sudo ipsec restart; fi",
-						NoLog:   false,
-					}
-					_, _, _, err := bash.RunWithReturn()
-					return err
-				}, 3, 60)
+	sort.Slice(supports, func(i, j int) bool {
+		if _, ret := utils.CompareVersion(supports[i], supports[j]); ret < 0 {
+			return true
+		}
+		return false
+	})
+	return supports
+}
 
-				restartTicker = time.NewTicker(time.Second * IPSecRestartInterval)
-			}
+func getIpsecDriver(version string) string {
+	if utils.Vyos_version == utils.VYOS_1_1_7 {
+		if _, ret := utils.CompareVersion(version, strongswanVersion_5_9_4); ret >= 0 {
+			return ipsec_driver_strongswan_withipsec
+		} else {
+			return ipsec_driver_vyos
+		}
+	}
+
+	return ipsec_driver_vyos
+}
+
+func upDownStrongswanSoftware(version string, down bool) error {
+	var err error
+
+	defer func() {
+		if err != nil {
+			upDownStrongswanSoftware(version, !down)
 		}
 	}()
+
+	upgradePath := ipsec_path_software_data + version + "/" + ipsec_strongswan_upgrade_cmd
+	if exist, _ := utils.PathExists(upgradePath); !exist {
+		return fmt.Errorf("upgrade.sh for strongswan version %s not existed", version)
+	}
+
+	downOpt := ""
+	if down {
+		downOpt = " -d"
+	}
+
+	b := utils.Bash{
+		Command: upgradePath + downOpt,
+		Sudo:    true,
+		Timeout: 10,
+	}
+	err = b.Run()
+	return err
+}
+
+func updateCurrentVersion(currentVersion string, useConfig bool) error {
+	if useConfig {
+		if err := updateIpsecVersionConfig(currentVersion); err != nil {
+			return err
+		}
+	}
+	ipsecVerMgr.useConfig = useConfig
+
+	ipsecVerMgr.currentVersion = currentVersion
+	driverName := getIpsecDriver(currentVersion)
+	if driverName != ipsecVerMgr.currentDriver.DriverType() {
+		ipsecVerMgr.currentDriver = ipsecDriverList[driverName]
+	}
+	return nil
+}
+
+func autoUpgradeStrongswan() error {
+	var err error
+	if ipsecVerMgr.latestVersion == "" ||
+		ipsecVerMgr.currentVersion == ipsecVerMgr.latestVersion {
+		return nil
+	}
+
+	if ipsecVerMgr.currentDriver.ExistConnWorking() {
+		return nil
+	}
+
+	currentVersion := ipsecVerMgr.currentVersion
+	if err = upDownStrongswanSoftware(currentVersion, true); err != nil {
+		return err
+	}
+
+	defer func(v string) {
+		if err != nil {
+			upDownStrongswanSoftware(v, false)
+		}
+	}(currentVersion)
+
+	if err = updateCurrentVersion(ipsecVerMgr.latestVersion, false); err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			updateCurrentVersion(currentVersion, false)
+		}
+	}()
+
+	if err = upDownStrongswanSoftware(ipsecVerMgr.currentVersion, false); err != nil {
+		return err
+	}
+
+	log.Infof("auto upgrade strongswan from %s to %s, current driver %s.",
+		currentVersion, ipsecVerMgr.currentVersion, ipsecVerMgr.currentDriver.DriverType())
+
+	return nil
+}
+
+/* 手动升级、降级：
+    1、删除当前版本 ipsec配置；
+	2、降级当前版本软件
+    3、修改内存版本信息
+	4、升级指定版本软件
+	5、创建指定版本 ipsec配置
+*/
+func updateIpsecVersion(cmd *updateIpsecVersionCmd) error {
+
+	log.Infof("TEMP: start update strongswan version from %s to %s.",
+		ipsecVerMgr.currentVersion, cmd.Version)
+	if cmd.Version == ipsecVerMgr.currentVersion {
+		return nil
+	}
+
+	if !versionInSupport(cmd.Version) {
+		return fmt.Errorf("version %s is not support", cmd.Version)
+	}
+
+	err := ipsecVerMgr.currentDriver.DeleteIpsecConns(&deleteIPsecCmd{cmd.Infos})
+	if err != nil {
+		return err
+	}
+	// wait for strongswan to notify the peer to delete connections and ipsec config(vyos).
+	time.Sleep(time.Second)
+
+	defer func(driver ipsecDriver) {
+		if err != nil {
+			driver.CreateIpsecConns(&createIPsecCmd{Infos: cmd.Infos, AutoRestartVpn: cmd.AutoRestartVpn})
+		}
+	}(ipsecVerMgr.currentDriver)
+
+	currentVersion := ipsecVerMgr.currentVersion
+	useConfig := ipsecVerMgr.useConfig
+	if err = upDownStrongswanSoftware(currentVersion, true); err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			upDownStrongswanSoftware(currentVersion, false)
+		}
+	}()
+
+	if err = updateCurrentVersion(cmd.Version, true); err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			updateCurrentVersion(currentVersion, useConfig)
+		}
+	}()
+
+	if err = upDownStrongswanSoftware(ipsecVerMgr.currentVersion, false); err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			upDownStrongswanSoftware(ipsecVerMgr.currentVersion, true)
+		}
+	}()
+
+	err = ipsecVerMgr.currentDriver.CreateIpsecConns(&createIPsecCmd{Infos: cmd.Infos, AutoRestartVpn: cmd.AutoRestartVpn})
+	if err != nil {
+		return err
+	}
+
+	log.Infof("success update strongswan version from %s to %s, current driver=%s.",
+		currentVersion, ipsecVerMgr.currentVersion, ipsecVerMgr.currentDriver.DriverType())
+	return nil
+}
+
+func getIpsecVersionUserConfig() (string, error) {
+
+	data, err := ioutil.ReadFile(ipsec_path_version)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+func updateIpsecVersionConfig(version string) error {
+	return utils.WriteFile(ipsec_path_version, version)
+}
+
+func checkIpsecCurrentVersion() (err error, isUserConfig bool) {
+	var version string
+	if exist, _ := utils.PathExists(ipsec_path_version); !exist {
+		return nil, false
+	}
+
+	version, err = getIpsecVersionUserConfig()
+	if err != nil {
+		return err, false
+	}
+
+	if ipsecVerMgr.currentVersion != version {
+		errInfo := fmt.Sprintf("the current ipsec version(%s) is inconsistent with the user configuration(%s)",
+			ipsecVerMgr.currentVersion, version)
+
+		log.Errorf(errInfo)
+		return errors.New(errInfo), false
+	}
+
+	return nil, true
+}
+
+func IpsecInit() error {
+	// currently, supports vyos and strongswan(with ipsec cli) driver.
+	ipsecDriverList = make(map[string]ipsecDriver)
+	ipsecDriverList[ipsec_driver_strongswan_withipsec] = &ipsecStrongSWan{}
+	ipsecDriverList[ipsec_driver_vyos] = &ipsecVyos{}
+
+	version, err := getCurrentVersionInuse()
+	if err != nil {
+		return err
+	}
+
+	driverName := getIpsecDriver(version)
+	if driver, ok := ipsecDriverList[driverName]; ok {
+		ipsecVerMgr.currentVersion = version
+		ipsecVerMgr.currentDriver = driver
+	} else {
+		return errors.New("no ipsec driver for " + driverName)
+	}
+
+	supportVersions := getVersionSupport()
+	if len(supportVersions) == 0 {
+		supportVersions = append(supportVersions, version)
+	}
+
+	ipsecVerMgr.supportVersions = supportVersions
+	ipsecVerMgr.latestVersion = supportVersions[len(supportVersions)-1]
+
+	log.Infof("strongswan version info: current version %s, current driver %s, latest version %s.",
+		ipsecVerMgr.currentVersion, ipsecVerMgr.currentDriver.DriverType(), ipsecVerMgr.latestVersion)
+
+	err, useConfig := checkIpsecCurrentVersion()
+	if err != nil {
+		return err
+	}
+	ipsecVerMgr.useConfig = useConfig
+	if !useConfig {
+		// check and upgrade
+		autoUpgradeStrongswan()
+	}
+
+	return nil
+}
+
+func GetIpsecServiceStatus() *ServiceStatus {
+	return &ServiceStatus{"ipsec",
+		ipsecVerMgr.currentVersion,
+		ipsecVerMgr.latestVersion,
+		ipsecVerMgr.supportVersions}
+}
+
+func GetIpsecVersionInfo() (string, string) {
+	return ipsecVerMgr.currentVersion, ipsecVerMgr.latestVersion
 }
 
 func IPsecEntryPoint() {
@@ -797,4 +876,5 @@ func IPsecEntryPoint() {
 	server.RegisterAsyncCommandHandler(DELETE_IPSEC_CONNECTION, server.VyosLock(deleteIPsecConnectionHandler))
 	server.RegisterAsyncCommandHandler(SYNC_IPSEC_CONNECTION, server.VyosLock(syncIPsecConnectionHandler))
 	server.RegisterAsyncCommandHandler(UPDATE_IPSEC_CONNECTION, server.VyosLock(updateIPsecConnectionHandler))
+	server.RegisterAsyncCommandHandler(UPDATE_IPSEC_VERSION, server.VyosLock(updateIPsecVersionHandler))
 }

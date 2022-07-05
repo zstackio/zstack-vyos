@@ -3,17 +3,19 @@ package main
 import (
 	"flag"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/pkg/errors"
-	"github.com/zstackio/zstack-vyos/plugin"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+
+	"github.com/pkg/errors"
+	"github.com/zstackio/zstack-vyos/plugin"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 func loadPlugins() {
@@ -39,6 +41,13 @@ func loadPlugins() {
 	plugin.FirewallEntryPoint()
 	plugin.PerformanceEntryPoint()
 	plugin.MiscEntryPoint()
+}
+
+func initPlugins() {
+	if err := plugin.IpsecInit(); err != nil {
+		utils.PanicOnError(err)
+	}
+	plugin.InitHaNicState()
 }
 
 type nic struct {
@@ -144,8 +153,8 @@ func configureZvrFirewall() {
 	if r := tree.FindFirewallRuleByDescription("eth0", "local", des); r != nil {
 		r.Delete()
 		/* if error happened, make sure zvr can work properly,
-		 firewall for 7272 need to be delete and added back
-		tree.Apply(false) */
+		   firewall for 7272 need to be delete and added back
+		  tree.Apply(false) */
 	}
 
 	tree.SetFirewallOnInterface("eth0", "local",
@@ -293,8 +302,8 @@ func main() {
 	utils.InitBootStrapInfo()
 	utils.InitVyosVersion()
 	checkIptablesRules()
-	plugin.InitHaNicState()
 	utils.InitNatRule()
+	initPlugins()
 	loadPlugins()
 	setupRotates()
 	server.VyosLockInterface(configureZvrFirewall)()

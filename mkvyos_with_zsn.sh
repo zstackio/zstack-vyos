@@ -114,6 +114,7 @@ SBIN_DIR=/opt/vyatta/sbin
 VERSION=`date +%Y%m%d`
 ZVR_VERSION=$tmpdir/version
 GOPRLIMIT=$tmpdir/goprlimit
+DATA=$tmpdir/data.tar.gz
 
 bash -c "$3"
 ZSN_DIR=/usr/local/zstack/zsn-agent/bin
@@ -151,6 +152,8 @@ upload $SYSCTL $ROOTPATH/etc/sysctl.conf
 mkdir-p $ROOTPATH/etc/conntrackd
 upload $CONNTRACKD $ROOTPATH/etc/conntrackd/conntrackd.conf
 upload $ZSN $ROOTPATH/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
+mkdir-p $ROOTPATH/home/vyos/zvr/data/
+tar-in $DATA $ROOTPATH/home/vyos/zvr/data/ compress:gzip
 mkdir-p $ROOTPATH/opt/vyatta/etc/config/scripts/
 upload -<<END $VyosPostScript
 #!/bin/bash
@@ -192,6 +195,7 @@ chown vyos:users /home/vyos/zvr/ssh/zvr-reboot.sh
 chown root:root /etc/sysctl.conf
 chown root:root /etc/conntrackd/conntrackd.conf
 chown vyos:users /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh
+ln -s /usr/local/lib/libcrypto.so.1.0.0  /usr/lib/libcrypto.so.1.0.0
 $SBIN_DIR/zvrboot >/home/vyos/zvr/zvrboot.log 2>&1 < /dev/null &
 # disable distributed routing by default
 export ZSNP_TMOUT=-960

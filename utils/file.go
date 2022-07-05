@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -107,4 +108,29 @@ func ReadPid(pidPath string) (int, error) {
 	pid = strings.TrimSpace(pid)
 	log.Debugf("haproxy pid: %s", pid)
 	return strconv.Atoi(pid)
+}
+
+// WriteFile 写一些需要root权限的文件使用，zvr进程使用vyos用户执行，无法直接调用 syscall
+func WriteFile(path string, context string) error {
+	_, fileName := filepath.Split(path)
+	tmpFile, err := ioutil.TempFile("", fileName)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmpFile.Name())
+
+	_, err = tmpFile.Write([]byte(context))
+	if err != nil {
+		return err
+	}
+
+	if err = SudoMoveFile(tmpFile.Name(), path); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func SudoRmFile(path string) error {
+	return exec.Command("sudo", "/bin/rm", "-f", path).Run()
 }

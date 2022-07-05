@@ -3,6 +3,7 @@ package plugin
 import (
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/gomega"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
 )
@@ -112,6 +113,119 @@ var _ = Describe("ipsec_test", func() {
 		tree.Apply(false)
 
 		restoreIpRuleForMainRouteTable()
+	})
+
+	It("test create native ipsec1", func() {
+		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+		configureNic(nicCmd)
+		cmd := &createIPsecCmd{}
+		cmd.AutoRestartVpn = false
+
+		info := &ipsecInfo{}
+		info.Uuid = "sheng-test1"
+		info.Vip = "172.25.3.157"
+		info.LocalCidrs = []string{"192.168.100.0/24", "192.168.101.0/24", "192.168.102.0/24"}
+		info.PeerAddress = "172.25.10.63"
+		info.AuthKey = "1234"
+		info.AuthMode = "psk"
+		info.PublicNic = utils.PubNicForUT.Mac
+		info.IkeAuthAlgorithm = "sha1"
+		info.IkeEncryptionAlgorithm = "aes128"
+		info.IkeDhGroup = 14
+		info.PolicyAuthAlgorithm = "sha1"
+		info.PolicyEncryptionAlgorithm = "aes128"
+		info.Pfs = "dh-group14"
+		info.PolicyMode = "tunnel"
+		info.TransformProtocol = "esp"
+		info.PeerCidrs = []string{"10.0.0.0/24", "10.0.1.0/24", "10.0.2.0/24"}
+		info.ExcludeSnat = true
+		info.LocalId = "sheng-local"
+		info.RemoteId = "sheng-remote"
+		info.IkeVersion = "ikev2"
+
+		cmd.Infos = append(cmd.Infos, *info)
+
+		info.Uuid = "sheng-test2"
+		info.Vip = "172.25.3.158"
+		info.LocalCidrs = []string{"192.169.100.0/24", "192.169.101.0/24", "192.169.102.0/24"}
+		info.PeerAddress = "172.25.10.64"
+		info.AuthKey = "5678"
+		info.AuthMode = "psk"
+		info.PublicNic = utils.PubNicForUT.Mac
+		info.IkeAuthAlgorithm = "sha1"
+		info.IkeEncryptionAlgorithm = "aes128"
+		info.IkeDhGroup = 18
+		info.PolicyAuthAlgorithm = "sha1"
+		info.PolicyEncryptionAlgorithm = "aes128"
+		info.Pfs = ""
+		info.PolicyMode = "tunnel"
+		info.TransformProtocol = "esp"
+		info.PeerCidrs = []string{"10.1.0.0/24", "10.1.1.0/24", "10.1.2.0/24"}
+		info.ExcludeSnat = true
+		info.LocalId = ""
+		info.RemoteId = ""
+		info.IkeVersion = "ike"
+
+		cmd.Infos = append(cmd.Infos, *info)
+
+		for _, info := range cmd.Infos {
+			err := modifyIpsecNative(&info)
+			gomega.Expect(err).To(gomega.BeNil(), "create ipsec native err: %v", err)
+		}
+
+	})
+
+	It("test update native ipsec1", func() {
+		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+		configureNic(nicCmd)
+		cmd := &createIPsecCmd{}
+		cmd.AutoRestartVpn = false
+
+		info := &ipsecInfo{}
+		info.Uuid = "sheng-test1"
+		info.Vip = "172.25.3.157"
+		info.LocalCidrs = []string{"192.168.100.0/24"}
+		info.PeerAddress = "172.25.10.63"
+		info.AuthKey = "1234-new"
+		info.AuthMode = "psk"
+		info.PublicNic = utils.PubNicForUT.Mac
+		info.IkeAuthAlgorithm = "sha1"
+		info.IkeEncryptionAlgorithm = "aes256"
+		info.IkeDhGroup = 14
+		info.PolicyAuthAlgorithm = "sha1"
+		info.PolicyEncryptionAlgorithm = "aes256"
+		info.Pfs = "dh-group14"
+		info.PolicyMode = "tunnel"
+		info.TransformProtocol = "esp"
+		info.PeerCidrs = []string{"10.0.0.0/24", "10.0.1.0/24"}
+		info.ExcludeSnat = true
+		info.LocalId = "sheng-local-new"
+		info.RemoteId = "sheng-remote-new"
+		info.IkeVersion = "ikev2"
+
+		cmd.Infos = append(cmd.Infos, *info)
+
+		for _, info := range cmd.Infos {
+			err := modifyIpsecNative(&info)
+			gomega.Expect(err).To(gomega.BeNil(), "update ipsec native err: %v", err)
+		}
+	})
+
+	It("test delete native ipsec1", func() {
+		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+		configureNic(nicCmd)
+		cmd := &createIPsecCmd{}
+		cmd.AutoRestartVpn = false
+
+		info := &ipsecInfo{}
+		info.Uuid = "sheng-test2"
+		cmd.Infos = append(cmd.Infos, *info)
+
+		for _, info := range cmd.Infos {
+			err := deleteIpsecNative(&info)
+			gomega.Expect(err).To(gomega.BeNil(), "delete ipsec native err: %v", err)
+		}
+
 	})
 
 	It("ipsec test destroying", func() {
