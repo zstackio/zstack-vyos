@@ -537,19 +537,19 @@ func getStrongswanSoftwareVersion() (string, error) {
 func updateOriginVersion(version string) error {
 	log.Infof("TEMP: updateOriginVersion for version=%s.", version)
 
-	versionPath := ipsec_path_software_data + version
-	if exist, _ := utils.PathExists(versionPath); exist {
-		log.Infof("TEMP: updateOriginVersion version has existed.")
-		return nil
-	}
-
 	originPath := ipsec_path_software_data + "origin"
 	if exist, _ := utils.PathExists(originPath); !exist {
 		return errors.New("no origin version in " + ipsec_path_software_data)
 	}
 
-	if err := os.MkdirAll(versionPath, 0755); err != nil {
-		return err
+	versionPath := ipsec_path_software_data + version
+	if exist, _ := utils.PathExists(versionPath); !exist {
+		if err := os.MkdirAll(versionPath, 0755); err != nil {
+			return err
+		}
+
+		log.Infof("TEMP: updateOriginVersion create origin dir %s.", versionPath)
+		return nil
 	}
 
 	if err := utils.CopyFile(originPath+"/"+ipsec_strongswan_upgrade_cmd,
@@ -567,7 +567,7 @@ func getCurrentVersionInuse() (string, error) {
 		return "", err
 	}
 
-	if _, ret := utils.CompareVersion(version, strongswanVersion_5_9_4); ret < 0 {
+	if isOriginVersion(version) {
 		if err = updateOriginVersion(version); err != nil {
 			return "", err
 		}
@@ -586,6 +586,14 @@ func versionInSupport(version string) bool {
 	return false
 }
 
+func isOriginVersion(version string) bool {
+	if _, ret := utils.CompareVersion(version, strongswanVersion_5_9_4); ret < 0 {
+		return true
+	}
+
+	return false
+}
+
 func getVersionSupport() []string {
 	var supports []string
 	if exist, _ := utils.PathExists(ipsec_path_software_data); !exist {
@@ -598,7 +606,18 @@ func getVersionSupport() []string {
 
 	for _, fi := range dir {
 		name := fi.Name()
-		if fi.IsDir() && utils.ValidVersionString(name) { // 目录, 递归遍历
+		if !fi.IsDir() || name == "origin" {
+			continue
+		}
+
+		if utils.ValidVersionString(name) { // 目录, 递归遍历
+			if isOriginVersion(name) {
+				if err = updateOriginVersion(name); err != nil {
+					//
+					log.Errorf("update origin version file err: %s.", err.Error())
+				}
+			}
+
 			supports = append(supports, name)
 			os.Chmod(ipsec_path_software_data+name+"/"+ipsec_strongswan_upgrade_cmd, 0777)
 		}
@@ -645,9 +664,10 @@ func upDownStrongswanSoftware(version string, down bool) error {
 	}
 
 	b := utils.Bash{
-		Command: upgradePath + downOpt,
-		Sudo:    true,
-		Timeout: 10,
+		Command:  upgradePath + downOpt,
+		Sudo:     true,
+		Timeout:  10,
+		IsScript: true,
 	}
 	err = b.Run()
 	return err

@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"io/ioutil"
 	"os/exec"
+	"strings"
 	"syscall"
 	"text/template"
 	"time"
@@ -22,6 +23,7 @@ type Bash struct {
 	NoLog     bool
 	Timeout   int
 	Sudo      bool
+	IsScript  bool
 
 	retCode int
 	stdout  string
@@ -104,10 +106,21 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 		}()
 	}
 
+	/* shell script file should not be loaded into bash as a string
+	 */
 	if b.Sudo {
-		cmd = exec.Command("sudo", "bash", "-c", cmdstr)
+		if b.IsScript {
+			args := append([]string{"bash"}, strings.Split(cmdstr, " ")...)
+			cmd = exec.Command("sudo", args...)
+		} else {
+			cmd = exec.Command("sudo", "bash", "-c", cmdstr)
+		}
 	} else {
-		cmd = exec.Command("bash", "-c", cmdstr)
+		if b.IsScript {
+			cmd = exec.Command("bash", strings.Split(cmdstr, " ")...)
+		} else {
+			cmd = exec.Command("bash", "-c", cmdstr)
+		}
 	}
 
 	cmd.Stdout = &so
