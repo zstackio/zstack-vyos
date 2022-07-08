@@ -433,7 +433,14 @@ func deleteIPsecConnection(cmd *deleteIPsecCmd) interface{} {
 		delete(ipsecMap, info.Uuid)
 	}
 
-	/* del ipsec iptables rule */
+	ipsecVerMgr.currentDriver.DeleteIpsecConns(cmd)
+
+	if len(ipsecMap) > 0 {
+		writeIpsecHaScript(true)
+	} else {
+		writeIpsecHaScript(false)
+	}
+
 	/* del ipsec iptables rule */
 	if utils.IsSkipVyosIptables() {
 		syncIpSecRulesByIptables()
@@ -443,14 +450,6 @@ func deleteIPsecConnection(cmd *deleteIPsecCmd) interface{} {
 			delIPSecRule(tree, &info)
 		}
 		tree.Apply(false)
-	}
-
-	ipsecVerMgr.currentDriver.DeleteIpsecConns(cmd)
-
-	if len(ipsecMap) > 0 {
-		writeIpsecHaScript(true)
-	} else {
-		writeIpsecHaScript(false)
 	}
 
 	return nil
