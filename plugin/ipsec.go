@@ -699,6 +699,11 @@ func autoUpgradeStrongswan() error {
 		return nil
 	}
 
+	if utils.Kernel_version == utils.Kernel_3_13_11 {
+		log.Errorf("current vyos kernel [%s] not support upgrade strongswan", utils.Kernel_version)
+		return err
+	}
+
 	currentVersion := ipsecVerMgr.currentVersion
 	if err = upDownStrongswanSoftware(currentVersion, true); err != nil {
 		return err
@@ -737,6 +742,9 @@ func autoUpgradeStrongswan() error {
 	5、创建指定版本 ipsec配置
 */
 func updateIpsecVersion(cmd *updateIpsecVersionCmd) error {
+	if utils.Kernel_version == utils.Kernel_3_13_11 {
+		return fmt.Errorf("current vyos kernel [%s] not support upgrade strongswan", utils.Kernel_version)
+	}
 
 	log.Infof("TEMP: start update strongswan version from %s to %s.",
 		ipsecVerMgr.currentVersion, cmd.Version)
