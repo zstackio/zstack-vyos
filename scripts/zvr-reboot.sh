@@ -14,6 +14,7 @@ restart_zvr() {
 }
 
 if test x$1 = x'true'; then
+    UPGRADE_VERSION_FILE="true"
     echo "$(date '+%Y-%m-%d %H:%M:%S') force restart zstack virtual router " >> $LOGFILE
     restart_zvr
     exit
