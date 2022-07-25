@@ -357,8 +357,7 @@ func delIPSecRule(tree *server.VyosConfigTree, info *ipsecInfo) {
 		}
 	}
 
-	ipsec := tree.Get("vpn ipsec site-to-site peer")
-	if ipsec == nil || ipsec.Size() == 0 {
+	if !ipsecVerMgr.currentDriver.ExistConnWorking() {
 		// delete firewall
 		if r := tree.FindFirewallRuleByDescription(nicname, "local", "ipsec-500-udp"); r != nil {
 			r.Delete()
