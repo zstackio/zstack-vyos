@@ -3,9 +3,6 @@ package plugin
 import (
 	"bytes"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
 	"html/template"
 	"io/ioutil"
 	"os"
@@ -13,6 +10,10 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 type KeepAlivedStatus int
@@ -368,20 +369,22 @@ vrrp_instance vyos-ha {
 	notify_fault "{{.BackupScript}} FAULT"
 }
 `
-func (k *KeepalivedConf) BuildCheckScript() (error) {
+
+func (k *KeepalivedConf) BuildCheckScript() error {
 	check_zvr := `#! /bin/bash
 sudo /usr/bin/pgrep -u vyos -f /opt/vyatta/sbin/zvr > /dev/null
 `
-	err := ioutil.WriteFile(KeepalivedSciptPath + "check_zvr.sh", []byte(check_zvr), 0644); utils.PanicOnError(err)
+	err := ioutil.WriteFile(KeepalivedSciptPath+"check_zvr.sh", []byte(check_zvr), 0644)
+	utils.PanicOnError(err)
 
 	for _, ip := range k.MonitorIps {
 		check_monitor := fmt.Sprintf("#! /bin/bash\nsudo /bin/ping %s -w 1 -c 1 > /dev/null", ip)
 		script_name := fmt.Sprintf("check_monitor_%s.sh", ip)
-		err := ioutil.WriteFile(KeepalivedSciptPath + script_name, []byte(check_monitor), 0644); utils.PanicOnError(err)
+		err := ioutil.WriteFile(KeepalivedSciptPath+script_name, []byte(check_monitor), 0644)
+		utils.PanicOnError(err)
 	}
 	return nil
 }
-
 
 func (k *KeepalivedConf) BuildConf() error {
 	tmpl, err := template.New("keepalived.conf").Parse(tKeepalivedConf)
@@ -508,6 +511,19 @@ func callStatusChangeScripts() {
 		}
 	}
 	bash.RunWithReturn()
+
+	/* to avoid backup vpc nic up, we set nic disable state in zvrboot,
+	   so when change to master state, delete the disable state */
+	if keepAlivedStatus == KeepAlivedStatus_Master {
+		nics, _ := utils.GetAllNics()
+		tree := server.NewParserFromShowConfiguration().Tree
+
+		for _, nic := range nics {
+			tree.Deletef("interfaces ethernet %s disable", nic.Name)
+		}
+		tree.Apply(false)
+	}
+
 }
 
 var keepalivedPID int
