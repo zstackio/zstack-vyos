@@ -57,11 +57,12 @@ type ServiceStatus struct {
 }
 
 type pingRsp struct {
-	Uuid         string `json:"uuid"`
-	Version      string `json:"version"`
-	HaStatus     string `json:"haStatus"`
-	Healthy      bool   `json:"healthy"`
-	HealthDetail string `json:"healthDetail"`
+	Uuid              string                       `json:"uuid"`
+	Version           string                       `json:"version"`
+	HaStatus          string                       `json:"haStatus"`
+	Healthy           bool                         `json:"healthy"`
+	HealthDetail      string                       `json:"healthDetail"`
+	ServiceHealthList map[string]map[string]string `json:"serviceHealthList"`
 }
 
 type testRsp struct {
@@ -251,6 +252,8 @@ func setServiceStatus() []*ServiceStatus {
 }
 
 func pingHandler(ctx *server.CommandContext) interface{} {
+	serviceHealthList := make(map[string]map[string]string)
+	serviceHealthList[IPSEC_STATUS_NAME] = getIpsecConnsState()
 
 	addRouteIfCallbackIpChanged(false)
 	var haStatus string
@@ -263,7 +266,8 @@ func pingHandler(ctx *server.CommandContext) interface{} {
 	}
 
 	return pingRsp{Uuid: initConfig.Uuid, Version: string(VERSION), HaStatus: haStatus,
-		Healthy: healthStatus.Healthy, HealthDetail: healthStatus.HealthDetail}
+		Healthy: healthStatus.Healthy, HealthDetail: healthStatus.HealthDetail,
+		ServiceHealthList: serviceHealthList}
 }
 
 func echoHandler(ctx *server.CommandContext) interface{} {

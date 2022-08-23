@@ -3,21 +3,20 @@ package plugin
 import (
 	"errors"
 	"fmt"
+	log "github.com/Sirupsen/logrus"
+	"github.com/zstackio/zstack-vyos/utils"
 	"io/ioutil"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 	"text/template"
-
-	log "github.com/Sirupsen/logrus"
-	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (
 	ipsecSecretFormat = "%s %s : PSK %s"
-	ipsecConfFormat   = `
-conn {{.ConnName}}
+	ipsecConfFormatN  = `
+conn {{.ConnName}}{{- if ne .Number ""}}-{{.Number}}{{- end}}
     left={{.Left}}
     {{- if ne .Right ""}}   
     right={{.Right}}
@@ -85,6 +84,10 @@ conn {{.ConnName}}
 	idtype_name     = "name"
 	idtype_fqdn     = "fqdn"
 	idtype_userfqdn = "userfqdn"
+
+	ipsec_create_retrytime   = 3
+	ipsec_sync_retrytime     = 12
+	ipsec_retrytime_interval = 10
 )
 
 type ipsecConf struct {
@@ -110,6 +113,7 @@ type ipsecConf struct {
 	EncapMode   string
 	Secret      string
 	Margintime  string
+	Number      string
 }
 
 var (
@@ -258,9 +262,8 @@ func getNativeConf(ipsecMsg *ipsecInfo) (error, *ipsecConf) {
 }
 
 func saveIpsecSecret(ipsecCfg *ipsecConf) error {
-	prefix := getPrefixByIdType(ipsecCfg.IdType)
 	return utils.WriteFile(getIpsecSecretFile(ipsecCfg.ConnName),
-		fmt.Sprintf(ipsecSecretFormat, prefix+ipsecCfg.Leftid, prefix+ipsecCfg.Rightid, ipsecCfg.Secret))
+		fmt.Sprintf(ipsecSecretFormat, ipsecCfg.Leftid, ipsecCfg.Rightid, ipsecCfg.Secret))
 }
 
 func removeIpsecSecretCfg(connUuid string) error {
@@ -302,9 +305,44 @@ func saveIpsecConnCfg(ipsecCfg *ipsecConf) error {
 }
 */
 
-func saveIpsecConnCfg(ipsecCfg *ipsecConf) error {
+func splitIpsecConnConf(ipsecCfg ipsecConf) []ipsecConf {
+	log.Debugf("begin split ipsec config")
+	var ipsecConfList = make([]ipsecConf, 0)
+	leftsubnet := strings.Split(ipsecCfg.Leftsubnet, ",")
+	rightsubnet := strings.Split(ipsecCfg.Rightsubnet, ",")
+	number := len(leftsubnet) * len(rightsubnet)
+	if ipsecCfg.Keyexchange == "ikev1" && number > 1 {
+		subnetA := make([]string, 0)
+		subnetB := make([]string, 0)
+		for _, l := range leftsubnet {
+			for _, r := range rightsubnet {
+				subnetA = append(subnetA, l)
+				subnetB = append(subnetB, r)
+			}
+		}
+		for i := 0; i < number; i++ {
+			var tmpIpsecCfg = ipsecCfg
+			tmpIpsecCfg.Number = strconv.Itoa(i)
+			// don`t need zero suffix
+			if i == 0 {
+				tmpIpsecCfg.Number = ""
+			}
+			tmpIpsecCfg.Leftsubnet = subnetA[i]
+			tmpIpsecCfg.Rightsubnet = subnetB[i]
+			ipsecConfList = append(ipsecConfList, tmpIpsecCfg)
+		}
+		return ipsecConfList
+	} else {
+		log.Debugf("don't need split ipsec config")
+		ipsecConfList = append(ipsecConfList, ipsecCfg)
+		return ipsecConfList
+	}
+}
 
-	tmpl, err := template.New(ipsecCfg.ConnName).Parse(ipsecConfFormat)
+func saveIpsecConnCfg(ipsecCfg *ipsecConf) error {
+	// ikev1 need split IpsecConn Conf
+	var ipsecConfList = splitIpsecConnConf(*ipsecCfg)
+	tmpl, err := template.New(ipsecCfg.ConnName).Parse(ipsecConfFormatN)
 	if err != nil {
 		return err
 	}
@@ -316,8 +354,10 @@ func saveIpsecConnCfg(ipsecCfg *ipsecConf) error {
 		return err
 	}
 
-	if err = tmpl.Execute(fileConf, ipsecCfg); err != nil {
-		return err
+	for _, conf := range ipsecConfList {
+		if err = tmpl.Execute(fileConf, conf); err != nil {
+			return err
+		}
 	}
 
 	if err = utils.SudoMoveFile(fileConf.Name(), getIpsecConfFile(ipsecCfg.ConnName)); err != nil {
@@ -367,6 +407,7 @@ func isIpsecConnUp(connName string) (bool, error) {
 	b := utils.Bash{
 		Command: ipsecStatus + connName,
 		Sudo:    true,
+		NoLog:   true,
 	}
 
 	ret, out, _, err := b.RunWithReturn()
@@ -377,11 +418,67 @@ func isIpsecConnUp(connName string) (bool, error) {
 		return false, errors.New("bash " + ipsecStatus + connName + "failed")
 	}
 	// 包括rekeying reauthing installed等状态
-	if strings.Contains(out, "1 up") {
+	if strings.Contains(out, "ESTABLISHED") {
 		return true, nil
 	}
 
 	return false, nil
+}
+
+func getConnectStatistic(connName string) (int, int) {
+	errRes := 0
+	trafficBytes := 0
+	trafficPackets := 0
+	srcAddr := ""
+	dstAddr := ""
+	fileCfg := getIpsecConfFile(connName)
+
+	f, err := ioutil.ReadFile(fileCfg)
+	if err != nil || len(f) == 0 {
+		return errRes, errRes
+	}
+	for _, line := range strings.Split(string(f), "\n") {
+		if strings.Contains(line, "left=") {
+			line = strings.Replace(line, " ", "", -1)
+			line = strings.Replace(line, "left=", "", -1)
+			srcAddr = line
+		} else if strings.Contains(line, "right=") {
+			line = strings.Replace(line, " ", "", -1)
+			line = strings.Replace(line, "right=", "", -1)
+			dstAddr = line
+		}
+	}
+
+	/*
+		cmd = "ip -s xfrm state | grep -A 14 'src %s dst %s' |
+		       grep -A 1 'lifetime current:' | sed -n '2p;5p' |
+		       awk -F '[,]' '{print $1};{print $2}' | awk '$1=$1' |
+			   sed 's?(bytes)\|(packets)??' "
+		input =  srcAddr, dstAddr
+		output = 0 0 or 4 200 0 0 or 1 50 2 100 3 150 or ...
+		two number pairs means two of StatisticTraffic and StatisticPackets
+		more than one pair means ipsec old tunnel statistic
+		all tunnel statistic will clear when state up&down
+	*/
+	bashGetStatistic := utils.Bash{
+		Command: fmt.Sprintf("ip -s xfrm state | grep -A 14 'src %s dst %s' | grep -A 1 'lifetime current:' | sed -n '2p;5p' | awk -F '[,]' '{print $1};{print $2}' | awk '$1=$1' | sed 's?(bytes)\\|(packets)??' ", srcAddr, dstAddr),
+		Sudo:    true,
+		NoLog:   true,
+	}
+	_, o2, _, err2 := bashGetStatistic.RunWithReturn()
+	if err2 != nil {
+		return errRes, errRes
+	}
+	for i, ret := range strings.Split(o2, "\n") {
+		if i%2 == 0 {
+			retInt, _ := strconv.Atoi(ret)
+			trafficBytes = trafficBytes + retInt
+		} else {
+			retInt, _ := strconv.Atoi(ret)
+			trafficPackets = trafficPackets + retInt
+		}
+	}
+	return trafficBytes, trafficPackets
 }
 
 func startIpsec() error {
@@ -515,18 +612,21 @@ func reloadIpsecConnCfgAndSecret(cfgUuid string, restartConnOpt, downOpt, reload
 		ipsecConnDown(cfgUuid)
 		*downOpt = true
 	}
-	if reloadError = ipsecReloadConn(); reloadError != nil {
-		return reloadError
-	}
-	*reloadOpt = true
-	if reloadError = ipsecReloadSecret(); reloadError != nil {
-		return reloadError
-	}
 	if *restartConnOpt {
 		go func() {
 			ipsecConnDown(cfgUuid)
+			ipsecReloadConn()
 			ipsecConnUp(cfgUuid)
+			*reloadOpt = true
 		}()
+	} else {
+		if reloadError = ipsecReloadConn(); reloadError != nil {
+			return reloadError
+		}
+		*reloadOpt = true
+	}
+	if reloadError = ipsecReloadSecret(); reloadError != nil {
+		return reloadError
 	}
 	return nil
 }
@@ -665,15 +765,15 @@ func initIpsecLogrotate() {
 	return
 }
 
-func getIpsecConns() map[string]string {
-	connUuids := make(map[string]string)
+func getIpsecConns() []string {
+	var connUuids []string
 	files, _ := ioutil.ReadDir(ipsec_path_cfg_ipsecdir)
 	for _, f := range files {
 		filename := f.Name() // 1234.conf
 		fmt.Println(filename)
 		fileExt := path.Ext(filename)
 		if fileExt == ".conf" || fileExt == ".conf_bak" {
-			connUuids[filename[0:(len(filename)-len(fileExt))]] = filename
+			connUuids = append(connUuids, filename[0:(len(filename)-len(fileExt))])
 		}
 	}
 
@@ -693,11 +793,63 @@ func ageIpsecConns(conns map[string]string) {
 	}
 }
 
+func getIpsecConnsState() map[string]string {
+	ipsecStateMap := make(map[string]string)
+	connUuids := getIpsecConns()
+	for _, conn := range connUuids {
+		if ret, _ := isIpsecConnUp(conn); ret {
+			ipsecStateMap[conn] = IPSEC_STATE_UP
+		} else {
+			ipsecStateMap[conn] = IPSEC_STATE_DOWN
+		}
+	}
+	return ipsecStateMap
+}
+
+func getIpsecConnsStatistic() []IPSecStatistic {
+	connUuids := getIpsecConns()
+	log.Debugf("get ipsec conn status :")
+	var ipsecStatusList []IPSecStatistic
+	// ha backup vpc don't need to collect ipsec statistic
+	if utils.IsHaEnabled() {
+		if IsBackup() {
+			return ipsecStatusList
+		}
+	}
+	for _, conn := range connUuids {
+		var ipsecStatus IPSecStatistic
+		//ipsec conn name
+		ipsecStatus.connName = conn
+		//ipsec conn up&down and statistic
+		if ret, _ := isIpsecConnUp(ipsecStatus.connName); ret {
+			ipsecStatus.trafficBytes, ipsecStatus.trafficPackets = getConnectStatistic(conn)
+		} else {
+			ipsecStatus.trafficBytes = 0 // down conn return zero statistic
+			ipsecStatus.trafficPackets = 0
+		}
+		ipsecStatusList = append(ipsecStatusList, ipsecStatus)
+	}
+	//TODO log for test
+	for _, ipsecStatus := range ipsecStatusList {
+		log.Debugf("ipsec conn info[%s]", ipsecStatus)
+	}
+	return ipsecStatusList
+}
+
 type ipsecStrongSWan struct {
 }
 
 func (driver *ipsecStrongSWan) DriverType() string {
 	return ipsec_driver_strongswan_withipsec
+}
+
+func (driver *ipsecStrongSWan) GetIpsecLog(cmd *getIPsecLogCmd) string {
+	ipsecLog := ""
+	log.Debug("start get ipsec log")
+	for _, str := range utils.ReadLastNLine(ipsec_vyos_path_log, cmd.Lines) {
+		ipsecLog = strings.TrimSpace(str) + "\n" + ipsecLog
+	}
+	return ipsecLog
 }
 
 func (driver *ipsecStrongSWan) ExistConnWorking() bool {
@@ -722,11 +874,36 @@ func (driver *ipsecStrongSWan) CreateIpsecConns(cmd *createIPsecCmd) error {
 		log.Error("start ipsec daemon err: " + err.Error())
 		return nil
 	}
-
+	var infoUuids []string
 	for _, conf := range cmd.Infos {
 		if err := modifyIpsecNative(&conf); err != nil {
 			log.Error("create ipsec connection err: " + err.Error())
 		}
+		infoUuids = append(infoUuids, conf.Uuid)
+	}
+	// ha backup vpc don't need detect ipsec status
+	if utils.IsHaEnabled() {
+		if IsBackup() {
+			return nil
+		}
+	}
+	err := utils.Retry(func() error {
+		ready := 0
+		for _, uuid := range infoUuids {
+			if ret, _ := isIpsecConnUp(uuid); ret {
+				ready++
+			} else {
+				return errors.New("ipsec conn [" + uuid + "] not ready")
+			}
+			if len(infoUuids) == ready {
+				return nil
+			}
+		}
+		return errors.New("ipsec conn not ready")
+	}, ipsec_create_retrytime, ipsec_retrytime_interval)
+	// create ipsec conn will not return err when conn can not connect
+	if err != nil {
+		log.Error("create ipsec connection status err: " + err.Error())
 	}
 
 	return nil
@@ -772,11 +949,39 @@ func (driver *ipsecStrongSWan) SyncIpsecConns(cmd *syncIPsecCmd) error {
 		log.Error("start ipsec daemon err: " + err.Error())
 		return nil
 	}
-
+	var infoUuids []string
 	for _, info := range cmd.Infos {
 		if err := modifyIpsecNative(&info); err != nil {
 			log.Error("create ipsec connection err: " + err.Error())
 		}
+		infoUuids = append(infoUuids, info.Uuid)
+	}
+	// ha backup vpc don't need detect ipsec status
+	if utils.IsHaEnabled() {
+		if IsBackup() {
+			return nil
+		}
+	}
+	if !cmd.NeedStatus {
+		return nil
+	}
+	err := utils.Retry(func() error {
+		ready := 0
+		for _, uuid := range infoUuids {
+			if ret, _ := isIpsecConnUp(uuid); ret {
+				ready++
+			} else {
+				return errors.New("ipsec conn [" + uuid + "] not ready")
+			}
+			if len(infoUuids) == ready {
+				return nil
+			}
+		}
+		return errors.New("ipsec conn not ready")
+	}, ipsec_sync_retrytime, ipsec_retrytime_interval)
+	if err != nil {
+		log.Error("sync ipsec connection status err: " + err.Error())
+		return err
 	}
 	return nil
 }

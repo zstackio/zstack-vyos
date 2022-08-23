@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -133,4 +134,39 @@ func WriteFile(path string, context string) error {
 
 func SudoRmFile(path string) error {
 	return exec.Command("sudo", "/bin/rm", "-f", path).Run()
+}
+
+// ReadLastNLine 读取文件的最后n行, 换行符号为LF/RF时有效, 返回数组为倒序
+func ReadLastNLine(path string, n int) []string {
+	fileHandle, err := os.Open(path)
+	if err != nil {
+		return append(make([]string, 0), "Cannot open file")
+	}
+	defer fileHandle.Close()
+
+	var lines []string
+	var line = ""
+	var cursor int64 = 0
+	stat, _ := fileHandle.Stat()
+	filesize := stat.Size()
+	for {
+		cursor -= 1
+		fileHandle.Seek(cursor, io.SeekEnd)
+		char := make([]byte, 1)
+		fileHandle.Read(char)
+		if cursor != -1 && (char[0] == 10 || char[0] == 13) { // stop if we find a line (RF 10 LF 13)
+			n -= 1
+			lines = append(lines, line)
+			line = ""
+			if n == 0 {
+				break
+			}
+			continue
+		}
+		line = fmt.Sprintf("%s%s", string(char), line) // there is more efficient way
+		if cursor == -filesize {                       // stop if we are at the begining
+			break
+		}
+	}
+	return lines
 }
