@@ -79,7 +79,7 @@ fi
 
 ##check zvr versoin
 uri=http://$manageNicIp:7272/test
-pid=$(ps aux | grep '/opt/vyatta/sbin/zvr' | grep -v grep | awk '{print $2}')
+pid=$(ps aux | grep -w '/opt/vyatta/sbin/zvr' | grep -v grep | awk '{print $2}')
 if [ x$pid = x"" ]; then
     echo "$(date '+%Y-%m-%d %H:%M:%S') zstack virtual router is stopped, restart zstack virtual router" >> $LOGFILE
     restart_zvr
