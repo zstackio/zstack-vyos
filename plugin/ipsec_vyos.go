@@ -355,6 +355,10 @@ func ipsecDownConns(ipsec *ipsecInfo) {
 	}
 }
 
+func (driver *ipsecVyos) GetIpsecLog(cmd *getIPsecLogCmd) string {
+	return "please upgrade ipsec to get log"
+}
+
 func (driver *ipsecVyos) ExistConnWorking() bool {
 	if exist, _ := utils.PathExists(ipsec_vyos_path_cfg); !exist {
 		return false

@@ -20,6 +20,7 @@ const (
 	SYNC_IPSEC_CONNECTION   = "/vyos/syncipsecconnection"
 	UPDATE_IPSEC_CONNECTION = "/vyos/updateipsecconnection"
 	UPDATE_IPSEC_VERSION    = "/vyos/updateipsecversion"
+	GET_IPSEC_LOG           = "/vyos/getipseclog"
 
 	IPSecInfoMaxSize = 256
 
@@ -43,6 +44,7 @@ const (
 	ipsec_path_software_data          = "/home/vyos/zvr/data/upgrade/strongswan/"
 	ipsec_path_version                = "/usr/local/etc/ipsec.version"
 	ipsec_vyos_path_cfg               = "/etc/ipsec.conf"
+	ipsec_vyos_path_log               = "/var/log/charon.log"
 )
 
 var AutoRestartVpn = false
@@ -88,10 +90,24 @@ type deleteIPsecCmd struct {
 type syncIPsecCmd struct {
 	Infos          []ipsecInfo `json:"infos"`
 	AutoRestartVpn bool        `json:"autoRestartVpn"`
+	NeedStatus     bool        `json:"needStatus"`
+}
+
+type syncIPsecRsp struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error"`
 }
 
 type updateIPsecCmd struct {
 	Infos []ipsecInfo `json:"infos"`
+}
+
+type getIPsecLogCmd struct {
+	Lines int `json:"lines"`
+}
+
+type getIPsecLogRsp struct {
+	IpsecLog string `json:"ipsecLog"`
 }
 
 type updateIpsecVersionCmd struct {
@@ -416,7 +432,7 @@ func syncIPsecConnection(cmd *syncIPsecCmd) interface{} {
 		tree.Apply(false)
 	}
 
-	ipsecVerMgr.currentDriver.SyncIpsecConns(cmd)
+	err := ipsecVerMgr.currentDriver.SyncIpsecConns(cmd)
 
 	if len(ipsecMap) > 0 {
 		writeIpsecHaScript(true)
@@ -424,7 +440,10 @@ func syncIPsecConnection(cmd *syncIPsecCmd) interface{} {
 		writeIpsecHaScript(false)
 	}
 
-	return nil
+	if err != nil {
+		return syncIPsecRsp{Success: false, Error: err.Error()}
+	}
+	return syncIPsecRsp{Success: true}
 }
 
 func deleteIPsecConnection(cmd *deleteIPsecCmd) interface{} {
@@ -459,6 +478,16 @@ func updateIPsecConnection(cmd *updateIPsecCmd) interface{} {
 	ipsecVerMgr.currentDriver.ModifyIpsecConns(cmd)
 
 	return nil
+}
+
+func getIpsecLog(cmd *getIPsecLogCmd) interface{} {
+	return getIPsecLogRsp{IpsecLog: ipsecVerMgr.currentDriver.GetIpsecLog(cmd)}
+}
+
+func getIpsecLogHandler(ctx *server.CommandContext) interface{} {
+	cmd := &getIPsecLogCmd{}
+	ctx.GetCommand(cmd)
+	return getIpsecLog(cmd)
 }
 
 func createIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
@@ -506,6 +535,7 @@ type ipsecDriver interface {
 	DeleteIpsecConns(cmd *deleteIPsecCmd) error
 	ModifyIpsecConns(cmd *updateIPsecCmd) error
 	SyncIpsecConns(cmd *syncIPsecCmd) error
+	GetIpsecLog(cmd *getIPsecLogCmd) string
 }
 
 var (
@@ -903,4 +933,5 @@ func IPsecEntryPoint() {
 	server.RegisterAsyncCommandHandler(SYNC_IPSEC_CONNECTION, server.VyosLock(syncIPsecConnectionHandler))
 	server.RegisterAsyncCommandHandler(UPDATE_IPSEC_CONNECTION, server.VyosLock(updateIPsecConnectionHandler))
 	server.RegisterAsyncCommandHandler(UPDATE_IPSEC_VERSION, server.VyosLock(updateIPsecVersionHandler))
+	server.RegisterAsyncCommandHandler(GET_IPSEC_LOG, server.VyosLock(getIpsecLogHandler))
 }
