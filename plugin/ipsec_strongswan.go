@@ -84,10 +84,6 @@ conn {{.ConnName}}{{- if ne .Number ""}}-{{.Number}}{{- end}}
 	idtype_name     = "name"
 	idtype_fqdn     = "fqdn"
 	idtype_userfqdn = "userfqdn"
-
-	ipsec_create_retrytime   = 3
-	ipsec_sync_retrytime     = 12
-	ipsec_retrytime_interval = 10
 )
 
 type ipsecConf struct {
@@ -874,36 +870,11 @@ func (driver *ipsecStrongSWan) CreateIpsecConns(cmd *createIPsecCmd) error {
 		log.Error("start ipsec daemon err: " + err.Error())
 		return nil
 	}
-	var infoUuids []string
+
 	for _, conf := range cmd.Infos {
 		if err := modifyIpsecNative(&conf); err != nil {
 			log.Error("create ipsec connection err: " + err.Error())
 		}
-		infoUuids = append(infoUuids, conf.Uuid)
-	}
-	// ha backup vpc don't need detect ipsec status
-	if utils.IsHaEnabled() {
-		if IsBackup() {
-			return nil
-		}
-	}
-	err := utils.Retry(func() error {
-		ready := 0
-		for _, uuid := range infoUuids {
-			if ret, _ := isIpsecConnUp(uuid); ret {
-				ready++
-			} else {
-				return errors.New("ipsec conn [" + uuid + "] not ready")
-			}
-			if len(infoUuids) == ready {
-				return nil
-			}
-		}
-		return errors.New("ipsec conn not ready")
-	}, ipsec_create_retrytime, ipsec_retrytime_interval)
-	// create ipsec conn will not return err when conn can not connect
-	if err != nil {
-		log.Error("create ipsec connection status err: " + err.Error())
 	}
 
 	return nil
@@ -939,7 +910,7 @@ func (driver *ipsecStrongSWan) ModifyIpsecConns(cmd *updateIPsecCmd) error {
 	return nil
 }
 
-func (driver *ipsecStrongSWan) SyncIpsecConns(cmd *syncIPsecCmd) error {
+func (driver *ipsecStrongSWan) SyncIpsecConns(cmd *syncIPsecCmd) []string {
 	if len(cmd.Infos) == 0 {
 		stopIpsec()
 		return nil
@@ -949,39 +920,20 @@ func (driver *ipsecStrongSWan) SyncIpsecConns(cmd *syncIPsecCmd) error {
 		log.Error("start ipsec daemon err: " + err.Error())
 		return nil
 	}
-	var infoUuids []string
+
 	for _, info := range cmd.Infos {
 		if err := modifyIpsecNative(&info); err != nil {
 			log.Error("create ipsec connection err: " + err.Error())
 		}
-		infoUuids = append(infoUuids, info.Uuid)
 	}
-	// ha backup vpc don't need detect ipsec status
-	if utils.IsHaEnabled() {
-		if IsBackup() {
-			return nil
+	var downList []string
+	for _, info := range cmd.Infos {
+		if ret, _ := isIpsecConnUp(info.Uuid); !ret {
+			downList = append(downList, info.Uuid)
 		}
 	}
-	if !cmd.NeedStatus {
-		return nil
-	}
-	err := utils.Retry(func() error {
-		ready := 0
-		for _, uuid := range infoUuids {
-			if ret, _ := isIpsecConnUp(uuid); ret {
-				ready++
-			} else {
-				return errors.New("ipsec conn [" + uuid + "] not ready")
-			}
-			if len(infoUuids) == ready {
-				return nil
-			}
-		}
-		return errors.New("ipsec conn not ready")
-	}, ipsec_sync_retrytime, ipsec_retrytime_interval)
-	if err != nil {
-		log.Error("sync ipsec connection status err: " + err.Error())
-		return err
+	if downList != nil && len(downList) > 0 {
+		return downList
 	}
 	return nil
 }

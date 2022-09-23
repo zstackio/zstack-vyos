@@ -90,12 +90,6 @@ type deleteIPsecCmd struct {
 type syncIPsecCmd struct {
 	Infos          []ipsecInfo `json:"infos"`
 	AutoRestartVpn bool        `json:"autoRestartVpn"`
-	NeedStatus     bool        `json:"needStatus"`
-}
-
-type syncIPsecRsp struct {
-	Success bool   `json:"success"`
-	Error   string `json:"error"`
 }
 
 type updateIPsecCmd struct {
@@ -108,6 +102,10 @@ type getIPsecLogCmd struct {
 
 type getIPsecLogRsp struct {
 	IpsecLog string `json:"ipsecLog"`
+}
+
+type syncIPsecRsp struct {
+	DownIpsecConns []string `json:"downIpsecConns"`
 }
 
 type updateIpsecVersionCmd struct {
@@ -432,7 +430,7 @@ func syncIPsecConnection(cmd *syncIPsecCmd) interface{} {
 		tree.Apply(false)
 	}
 
-	err := ipsecVerMgr.currentDriver.SyncIpsecConns(cmd)
+	DownIpsecConns := ipsecVerMgr.currentDriver.SyncIpsecConns(cmd)
 
 	if len(ipsecMap) > 0 {
 		writeIpsecHaScript(true)
@@ -440,10 +438,7 @@ func syncIPsecConnection(cmd *syncIPsecCmd) interface{} {
 		writeIpsecHaScript(false)
 	}
 
-	if err != nil {
-		return syncIPsecRsp{Success: false, Error: err.Error()}
-	}
-	return syncIPsecRsp{Success: true}
+	return syncIPsecRsp{DownIpsecConns: DownIpsecConns}
 }
 
 func deleteIPsecConnection(cmd *deleteIPsecCmd) interface{} {
@@ -534,7 +529,7 @@ type ipsecDriver interface {
 	CreateIpsecConns(cmd *createIPsecCmd) error
 	DeleteIpsecConns(cmd *deleteIPsecCmd) error
 	ModifyIpsecConns(cmd *updateIPsecCmd) error
-	SyncIpsecConns(cmd *syncIPsecCmd) error
+	SyncIpsecConns(cmd *syncIPsecCmd) []string
 	GetIpsecLog(cmd *getIPsecLogCmd) string
 }
 
