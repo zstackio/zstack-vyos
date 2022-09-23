@@ -417,7 +417,7 @@ func (driver *ipsecVyos) ModifyIpsecConns(cmd *updateIPsecCmd) error {
 	return nil
 }
 
-func (driver *ipsecVyos) SyncIpsecConns(cmd *syncIPsecCmd) error {
+func (driver *ipsecVyos) SyncIpsecConns(cmd *syncIPsecCmd) []string {
 	/* use vyos cli to config ipsec */
 	AutoRestartVpn = cmd.AutoRestartVpn
 
