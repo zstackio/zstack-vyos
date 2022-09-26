@@ -804,7 +804,6 @@ func getIpsecConnsState() map[string]string {
 
 func getIpsecConnsStatistic() []IPSecStatistic {
 	connUuids := getIpsecConns()
-	log.Debugf("get ipsec conn status :")
 	var ipsecStatusList []IPSecStatistic
 	// ha backup vpc don't need to collect ipsec statistic
 	if utils.IsHaEnabled() {
@@ -825,10 +824,7 @@ func getIpsecConnsStatistic() []IPSecStatistic {
 		}
 		ipsecStatusList = append(ipsecStatusList, ipsecStatus)
 	}
-	//TODO log for test
-	for _, ipsecStatus := range ipsecStatusList {
-		log.Debugf("ipsec conn info[%s]", ipsecStatus)
-	}
+
 	return ipsecStatusList
 }
 
