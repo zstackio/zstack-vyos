@@ -615,7 +615,7 @@ const _zvr_shm = "/dev/shm/zvr.log"
 
 func KeepalivedEntryPoint() {
 	utils.RegisterDiskFullHandler(func(e error) {
-		if IsMaster() {
+		if utils.IsHaEnabled() && IsMaster() {
 			s := time.Now().Format(time.RFC3339) + " " + e.Error() + "\n"
 			ioutil.WriteFile(_zvr_shm, []byte(s), 0640)
 			doRestartKeepalived(KeepAlivedProcess_Restart)
