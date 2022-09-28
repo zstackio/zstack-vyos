@@ -549,7 +549,7 @@ backend {{ .ServerGroupUuid}}
 		m["AclEntryMd5"] = md5.Sum([]byte(m["AclEntry"].(string)))
 	}
 	if _, exist := m["Nbprocess"]; !exist {
-		m["Nbprocess"] = strconv.Itoa(getNbProcessDefault())
+		m["Nbprocess"] = "1"
 	}
 	m["HaproxyVersion"] = haproxyVersion
 	m["EnableHaproxyLog"] = EnableHaproxyLog
@@ -593,14 +593,6 @@ backend {{ .ServerGroupUuid}}
 	utils.PanicOnError(err)
 	LbListeners[this.lb.ListenerUuid] = this
 	return err
-}
-
-func getNbProcessDefault() int {
-	num := runtime.NumCPU()
-	if num > 1 {
-		num = num - 1
-	}
-	return num
 }
 
 func (this *HaproxyListener) startListenerService() (ret int, err error) {
@@ -1615,12 +1607,12 @@ type loadBalancerCollector struct {
 	curSessionUsageEntry        *prom.Desc
 	concurrentSessionUsageEntry *prom.Desc
 	// just for l7 layer lb
-	hrsp1xxEntry   *prom.Desc
-	hrsp2xxEntry   *prom.Desc
-	hrsp3xxEntry   *prom.Desc
-	hrsp4xxEntry   *prom.Desc
-	hrsp5xxEntry   *prom.Desc
-	hrspOtherEntry *prom.Desc
+	hrsp1xxEntry                *prom.Desc
+	hrsp2xxEntry                *prom.Desc
+	hrsp3xxEntry                *prom.Desc
+	hrsp4xxEntry                *prom.Desc
+	hrsp5xxEntry                *prom.Desc
+	hrspOtherEntry              *prom.Desc
 }
 
 const (
@@ -1773,7 +1765,7 @@ func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
 			ch <- prom.MustNewConstMetric(c.totalSessionNumEntry, prom.GaugeValue, float64(cnt.totalSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
 			ch <- prom.MustNewConstMetric(c.concurrentSessionUsageEntry, prom.GaugeValue, float64(cnt.concurrentSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
 		}
-
+		
 		ch <- prom.MustNewConstMetric(c.curSessionUsageEntry, prom.GaugeValue, float64(sessionNum*100/maxSessionNum), listenerUuid, lbUuid)
 
 		if _, ok := listener.(*HaproxyListener); ok {
@@ -1803,12 +1795,12 @@ type LbCounter struct {
 	totalSessionNumber      uint64
 	concurrentSessionNumber uint64
 	// just for l7 layer lb
-	hrsp1xx   uint64
-	hrsp2xx   uint64
-	hrsp3xx   uint64
-	hrsp4xx   uint64
-	hrsp5xx   uint64
-	hrspOther uint64
+	hrsp1xx                 uint64
+	hrsp2xx                 uint64
+	hrsp3xx                 uint64
+	hrsp4xx                 uint64
+	hrsp5xx                 uint64
+	hrspOther               uint64
 }
 
 func getIpFromLbStat(name string) string {
@@ -1821,7 +1813,7 @@ func statusFormat(status string) int {
 	case "UP":
 		return 1
 	/*case "DOWN":
-	  return 0*/
+	return 0*/
 	default:
 		return 0
 	}
