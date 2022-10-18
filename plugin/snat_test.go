@@ -87,7 +87,6 @@ var _ = Describe("snat_test", func() {
 		cmd = &setSnatStateCmd{Snats: []snatInfo{sinfo1, sinfo2}}
 		cmd.Enable = false
 		setSnatState(cmd)
-		// delete with getNicSNATRuleNumberByConfig, check with getNicSNATRuleNumber;
 		checkSnatRuleDel(utils.PrivateNicsForUT[0])
 		checkSnatRuleDel(utils.PrivateNicsForUT[1])
 		checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[0], false)
@@ -195,7 +194,7 @@ func checkSnatRuleSet(pub, pri utils.NicInfo) {
 	rule = tree.Get(cmd)
 	gomega.Expect(rule).NotTo(gomega.BeNil(), "snat rule [%s] check failed", cmd)
 
-	cmd = fmt.Sprintf("nat source rule %d source address %s", priNicRuleNo, getSnatIpRange(pri.Ip, pri.Netmask))
+	cmd = fmt.Sprintf("nat source rule %d source address %s", priNicRuleNo, cidr)
 	rule = tree.Get(cmd)
 	gomega.Expect(rule).NotTo(gomega.BeNil(), "snat rule [%s] check failed", cmd)
 
@@ -237,8 +236,8 @@ func checkSnatVyosIpTables(pub, pri utils.NicInfo, add bool) {
 		gomega.Expect(err).NotTo(gomega.BeNil(), "vyos iptables rule [%s] del failed, ret = %d, err = %v", cmd, ret, err)
 	}
 
-	cmd = fmt.Sprintf("iptables -t nat -C POSTROUTING -o %s -m iprange --src-range %s -m comment --comment SRC-NAT-%d -j SNAT --to-source %s",
-		getSnatIpRange(pri.Ip, pri.Netmask), pri.Name, priNicRuleNo, pub.Ip)
+	cmd = fmt.Sprintf("iptables -t nat -C POSTROUTING -s %s ! -d 224.0.0.0/8 -o %s -m comment --comment SRC-NAT-%d -j SNAT --to-source %s",
+		cidr, pri.Name, priNicRuleNo, pub.Ip)
 	bash = utils.Bash{
 		Command: cmd,
 		Sudo:    true,
