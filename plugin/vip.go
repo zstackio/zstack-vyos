@@ -1197,7 +1197,7 @@ func getInterfaceMonitorRules(direct direction, qosRules *interfaceQosRules) map
 		case 0:
 			strs := strings.Split(line, " ")
 			classStr := strings.Split(strs[2], ":")
-			id, _ := strconv.ParseUint(strings.Trim(classStr[1], " "), 10, 64)
+			id, _ := strconv.ParseUint(strings.Trim(classStr[1], " "), 16, 64)
 			classId = (uint32)(id)
 			/* in case class delete fail, just skip lines for this classid */
 			vipIp, vipOk = qosRules.classIdMap[classId]
