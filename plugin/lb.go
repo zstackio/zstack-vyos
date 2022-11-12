@@ -424,6 +424,9 @@ func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo) (err erro
     #stats socket {{.SocketPath}} user vyos
     stats socket {{.SocketPath}} gid {{.gid}} uid {{.uid}}
     ulimit-n {{.ulimit}}
+{{- if eq .Mode "https" }}
+    tune.ssl.default-dh-param 2048
+{{end}}
 {{if eq .HaproxyVersion "1.6.9"}}
     nbproc {{.Nbprocess}}
 {{else}}
@@ -433,6 +436,7 @@ func (this *HaproxyListener) createListenerServiceConfigure(lb lbInfo) (err erro
 defaults
     log global
     option dontlognull
+    option redispatch
 {{- if eq .Mode "https" "http"}}
     option {{.HttpMode}}
 {{end}}
@@ -497,6 +501,13 @@ backend {{ .ServerGroupUuid}}
     balance {{ $.BalancerAlgorithm}}
     timeout server {{$.ConnectionIdleTimeout}}s
     timeout connect 60s
+{{- if eq $.SessionPersistence "insert"}}
+    cookie  zstack_cookie  insert  nocache  maxidle {{$.SessionIdleTimeout}}s
+{{- else }}
+{{- if eq $.SessionPersistence "rewrite"}}
+    cookie  {{$.CookieName}}  rewrite
+{{- end }}
+{{- end }}
 
 {{- if eq $.HealthCheckProtocol "http" }}
     option httpchk {{$.HttpChkMethod}} {{$.HttpChkUri}}
@@ -508,9 +519,17 @@ backend {{ .ServerGroupUuid}}
 {{- with .BackendServers }}
 {{- range . }}
 {{- if eq $.BalancerAlgorithm "static-rr" }}
+{{- if eq $.SessionPersistence "insert" "rewrite"}}
+    server nic-{{.Ip}} {{.Ip}}:{{$.InstancePort}} cookie {{.Ip}} weight {{.Weight}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
+{{- else }}    
     server nic-{{.Ip}} {{.Ip}}:{{$.InstancePort}} weight {{.Weight}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
+{{- end }}
+{{- else }}
+{{- if eq $.SessionPersistence "insert" "rewrite"}}
+    server nic-{{.Ip}} {{.Ip}}:{{$.InstancePort}} cookie {{.Ip}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
 {{- else }}
     server nic-{{.Ip}} {{.Ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}
@@ -558,6 +577,10 @@ backend {{ .ServerGroupUuid}}
 		if _, exist := m["HttpMode"]; !exist {
 			m["HttpMode"] = "http-server-close"
 		}
+	}
+
+	if _, exist := m["SessionPersistence"]; !exist {
+		m["SessionPersistence"] = "disable"
 	}
 
 	bash := utils.Bash{
