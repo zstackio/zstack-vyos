@@ -5,7 +5,6 @@ LOGFILE=$HOMDIR/systemMonitor.log
 BOOTSTRAPINFO=$HOMDIR/bootstrap-info.json
 DEFAULT_DIR="bin boot config dev etc home install.log lib lib64 lost+found media mnt opt proc root sbin srv sys tmp usr var"
 DEFAULT_MONIOTOR_DIR="/home /root /tmp /usr /var /opt /etc"
-MAX_FILE_SIZE=100
 MAX_NUM_OF_MONITOR_DIR=10
 template='{"filePath":"var1","fileSize":"var2"}'
 ret_template='{"virtualRouterUuid":"var1", "abnormalFiles":[var2], "diskTotal":"var3","diskUsed":"var4","diskUsedutilization":"var5"}'
@@ -32,13 +31,19 @@ if [ x$virtualRouterUuid = x"" ]; then
     exit
 fi
 
+abnormalFileMaxSize=$(grep "abnormalFileMaxSize" $BOOTSTRAPINFO |awk '{print $2}')
+if [ x$abnormalFileMaxSize = x"" ]; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') get abnormalFileMaxSize failed " >> $LOGFILE
+    exit
+fi
+
 
 checkFileSize() {
     sizeFileM=$sizeFilesMap
     fileNum=`(echo $sizeFileM|awk '{print NF}')`
     for (( i = 1; i < $fileNum; i=$i+2 )); do
         size=$(echo $sizeFileM|cut -d " " -f$i)
-        if [ $size -gt $MAX_FILE_SIZE ]; then
+        if [ $size -gt $abnormalFileMaxSize ]; then
             filePath=$(echo $sizeFileM|cut -d " " -f$((i+1)))
             info="$filePath $size"
             ret="$ret|$info"
@@ -84,7 +89,7 @@ fi
 ## check system file
 sizeFilesMap=$(find $DEFAULT_MONIOTOR_DIR -type f -print0 | xargs -0 du -hm | sort -rh | head -n $MAX_NUM_OF_MONITOR_DIR)
 maxSize=$(echo $sizeFilesMap|cut -d " " -f1)
-if [ $maxSize -gt $MAX_FILE_SIZE ]; then
+if [ $maxSize -gt $abnormalFileMaxSize ]; then
     NEED_REPORT_MN="true"
     checkFileSize
 fi
