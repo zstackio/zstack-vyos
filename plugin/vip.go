@@ -438,7 +438,11 @@ func (rules *interfaceQosRules) InterfaceQosRuleInit(direct direction) interface
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo tc qdisc del dev %s root;", name),
 	}
-	bash.Run()
+	_, _, e, err := bash.RunWithReturn()
+	if err != nil {
+		utils.Assertf(strings.Contains(e, "with handle of zero"), "Failed to del rules from dev %s", name)
+	}
+	
 	bash1 := utils.Bash{
 		Command: fmt.Sprintf("sudo tc qdisc replace dev %s root handle 1: htb default 1;"+
 			"sudo tc class add dev %s parent 1:0 classid 1:1 htb rate 10gbit ceil 10gbit;"+
@@ -461,7 +465,11 @@ func (rules *interfaceQosRules) InterfaceQosRuleCleanUp() interface{} {
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo tc qdisc del dev %s root", name),
 	}
-	bash.Run()
+	_, _, e, err := bash.RunWithReturn()
+	if err != nil {
+		utils.Assertf(strings.Contains(e, "with handle of zero"), "Failed to del rules from dev %s", name)
+	}
+
 
 	if rules.direct == INGRESS {
 		if !utils.IsEnableVyosCmd() {
@@ -1120,7 +1128,10 @@ func (vipQos *vipQosRemoveNic) RemoveNic(nicName string) error {
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo tc qdisc del dev %s root;", nicName),
 	}
-	bash.Run()
+	_, _, e, err := bash.RunWithReturn()
+	if err != nil {
+		utils.Assertf(strings.Contains(e, "with handle of zero"), "Failed to del rules from dev %s", nicName)
+	}
 
 	delete(totalQosRules, nicName)
 	return nil

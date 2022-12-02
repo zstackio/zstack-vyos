@@ -404,6 +404,10 @@ func AddRoute(dst, nexthop string) error {
 	}
 	ret, _, e, err := bash.RunWithReturn()
 	if err != nil {
+		if strings.Contains(e, "File exists") {
+			log.Debugf("route is exists, skip err")
+			return nil
+		}
 		return err
 	}
 	if ret != 0 {
@@ -411,6 +415,18 @@ func AddRoute(dst, nexthop string) error {
 	}
 
 	return nil
+}
+
+func FlushNicRoute(nic string) error {
+	bash := Bash{
+		Command: fmt.Sprintf("sudo ip route flush dev %s", nic),
+	}
+	ret, _, _, err := bash.RunWithReturn()
+	if err != nil || ret != 0 {
+		return nil
+	}
+
+	return err
 }
 
 func DelIp6DefaultRoute() error {

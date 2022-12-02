@@ -8,11 +8,12 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"path/filepath"
 )
 
 var (
 	vyosScriptLock = &sync.Mutex{}
-	fileLockPath   = "/home/vyos/zvr/.vyosfilelock"
+	fileLockPath   = filepath.Join(utils.GetZvrRootPath(), ".vyosfilelock")
 )
 
 func FindNicNameByMacFromConfiguration(mac, configuration string) (string, bool) {

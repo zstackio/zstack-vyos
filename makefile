@@ -31,22 +31,32 @@ DEPS=github.com/Sirupsen/logrus github.com/pkg/errors github.com/fatih/structs g
 .PHONY: zvr
 zvr:
 	mkdir -p $(TARGET_DIR)
-	$(GO) build -mod vendor -o $(TARGET_DIR)/zvr zvr/zvr.go
+	GOOS="linux" GOARCH="amd64" $(GO) build -mod vendor -o $(TARGET_DIR)/zvr_x86_64 zvr/zvr.go
 
 .PHONY: zvrarm
 zvrarm:
 	mkdir -p $(TARGET_DIR)
 	CGO_ENABLED=0 GOOS="linux" GOARCH="arm64" $(GO) build -mod vendor -o $(TARGET_DIR)/zvr_aarch64 zvr/zvr.go
 
+.PHONY: zvrloong
+zvrloong:
+	mkdir -p $(TARGET_DIR)
+	CGO_ENABLED=0 GOOS="linux" GOARCH="loong64" $(GO) build -mod vendor -o $(TARGET_DIR)/zvr_loongarch64 zvr/zvr.go
+
 .PHONY: zvrboot
 zvrboot:
 	mkdir -p $(TARGET_DIR)
-	$(GO) build -mod vendor -o $(TARGET_DIR)/zvrboot zvrboot/zvrboot.go zvrboot/zvrboot_utils.go
+	GOOS="linux" GOARCH="amd64" $(GO) build -mod vendor -o $(TARGET_DIR)/zvrboot_x86_64 zvrboot/zvrboot.go zvrboot/zvrboot_utils.go
 
 .PHONY: zvrbootarm
 zvrbootarm:
 	mkdir -p $(TARGET_DIR)
 	CGO_ENABLED=0 GOOS="linux" GOARCH="arm64" $(GO) build -mod vendor -o $(TARGET_DIR)/zvrboot_aarch64 zvrboot/zvrboot.go zvrboot/zvrboot_utils.go
+
+.PHONY: zvrbootloong
+zvrbootloong:
+	mkdir -p $(TARGET_DIR)
+	GOOS="linux" GOARCH="loong64" $(GO) build -mod vendor -o $(TARGET_DIR)/zvrboot_loongarch64 zvrboot/zvrboot.go zvrboot/zvrboot_utils.go
 
 deps:
 	$(GO) get $(DEPS)
@@ -54,15 +64,20 @@ deps:
 clean:
 	rm -rf target/
 
+#package: clean zvr zvrarm zvrloong zvrboot zvrbootarm zvrbootloong
 package: clean zvr zvrarm zvrboot zvrbootarm
 	mkdir -p $(PKG_ZVR_DIR)
 	mkdir -p $(PKG_ZVRBOOT_DIR)
 	cp -f $(VERSION_FILE) $(TARGET_DIR)
 	cp -a data/ $(PKG_ZVR_DIR)
-	cp -f $(TARGET_DIR)/zvr $(FILE_LIST_ZVR)
+	cp -f $(TARGET_DIR)/zvr_x86_64 $(FILE_LIST_ZVR)
 	cp -f $(TARGET_DIR)/zvr_aarch64 $(FILE_LIST_ZVR)
-	cp -f $(TARGET_DIR)/zvrboot $(PKG_ZVRBOOT_DIR)
+# 	cp -f $(TARGET_DIR)/zvr_loongarch64 $(FILE_LIST_ZVR)
+	cp -f $(TARGET_DIR)/zvrboot_x86_64 $(PKG_ZVRBOOT_DIR)
 	cp -f $(TARGET_DIR)/zvrboot_aarch64 $(PKG_ZVRBOOT_DIR)
+# 	cp -f $(TARGET_DIR)/zvrboot_loongarch64 $(PKG_ZVRBOOT_DIR)
+	cp -f zvr/zvr_loongarch64 $(FILE_LIST_ZVR)
+	cp -f zvrboot/zvrboot_loongarch64 $(PKG_ZVRBOOT_DIR)
 	cp -f scripts/grub.cfg.5.4.80 $(PKG_ZVR_DIR)
 	cp -f scripts/grub.cfg.3.13 $(PKG_TAR_DIR)
 	tar czf $(PKG_ZVR_DIR)/zvr-data.tar.gz -C $(DATA_ZVR_DIR) .
@@ -73,10 +88,14 @@ tar: zvr zvrarm zvrboot zvrbootarm
 	rm -rf $(PKG_TAR_DIR)
 	mkdir -p $(PKG_TAR_DIR)
 	cp -a data/ $(PKG_TAR_DIR)
-	cp -f $(TARGET_DIR)/zvr $(FILE_LIST_TAR)
+	cp -f $(TARGET_DIR)/zvr_x86_64 $(FILE_LIST_TAR)
 	cp -f $(TARGET_DIR)/zvr_aarch64 $(FILE_LIST_TAR)
-	cp -f $(TARGET_DIR)/zvrboot $(FILE_LIST_TAR)
+# 	cp -f $(TARGET_DIR)/zvr_loongarch64 $(FILE_LIST_TAR)
+	cp -f $(TARGET_DIR)/zvrboot_x86_64 $(FILE_LIST_TAR)
 	cp -f $(TARGET_DIR)/zvrboot_aarch64 $(FILE_LIST_TAR)
+# 	cp -f $(TARGET_DIR)/zvrboot_loongarch64 $(FILE_LIST_TAR)
+	cp -f zvr/zvr_loongarch64 $(FILE_LIST_TAR)
+	cp -f zvrboot/zvrboot_loongarch64 $(FILE_LIST_TAR)
 	cp -f scripts/grub.cfg.5.4.80 $(PKG_TAR_DIR)
 	cp -f scripts/grub.cfg.3.13 $(PKG_TAR_DIR)
 	cp -f scripts/vyos-postconfig-bootup.script $(PKG_TAR_DIR)

@@ -38,9 +38,21 @@ function sync_zvr_file {
 
 log_info "[01_sync_conf_file.sh]: start exec"
 
-mkdir -p /home/vyos/zvr/keepalived/script/
+mkdir -p /home/$USER/zvr/keepalived/script/
 chmod -R +r /var/mail
 chown -R root:root /var/mail
+
+if [ "${USER}" == "vyos" ]; then
+    BIN_PATH=$VYATTA_BIN_PATH
+else 
+    BIN_PATH=$USER_BIN_PATH
+fi
+
+ZVR_ROOT_PATH="/home/${USER}/zvr"
+
+sed -i "s%__ZVR_ROOT_PATH__%${ZVR_ROOT_PATH}%g"   ${UPDATE_ZVR_FILE}
+sed -i "s%__BIN_PATH__%${BIN_PATH}%g"             ${UPDATE_ZVR_FILE}
+sed -i "s%__USER__%${USER}%g"                     ${UPDATE_ZVR_FILE}
 
 if [ ! -f "${UPDATE_ZVR_FILE}" ]; then
     log_info "can not find ${UPDATE_ZVR_FILE}, should check data directory"
@@ -52,6 +64,8 @@ gen_file=`sed -n "/${FLAG_GEN}/,/^\[\[/p" ${UPDATE_ZVR_FILE} | sed '/^[#\[]/d;/^
 echo "${gen_file}" | while read line; do
     sync_zvr_file ${line}
 done
+
+
 
 if [ "${ARCH}" == "x86_64" ]; then
     log_info "start sync x86 zvr-update file"
@@ -65,10 +79,10 @@ elif [ "${ARCH}" == "aarch64" ]; then
     echo "${arm_file}" | while read line; do
         sync_zvr_file ${line}
     done
-elif [ "${ARCH}" == "mips64el" ]; then
-    log_info "start sync mips zvr-update file"
-    mips_file=`sed -n "/${FLAG_ARM}/,/^\[\[/p" ${UPDATE_ZVR_FILE} | sed '/^[#\[]/d;/^$/d'`
-    echo "${mips_file}" | while read line; do
+elif [ "${ARCH}" == "loongarch64" ]; then
+    log_info "start sync loong zvr-update file"
+    loong_file=`sed -n "/${FLAG_LOONG}/,/^\[\[/p" ${UPDATE_ZVR_FILE} | sed '/^[#\[]/d;/^$/d'`
+    echo "${loong_file}" | while read line; do
         sync_zvr_file ${line}
     done
 else

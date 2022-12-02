@@ -450,8 +450,6 @@ func createRuleHandler(ctx *server.CommandContext) interface{} {
 }
 
 func createRule(cmd *createRuleCmd) interface{} {
-
-	tree := server.NewParserFromShowConfiguration().Tree
 	ref := cmd.Ref
 	nic, err := utils.GetNicNameByMac(ref.Mac)
 	utils.PanicOnError(err)
@@ -462,6 +460,8 @@ func createRule(cmd *createRuleCmd) interface{} {
 
 		return nil
 	}
+	
+	tree := server.NewParserFromShowConfiguration().Tree
 	if rs := tree.Get(fmt.Sprintf("firewall name %s", ruleSetName)); rs == nil {
 		tree.CreateFirewallRuleSet(ruleSetName, []string{"default-action accept"})
 	}

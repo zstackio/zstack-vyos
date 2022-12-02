@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"io/ioutil"
 	"sort"
+	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/zstackio/zstack-vyos/utils"
@@ -15,11 +16,14 @@ import (
 const (
 	DNSMASQ_BIN_PATH         = "/usr/sbin/dnsmasq -x /var/run/dnsmasq.pid -u dnsmasq -7 /etc/dnsmasq.d"
 	DNSMASQ_CONF_PATH        = "/etc/dnsmasq.conf"
-	DNSMASQ_CONF_PATH_TEMP   = "/home/vyos/zvr/dnsmasq.conf"
 	DNSMASQ_RESOLV_FILE      = "/etc/resolv.conf"
-	DNSMASQ_RESOLV_FILE_TEMP = "/home/vyos/zvr/resolv.conf"
 	DNSMASQ_PID_FILE         = "/var/run/dnsmasq.pid"
-	DNSMASQ_PID_FILE_TEMP    = "/home/vyos/zvr/.zstack_config/dnsmasq.pid"
+)
+
+var (
+	DNSMASQ_CONF_PATH_TEMP   = filepath.Join(utils.GetZvrRootPath(), "dnsmasq.conf")
+	DNSMASQ_RESOLV_FILE_TEMP = filepath.Join(utils.GetZvrRootPath(), "resolv.conf")
+	DNSMASQ_PID_FILE_TEMP    = filepath.Join(utils.GetZvrZsConfigPath(), "dnsmasq.pid")
 )
 
 const dnsmasqTemplate = `#

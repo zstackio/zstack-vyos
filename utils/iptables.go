@@ -16,10 +16,6 @@ const (
 	MangleTable   = "mangle"
 )
 
-const (
-	ZVR_PATH = "/home/vyos/zvr"
-)
-
 type IpTablesHelper interface {
 	parseIpTableRule(rule *IpTableRule, priority int)
 	getNextRuleNumber(t *IpTables, rule *IpTableRule) int
@@ -419,14 +415,14 @@ func (t *IpTables) Apply() error {
 }
 
 func (t *IpTables) restore() error {
-	if ok, _ := PathExists(ZVR_PATH); !ok {
-		if err := MkdirForFile(ZVR_PATH, 0755); err != nil {
-			log.Debugf("Create dir: %s failed", ZVR_PATH)
+	if ok, _ := PathExists(GetZvrRootPath()); !ok {
+		if err := MkdirForFile(GetZvrRootPath(), 0755); err != nil {
+			log.Debugf("Create dir: %s failed", GetZvrRootPath())
 			return err
 		}
 	}
 
-	tmpFile, err := ioutil.TempFile(ZVR_PATH, "iptable-restore")
+	tmpFile, err := ioutil.TempFile(GetZvrRootPath(), "iptable-restore")
 	if err != nil {
 		log.Debugf("create iptable-restore temp file failed %s", err.Error())
 		return err

@@ -34,11 +34,6 @@ const (
 	DELETE_LB_PATH            = "/lb/delete"
 	CREATE_CERTIFICATE_PATH   = "/certificate/create"
 	DELETE_CERTIFICATE_PATH   = "/certificate/delete"
-	LB_ROOT_DIR               = "/home/vyos/zvr/lb/"
-	LB_CONF_DIR               = "/home/vyos/zvr/lb/conf/"
-	LB_PID_DIR                = "/home/vyos/zvr/lb/pid/"
-	CERTIFICATE_ROOT_DIR      = "/home/vyos/zvr/certificate/"
-	LB_SOCKET_DIR             = "/home/vyos/zvr/lb/sock/"
 
 	LB_MODE_HTTPS = "https"
 
@@ -52,6 +47,15 @@ const (
 	LB_LOCAL_ICMP_FIREWALL_RULE_NUMBER = 2000
 	HAPROXY_VERSION_1_6_9              = "1.6.9"
 	HAPROXY_VERSION_2_1_0              = "2.1.0"
+)
+
+var (
+	ZVR_ROOT_PATH          = utils.GetZvrRootPath()
+	LB_ROOT_DIR            = filepath.Join(ZVR_ROOT_PATH, "lb/")
+	LB_CONF_DIR            = filepath.Join(ZVR_ROOT_PATH, "lb/conf/")
+	LB_PID_DIR             = filepath.Join(ZVR_ROOT_PATH, "pid/")
+	CERTIFICATE_ROOT_DIR   = filepath.Join(ZVR_ROOT_PATH, "certificate/")
+	LB_SOCKET_DIR          = filepath.Join(ZVR_ROOT_PATH, "lb/sock/")
 )
 
 var (

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strings"
+	"path/filepath"
 	_ "strings"
 
 	_ "github.com/Sirupsen/logrus"
@@ -57,7 +58,7 @@ func checkSshMonitor() {
 
 func cleanUpCrondConfig() {
 	bash := utils.Bash{
-		Command: "rm -f /home/vyos/zvr/.zstack_config/cronjob",
+		Command: fmt.Sprintf("rm -f %s/.zstack_config/cronjob", utils.GetZvrRootPath()),
 		Sudo:    true,
 	}
 	bash.Run()

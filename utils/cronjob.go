@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"io/ioutil"
 	"text/template"
+	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 )
 
-const (
+var (
 	CROND_CONFIG_FILE      = "/etc/cron.d/zstack_cronjob"
-	CROND_CONFIG_FILE_TEMP = "/home/vyos/zstack_cronjob"
-	CROND_JSON_FILE        = "/home/vyos/zvr/.zstack_config/cronjob"
+	CROND_CONFIG_FILE_TEMP = filepath.Join(GetZvrRootPath(), "zstack_cronjob")
+	CROND_JSON_FILE        = filepath.Join(GetZvrRootPath(), ".zstack_config/cronjob")
 )
 
 type CronjobMap map[int]*Cronjob
@@ -154,20 +155,21 @@ func (c CronjobMap) ConfigService() error {
 	return JsonStoreConfig(CROND_JSON_FILE, cronjobAttrs)
 }
 
-func (c CronjobMap) RestartService() error {
-	bash := Bash{
-		Command: "/etc/init.d/cron restart",
-		Sudo:    true,
+func GetNtpdCommand(operation string) string {
+	var command string
+	if IsVYOS() {
+		command = fmt.Sprintf("/etc/init.d/ntp %s", operation)
+	} else {
+		command = fmt.Sprintf("systemctl %s ntpd", operation)
 	}
 
-	return bash.Run()
+	return command
+}
+
+func (c CronjobMap) RestartService() error {
+	return ServiceOperation("cron", "restart")
 }
 
 func (c CronjobMap) StopService() error {
-	bash := Bash{
-		Command: "/etc/init.d/cron stop",
-		Sudo:    true,
-	}
-
-	return bash.Run()
+	return ServiceOperation("cron", "stop")
 }

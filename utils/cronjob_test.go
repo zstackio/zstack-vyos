@@ -80,7 +80,7 @@ var _ = Describe("cronjob_test", func() {
 
 func cleanUpCrondConfig() {
 	bash := Bash{
-		Command: "rm -f /home/vyos/zvr/.zstack_config/cronjob",
+		Command: fmt.Sprintf("rm -f %s", filepath.Join(zvrZsConfigPath, "cronjob")),
 		Sudo:    true,
 	}
 	bash.Run()

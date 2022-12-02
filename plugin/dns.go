@@ -154,7 +154,10 @@ func setVpcDnsHandler(ctx *server.CommandContext) interface{} {
 }
 
 func setVpcDns(cmd *setVpcDnsCmd) interface{} {
-	tree := server.NewParserFromShowConfiguration().Tree
+	var tree *server.VyosConfigTree
+	if !utils.IsSkipVyosIptables() {
+		tree = server.NewParserFromShowConfiguration().Tree
+	}
 
 	/* remove old dns  */
 	dnsServers = map[string]string{}
@@ -203,7 +206,9 @@ func setVpcDns(cmd *setVpcDnsCmd) interface{} {
 		dnsServers[dns] = dns
 	}
 
-	tree.Apply(false)
+	if !utils.IsSkipVyosIptables() {
+		tree.Apply(false)
+	}
 
 	dnsConf := NewDnsmasq(nicNames, dnsServers)
 	dnsConf.RestartDnsmasq()

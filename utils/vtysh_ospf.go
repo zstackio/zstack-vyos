@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"strings"
 	"text/template"
+	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
 )
 
 const (
-	OSPF_JSON_FILE = "/home/vyos/zvr/.zstack_config/ospf.json"
-
 	Standard = "Standard"
 	Stub     = "Stub"
 	NSSA     = "NSSA"
@@ -21,6 +20,8 @@ const (
 	MD5       = "MD5"
 	Plaintext = "Plaintext"
 )
+
+var OSPF_JSON_FILE = filepath.Join(GetZvrZsConfigPath(), "ospf.json")
 
 const ospfAddTemplate = `'configure terminal
 router ospf

@@ -86,7 +86,7 @@ func (b *Bash) RunWithReturn() (retCode int, stdout, stderr string, err error) {
 
 	var so, se bytes.Buffer
 	var cmd *exec.Cmd
-	tmpfile, err := ioutil.TempFile("/home/vyos", "zvrcommand")
+	tmpfile, err := ioutil.TempFile(fmt.Sprintf("/home/%s", GetZvrUser()), "zvrcommand")
 	PanicOnError(err)
 	defer os.Remove(tmpfile.Name())
 

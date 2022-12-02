@@ -2,8 +2,11 @@
 
 ARCH=`uname -m`
 KERNEL_VERSION=`uname -r`
+id -u vyos > /dev/null 2>&1 && USER="vyos" || USER="zstack"
 
-DATA_PATH="/home/vyos/zvr/data"
+VYATTA_BIN_PATH="/opt/vyatta/sbin"
+USER_BIN_PATH="/usr/local/bin"
+DATA_PATH="/home/$USER/zvr/data"
 REPOS_PATH="${DATA_PATH}/repos"
 HOOKS_PATH="${DATA_PATH}/hooks"
 FILE_LISTS_PATH="${DATA_PATH}/file-lists"
@@ -15,8 +18,9 @@ FLAG_X86="X86"
 FLAG_ARM="ARM"
 FLAG_MIPS="MIPS"
 FLAG_GEN="GENERIC"
+FLAG_LOONG="LOONG"
 
-LOG_FILE="/home/vyos/zvr/zvrconfig.log"
+LOG_FILE="/home/$USER/zvr/zvrconfig.log"
 function log_info() {
 	echo "$(date -d today '+%Y%m%d %H:%M:%S') - $1"  >> ${LOG_FILE} 2>>${LOG_FILE}
 }

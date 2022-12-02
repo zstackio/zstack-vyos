@@ -21,9 +21,11 @@ const primaryBackupScript = `#!/bin/sh
 # Contributions to improve this script are welcome :).
 #
 
+id -u vyos > /dev/null 2>&1 && USER="vyos" || USER="zstack"
+
 CONNTRACKD_BIN=/usr/sbin/conntrackd
 CONNTRACKD_LOCK=/var/lock/conntrack.lock
-CONNTRACKD_CONFIG=/home/vyos/zvr/keepalived/conf/conntrackd.conf
+CONNTRACKD_CONFIG=/home/$USER/zvr/keepalived/conf/conntrackd.conf
 s=$(echo "$1" | tr '[:upper:]' '[:lower:]')
 
 case "$s" in

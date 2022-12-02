@@ -136,10 +136,13 @@ func configureRadvdServer() {
 func configurePassword() {
 	log.Debugf("[configure: vyos password]")
 	password, found := utils.BootstrapInfo["vyosPassword"]
+	log.Debugf("[configure: %s", password)
 	utils.Assert(found && password != "", "vyosPassword cannot be empty")
 	if !isOnVMwareHypervisor() {
-		err := utils.SetUserPasswd("vyos", fmt.Sprintf("%s", password))
-		utils.Assertf(err == nil, "configure vyos password error: %s", err)
+		log.Debugf("not vmware")
+		err := utils.SetUserPasswd(utils.GetZvrUser(), fmt.Sprintf("%s", password))
+		utils.Assertf(err == nil, "configure vpc password error: %s", err)
+
 	}
 }
 
@@ -167,11 +170,17 @@ func configureNicInfo(nic *utils.NicInfo) {
 	err = utils.IpLinkSetUp(nic.Name)
 	utils.Assertf(err == nil, "IpLinkSetUp[%s] error: %s", nic.Name, err)
 	if nic.Ip != "" {
+		log.Debugf("[flush-nic]")
 		err := utils.Ip4AddrFlush(nic.Name)
 		utils.Assertf(err == nil, "IpAddr4Flush[%s] error: %+v", nic.Name, err)
+		log.Debugf("[flush-route]")
+		err = utils.FlushNicRoute(nic.Name)
+		utils.Assertf(err == nil, "Flush nic[%s] route error: %+v", nic.Name, err)
+		log.Debugf("[getcidr]")
 		cidr, err := utils.NetmaskToCIDR(nic.Netmask)
 		utils.PanicOnError(err)
 		ipString := fmt.Sprintf("%v/%v", nic.Ip, cidr)
+		log.Debugf("[addip]")
 		err = utils.IpAddrAdd(nic.Name, ipString)
 		utils.Assertf(err == nil, "IpAddrAdd[%s, %s] error: %+v", nic.Name, ipString, err)
 	}
@@ -299,9 +308,9 @@ func checkNicAddress() {
 		}
 		if !strings.EqualFold(dupinfo, "") {
 			log.Error(dupinfo)
-			err := utils.MkdirForFile(NETWORK_HEALTH_STATUS_PATH, 0755)
+			err := utils.MkdirForFile(networkHealthStatusPath, 0755)
 			utils.PanicOnError(err)
-			err = ioutil.WriteFile(NETWORK_HEALTH_STATUS_PATH, []byte(dupinfo), 0755)
+			err = ioutil.WriteFile(networkHealthStatusPath, []byte(dupinfo), 0755)
 			utils.PanicOnError(err)
 		}
 	}
@@ -324,7 +333,9 @@ func configureHaScript() {
 }
 
 func configureSystem() {
-	resetVyos()
+	if utils.IsVYOS() {
+		resetVyos()
+	}
 	printBootStrapInfo()
 	configureTimeZone()
 	parseNicFromBootstrap()

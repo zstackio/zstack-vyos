@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -17,7 +18,6 @@ const (
 	VYOS_1_2           = "1.2"
 	TIME_ZONE_FILE     = "/etc/timezone"
 	LOCAL_TIME_FILE    = "/etc/localtime"
-	ZSTACK_CONFIG_PATH = "/home/vyos/zvr/.zstack_config"
 )
 
 var (
@@ -25,11 +25,13 @@ var (
 	StringCompareFn    = CompareString
 	StringRegCompareFn = CompareRegString
 
-	Cronjob_file_ssh         = "/home/vyos/zvr/ssh/sshd.sh"
-	Cronjob_file_rsyslog     = "/home/vyos/zvr/ssh/rsyslog.sh"
+	ZSTACK_CONFIG_PATH = filepath.Join(GetZvrRootPath(), ".zstack_config")
+
+	Cronjob_file_ssh         = filepath.Join(GetZvrRootPath(), "ssh/sshd.sh")
+	Cronjob_file_rsyslog     = filepath.Join(GetZvrRootPath(), "ssh/rsyslog.sh")
 	Cronjob_file_zsn         = "/usr/local/zstack/zsn-agent/bin/zsn-crontab.sh"
-	Cronjob_file_zvrMonitor  = "/home/vyos/zvr/ssh/zvr-monitor.sh"
-	Cronjob_file_fileMonitor = "/home/vyos/zvr/ssh/file-monitor.sh"
+	Cronjob_file_zvrMonitor  = filepath.Join(GetZvrRootPath(), "ssh/zvr-monitor.sh")
+	Cronjob_file_fileMonitor = filepath.Join(GetZvrRootPath(), "ssh/file-monitor.sh")
 
 	Vyos_version_file = "/opt/vyatta/etc/version"
 	Vyos_version      = VYOS_1_1_7
@@ -91,12 +93,16 @@ func Arping(nicname string, ip string, gateway string) {
 }
 
 func SetUserPasswd(user string, password string) error {
-	bash := Bash{
+	var err error
+	bash :=  Bash{
 		Command: fmt.Sprintf("echo '%s:%s' | chpasswd", user, password),
-		Sudo:    true,
+		Sudo: true,
 	}
 
-	return bash.Run()
+	if ret, _, _, err := bash.RunWithReturn(); ret == 0 && err == nil {
+		return nil
+	}
+	return err
 }
 
 func SetTimeZone(timeZone string) error {
@@ -118,4 +124,20 @@ func SetNicOption(devName string) {
 	}
 
 	bash.Run()
+}
+
+func ServiceOperation(name string, operation string) error {
+	var command string
+	if IsVYOS() {
+		command = fmt.Sprintf("/etc/init.d/%s %s", name, operation)
+	} else {
+		command = fmt.Sprintf("systemctl %s %sd", operation, name)
+	}
+
+	bash := Bash{
+		Command: command,
+		Sudo:    true,
+	}
+
+	return bash.Run()
 }

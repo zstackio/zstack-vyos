@@ -1,6 +1,7 @@
 #!/bin/bash
 
-cd /home/vyos/zvr/data/hooks
+USER=$1
+cd /home/$USER/zvr/data/hooks
 . ./hook_function
 kernel_version=`uname -r`
 

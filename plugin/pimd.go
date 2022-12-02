@@ -10,19 +10,19 @@ import (
 	"html/template"
 	"io/ioutil"
 	"strings"
+	"path/filepath"
 	/*log "github.com/Sirupsen/logrus"*/)
 
 const (
 	ENABLE_PIMD_PATH  = "/pimd/enable"
 	DISABLE_PIMD_PATH = "/pimd/disable"
 	GET_MROUTE_PATH   = "/pimd/route"
-
-	PIMD_BINARY_PATH = "/opt/vyatta/sbin/pimd"
-	PIMD_CONF_DIR    = "/home/vyos/zvr/pimd/"
-	PIMD_CONF_PATH   = "/home/vyos/zvr/pimd/pimd.conf"
-
-	VYOSHA_PIMD_SCRIPT = "/home/vyos/zvr/keepalived/script/pimd.sh"
 )
+
+var PIMD_CONF_DIR    = filepath.Join(utils.GetUserHomePath(), "pimd/")
+var PIMD_CONF_PATH   = filepath.Join(utils.GetUserHomePath(), "/pimd/pimd.conf")
+var PIMD_BINARY_PATH = filepath.Join(utils.GetThirdPartyBinPath(), "pimd")
+var HA_PIMD_SCRIPT   = filepath.Join(utils.GetZvrRootPath(), "keepalived/script/pimd.sh")
 
 type rendezvousPointInfo struct {
 	RpAddress     string `json:"rpAddress"`
@@ -426,7 +426,7 @@ func writePimdHaScript(enable bool) {
 		conent = "echo 'no pimd configured'"
 	}
 
-	err := ioutil.WriteFile(VYOSHA_PIMD_SCRIPT, []byte(conent), 0755)
+	err := ioutil.WriteFile(HA_PIMD_SCRIPT, []byte(conent), 0755)
 	utils.PanicOnError(err)
 }
 

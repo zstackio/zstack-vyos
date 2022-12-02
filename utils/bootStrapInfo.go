@@ -7,14 +7,15 @@ import (
 	"net"
 	"os"
 	"strings"
+	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 )
 
 const (
-	BOOTSTRAP_INFO_CACHE        = "/home/vyos/zvr/bootstrap-info.json"
+	BOOTSTRAP_INFO_FILE         = "bootstrap-info.json"
 	DEFAULT_SSH_PORT            = 22
-	VYOSHA_DEFAULT_ROUTE_SCRIPT = "/home/vyos/zvr/keepalived/script/defaultroute.sh"
+	HA_DEFAULT_ROUTE_SCRIPT 	= "keepalived/script/defaultroute.sh"
 )
 
 const (
@@ -28,7 +29,6 @@ const (
 	NIC_TYPE_PRIVATE = "Private"
 	NIC_TYPE_PUBLIC  = "Public"
 
-	VYOS_UT_LOG_FOLDER = "/home/vyos/vyos_ut/testLog/"
 )
 
 type NicInfo struct {
@@ -59,6 +59,10 @@ func (n NicArray) Swap(i, j int)      { n[i], n[j] = n[j], n[i] }
 func (n NicArray) Less(i, j int) bool { return n[i].Name < n[j].Name }
 
 var BootstrapInfo map[string]interface{} = make(map[string]interface{})
+
+var VYOS_UT_LOG_FOLDER 		= fmt.Sprintf("%s/vyos_ut/testLog/", GetUserHomePath())
+var bootstrapInfoPath 		= filepath.Join(GetZvrRootPath(), BOOTSTRAP_INFO_FILE)
+var haDefaultRouteScript 	= filepath.Join(GetZvrRootPath(), HA_DEFAULT_ROUTE_SCRIPT)
 
 func MakeIfaceAlias(nic *NicInfo) string {
 	result := ""
@@ -141,14 +145,14 @@ func IsConfigTcForVipQos() bool {
 }
 
 func InitBootStrapInfo() {
-	content, err := ioutil.ReadFile(BOOTSTRAP_INFO_CACHE)
+	content, err := ioutil.ReadFile(bootstrapInfoPath)
 	PanicOnError(err)
 	if len(content) == 0 {
-		log.Debugf("no content in %s, can not get mgmt gateway", BOOTSTRAP_INFO_CACHE)
+		log.Debugf("no content in %s, can not get mgmt gateway", bootstrapInfoPath)
 	}
 
 	if err := json.Unmarshal(content, &BootstrapInfo); err != nil {
-		log.Debugf("can not parse info from %s, can not get mgmt gateway", BOOTSTRAP_INFO_CACHE)
+		log.Debugf("can not parse info from %s, can not get mgmt gateway", bootstrapInfoPath)
 	}
 
 	if !IsEnableVyosCmd() {
@@ -217,7 +221,7 @@ func WriteDefaultHaScript(defaultNic *Nic) {
 		conent += fmt.Sprintln(fmt.Sprintf("ip -6 route add default via %s dev %s || true", defaultNic.Gateway6, defaultNicName))
 	}
 
-	err = ioutil.WriteFile(VYOSHA_DEFAULT_ROUTE_SCRIPT, []byte(conent), 0755)
+	err = ioutil.WriteFile(haDefaultRouteScript, []byte(conent), 0755)
 	PanicOnError(err)
 }
 
@@ -275,7 +279,7 @@ func GetHaStatus() (status string) {
 }
 
 func IsRuingUT() bool {
-	return strings.Contains(os.Args[0], "/home/vyos/vyos_ut/zstack-vyos/")
+	return strings.Contains(os.Args[0], fmt.Sprintf("%s/vyos_ut/zstack-vyos/", GetUserHomePath()))
 }
 
 func IsEnableVyosCmd() bool {

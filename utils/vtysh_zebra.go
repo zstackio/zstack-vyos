@@ -3,12 +3,14 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 )
 
 const (
-	ZEBRA_JSON_FILE = "/home/vyos/zvr/.zstack_config/zebra.json"
 	BLACKHOLE_ROUTE = "null0"
 )
+
+var ZEBRA_JSON_FILE = filepath.Join(GetZvrZsConfigPath(), "zebra.json")
 
 type ZebraRoute struct {
 	Dst      string

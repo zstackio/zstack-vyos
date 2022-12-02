@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/zstackio/zstack-vyos/server"
@@ -54,18 +55,21 @@ func (s KeepAlivedStatus) string() string {
 }
 
 const (
-	KeepalivedRootPath           = "/home/vyos/zvr/keepalived/"
-	KeepalivedConfigPath         = "/home/vyos/zvr/keepalived/conf/"
-	KeepalivedSciptPath          = "/home/vyos/zvr/keepalived/script/"
-	KeepalivedConfigFile         = "/home/vyos/zvr/keepalived/conf/keepalived.conf"
-	ConntrackdConfigFile         = "/home/vyos/zvr/keepalived/conf/conntrackd.conf"
 	ConntrackdBinaryFile         = "/usr/sbin/conntrackd"
 	KeepalivedPidFile            = "/var/run/keepalived.pid"
 	KeepalivedBinaryFile         = "/usr/sbin/keepalived"
-	KeepalivedScriptMasterDoGARP = "/home/vyos/zvr/keepalived/script/garp.sh"
-	KeepalivedScriptNotifyMaster = "/home/vyos/zvr/keepalived/script/notifyMaster"
-	KeepalivedScriptNotifyBackup = "/home/vyos/zvr/keepalived/script/notifyBackup"
-	ConntrackScriptPrimaryBackup = "/home/vyos/zvr/keepalived/script/primary-backup.sh"
+)
+
+var (
+	KeepalivedRootPath           = filepath.Join(utils.GetZvrRootPath(), "keepalived/")
+	KeepalivedConfigPath         = filepath.Join(KeepalivedRootPath, "conf/")
+	KeepalivedSciptPath          = filepath.Join(KeepalivedRootPath, "script/")
+	KeepalivedConfigFile         = filepath.Join(KeepalivedRootPath, "conf/keepalived.conf")
+	ConntrackdConfigFile         = filepath.Join(KeepalivedRootPath, "conf/conntrackd.conf")
+	KeepalivedScriptMasterDoGARP = filepath.Join(KeepalivedRootPath, "script/garp.sh")
+	KeepalivedScriptNotifyMaster = filepath.Join(KeepalivedRootPath, "script/notifyMaster")
+	KeepalivedScriptNotifyBackup = filepath.Join(KeepalivedRootPath, "script/notifyBackup")
+	ConntrackScriptPrimaryBackup = filepath.Join(KeepalivedRootPath, "script/primary-backup.sh")
 )
 
 type KeepalivedNotify struct {
@@ -78,6 +82,14 @@ type KeepalivedNotify struct {
 	NicNames            []string
 	VrUuid              string
 	CallBackUrl         string
+	DoGARPScript        string
+	IpsecScript         string
+	FlowScript          string
+	PimdScript          string
+	DhcpdScript         string
+	KeepalivedCfg       string
+	DefaultRouteScript  string
+	PrimaryBackupScript string
 }
 
 const tSendGratiousARP = `#!/bin/sh
@@ -103,25 +115,25 @@ sudo ip link set up dev {{$name}} || true
 {{ end }}
 
 #send Gratuitous ARP
-(/bin/bash /home/vyos/zvr/keepalived/script/garp.sh) &
+(/bin/bash {{.DoGARPScript}}) &
 
 #restart ipsec process
-(/bin/bash /home/vyos/zvr/keepalived/script/ipsec.sh) &
+(/bin/bash {{.IpsecScript}}) &
 
 #restart flow-accounting process
-(/bin/bash /home/vyos/zvr/keepalived/script/flow.sh) &
+(/bin/bash {{.FlowScript}}) &
 
 #reload pimd config
-(/bin/bash /home/vyos/zvr/keepalived/script/pimd.sh) &
+(/bin/bash {{.PimdScript}}) &
 
 #start dhcp server
-(/bin/bash /home/vyos/zvr/keepalived/script/dhcpd.sh) &
+(/bin/bash {{.DhcpdScript}}) &
 
 #add default route
-(/bin/bash /home/vyos/zvr/keepalived/script/defaultroute.sh) &
+(/bin/bash {{.DefaultRouteScript}}) &
 
 #sync conntrackd
-#(/bin/bash /home/vyos/zvr/keepalived/script/primary-backup.sh primary) &
+#(/bin/bash {{.PrimaryBackupScript}} primary) &
 
 #notify Mn node
 (curl -H "Content-Type: application/json" -H "commandpath: /vpc/hastatus" -X POST -d '{"virtualRouterUuid": "{{.VrUuid}}", "haStatus":"Master"}' {{.CallBackUrl}}) &
@@ -133,11 +145,11 @@ ip add
 const tKeepalivedNotifyBackup = `#!/bin/sh
 # This file is auto-generated, DO NOT EDIT! DO NOT EDIT!! DO NOT EDIT!!!
 port=7272
-peerIp=$(echo $(grep -A1 -w unicast_peer /home/vyos/zvr/keepalived/conf/keepalived.conf | tail -1))
+peerIp=$(echo $(grep -A1 -w unicast_peer {{.KeepalivedCfg}} | tail -1))
 test x"$2" != x"" && port=$2
 test x"$peerIp" != x"" && curl -X POST -H "User-Agent: curl/7.2.5" --connect-timeout 3 http://"$peerIp:$port"/keepalived/garp
 
-#/bin/bash /home/vyos/zvr/keepalived/script/primary-backup.sh "$1"
+#/bin/bash {{.PrimaryBackupScript}} "$1"
 
 {{ range .MgmtVipPairs }}
 sudo ip add del {{.Vip}}/{{.Prefix}} dev {{.NicName}} || true
@@ -189,6 +201,15 @@ func NewKeepalivedNotifyConf(vyosHaVips, mgmtVips []nicVipPair) *KeepalivedNotif
 		NicIps:         nicIps,
 		VrUuid:         utils.GetVirtualRouterUuid(),
 		CallBackUrl:    haStatusCallbackUrl,
+		IpsecScript:    filepath.Join(KeepalivedSciptPath, "ipsec.sh"),
+		FlowScript:     filepath.Join(KeepalivedSciptPath, "flow.sh"),
+		PimdScript:     filepath.Join(KeepalivedSciptPath, "pimd.sh"),
+		DhcpdScript:    filepath.Join(KeepalivedSciptPath, "dhcpd.sh"),
+		DoGARPScript:   KeepalivedScriptMasterDoGARP,
+		KeepalivedCfg:  KeepalivedConfigFile,
+		PrimaryBackupScript: ConntrackScriptPrimaryBackup,
+		DefaultRouteScript:  filepath.Join(KeepalivedSciptPath, "defaultroute.sh"),
+
 	}
 
 	return knc
@@ -247,25 +268,28 @@ func (k *KeepalivedNotify) CreateBackupScript() error {
 }
 
 type KeepalivedConf struct {
-	HeartBeatNic string
-	Interval     int
-	MonitorIps   []string
-	LocalIp      string
-	PeerIp       string
-
-	MasterScript string
-	BackupScript string
+	HeartBeatNic        string
+	Interval            int
+	MonitorIps          []string
+	LocalIp             string
+	PeerIp              string
+	MasterScript        string
+	BackupScript        string
+	SciptPath           string
+	PrimaryBackupScript string
 }
 
 func NewKeepalivedConf(hearbeatNic, LocalIp, PeerIp string, MonitorIps []string, Interval int) *KeepalivedConf {
 	kc := &KeepalivedConf{
-		HeartBeatNic: hearbeatNic,
-		Interval:     Interval,
-		MonitorIps:   MonitorIps,
-		LocalIp:      LocalIp,
-		PeerIp:       PeerIp,
-		MasterScript: KeepalivedScriptNotifyMaster,
-		BackupScript: KeepalivedScriptNotifyBackup,
+		HeartBeatNic:  hearbeatNic,
+		Interval:      Interval,
+		MonitorIps:    MonitorIps,
+		LocalIp:       LocalIp,
+		PeerIp:        PeerIp,
+		MasterScript:  KeepalivedScriptNotifyMaster,
+		BackupScript:  KeepalivedScriptNotifyBackup,
+		SciptPath:     KeepalivedSciptPath,
+		PrimaryBackupScript: ConntrackScriptPrimaryBackup,
 	}
 
 	return kc
@@ -328,7 +352,7 @@ global_defs {
 }
 
 vrrp_script monitor_zvr {
-       script "/home/vyos/zvr/keepalived/script/check_zvr.sh"        # cheaper than pidof
+       script "{{.SciptPath}}/check_zvr.sh"        # cheaper than pidof
        interval 2                      # check every 2 seconds
        fall 2                          # require 2 failures for KO
        rise 2                          # require 2 successes for OK
@@ -336,7 +360,7 @@ vrrp_script monitor_zvr {
 
 {{ range .MonitorIps }}
 vrrp_script monitor_{{.}} {
-	script "/home/vyos/zvr/keepalived/script/check_monitor_{{.}}.sh"
+	script "{{.SciptPath}}/check_monitor_{{.}}.sh"
 	interval 2
 	weight -2
 	fall 3
@@ -371,9 +395,11 @@ vrrp_instance vyos-ha {
 `
 
 func (k *KeepalivedConf) BuildCheckScript() error {
-	check_zvr := `#! /bin/bash
-sudo /usr/bin/pgrep -u vyos -f /opt/vyatta/sbin/zvr > /dev/null
-`
+	check_zvr_tmp := `#! /bin/bash
+sudo /usr/bin/pgrep -u %s -f %s > /dev/null
+`	
+	zvr_bin := filepath.Join(utils.GetThirdPartyBinPath(), "zvr")
+	check_zvr := fmt.Sprintf(check_zvr_tmp, utils.GetZvrUser(), zvr_bin)
 	err := ioutil.WriteFile(KeepalivedSciptPath+"check_zvr.sh", []byte(check_zvr), 0644)
 	utils.PanicOnError(err)
 

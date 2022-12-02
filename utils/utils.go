@@ -55,3 +55,39 @@ func ValidVersionString(version string) bool {
 	}
 	return true
 }
+
+func IsVYOS() bool {
+	if exist, _ := PathExists("/bin/vbash"); !exist {
+		return false
+	}
+	return true
+}
+
+func GetZvrUser() string {
+	if IsVYOS() {
+		return "vyos"
+	}
+	return "zstack"
+}
+
+func GetUserHomePath() string {
+	if IsVYOS() {
+		return "/home/vyos/"
+	}
+	return "/home/zstack/"
+}
+
+func GetZvrRootPath() string {
+	return GetUserHomePath() + "zvr/"
+}
+
+func GetZvrZsConfigPath() string {
+	return GetZvrRootPath() + ".zstack_config/"
+}
+
+func GetThirdPartyBinPath() string {
+	if IsVYOS() {
+		return "/opt/vyatta/sbin/"
+	}
+	return "/usr/local/bin/"
+}
