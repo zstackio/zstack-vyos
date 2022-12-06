@@ -629,6 +629,20 @@ missingok
 	_, err = dhcp_log_rotatoe_file.Write([]byte(rotate_conf))
 	utils.PanicOnError(err)
 
+	zvr_start_up_log_rotatoe_file, err := ioutil.TempFile(DHCPD_PATH, "zvrStartUpRotation")
+	utils.PanicOnError(err)
+	zvr_start_up_rotate_conf := `/home/vyos/zvr/zvrstartup.log {
+size 10240k
+daily
+rotate 10
+compress
+copytruncate
+notifempty
+missingok
+}`
+	_, err = zvr_start_up_log_rotatoe_file.Write([]byte(zvr_start_up_rotate_conf))
+	utils.PanicOnError(err)
+
 	zvr_log_rotatoe_file, err := ioutil.TempFile(DHCPD_PATH, "zvrRotation")
 	utils.PanicOnError(err)
 	zvr_rotate_conf := `/home/vyos/zvr/zvr.log {
@@ -645,6 +659,7 @@ missingok
 	utils.SudoMoveFile(dhcp_log_file.Name(), "/etc/rsyslog.d/dhcp.conf")
 	utils.SudoMoveFile(dhcp_log_rotatoe_file.Name(), "/etc/logrotate.d/dhcp")
 	utils.SudoMoveFile(zvr_log_rotatoe_file.Name(), "/etc/logrotate.d/zvr")
+    utils.SudoMoveFile(zvr_start_up_log_rotatoe_file.Name(), "/etc/logrotate.d/zvrstartup")
 }
 
 func init() {
