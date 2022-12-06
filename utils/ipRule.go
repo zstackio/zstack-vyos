@@ -69,7 +69,6 @@ func GetZStackIpRules() []ZStackIpRule {
 			tableId, _ := strconv.Atoi(strings.Replace(strings.TrimSpace(items[6]), PolicyRouteChainPrefix, "", 1))
 			rule := ZStackIpRule{Fwmark: mark, From: "", TableId: uint64(tableId)}
 			rules = append(rules, rule)
-			fmt.Println(items[4] + " " + items[6])
 		} else {
 			tableId, _ := strconv.Atoi(strings.Replace(strings.TrimSpace(items[4]), PolicyRouteChainPrefix, "", 1))
 			rule := ZStackIpRule{Fwmark: 0, From: items[2], TableId: uint64(tableId)}
