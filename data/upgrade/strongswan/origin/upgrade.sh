@@ -2,7 +2,7 @@
 
 case "$1" in
     "-d")
-        if [[ $(ipsec version | grep 4.5.2) == "" ]] && [[ $(ipsec version | grep 5.7.2) == "" ]];then
+        if [[ $(ipsec version | grep 4.5.2) == "" ]] && [[ $(ipsec version | grep 5.7.2) == "" ]] && [[ $(ipsec version | grep 5.8.4) == "" ]];then
             exit 0
         fi
 

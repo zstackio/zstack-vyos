@@ -656,7 +656,7 @@ func getVersionSupport() []string {
 }
 
 func getIpsecDriver(version string) string {
-	if utils.Vyos_version == utils.VYOS_1_1_7 {
+	if utils.Vyos_version == utils.VYOS_1_1_7 || utils.Vyos_version == utils.VYOS_1_2 {
 		if _, ret := utils.CompareVersion(version, strongswanVersion_5_9_4); ret >= 0 {
 			return ipsec_driver_strongswan_withipsec
 		} else {
