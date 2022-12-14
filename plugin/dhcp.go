@@ -31,7 +31,7 @@ const (
 	GROUP_FULL    = "full"
 	GROUP_PARTIAL = "partial"
 
-	MAX_LEASE_TIME = 31104000 /* 360 days */
+	MAX_LEASE_TIME = 86400 /* 1 day */
 
 	DHCP_DHCP_SCRIPT = "/home/vyos/zvr/keepalived/script/dhcpd.sh"
 )
