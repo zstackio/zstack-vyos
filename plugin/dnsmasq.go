@@ -106,7 +106,7 @@ func (d *DnsmasqConf) RestartDnsmasq() error {
 			Sudo:    true,
 		}
 		return bash.Run()
-	}, 5, 1)
+	}, 5, 15)
 	utils.PanicOnError(err)
 
 	if ok, err := utils.PathExists(DNSMASQ_PID_FILE_TEMP); err != nil || !ok {
