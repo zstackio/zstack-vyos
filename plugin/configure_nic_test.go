@@ -79,8 +79,6 @@ var _ = Describe("configure_nic_test", func() {
 		ccmd.Snats = []snatInfo{sinfo1, sinfo2}
 		log.Debugf("############### TestChangeDefaultNic change default nic ###############")
 		changeDefaultNic(ccmd)
-		checkSnatRuleSet(utils.AdditionalPubNicsForUT[0], utils.PrivateNicsForUT[0])
-		checkSnatRuleSet(utils.AdditionalPubNicsForUT[0], utils.PrivateNicsForUT[1])
 
 		sinfo1 = snatInfo{
 			PublicNicMac:  utils.PubNicForUT.Mac,
@@ -101,8 +99,6 @@ var _ = Describe("configure_nic_test", func() {
 		ccmd.Snats = []snatInfo{sinfo1, sinfo2}
 		log.Debugf("############### TestChangeDefaultNic change default nic again ###############")
 		changeDefaultNic(ccmd)
-		checkSnatRuleSet(utils.PubNicForUT, utils.PrivateNicsForUT[0])
-		checkSnatRuleSet(utils.PubNicForUT, utils.PrivateNicsForUT[1])
 
 		rcmd := removeSnatCmd{NatInfo: []snatInfo{sinfo2, sinfo1}}
 		removeSnat(&rcmd)
@@ -365,24 +361,3 @@ func checkRadvdProcess() bool {
 
 	return ret == 0
 }
-
-/*
-func TestCheckNicIsUp(t *testing.T)  {
-    cmd := &configureNicCmd{}
-    cmd.Nics = append(cmd.Nics, utils.PrivateNicsForUT[0])
-    configureNic(cmd)
-    if err := checkNicIsUp(utils.PrivateNicsForUT[0].Name, false); err == nil {
-        t.Fatalf("nic [%s] shoud not be up", utils.PrivateNicsForUT[0].Name)
-    }
-    removeNic(cmd)
-
-    keepAlivedStatus = KeepAlivedStatus_Master
-    configureNic(cmd)
-    if err := checkNicIsUp(utils.PrivateNicsForUT[0].Name, false); err != nil {
-        t.Fatalf("nic [%s] is not up", utils.PrivateNicsForUT[0].Name)
-    }
-    removeNic(cmd)
-
-    keepAlivedStatus = KeepAlivedStatus_Backup
-}
-*/

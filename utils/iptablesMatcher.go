@@ -341,6 +341,10 @@ func (r *IpTableRule) isMatcherEqual(o *IpTableRule) error {
 		return fmt.Errorf("not match, old priority: %d, new priority: %d", o.priority, r.priority)
 	}
 
+	if r.snatTargetIp != o.snatTargetIp {
+		return fmt.Errorf("not match, old snatTargetIp: %s, new snatTargetIp: %s", o.snatTargetIp, r.snatTargetIp)
+	}
+
 	return nil
 }
 
@@ -463,7 +467,7 @@ func (r *IpTableRule) matcherString() string {
 
 		if r.srcPort != "" {
 			fields := strings.Fields(r.srcPort)
-			if strings.Contains(r.srcPort, ",") {
+			if strings.ContainsAny(r.srcPort, ",:") {
 				if fields[0] == "!" {
 					rules = append(rules, "-m multiport")
 					rules = append(rules, fmt.Sprintf("! --sports %s", strings.Join(fields[1:], " ")))
@@ -484,7 +488,7 @@ func (r *IpTableRule) matcherString() string {
 
 		if r.dstPort != "" {
 			fields := strings.Fields(r.dstPort)
-			if strings.Contains(r.dstPort, ",") {
+			if strings.ContainsAny(r.dstPort, ",:") {
 				if fields[0] == "!" {
 					rules = append(rules, "-m multiport")
 					rules = append(rules, fmt.Sprintf("! --dports %s", strings.Join(fields[1:], " ")))

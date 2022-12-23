@@ -1,117 +1,144 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
+	"strings"
+	_ "strings"
+
 	_ "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
-	gomega "github.com/onsi/gomega"
-	"github.com/zstackio/zstack-vyos/server"
+	. "github.com/onsi/gomega"
 	"github.com/zstackio/zstack-vyos/utils"
-	_ "strings"
 )
 
-var _ = Describe("zvrboot_test TestInitFirewall", func() {
-	It("zvrboot_test", func() {
-		/*
-			utils.InitLog(utils.VYOS_UT_LOG_FOLDER + "zvrboot_test.log", false)
-			waitIptablesServiceOnline()
-			content := ``
-			if err := json.Unmarshal([]byte(content), &bootstrapInfo); err != nil {
-				panic(errors.Wrap(err, fmt.Sprintf("unable to JSON parse:\n %s", string(content))))
-			}
-			utils.InitVyosVersion()
-			configureVyos()
-
-			log.Debugf("############### TestConfigureVyos ###############")
-			checkNicFirewall(utils.MgtNicForUT)
-			checkNicFirewall(utils.PubNicForUT)
-		*/
+var _ = Describe("zvrboot_test", func() {
+	It("[REPLACE_VYOS] zvrboot: pre env", func() {
+		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"zvrboot_test.log", false)
+		utils.SetEnableVyosCmdForUT(false)
+		utils.SetHaStatus(utils.HAMASTER)
+	})
+	It("[REPLACE_VYOS] zvrboot: test configure nic", func() {
+		parseNicFromBootstrap()
+		renameNic()
+		checkMgmtNicConfigure()
+		configureAdditionNic()
+		checkAdditionNicConfigure()
+	})
+	It("[REPLACE_VYOS] zvrboot: test config time zone", func() {
+		configureTimeZone()
+		checkTimeZone()
+	})
+	It("[REPLACE_VYPS] zvrboot: test config password", func() {
+		configurePassword()
+	})
+	It("[REPLACE_VYPS] zvrboot: test check ip address", func() {
+		checkNicAddress()
+	})
+	It("[REPLACE_VYPS] zvrboot: test cconfig ssh monitor", func() {
+		cleanUpCrondConfig()
+		configureSshMonitor()
+		checkSshMonitor()
+		utils.SetEnableVyosCmdForUT(true)
 	})
 })
 
-func checkNicFirewall(nic utils.NicInfo) {
-	tree := server.NewParserFromShowConfiguration().Tree
-	cmd := fmt.Sprintf("firewall name %s.local default-action %s", nic.Name, nic.FirewallDefaultAction)
-	rule := tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
+func checkSshMonitor() {
+	testMap := make(utils.CronjobMap)
+	err := utils.JsonLoadConfig(utils.CROND_JSON_FILE, &testMap)
+	Expect(err).To(BeNil(), fmt.Sprintf("load crond json error: %+v", err))
 
-	cmd = fmt.Sprintf("firewall name %s.local rule 1 action accept", nic.Name)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
+	cronJob := testMap[1]
+	Expect(cronJob).NotTo(BeNil(), "ssh monitor should exist")
+	Expect(cronJob.ExecCommand).To(Equal(utils.Cronjob_file_ssh), "ssh monitor exec command error")
+	Expect(cronJob.FieldMinute).To(Equal("*/1"), "ssh monitor field error")
+}
 
-	cmd = fmt.Sprintf("firewall name %s.local rule 1 destination address %s", nic.Name, nic.Ip)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
+func cleanUpCrondConfig() {
+	bash := utils.Bash{
+		Command: "rm -f /home/vyos/zvr/.zstack_config/cronjob",
+		Sudo:    true,
+	}
+	bash.Run()
+}
 
-	cmd = fmt.Sprintf("firewall name %s.local rule 1 state established enable", nic.Name)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
+func checkTimeZone() {
+	src, _ := ioutil.ReadFile(utils.TIME_ZONE_FILE)
+	timezone := strings.ReplaceAll(string(src), "\n", "")
+	Expect(timezone).To(Equal("Asia/Shanghai"), "configure time zone error")
 
-	cmd = fmt.Sprintf("firewall name %s.local rule 1 state related enable", nic.Name)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
+	ok := diffConfigFile("/usr/share/zoneinfo/Asia/Shanghai", utils.LOCAL_TIME_FILE)
+	Expect(ok).To(BeTrue(), "configure local time error")
+}
 
-	cmd = fmt.Sprintf("firewall name %s.local rule 2 action accept", nic.Name)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
+func diffConfigFile(srcfile string, dstfile string) bool {
+	var src, dst []byte
+	var err error
+	if src, err = ioutil.ReadFile(srcfile); err != nil {
+		return false
+	}
+	if dst, err = ioutil.ReadFile(dstfile); err != nil {
+		return false
+	}
 
-	cmd = fmt.Sprintf("firewall name %s.local rule 2 destination address %s", nic.Name, nic.Ip)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
+	return bytes.Equal(src, dst)
+}
 
-	cmd = fmt.Sprintf("firewall name %s.local rule 2 protocol icmp", nic.Name)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
+func checkMgmtNicConfigure() {
+	//eth0 := nicsMap["eth0"]
+	Expect(mgmtNic).ToNot(BeNil(), "parse eth0 configure frome BootstrapInfo error")
+	if mgmtNic.Ip != "" {
+		Expect(mgmtNic.Netmask).NotTo(BeEmpty(), "eth0 netmask should not be empty", mgmtNic.Name)
+		cidr, _ := utils.NetmaskToCIDR(mgmtNic.Netmask)
+		ipString := fmt.Sprintf("%v/%v", mgmtNic.Ip, cidr)
+		isExist, err := utils.IpAddrIsExist(mgmtNic.Name, ipString)
+		Expect(err).To(BeNil(), "nic[%s] ip[%s] should exist, error: %+v", mgmtNic.Name, ipString, err)
+		Expect(isExist).To(BeTrue(), "nic[%s] ip[%s] should exist", mgmtNic.Name, ipString)
+	}
+	if mgmtNic.Ip6 != "" {
+		ip6String := fmt.Sprintf("%s/%d", mgmtNic.Ip6, mgmtNic.PrefixLength)
+		isExist, err := utils.IpAddrIsExist(mgmtNic.Name, ip6String)
+		Expect(err).To(BeNil(), "nic[%s] ip6[%s] should exist, error: %+v", mgmtNic.Name, ip6String, err)
+		Expect(isExist).To(BeTrue(), "nic[%s] ip6[%s] should exist", mgmtNic.Name, ip6String)
+	}
+	linkAttr, err := utils.IpLinkShowAttrs(mgmtNic.Name)
+	Expect(err).To(BeNil(), "get nic[%s] attr error: %+v", mgmtNic.Name, err)
+	Expect(linkAttr).ToNot(BeNil(), "nic[%s] linkAttr should not be nil", mgmtNic.Name)
+	Expect(linkAttr.MAC).To(Equal(mgmtNic.Mac), "nic[%s] Mac %s should equal %s", mgmtNic.Name, linkAttr.MAC, mgmtNic.Mac)
+	mgmtNodeCidr := utils.BootstrapInfo["managementNodeCidr"]
+	if mgmtNodeCidr != nil {
+		mgmtNodeCidrStr := mgmtNodeCidr.(string)
+		nexthop, _ := utils.IpRouteGet(mgmtNodeCidrStr)
+		Expect(nexthop).To(Equal(mgmtNic.Gateway), "route dst mgmt node error")
+	}
+}
 
-	cmd = fmt.Sprintf("firewall name %s.local rule 3 action reject", nic.Name)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
-
-	cmd = fmt.Sprintf("firewall name %s.local rule 3 destination address %s", nic.Name, nic.Ip)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
-
-	cmd = fmt.Sprintf("firewall name %s.local rule 3 destination port %d", nic.Name, int(utils.GetSshPortFromBootInfo()))
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
-
-	cmd = fmt.Sprintf("firewall name %s.local rule 3 protocol tcp", nic.Name)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
-
-	cmd = fmt.Sprintf("firewall name %s.in default-action %s", nic.Name, nic.FirewallDefaultAction)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
-
-	cmd = fmt.Sprintf("firewall name %s.in rule 4000 action accept", nic.Name)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
-
-	cmd = fmt.Sprintf("firewall name %s.in rule 4000 state established enable", nic.Name)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
-
-	cmd = fmt.Sprintf("firewall name %s.in rule 4000 state related enable", nic.Name)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
-
-	cmd = fmt.Sprintf("firewall name %s.in rule 4000 action accept", nic.Name)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
-
-	cmd = fmt.Sprintf("firewall name %s.in rule 9999 action accept", nic.Name)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
-
-	cmd = fmt.Sprintf("firewall name %s.in rule 9999 state new enable", nic.Name)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).NotTo(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
-
-	cmd = fmt.Sprintf("firewall name %s.in rule 4001 state action accept", nic.Name)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).To(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
-
-	cmd = fmt.Sprintf("firewall name %s.in rule 4001 protocol icmp", nic.Name)
-	rule = tree.Get(cmd)
-	gomega.Expect(rule).To(gomega.BeNil(), fmt.Sprintf("firewall rule [%s] check failed", cmd))
+func checkAdditionNicConfigure() {
+	for _, nic := range nicsMap {
+		if nic.Ip != "" {
+			Expect(nic.Netmask).NotTo(BeEmpty(), "nic[%s] netmask should not be empty", nic.Name)
+			cidr, _ := utils.NetmaskToCIDR(nic.Netmask)
+			ipString := fmt.Sprintf("%v/%v", nic.Ip, cidr)
+			isExist, err := utils.IpAddrIsExist(nic.Name, ipString)
+			Expect(err).To(BeNil(), "nic[%s] ip[%s] should exist, error: %+v", nic.Name, ipString, err)
+			Expect(isExist).To(BeTrue(), "nic[%s] ip[%s] should exist", nic.Name, ipString)
+		}
+		if nic.Ip6 != "" {
+			ip6String := fmt.Sprintf("%s/%d", nic.Ip6, nic.PrefixLength)
+			isExist, err := utils.IpAddrIsExist(nic.Name, ip6String)
+			Expect(err).To(BeNil(), "nic[%s] ip6[%s] should exist, error: %+v", nic.Name, ip6String, err)
+			Expect(isExist).To(BeTrue(), "nic[%s] ip6[%s] should exist", nic.Name, ip6String)
+		}
+		linkAttr, err := utils.IpLinkShowAttrs(nic.Name)
+		Expect(err).To(BeNil(), "get nic[%s] attr error: %+v", nic.Name, err)
+		Expect(linkAttr).ToNot(BeNil(), "nic[%s] linkAttr should not be nil", nic.Name)
+		Expect(linkAttr.MAC).To(Equal(nic.Mac), "Mac %s should equal %s", linkAttr.MAC, nic.Mac)
+		if nic.Mtu != 0 {
+			Expect(linkAttr.MTU).To(Equal(nic.Mtu), "mtu %d should equal %d", linkAttr.MTU, nic.Mtu)
+		}
+		if nic.L2Type != "" {
+			Expect(linkAttr.Alias).To(Equal(utils.MakeIfaceAlias(nic)), "alias not equal")
+		}
+	}
 }

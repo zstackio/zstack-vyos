@@ -1,8 +1,0 @@
-[uninstall]
-# Use for delete files
-#
-
-[install]
-# Use for add/sync files
-#
-modules             /etc/              0664    root:root

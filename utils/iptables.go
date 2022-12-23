@@ -458,7 +458,7 @@ func (t *IpTables) restore() error {
 		Sudo:    true,
 	}
 
-	log.Debugf("iptables-restore content: %s", content)
+	//log.Debugf("iptables-restore content: %s", content)
 	_, _, _, err = cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("iptables-restore failed %s", err.Error())
@@ -466,10 +466,7 @@ func (t *IpTables) restore() error {
 			Command: fmt.Sprintf("iptables-restore  --table=%s < %s 2>&1 | grep 'Error occurred at line' | awk '{print $(NF)}' | xargs -i sed -n '{}p' %s", t.Name, tmpFile.Name(), tmpFile.Name()),
 			Sudo:    true,
 		}
-		_, outStr, _, err := bash.RunWithReturn()
-		if err != nil {
-			return err
-		}
+		_, outStr, _, _ := bash.RunWithReturn()
 		log.Debugf("Error occurred at table: %s, error rule: %s", t.Name, outStr)
 		return err
 	}
@@ -489,7 +486,7 @@ func (t *IpTables) save() error {
 		log.Debugf("iptables-save failed ret = %d, err: %s", ret, err)
 		return fmt.Errorf("iptables-save failed ret = %d, err: %s", ret, err)
 	}
-	log.Debugf("current iptables %s", o)
+	//log.Debugf("current iptables %s", o)
 
 	t.Chains = []*IpTableChain{}
 	t.Rules = []*IpTableRule{}

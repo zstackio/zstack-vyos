@@ -2,11 +2,12 @@ package plugin
 
 import (
 	"fmt"
+	"strings"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
-	"strings"
 )
 
 var _ = Describe("route_test", func() {
@@ -88,6 +89,7 @@ var _ = Describe("route_test", func() {
 		removeNic(nicCmd)
 		utils.SetHaStatus(oldHaStatus)
 	})
+
 })
 
 func checkRoutes(routes []routeInfo, routesDeleted []routeInfo) {

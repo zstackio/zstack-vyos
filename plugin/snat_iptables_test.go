@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/zstackio/zstack-vyos/utils"
@@ -23,6 +24,7 @@ var _ = Describe("snat_iptables_test", func() {
 			PrivateNicMac: utils.PrivateNicsForUT[0].Mac,
 			PrivateNicIp:  utils.PrivateNicsForUT[0].Ip,
 			SnatNetmask:   utils.PrivateNicsForUT[0].Netmask,
+			State:         true,
 		}
 		sinfo2 = snatInfo{
 			PublicNicMac:  utils.PubNicForUT.Mac,
@@ -30,6 +32,7 @@ var _ = Describe("snat_iptables_test", func() {
 			PrivateNicMac: utils.PrivateNicsForUT[1].Mac,
 			PrivateNicIp:  utils.PrivateNicsForUT[1].Ip,
 			SnatNetmask:   utils.PrivateNicsForUT[1].Netmask,
+			State:         true,
 		}
 		rmCmd = &removeSnatCmd{NatInfo: []snatInfo{sinfo1, sinfo2}}
 		nicCmd = &configureNicCmd{}
@@ -64,6 +67,27 @@ var _ = Describe("snat_iptables_test", func() {
 	It("[IPTABLES]snat : test sync snat", func() {
 		syncCmd := &syncSnatCmd{Snats: []snatInfo{sinfo1, sinfo2}, Enable: true}
 		syncSnat(syncCmd)
+		checkSyncSnatByIptables(syncCmd.Snats, syncCmd.Enable)
+
+		removeSnat(rmCmd)
+		checkSnatRuleDelIptables(rmCmd)
+	})
+
+	It("[IPTABLES]snat : test sync non-public networksnat", func() {
+		sinfo1.State = true
+		sinfo2.State = false
+		syncCmd := &syncSnatCmd{Snats: []snatInfo{sinfo1, sinfo2}, Enable: true}
+		syncSnat(syncCmd)
+		checkSyncSnatByIptables(syncCmd.Snats, syncCmd.Enable)
+
+		sinfo2.State = true
+		setState := &setSnatStateCmd{Snats: []snatInfo{sinfo2}, Enable: true}
+		setSnatState(setState)
+		checkSyncSnatByIptables(syncCmd.Snats, syncCmd.Enable)
+
+		sinfo2.State = false
+		setState1 := &setSnatStateCmd{Snats: []snatInfo{sinfo2}, Enable: false}
+		setSnatState(setState1)
 		checkSyncSnatByIptables(syncCmd.Snats, syncCmd.Enable)
 
 		removeSnat(rmCmd)
@@ -143,12 +167,20 @@ func checkSyncSnatByIptables(Snats []snatInfo, state bool) {
 		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
 		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(outNic).SetSnatTargetIp(s.PublicIp)
 		res := table.Check(rule)
-		Expect(res).To(BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
+		if s.State == true {
+			Expect(res).To(BeTrue(), fmt.Sprintf("firewall rule [%s] should exist", rule.String()))
+		} else {
+			Expect(res).To(BeFalse(), fmt.Sprintf("firewall rule [%s] should not exist", rule.String()))
+		}
 
 		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
 		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
 		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
 		res = table.Check(rule)
-		Expect(res).To(BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
+		if s.State == true {
+			Expect(res).To(BeTrue(), fmt.Sprintf("firewall rule [%s] should exist", rule.String()))
+		} else {
+			Expect(res).To(BeFalse(), fmt.Sprintf("firewall rule [%s] should not exist", rule.String()))
+		}
 	}
 }

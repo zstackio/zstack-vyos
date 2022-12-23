@@ -3,14 +3,15 @@ package plugin
 import (
 	"bytes"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	prom "github.com/prometheus/client_golang/prometheus"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
 	"sort"
 	"strconv"
 	"strings"
 	"unicode"
+
+	log "github.com/Sirupsen/logrus"
+	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (
@@ -75,10 +76,11 @@ type qosRuleHook interface {
 
 func (rule *qosRule) AddRule(nic string, direct direction) interface{} {
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo tc qdisc del dev %s parent 1:%x;"+
-			"sudo tc class del dev %s parent 1:0 classid 1:%x;",
+		Command: fmt.Sprintf("tc qdisc del dev %s parent 1:%x;"+
+			"tc class del dev %s parent 1:0 classid 1:%x;",
 			nic, rule.classId,
 			nic, rule.classId),
+		Sudo: true,
 	}
 	bash.Run()
 
@@ -88,10 +90,11 @@ func (rule *qosRule) AddRule(nic string, direct direction) interface{} {
 	}
 
 	bash1 := utils.Bash{
-		Command: fmt.Sprintf("sudo tc class add dev %s parent 1:0 classid 1:%x htb rate %d ceil %d burst 15k cburst 15k;"+
-			"sudo tc qdisc add dev %s parent 1:%x sfq;",
+		Command: fmt.Sprintf("tc class add dev %s parent 1:0 classid 1:%x htb rate %d ceil %d burst 15k cburst 15k;"+
+			"tc qdisc add dev %s parent 1:%x sfq;",
 			nic, rule.classId, bandwidth, bandwidth,
 			nic, rule.classId),
+		Sudo: true,
 	}
 	bash1.Run()
 	bash1.PanicIfError()
@@ -103,12 +106,13 @@ func (rule *qosRule) AddRule(nic string, direct direction) interface{} {
 
 func (rule *qosRule) DelRule(nic string, direct direction) interface{} {
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo tc filter del dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32;"+
-			"sudo tc qdisc del dev %s parent 1:%x sfq;"+
-			"sudo tc class del dev %s parent 1:0 classid 1:%x;",
+		Command: fmt.Sprintf("tc filter del dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32;"+
+			"tc qdisc del dev %s parent 1:%x sfq;"+
+			"tc class del dev %s parent 1:0 classid 1:%x;",
 			nic, rule.prioId, rule.filterId, rule.filterPos,
 			nic, rule.classId,
 			nic, rule.classId),
+		Sudo: true,
 	}
 	bash.Run()
 
@@ -122,28 +126,32 @@ func (rule *qosRule) AddFilter(nic string, direct direction) interface{} {
 		if direct == INGRESS {
 			bash = utils.Bash{
 				Command: fmt.Sprintf(
-					"sudo tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32 match ip dst %s/32 match ip dport %d 0xffff flowid 1:%x",
+					"tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32 match ip dst %s/32 match ip dport %d 0xffff flowid 1:%x",
 					nic, rule.prioId, rule.filterId, rule.filterPos, rule.ip, rule.port, rule.classId),
+				Sudo: true,
 			}
 		} else {
 			bash = utils.Bash{
 				Command: fmt.Sprintf(
-					"sudo tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32 match ip src %s/32 match ip sport %d 0xffff flowid 1:%x",
+					"tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32 match ip src %s/32 match ip sport %d 0xffff flowid 1:%x",
 					nic, rule.prioId, rule.filterId, rule.filterPos, rule.ip, rule.port, rule.classId),
+				Sudo: true,
 			}
 		}
 	} else {
 		if direct == INGRESS {
 			bash = utils.Bash{
 				Command: fmt.Sprintf(
-					"sudo tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32 match ip dst %s/32 flowid 1:%x",
+					"tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32 match ip dst %s/32 flowid 1:%x",
 					nic, rule.prioId, rule.filterId, rule.filterPos, rule.ip, rule.classId),
+				Sudo: true,
 			}
 		} else {
 			bash = utils.Bash{
 				Command: fmt.Sprintf(
-					"sudo tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32 match ip src %s/32 flowid 1:%x",
+					"tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32 match ip src %s/32 flowid 1:%x",
 					nic, rule.prioId, rule.filterId, rule.filterPos, rule.ip, rule.classId),
+				Sudo: true,
 			}
 		}
 	}
@@ -155,8 +163,9 @@ func (rule *qosRule) AddFilter(nic string, direct direction) interface{} {
 
 func (rule *qosRule) DelFilter(nic string, direct direction) interface{} {
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo tc filter del dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32",
+		Command: fmt.Sprintf("tc filter del dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32",
 			nic, rule.prioId, rule.filterId, rule.filterPos),
+		Sudo: true,
 	}
 	bash.Run()
 	return nil
@@ -234,10 +243,11 @@ func (vipRules *vipQosRules) VipQosRulesInit(nicName string) interface{} {
 
 	/* generate the filter handler */
 	filterBash := utils.Bash{
-		Command: fmt.Sprintf("sudo tc filter add dev %s parent 1:0 prio %d protocol ip u32; "+
-			"sudo tc filter show dev %s prio %d protocol ip | grep 'ht divisor'",
+		Command: fmt.Sprintf("tc filter add dev %s parent 1:0 prio %d protocol ip u32; "+
+			"tc filter show dev %s prio %d protocol ip | grep 'ht divisor'",
 			nicName, vipRules.prioId,
 			nicName, vipRules.prioId),
+		Sudo: true,
 	}
 	_, o, _, _ := filterBash.RunWithReturn()
 	filterBash.PanicIfError()
@@ -293,8 +303,9 @@ func (vipRules *vipQosRules) VipQosDelRule(rule qosRule, nicName string, direct 
 		log.Debugf("DelRule clean ip %s prio %d", rule.ip, rule.prioId)
 		/* delete filter */
 		bash := utils.Bash{
-			Command: fmt.Sprintf("sudo tc filter del dev %s parent 1:0 prio %d protocol ip u32",
+			Command: fmt.Sprintf("tc filter del dev %s parent 1:0 prio %d protocol ip u32",
 				nicName, rule.prioId),
+			Sudo: true,
 		}
 		bash.Run()
 		//bash.PanicIfError()
@@ -379,25 +390,43 @@ func (rules *interfaceQosRules) InterfaceQosRuleInit(direct direction) interface
 		ifbName.WriteString(index)
 		rules.ifbName = ifbName.String()
 
-		/* create ifb interface */
-		tree := server.NewParserFromShowConfiguration().Tree
-		if n := tree.Getf("interfaces input %s", rules.ifbName); n == nil {
-			tree.SetfWithoutCheckExisting("interfaces input %s ", rules.ifbName)
-		}
-
-		/* redirect ingress to ifb */
-		if n := tree.Getf("interfaces ethernet %s redirect", rules.name); n != nil {
-			n.Delete()
-		}
-		tree.Setf("interfaces ethernet %s redirect %s", rules.name, rules.ifbName)
-		tree.Apply(false)
-		name = rules.ifbName
-
-		if mtu := tree.Getf("interfaces ethernet %s mtu", rules.name); mtu != nil {
+		if !utils.IsEnableVyosCmd() {
+			if !utils.IpLinkIsExist(rules.ifbName) {
+				err := utils.IpLinkAdd(rules.ifbName, "ifb")
+				utils.PanicOnError(err)
+			}
+			_ = utils.IpLinkSetUp(rules.ifbName)
 			bash := utils.Bash{
-				Command: fmt.Sprintf("ip link set mtu %s dev %s", mtu.Value(), rules.ifbName),
+				Command: fmt.Sprintf("tc qdisc add dev %s handle ffff: ingress;"+
+					"tc filter add dev %s parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev %s", rules.name, rules.name, rules.ifbName),
+				Sudo: true,
 			}
 			bash.Run()
+			name = rules.ifbName
+
+			mtu, _ := utils.IpLinkGetMTU(rules.name)
+			_ = utils.IpLinkSetMTU(rules.ifbName, mtu)
+		} else {
+			/* create ifb interface */
+			tree := server.NewParserFromShowConfiguration().Tree
+			if n := tree.Getf("interfaces input %s", rules.ifbName); n == nil {
+				tree.SetfWithoutCheckExisting("interfaces input %s ", rules.ifbName)
+			}
+
+			/* redirect ingress to ifb */
+			if n := tree.Getf("interfaces ethernet %s redirect", rules.name); n != nil {
+				n.Delete()
+			}
+			tree.Setf("interfaces ethernet %s redirect %s", rules.name, rules.ifbName)
+			tree.Apply(false)
+			name = rules.ifbName
+
+			if mtu := tree.Getf("interfaces ethernet %s mtu", rules.name); mtu != nil {
+				bash := utils.Bash{
+					Command: fmt.Sprintf("ip link set mtu %s dev %s", mtu.Value(), rules.ifbName),
+				}
+				bash.Run()
+			}
 		}
 
 	} else {
@@ -435,14 +464,27 @@ func (rules *interfaceQosRules) InterfaceQosRuleCleanUp() interface{} {
 	bash.Run()
 
 	if rules.direct == INGRESS {
-		tree := server.NewParserFromShowConfiguration().Tree
-		if n := tree.Getf("interfaces ethernet %s redirect", rules.name); n != nil {
-			n.Delete()
+		if !utils.IsEnableVyosCmd() {
+			bash := utils.Bash{
+				Command: fmt.Sprintf("tc qdisc del dev %s handle ffff: ingress;"+
+					"tc filter del dev %s parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev %s", rules.name, rules.ifbName, rules.ifbName),
+				Sudo: true,
+			}
+			bash.Run()
+			if utils.IpLinkIsExist(rules.ifbName) {
+				err := utils.IpLinkDel(rules.ifbName)
+				utils.PanicOnError(err)
+			}
+		} else {
+			tree := server.NewParserFromShowConfiguration().Tree
+			if n := tree.Getf("interfaces ethernet %s redirect", rules.name); n != nil {
+				n.Delete()
+			}
+			if n := tree.Getf("interfaces input %s", rules.ifbName); n == nil {
+				n.Delete()
+			}
+			tree.Apply(false)
 		}
-		if n := tree.Getf("interfaces input %s", rules.ifbName); n == nil {
-			n.Delete()
-		}
-		tree.Apply(false)
 	}
 
 	rules.classBitmap.Reset()
@@ -699,6 +741,9 @@ func setVipHandler(ctx *server.CommandContext) interface{} {
 	cmd := &setVipCmd{}
 	ctx.GetCommand(cmd)
 
+	if !utils.IsEnableVyosCmd() {
+		return setVipByLinux(cmd)
+	}
 	return setVip(cmd)
 }
 
@@ -915,6 +960,10 @@ func getDeleteFailVip(info []vipInfo) []vipInfo {
 func removeVipHandler(ctx *server.CommandContext) interface{} {
 	cmd := &removeVipCmd{}
 	ctx.GetCommand(cmd)
+
+	if !utils.IsEnableVyosCmd() {
+		return removeVipByLinux(cmd)
+	}
 
 	return removeVip(cmd)
 }

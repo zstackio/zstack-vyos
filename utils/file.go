@@ -3,7 +3,6 @@ package utils
 import (
 	"bufio"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 func MkdirForFile(filepath string, perm os.FileMode) error {
@@ -37,6 +38,15 @@ func DeleteFile(filePath string) error {
 	if err := os.Remove(filePath); err != nil {
 		return err
 	}
+	return nil
+}
+
+// ！！！ it will delete the directory, use with caution ！
+func DeleteAllFiles(filePath string) error {
+	if err := os.RemoveAll(filePath); err != nil {
+		return err
+	}
+
 	return nil
 }
 

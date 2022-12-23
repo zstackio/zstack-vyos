@@ -15,5 +15,6 @@ require (
 	github.com/pkg/errors v0.8.1-0.20181023235946-059132a15dd0
 	github.com/prometheus/client_golang v0.9.2
 	github.com/sirupsen/logrus v1.8.1 // indirect
+	github.com/vishvananda/netlink v1.1.0
 	golang.org/x/sys v0.0.0-20210423082822-04245dca01da
 )

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -42,6 +43,7 @@ func JsonLoadConfig(filepath string, v interface{}) error {
 }
 
 func JsonStoreConfig(filepath string, v interface{}) error {
+	var out bytes.Buffer
 	if filepath == "" {
 		return errors.New("filepath can not be empty")
 	}
@@ -49,7 +51,6 @@ func JsonStoreConfig(filepath string, v interface{}) error {
 	if err != nil {
 		return err
 	}
-	var out bytes.Buffer
 	err = json.Indent(&out, data, "", "\t")
 	if err != nil {
 		return err
@@ -57,6 +58,9 @@ func JsonStoreConfig(filepath string, v interface{}) error {
 	if ok, err := PathExists(filepath); err != nil || !ok {
 		MkdirForFile(filepath, 0755)
 	}
+	content := string(out.Bytes())
+	content = strings.ReplaceAll(content, "\\u003c", "<")
+	content = strings.ReplaceAll(content, "\\u003e", ">")
 
-	return ioutil.WriteFile(filepath, out.Bytes(), 0664)
+	return ioutil.WriteFile(filepath, []byte(content), 0664)
 }

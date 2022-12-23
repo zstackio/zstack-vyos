@@ -1,0 +1,64 @@
+package utils
+
+import (
+	"github.com/vishvananda/netlink"
+)
+
+const (
+	FAMILY_V4  = netlink.FAMILY_V4
+	FAMILY_V6  = netlink.FAMILY_V6
+	FAMILY_ALL = netlink.FAMILY_ALL
+)
+
+const (
+	RT_PROTOS_UNSPEC     = 0
+	RT_PROTOS_REDIRECT   = 1
+	RT_PROTOS_KERNEL     = 2
+	RT_PROTOS_BOOT       = 3
+	RT_PROTOS_STATIC     = 4
+	RT_PROTOS_ZEBRA      = 11
+	RT_PROTOS_DHCP       = 16
+	RT_PROTOS_KEEPALIVED = 18
+	RT_PROTOS_OSPF       = 188
+	RT_PROTOS_ZSTACK     = 201
+	RT_PROTOS_ZVR        = 202
+)
+
+const (
+	RT_SCOPES_GLOBAL  = 0
+	RT_SCOPES_NOWHERE = 255
+	RT_SCOPES_HOST    = 254
+	RT_SCOPES_LINK    = 253
+)
+
+const (
+	RT_TABLES_LOCAL   = 255
+	RT_TABLES_MAIN    = 254
+	RT_TABLES_DEFAULT = 253
+	RT_TABLES_UNSPEC  = 0
+)
+
+const (
+	RT_TYPE_UNSPEC      = 0x0
+	RT_TYPE_UNICAST     = 0x1
+	RT_TYPE_LOCAL       = 0x2
+	RT_TYPE_BROADCAST   = 0x3
+	RT_TYPE_ANYCAST     = 0x4
+	RT_TYPE_MULTICAST   = 0x5
+	RT_TYPE_BLACKHOLE   = 0x6
+	RT_TYPE_UNREACHABLE = 0x7
+	RT_TYPE_PROHIBIT    = 0x8
+	RT_TYPE_THROW       = 0x9
+	RT_TYPE_NAT         = 0xa
+	RT_TYPE_XRESOLVE    = 0xb
+)
+
+const (
+	IF_OPER_UNKNOWN        = 0x0
+	IF_OPER_NOTPRESENT     = 0x1
+	IF_OPER_DOWN           = 0x2
+	IF_OPER_LOWERLAYERDOWN = 0x3
+	IF_OPER_TESTING        = 0x4
+	IF_OPER_DORMANT        = 0x5
+	IF_OPER_UP             = 0x6
+)

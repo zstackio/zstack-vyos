@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"fmt"
+
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
@@ -108,38 +109,33 @@ func checkSyncIpSecRulesByIptables() {
 		vipNicNameMap[info.Vip] = nicName
 	}
 
-	nicMap := make(map[string]string)
 	for _, info := range ipsecMap {
-		nicName, _ := vipNicNameMap[info.Vip]
-		if _, ok := nicMap[nicName]; ok {
-			continue
-		} else {
-			nicMap[nicName] = nicName
-		}
+		nicName, err := utils.GetNicNameByMac(info.PublicNic)
+		utils.PanicOnError(err)
 
 		filterTable := utils.NewIpTables(utils.FirewallTable)
 		/* filter rule */
 		filterRule := utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
 		filterRule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.IpsecRuleComment)
-		filterRule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("500").SetSrcIp(info.PeerAddress + "/32")
+		filterRule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("500").SetSrcIpset(ipsecAddressGroup)
 		res := filterTable.Check(filterRule)
 		gomega.Expect(res).To(gomega.BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", filterRule.String()))
 
 		filterRule = utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
 		filterRule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.IpsecRuleComment)
-		filterRule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("4500").SetSrcIp(info.PeerAddress + "/32")
+		filterRule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("4500").SetSrcIpset(ipsecAddressGroup)
 		res = filterTable.Check(filterRule)
 		gomega.Expect(res).To(gomega.BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", filterRule.String()))
 
 		filterRule = utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
 		filterRule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.IpsecRuleComment)
-		filterRule.SetProto(utils.IPTABLES_PROTO_ESP).SetSrcIp(info.PeerAddress + "/32")
+		filterRule.SetProto(utils.IPTABLES_PROTO_ESP).SetSrcIpset(ipsecAddressGroup)
 		res = filterTable.Check(filterRule)
 		gomega.Expect(res).To(gomega.BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", filterRule.String()))
 
 		filterRule = utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
 		filterRule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.IpsecRuleComment)
-		filterRule.SetProto(utils.IPTABLES_PROTO_AH).SetSrcIp(info.PeerAddress + "/32")
+		filterRule.SetProto(utils.IPTABLES_PROTO_AH).SetSrcIpset(ipsecAddressGroup)
 		res = filterTable.Check(filterRule)
 		gomega.Expect(res).To(gomega.BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", filterRule.String()))
 	}

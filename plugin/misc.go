@@ -3,13 +3,14 @@ package plugin
 import (
 	"bytes"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
 	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (
@@ -189,6 +190,57 @@ interface listen ::1
 	err = bash.Run()
 	utils.PanicOnError(err)
 }
+
+func configTaskScheduler() {
+	if !utils.IsEnableVyosCmd() {
+		//cronJobMap := make(utils.CronjobMap)
+		sshJob := utils.NewCronjob().SetId(1).SetCommand(utils.Cronjob_file_ssh).SetMinute("*/1")
+		zvrMonitorJob := utils.NewCronjob().SetId(2).SetCommand(utils.Cronjob_file_zvrMonitor).SetMinute("*/1")
+		fileMonitorJob := utils.NewCronjob().SetId(3).SetCommand(fmt.Sprintf("flock -xn /tmp/file-monitor.lock -c %s", utils.Cronjob_file_fileMonitor)).SetMinute("*/1")
+		rsyslogJob := utils.NewCronjob().SetId(4).SetCommand(utils.Cronjob_file_rsyslog).SetMinute("*/1")
+		topJob := utils.NewCronjob().SetId(5).SetCommand("/usr/bin/top -b -n 1 -H >> /var/log/top.log").SetMinute("*/1")
+
+		cronJobMap := utils.CronjobMap{
+			1: sshJob,
+			2: zvrMonitorJob,
+			3: fileMonitorJob,
+			4: rsyslogJob,
+			5: topJob,
+		}
+		err := cronJobMap.ConfigService()
+		utils.PanicOnError(err)
+	} else {
+		tree := server.NewParserFromShowConfiguration().Tree
+		if tree.Get("system task-scheduler task ssh") != nil {
+			tree.Delete("system task-scheduler task ssh")
+		}
+		if tree.Get("system task-scheduler task ssh") == nil {
+			tree.Set("system task-scheduler task ssh interval 1")
+			tree.Set(fmt.Sprintf("system task-scheduler task ssh executable path '%s'", utils.Cronjob_file_ssh))
+		}
+		if tree.Get("system task-scheduler task rsyslog") == nil {
+			tree.Set("system task-scheduler task rsyslog interval 1")
+			tree.Set(fmt.Sprintf("system task-scheduler task rsyslog executable path '%s'", utils.Cronjob_file_rsyslog))
+		}
+		if tree.Get("system task-scheduler task zvr-monitor") == nil {
+			tree.Set("system task-scheduler task zvr-monitor interval 1")
+			tree.Set(fmt.Sprintf("system task-scheduler task zvr-monitor executable path '%s'", utils.Cronjob_file_zvrMonitor))
+		}
+		if tree.Get("system task-scheduler task cpu-monitor") == nil {
+			tree.Set("system task-scheduler task cpu-monitor interval 1")
+			tree.Set("system task-scheduler task cpu-monitor executable path /usr/bin/top")
+			tree.Set("system task-scheduler task cpu-monitor executable arguments '-b -n 1 -H >> /var/log/top.log'")
+		}
+		if tree.Get("system task-scheduler task file-monitor") == nil {
+			tree.Set("system task-scheduler task file-monitor interval 1")
+			tree.Set("system task-scheduler task file-monitor executable path flock")
+			tree.Set(fmt.Sprintf("system task-scheduler task file-monitor executable arguments '-xn /tmp/file-monitor.lock -c %s'", utils.Cronjob_file_fileMonitor))
+		}
+
+		tree.Apply(false)
+	}
+}
+
 func initHandler(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(initConfig)
 	addRouteIfCallbackIpChanged(true)
@@ -200,40 +252,7 @@ func initHandler(ctx *server.CommandContext) interface{} {
 		}
 	}
 
-	tree := server.NewParserFromShowConfiguration().Tree
-
-	if tree.Get("system task-scheduler task ssh") != nil {
-		tree.Delete("system task-scheduler task ssh")
-	}
-
-	if tree.Get("system task-scheduler task ssh") == nil {
-		tree.Set("system task-scheduler task ssh interval 1")
-		tree.Set(fmt.Sprintf("system task-scheduler task ssh executable path '%s'", utils.Cronjob_file_ssh))
-	}
-
-	if tree.Get("system task-scheduler task rsyslog") == nil {
-		tree.Set("system task-scheduler task rsyslog interval 1")
-		tree.Set(fmt.Sprintf("system task-scheduler task rsyslog executable path '%s'", utils.Cronjob_file_rsyslog))
-	}
-
-	if tree.Get("system task-scheduler task zvr-monitor") == nil {
-		tree.Set("system task-scheduler task zvr-monitor interval 1")
-		tree.Set(fmt.Sprintf("system task-scheduler task zvr-monitor executable path '%s'", utils.Cronjob_file_zvrMonitor))
-	}
-
-	if tree.Get("system task-scheduler task cpu-monitor") == nil {
-		tree.Set("system task-scheduler task cpu-monitor interval 1")
-		tree.Set("system task-scheduler task cpu-monitor executable path /usr/bin/top")
-		tree.Set("system task-scheduler task cpu-monitor executable arguments 'b -n 1 -H >> /var/log/top.log'")
-	}
-
-	if tree.Get("system task-scheduler task file-monitor") == nil {
-		tree.Set("system task-scheduler task file-monitor interval 1")
-		tree.Set(fmt.Sprintf("system task-scheduler task file-monitor executable path '%s'", utils.Cronjob_file_fileMonitor))
-	}
-
-	tree.Apply(false)
-
+	configTaskScheduler()
 	doRefreshLogLevel(initConfig.LogLevel)
 	configureNtp(initConfig.TimeServers)
 	configure(initConfig.Parms)

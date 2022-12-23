@@ -306,9 +306,9 @@ func configureNicFirewall(nics []utils.NicInfo) {
 	}
 }
 
-func configureNic(cmd *configureNicCmd) interface{} {
+func configureNicByVyos(nicList []utils.NicInfo) interface{} {
 	var nicname string
-	for _, nic := range cmd.Nics {
+	for _, nic := range nicList {
 		tree := server.NewParserFromShowConfiguration().Tree
 		err := utils.Retry(func() error {
 			var e error
@@ -366,6 +366,21 @@ func configureNic(cmd *configureNicCmd) interface{} {
 			checkNicIsUp(nicname, true)
 		}
 	}
+
+	return nil
+}
+
+func configureNic(cmd *configureNicCmd) interface{} {
+	if !utils.IsEnableVyosCmd() {
+		if err := configureNicByLinux(cmd.Nics); err != nil {
+			return err
+		}
+	} else {
+		if err := configureNicByVyos(cmd.Nics); err != nil {
+			return err
+		}
+	}
+
 	configureNicFirewall(cmd.Nics)
 
 	radvdMap := make(utils.RadvdAttrsMap)
@@ -450,29 +465,49 @@ func removeNicHandler(ctx *server.CommandContext) interface{} {
 }
 
 func removeNic(cmd *configureNicCmd) interface{} {
-	tree := server.NewParserFromShowConfiguration().Tree
-	for _, nic := range cmd.Nics {
-		var nicname string
-		err := utils.Retry(func() error {
-			var e error
-			nicname, e = utils.GetNicNameByMac(nic.Mac)
-			if e != nil {
-				return e
-			} else {
-				return nil
-			}
-		}, 5, 1)
-		utils.PanicOnError(err)
-		tree.Deletef("interfaces ethernet %s", nicname)
-		if utils.IsSkipVyosIptables() {
-			err := utils.DestroyNicFirewall(nicname)
+	if utils.IsEnableVyosCmd() {
+		tree := server.NewParserFromShowConfiguration().Tree
+		for _, nic := range cmd.Nics {
+			var nicname string
+			err := utils.Retry(func() error {
+				var e error
+				nicname, e = utils.GetNicNameByMac(nic.Mac)
+				if e != nil {
+					return e
+				} else {
+					return nil
+				}
+			}, 5, 1)
 			utils.PanicOnError(err)
-		} else {
-			tree.Deletef("firewall name %s.in", nicname)
-			tree.Deletef("firewall name %s.local", nicname)
+			tree.Deletef("interfaces ethernet %s", nicname)
+			if utils.IsSkipVyosIptables() {
+				err := utils.DestroyNicFirewall(nicname)
+				utils.PanicOnError(err)
+			} else {
+				tree.Deletef("firewall name %s.in", nicname)
+				tree.Deletef("firewall name %s.local", nicname)
+			}
+		}
+		tree.Apply(false)
+	} else {
+		for _, nic := range cmd.Nics {
+			var nicname string
+			err := utils.Retry(func() error {
+				var e error
+				nicname, e = utils.GetNicNameByMac(nic.Mac)
+				if e != nil {
+					return e
+				} else {
+					return nil
+				}
+			}, 5, 1)
+			utils.PanicOnError(err)
+			err = utils.DestroyNicFirewall(nicname)
+			utils.PanicOnError(err)
+			err = utils.IpAddrFlush(nicname)
+			utils.PanicOnError(err)
 		}
 	}
-	tree.Apply(false)
 
 	radvdMap := make(utils.RadvdAttrsMap)
 	for _, nic := range cmd.Nics {
@@ -509,6 +544,9 @@ func configureNicFirewallDefaultAction(ctx *server.CommandContext) interface{} {
 	cmd := &configureNicCmd{}
 	ctx.GetCommand(cmd)
 
+	if !utils.IsEnableVyosCmd() {
+		return configureNicDefaultActionByLinux(cmd)
+	}
 	return configureNicDefaultAction(cmd)
 }
 
@@ -549,6 +587,9 @@ func changeDefaultNicHandler(ctx *server.CommandContext) interface{} {
 	cmd := &ChangeDefaultNicCmd{}
 	ctx.GetCommand(cmd)
 
+	if !utils.IsEnableVyosCmd() {
+		return changeDefaultNicByLinux(cmd)
+	}
 	return changeDefaultNic(cmd)
 }
 

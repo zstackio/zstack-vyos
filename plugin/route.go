@@ -2,12 +2,13 @@ package plugin
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -47,7 +48,11 @@ func syncRoutes(ctx *server.CommandContext) interface{} {
 	cmd := &SyncRoutesCmd{}
 	ctx.GetCommand(cmd)
 
-	setRoutes(cmd.Routes)
+	if !utils.IsEnableVyosCmd() {
+		setZebraRoutes(cmd.Routes)
+	} else {
+		setRoutes(cmd.Routes)
+	}
 	return nil
 }
 

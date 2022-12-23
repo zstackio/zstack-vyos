@@ -1,0 +1,44 @@
+[[GENERIC]]
+# this files for all archs
+# format: [source file]  [dst file]  [file mode]  [file owner]
+#
+sysctl.conf             /etc/sysctl.conf                           0644     root:root
+cpu-monitor             /etc/logrotate.d/cpu-monitor               0644     root:root
+mail-monitor            /etc/logrotate.d/mail-monitor              0644     root:root
+conntrackd.conf         /etc/conntrackd/conntrackd.conf            0644     root:root
+healthcheck.sh          /usr/share/healthcheck.sh                        0755     vyos:users
+sshd.sh                 /home/vyos/zvr/ssh/sshd.sh                       0755     vyos:users
+rsyslog.sh              /home/vyos/zvr/ssh/rsyslog.sh                    0755     vyos:users
+zvr-monitor.sh          /home/vyos/zvr/ssh/zvr-monitor.sh                0755     vyos:users
+zvr-reboot.sh           /home/vyos/zvr/ssh/zvr-reboot.sh                 0755     vyos:users
+file-monitor.sh         /home/vyos/zvr/ssh/file-monitor.sh               0755     vyos:users
+zsn-crontab.sh          /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh   0755     vyos:users
+ipsec.sh                /home/vyos/zvr/keepalived/temp/ipsec.sh          0755     vyos:users
+zstack-virtualrouteragent        /etc/init.d/zstack-virtualrouteragent        0755        root:root
+
+[[X86]]
+# this files just for x86_64
+# format: [source file]  [dst file]  [file mode]  [file owner]
+#
+keepalived       /usr/sbin/keepalived            0755      vyos:users
+haproxy          /opt/vyatta/sbin/haproxy        0755      vyos:users
+gobetween        /opt/vyatta/sbin/gobetween      0755      vyos:users
+pimd             /opt/vyatta/sbin/pimd           0755      vyos:users
+uacctd           /opt/vyatta/sbin/uacctd         0755      vyos:users
+goprlimit        /opt/vyatta/sbin/goprlimit      0755      vyos:users
+zvr              /opt/vyatta/sbin/zvr            0755      vyos:users
+
+[[ARM]]
+# this files just for aarch64
+# format: [source file]  [dst file]  [file mode]  [file owner]
+#
+keepalived_aarch64        /usr/sbin/keepalived           0755      vyos:users
+haproxy_aarch64           /opt/vyatta/sbin/haproxy       0755      vyos:users
+gobetween_aarch64         /opt/vyatta/sbin/gobetween     0755      vyos:users
+pimd_aarch64              /opt/vyatta/sbin/pimd          0755      vyos:users
+zvr_aarch64               /opt/vyatta/sbin/zvr           0755      vyos:users
+
+[[MIPS]]
+# Use for add/sync files just for mips64
+# format: [source file]  [dst file]  [file mode]  [file owner]
+#
