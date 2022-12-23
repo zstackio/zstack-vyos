@@ -87,25 +87,27 @@ func cleanupOldEip(tree *server.VyosConfigTree, eip eipInfo) {
 	}
 }
 
-func checkEipIpTableRules(eip eipInfo) error {
+func checkEipIpTableRules(eipList []eipInfo) error {
 	natTable := utils.NewIpTables(utils.NatTable)
-	nicName, err := utils.GetNicNameByMac(eip.PublicMac)
-	if err != nil {
-		return err
-	}
 
-	rule := utils.NewIpTableRule(utils.RULESET_DNAT.String())
-	rule.SetAction(utils.IPTABLES_ACTION_DNAT)
-	rule.SetDstIp(eip.VipIp + "/32").SetDnatTargetIp(eip.GuestIp)
-	if natTable.Check(rule) == false {
-		return fmt.Errorf("dnat rule[%s] check failed", rule.String())
-	}
+	for _, eip := range eipList {
+		nicName, err := utils.GetNicNameByMac(eip.PublicMac)
+		if err != nil {
+			return err
+		}
+		rule := utils.NewIpTableRule(utils.RULESET_DNAT.String())
+		rule.SetAction(utils.IPTABLES_ACTION_DNAT)
+		rule.SetDstIp(eip.VipIp + "/32").SetDnatTargetIp(eip.GuestIp)
+		if natTable.Check(rule) == false {
+			return fmt.Errorf("dnat rule[%s] check failed", rule.String())
+		}
 
-	rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
-	rule.SetAction(utils.IPTABLES_ACTION_SNAT)
-	rule.SetOutNic(nicName).SetSrcIp(eip.GuestIp + "/32").SetSnatTargetIp(eip.VipIp)
-	if natTable.Check(rule) == false {
-		return fmt.Errorf("snat rule[%s] check failed", rule.String())
+		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
+		rule.SetAction(utils.IPTABLES_ACTION_SNAT)
+		rule.SetOutNic(nicName).SetSrcIp(eip.GuestIp + "/32").SetSnatTargetIp(eip.VipIp)
+		if natTable.Check(rule) == false {
+			return fmt.Errorf("snat rule[%s] check failed", rule.String())
+		}
 	}
 
 	return nil
@@ -308,8 +310,7 @@ func createEip(cmd *setEipCmd) interface{} {
 		setEip(tree, eip)
 		tree.Apply(false)
 
-		err := checkEipIpTableRules(eip)
-		if err != nil {
+		if err := checkEipIpTableRules([]eipInfo{eip}); err != nil {
 			/* rollback */
 			//deleteEip(tree, eip)
 			tree.Apply(false)
@@ -514,12 +515,9 @@ func syncEip(cmd *syncEipCmd) interface{} {
 
 		tree.Apply(false)
 	}
-
-	for _, eip := range cmd.Eips {
-		/* utils.PanicOnError(err) will response error message to ZStack, return value can not do it */
-		if err := checkEipIpTableRules(eip); err != nil {
-			return err
-		}
+	
+	if err := checkEipIpTableRules(cmd.Eips); err != nil {
+		return err
 	}
 
 	for _, eip := range cmd.Eips {
