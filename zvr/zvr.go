@@ -307,7 +307,7 @@ func main() {
 	loadPlugins()
 	setupRotates()
 	server.VyosLockInterface(configureZvrFirewall)()
-	utils.StartDiskMon(getHeartBeatFile(options.LogFile), func(e error) { os.Exit(1) }, 2*time.Second)
+	utils.StartDiskMon(getHeartBeatFile(options.LogFile), func(e error) { if utils.IsHaEnabled() {os.Exit(1)} }, 2*time.Second)
 
 	server.Start()
 }
