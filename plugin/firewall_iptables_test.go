@@ -518,6 +518,40 @@ var _ = Describe("firewall_iptables_test", func() {
 		checkDeleteUserRuleByIpTables()
 	})
 
+	It("[IPTABLES]FIREWALL : test modify firewall rule and change state", func() {
+		ruleInfo1 := ruleInfo{
+			SourceIp: "10.10.10.1,10.10.10.10-10.10.10.20", DestIp: "20.20.20.1,20.20.20.10-20.20.20.20",
+			State:     "enable",
+			IsDefault: false, RuleNumber: 1234,
+			Protocol: "udp", Action: "accept",
+		}
+
+		ruleSet := ruleSetInfo{
+			Name:             "rs10",
+			ActionType:       "accept",
+			EnableDefaultLog: false,
+		}
+		ethRuleSetRef := ethRuleSetRef{
+			Mac:         utils.PrivateNicsForUT[0].Mac,
+			Forward:     FIREWALL_DIRECTION_IN,
+			RuleSetInfo: ruleSet,
+		}
+		ruleSetName1 := buildRuleSetName(utils.PrivateNicsForUT[0].Name, FIREWALL_DIRECTION_IN)
+		cmd := &createRuleCmd{Ref: ethRuleSetRef}
+
+		cmd.Ref.RuleSetInfo.Rules = []ruleInfo{ruleInfo1}
+		err := createRule(cmd)
+		gomega.Expect(err).To(gomega.BeNil(), fmt.Sprintf("createRuleByIptables add rules failed: %+v", err))
+		checkCreateRuleByIptables(utils.PrivateNicsForUT[0].Name, ruleSetName1, cmd.Ref)
+		checkIptableRule(ruleSetName1, []ruleInfo{ruleInfo1}, false)
+
+		ruleInfo1.State = "disable"
+		cmd.Ref.RuleSetInfo.Rules = []ruleInfo{ruleInfo1}
+		err = createRule(cmd)
+		gomega.Expect(err).To(gomega.BeNil(), fmt.Sprintf("createRuleByIptables add rules failed: %+v", err))
+		checkIptableRule(ruleSetName1, []ruleInfo{ruleInfo1}, true)
+	})
+
 	It("[IPTABLES]FIREWALL : firewall_iptables destroying env", func() {
 		var nicCmd configureNicCmd
 		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
