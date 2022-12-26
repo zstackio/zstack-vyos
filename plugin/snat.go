@@ -128,7 +128,8 @@ func setSnat(cmd *setSnatCmd) interface{} {
 
 		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
 		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
-		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
+		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s", s.PrivateNicIp)).
+			SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
 		rules = append(rules, rule)
 
 		table.AddIpTableRules(rules)
@@ -194,7 +195,8 @@ func removeSnat(cmd *removeSnatCmd) interface{} {
 
 			rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
 			rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
-			rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(priNic).SetSnatTargetIp(s.PublicIp)
+			rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s", s.PrivateNicIp)).
+				SetOutNic(priNic).SetSnatTargetIp(s.PublicIp)
 			table.RemoveIpTableRule([]*utils.IpTableRule{rule})
 		}
 
@@ -251,7 +253,8 @@ func setSnatStateByIptables(Snats []snatInfo, state bool) {
 
 		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
 		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
-		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
+		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s", s.PrivateNicIp)).
+			SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
 		rules = append(rules, rule)
 	}
 
@@ -296,7 +299,8 @@ func syncSnatByIptables(Snats []snatInfo, state bool) {
 
 		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
 		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
-		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
+		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s", s.PrivateNicIp)).
+			SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
 		rules = append(rules, rule)
 	}
 

@@ -38,14 +38,14 @@ func isNicFilterChain(chainName string) bool {
 
 func getRuleSetFromIpTable(table *utils.IpTables) map[string]*ruleSetInfo {
 	/* rule set action like this:
-		-A VYATTA_PRE_FW_FWD_HOOK -i eth1 -j eth1.in
-	    -A VYATTA_PRE_FW_IN_HOOK -i eth1 -j eth1.local
-	    -A VYATTA_FW_OUT_HOOK -o eth2 -j eth2.out
-	    -A eth2.in -s 1.1.1.0/24 -d 2.2.2.0/24 -p udp -m comment --comment "eth2.in-1001" -m state --state INVALID,NEW,RELATED,ESTABLISHED -m multiport --dports 5000:6000 -m multiport --sports 8000:9000 -j RETURN
-		-A eth2.in -m comment --comment "eth2.in-4000" -m state --state INVALID,NEW,RELATED,ESTABLISHED -j RETURN
-		-A eth2.in -p icmp -m comment --comment "eth2.in-4001" -j RETURN
-		-A eth2.in -m comment --comment "eth2.in-4002" -m state --state NEW,RELATED,ESTABLISHED -m set --match-set eip-group src -j RETURN
-		-A eth2.in -m comment --comment "eth2.in-10000 default-action reject" -j REJECT --reject-with icmp-port-unreachable
+	   	-A VYATTA_PRE_FW_FWD_HOOK -i eth1 -j eth1.in
+	       -A VYATTA_PRE_FW_IN_HOOK -i eth1 -j eth1.local
+	       -A VYATTA_FW_OUT_HOOK -o eth2 -j eth2.out
+	       -A eth2.in -s 1.1.1.0/24 -d 2.2.2.0/24 -p udp -m comment --comment "eth2.in-1001" -m state --state INVALID,NEW,RELATED,ESTABLISHED -m multiport --dports 5000:6000 -m multiport --sports 8000:9000 -j RETURN
+	   	-A eth2.in -m comment --comment "eth2.in-4000" -m state --state INVALID,NEW,RELATED,ESTABLISHED -j RETURN
+	   	-A eth2.in -p icmp -m comment --comment "eth2.in-4001" -j RETURN
+	   	-A eth2.in -m comment --comment "eth2.in-4002" -m state --state NEW,RELATED,ESTABLISHED -m set --match-set eip-group src -j RETURN
+	   	-A eth2.in -m comment --comment "eth2.in-10000 default-action reject" -j REJECT --reject-with icmp-port-unreachable
 	*/
 	sets := make(map[string]*ruleSetInfo)
 
@@ -81,14 +81,20 @@ func getRuleFromIpTableRule(r *utils.IpTableRule) ruleInfo {
 	rule.Action = strings.ToLower(r.GetAction())
 	if r.GetDstIpset() != "" {
 		rule.DestIp = r.GetDstIpset()
-	} else {
+	} else if r.GetDstIp() != "" {
 		rule.DestIp = getRuleIpInfoFromIpTableRule(r.GetDstIp())
+	} else if r.GetDstIpRange() != "" {
+		rule.DestIp = getRuleIpInfoFromIpTableRule(r.GetDstIpRange())
 	}
+
 	if r.GetSrcIpset() != "" {
 		rule.SourceIp = r.GetSrcIpset()
-	} else {
+	} else if r.GetSrcIp() != "" {
 		rule.SourceIp = getRuleIpInfoFromIpTableRule(r.GetSrcIp())
+	} else if r.GetSrcIpRange() != "" {
+		rule.SourceIp = getRuleIpInfoFromIpTableRule(r.GetSrcIpRange())
 	}
+
 	rule.Protocol = strings.ToUpper(r.GetProto())
 	rule.SourcePort = r.GetSrcPort()
 	rule.DestPort = r.GetDstPort()
@@ -134,8 +140,10 @@ func getIpTableRuleFromRule(ruleSetName string, r ruleInfo) *utils.IpTableRule {
 	if r.SourceIp != "" {
 		if strings.ContainsAny(r.SourceIp, IP_SPLIT) {
 			rule.SetSrcIpset(r.makeGroupName(ruleSetName, FIREWALL_RULE_SOURCE_GROUP_SUFFIX))
-		} else if strings.ContainsAny(r.SourceIp, "/-") {
+		} else if strings.Contains(r.SourceIp, "/") {
 			rule.SetSrcIp(r.SourceIp)
+		} else if strings.Contains(r.SourceIp, "-") {
+			rule.SetSrcIpRange(r.SourceIp)
 		} else {
 			rule.SetSrcIp(r.SourceIp + "/32")
 		}
@@ -143,8 +151,10 @@ func getIpTableRuleFromRule(ruleSetName string, r ruleInfo) *utils.IpTableRule {
 	if r.DestIp != "" {
 		if strings.ContainsAny(r.DestIp, IP_SPLIT) {
 			rule.SetDstIpset(r.makeGroupName(ruleSetName, FIREWALL_RULE_DEST_GROUP_SUFFIX))
-		} else if strings.ContainsAny(r.DestIp, "/-") {
+		} else if strings.Contains(r.DestIp, "/") {
 			rule.SetDstIp(r.DestIp)
+		} else if strings.Contains(r.DestIp, "-") {
+			rule.SetDstIpRange(r.DestIp)
 		} else {
 			rule.SetDstIp(r.DestIp + "/32")
 		}
