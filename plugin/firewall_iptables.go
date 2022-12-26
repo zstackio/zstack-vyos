@@ -302,8 +302,6 @@ func createRuleByIptables(nicName, ruleSetName string, ref ethRuleSetRef) error 
 		}
 	}
 
-	// if ruleInfo state is disable, not create iptables rule
-	ref.RuleSetInfo.Rules = deleteDisableRuleInfo(ref.RuleSetInfo.Rules)
 	for _, r := range ref.RuleSetInfo.Rules {
 		srcSetName := r.makeGroupName(ruleSetName, FIREWALL_RULE_SOURCE_GROUP_SUFFIX)
 		if r.SourceIp != "" && strings.ContainsAny(r.SourceIp, IP_SPLIT) {
@@ -340,7 +338,9 @@ func createRuleByIptables(nicName, ruleSetName string, ref ethRuleSetRef) error 
 			rule1.SetAction(utils.IPTABLES_ACTION_LOG)
 			rules = append(rules, &rule1)
 		}
-		rules = append(rules, rule)
+		if r.State == RULEINFO_ENABLE {
+			rules = append(rules, rule)
+		}
 	}
 
 	removeIptablesRulesByFirewallRuleNumber(table, oldRules, true)
