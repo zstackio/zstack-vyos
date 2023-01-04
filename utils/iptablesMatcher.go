@@ -592,7 +592,7 @@ func (r *IpTableRule) parseIpTablesMatcher(line string, chains []*IpTableChain) 
 			notMatch = false
 
 			break
-		case "--src-range": // --srcIp-range 172.16.90.1-172.16.90.10
+		case "--src-range": // --src-range 172.16.90.1-172.16.90.10
 			i++
 			if notMatch {
 				r.srcIpRange = "! " + items[i]

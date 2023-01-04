@@ -292,7 +292,7 @@ func checkSnatRuleSetByIptables(s snatInfo) {
 
 	rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
 	rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
-	rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s", s.PrivateNicIp)).
+	rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s-%s", s.PrivateGatewayIp, s.PrivateGatewayIp)).
 		SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
 	res = table.Check(rule)
 	Expect(res).To(BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))

@@ -125,7 +125,7 @@ func checkSnatRuleSetIptables(cmd *setSnatCmd) {
 
 	rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
 	rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
-	rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s", s.PrivateNicIp)).
+	rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s-%s", s.PrivateGatewayIp, s.PrivateGatewayIp)).
 		SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
 	res = table.Check(rule)
 	Expect(res).To(BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
@@ -148,7 +148,7 @@ func checkSnatRuleDelIptables(cmd *removeSnatCmd) {
 
 		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
 		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
-		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s", s.PrivateNicIp)).
+		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s-%s", s.PrivateGatewayIp, s.PrivateGatewayIp)).
 			SetOutNic(priNic).SetSnatTargetIp(s.PublicIp)
 		res = table.Check(rule)
 		Expect(res).To(BeFalse(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
@@ -177,7 +177,7 @@ func checkSyncSnatByIptables(Snats []snatInfo, state bool) {
 
 		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
 		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
-		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s", s.PrivateNicIp)).
+		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s-%s", s.PrivateGatewayIp, s.PrivateGatewayIp)).
 			SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
 		res = table.Check(rule)
 		if s.State == true {
