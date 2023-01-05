@@ -3,14 +3,15 @@ package plugin
 import (
 	"bytes"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
 	"html/template"
 	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/zstackio/zstack-vyos/server"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (
@@ -571,12 +572,11 @@ func startDhcpServer(dhcp dhcpServer) {
 	}
 	err = b.Run()
 
-	tree := server.NewParserFromShowConfiguration().Tree
-
 	if utils.IsSkipVyosIptables() {
 		err = setDhcpFirewallRules(nicname)
 		utils.PanicOnError(err)
 	} else {
+		tree := server.NewParserFromShowConfiguration().Tree
 		des := makeDhcpFirewallRuleDescription(nicname)
 		if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
 			tree.SetFirewallOnInterface(nicname, "local",
@@ -598,8 +598,8 @@ func startDhcpServer(dhcp dhcpServer) {
 		}
 
 		tree.AttachFirewallToInterface(nicname, "local")
+		tree.Apply(false)
 	}
-	tree.Apply(false)
 
 	delete(DhcpServerEntries, dhcp.NicMac)
 	DhcpServerEntries[dhcp.NicMac] = &dhcpStruct
@@ -659,7 +659,7 @@ missingok
 	utils.SudoMoveFile(dhcp_log_file.Name(), "/etc/rsyslog.d/dhcp.conf")
 	utils.SudoMoveFile(dhcp_log_rotatoe_file.Name(), "/etc/logrotate.d/dhcp")
 	utils.SudoMoveFile(zvr_log_rotatoe_file.Name(), "/etc/logrotate.d/zvr")
-    utils.SudoMoveFile(zvr_start_up_log_rotatoe_file.Name(), "/etc/logrotate.d/zvrstartup")
+	utils.SudoMoveFile(zvr_start_up_log_rotatoe_file.Name(), "/etc/logrotate.d/zvrstartup")
 }
 
 func init() {
