@@ -39,9 +39,11 @@ const (
 type IpTableMatcher struct {
 	chainName string
 
-	proto            string
-	icmpType         string
-	srcIp, dstIp     string
+	proto                  string
+	icmpType               string
+	srcIp, dstIp           string
+	srcIpRange, dstIpRange string
+
 	srcPort, dstPort string
 	states           []string
 	comment          string
@@ -126,6 +128,16 @@ func (r *IpTableRule) SetDstIp(dstIp string) *IpTableRule {
 	return r
 }
 
+func (r *IpTableRule) SetSrcIpRange(srcIpRange string) *IpTableRule {
+	r.srcIpRange = srcIpRange
+	return r
+}
+
+func (r *IpTableRule) SetDstIpRange(dstIpRange string) *IpTableRule {
+	r.dstIpRange = dstIpRange
+	return r
+}
+
 func (r *IpTableRule) SetSrcPort(srcPort string) *IpTableRule {
 	r.srcPort = srcPort
 	return r
@@ -201,6 +213,14 @@ func (r *IpTableRule) GetDstIp() string {
 	return r.dstIp
 }
 
+func (r *IpTableRule) GetSrcIpRange() string {
+	return r.srcIpRange
+}
+
+func (r *IpTableRule) GetDstIpRange() string {
+	return r.dstIpRange
+}
+
 func (r *IpTableRule) GetSrcPort() string {
 	return r.srcPort
 }
@@ -264,6 +284,14 @@ func (r *IpTableRule) isMatcherEqual(o *IpTableRule) error {
 
 	if r.dstIp != o.dstIp {
 		return fmt.Errorf("not match, old dst Ip: %s, new dst Ip: %s", r.dstIp, o.dstIp)
+	}
+
+	if r.srcIpRange != o.srcIpRange {
+		return fmt.Errorf("not match, old src ip range: %s, new src ip range: %s", r.srcIpRange, o.srcIpRange)
+	}
+
+	if r.dstIpRange != o.dstIpRange {
+		return fmt.Errorf("not match, old dst ip range: %s, new dst ip range: %s", r.dstIpRange, o.dstIpRange)
 	}
 
 	if r.srcPort != o.srcPort {
@@ -358,70 +386,36 @@ func (r *IpTableRule) matcherString() string {
 	if r.srcIp != "" {
 		items := strings.Fields(r.srcIp)
 		if items[0] == "!" {
-			if strings.ContainsAny(r.srcIp, "-") {
-				if r.proto != "" {
-					items := strings.Fields(r.proto)
-					if items[0] == "!" {
-						rules = append(rules, "! -p "+items[1])
-					} else {
-						rules = append(rules, "-p "+r.proto)
-					}
-					protoAdded = true
-				}
-				rules = append(rules, "-m iprange ! --src-range "+items[1])
-			} else {
-				rules = append(rules, "! -s "+items[1])
-			}
+			rules = append(rules, "! -s "+items[1])
 		} else {
-			if strings.ContainsAny(r.srcIp, "-") {
-				if r.proto != "" {
-					items := strings.Fields(r.proto)
-					if items[0] == "!" {
-						rules = append(rules, "! -p "+items[1])
-					} else {
-						rules = append(rules, "-p "+r.proto)
-					}
-					protoAdded = true
-				}
-				rules = append(rules, "-m iprange --src-range "+items[0])
-			} else {
-				rules = append(rules, "-s "+items[0])
-			}
+			rules = append(rules, "-s "+items[0])
+		}
+	}
+
+	if r.srcIpRange != "" {
+		items := strings.Fields(r.srcIpRange)
+		if items[0] == "!" {
+			rules = append(rules, "-m iprange ! --src-range "+items[1])
+		} else {
+			rules = append(rules, "-m iprange --src-range "+items[0])
 		}
 	}
 
 	if r.dstIp != "" {
 		items := strings.Fields(r.dstIp)
 		if items[0] == "!" {
-			if strings.ContainsAny(r.dstIp, "-") {
-				if r.proto != "" && !protoAdded {
-					items := strings.Fields(r.proto)
-					if items[0] == "!" {
-						rules = append(rules, "! -p "+items[1])
-					} else {
-						rules = append(rules, "-p "+r.proto)
-					}
-					protoAdded = true
-				}
-				rules = append(rules, "-m iprange ! --dst-range "+items[1])
-			} else {
-				rules = append(rules, "! -d "+items[1])
-			}
+			rules = append(rules, "! -d "+items[1])
 		} else {
-			if strings.ContainsAny(r.dstIp, "-") {
-				if r.proto != "" && !protoAdded {
-					items := strings.Fields(r.proto)
-					if items[0] == "!" {
-						rules = append(rules, "! -p "+items[1])
-					} else {
-						rules = append(rules, "-p "+r.proto)
-					}
-					protoAdded = true
-				}
-				rules = append(rules, "-m iprange --dst-range "+items[0])
-			} else {
-				rules = append(rules, "-d "+items[0])
-			}
+			rules = append(rules, "-d "+items[0])
+		}
+	}
+
+	if r.dstIpRange != "" {
+		items := strings.Fields(r.dstIpRange)
+		if items[0] == "!" {
+			rules = append(rules, "-m iprange ! --dst-range "+items[1])
+		} else {
+			rules = append(rules, "-m iprange --dst-range "+items[0])
 		}
 	}
 
@@ -577,7 +571,7 @@ func (r *IpTableRule) parseIpTablesMatcher(line string, chains []*IpTableChain) 
 			notMatch = true
 			break
 
-		case "-d", "--dst-range": //-d 172.20.11.156/32; --dst-range 172.16.90.1-172.16.90.10
+		case "-d": //-d 172.20.11.156/32;
 			i++
 			if notMatch {
 				r.dstIp = "! " + items[i]
@@ -588,12 +582,32 @@ func (r *IpTableRule) parseIpTablesMatcher(line string, chains []*IpTableChain) 
 
 			break
 
-		case "-s", "--src-range": // -s 10.86.0.221/32; --srcIp-range 172.16.90.1-172.16.90.10
+		case "-s": // -s 10.86.0.221/32;
 			i++
 			if notMatch {
 				r.srcIp = "! " + items[i]
 			} else {
 				r.srcIp = items[i]
+			}
+			notMatch = false
+
+			break
+		case "--src-range": // --src-range 172.16.90.1-172.16.90.10
+			i++
+			if notMatch {
+				r.srcIpRange = "! " + items[i]
+			} else {
+				r.srcIpRange = items[i]
+			}
+			notMatch = false
+
+			break
+		case "--dst-range": //--dst-range 172.16.90.1-172.16.90.10
+			i++
+			if notMatch {
+				r.dstIpRange = "! " + items[i]
+			} else {
+				r.dstIpRange = items[i]
 			}
 			notMatch = false
 
