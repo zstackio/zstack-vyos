@@ -77,7 +77,6 @@ func setDnsHandler(ctx *server.CommandContext) interface{} {
 }
 
 func setDns(cmd *setDnsCmd) interface{} {
-	tree := server.NewParserFromShowConfiguration().Tree
 	dnsByMac := make(map[string][]dnsInfo)
 	for _, info := range cmd.Dns {
 		dns := dnsByMac[info.NicMac]
@@ -105,6 +104,7 @@ func setDns(cmd *setDnsCmd) interface{} {
 			err := setDnsFirewallRules(eth)
 			utils.PanicOnError(err)
 		} else {
+			tree := server.NewParserFromShowConfiguration().Tree
 			des := makeDnsFirewallRuleDescription(eth)
 			if r := tree.FindFirewallRuleByDescription(eth, "local", des); r == nil {
 				tree.SetFirewallOnInterface(eth, "local",
@@ -116,10 +116,10 @@ func setDns(cmd *setDnsCmd) interface{} {
 
 				tree.AttachFirewallToInterface(eth, "local")
 			}
+
+			tree.Apply(false)
 		}
 	}
-
-	tree.Apply(false)
 
 	dnsConf := NewDnsmasq(nicNames, dnsServers)
 	dnsConf.RestartDnsmasq()

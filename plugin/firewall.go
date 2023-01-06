@@ -287,12 +287,12 @@ func detachRuleSetHandler(ctx *server.CommandContext) interface{} {
 func detachRuleSet(cmd *detachRuleSetCmd) interface{} {
 
 	ref := cmd.Ref
-	tree := server.NewParserFromShowConfiguration().Tree
 	nic, err := utils.GetNicNameByMac(ref.Mac)
 	utils.PanicOnError(err)
 	if utils.IsSkipVyosIptables() {
 		detachRuleSetOnInterfaceByIptables(nic, ref.Forward)
 	} else {
+		tree := server.NewParserFromShowConfiguration().Tree
 		tree.Deletef("interfaces ethernet %s firewall %s", nic, ref.Forward)
 		tree.Apply(false)
 	}
@@ -309,7 +309,6 @@ func attachRuleSetHandler(ctx *server.CommandContext) interface{} {
 func attachRuleSet(cmd *attachRuleSetCmd) interface{} {
 
 	ref := cmd.Ref
-	tree := server.NewParserFromShowConfiguration().Tree
 	nic, err := utils.GetNicNameByMac(ref.Mac)
 	utils.PanicOnError(err)
 	ruleSetName := buildRuleSetName(nic, ref.Forward)
@@ -317,6 +316,7 @@ func attachRuleSet(cmd *attachRuleSetCmd) interface{} {
 		err := attachRuleSetOnInterfaceByIptables(ref)
 		utils.PanicOnError(err)
 	} else {
+		tree := server.NewParserFromShowConfiguration().Tree
 		tree.AttachRuleSetOnInterface(nic, ref.Forward, ruleSetName)
 		tree.Apply(false)
 	}
@@ -331,11 +331,10 @@ func deleteRuleSetHandler(ctx *server.CommandContext) interface{} {
 }
 
 func deleteRuleSet(cmd *deleteRuleSetCmd) interface{} {
-
-	tree := server.NewParserFromShowConfiguration().Tree
 	if utils.IsSkipVyosIptables() {
 		deleteRuleSetByIptables(cmd.RuleSetName)
 	} else {
+		tree := server.NewParserFromShowConfiguration().Tree
 		tree.Deletef("firewall name %s", cmd.RuleSetName)
 		tree.Apply(false)
 	}
@@ -350,12 +349,11 @@ func createRuleSetHandler(ctx *server.CommandContext) interface{} {
 }
 
 func createRuleSet(cmd *createRuleSetCmd) interface{} {
-
-	tree := server.NewParserFromShowConfiguration().Tree
 	ruleSet := cmd.RuleSet
 	if utils.IsSkipVyosIptables() {
 		createRuleSetByIptables(ruleSet)
 	} else {
+		tree := server.NewParserFromShowConfiguration().Tree
 		tree.CreateFirewallRuleSet(ruleSet.Name, ruleSet.toRules())
 		tree.Apply(false)
 	}
@@ -403,8 +401,6 @@ func applyRuleSetChangesHandler(ctx *server.CommandContext) interface{} {
 }
 
 func applyRuleSetChanges(cmd *applyRuleSetChangesCmd) interface{} {
-
-	tree := server.NewParserFromShowConfiguration().Tree
 	refs := cmd.Refs
 	if utils.IsSkipVyosIptables() {
 		err := applyRuleSetChangesByIpTables(cmd)
@@ -413,6 +409,7 @@ func applyRuleSetChanges(cmd *applyRuleSetChangesCmd) interface{} {
 		return nil
 	}
 	for _, ref := range refs {
+		tree := server.NewParserFromShowConfiguration().Tree
 		nic, err := utils.GetNicNameByMac(ref.Mac)
 		utils.PanicOnError(err)
 		ruleSetName := buildRuleSetName(nic, ref.Forward)
@@ -438,9 +435,10 @@ func applyRuleSetChanges(cmd *applyRuleSetChangesCmd) interface{} {
 
 			tree.CreateUserFirewallRuleWithNumber(ruleSetName, rule.RuleNumber, rule.toRules(ruleSetName))
 		}
+
+		tree.Apply(false)
 	}
 
-	tree.Apply(false)
 	return nil
 }
 
@@ -643,8 +641,6 @@ func updateRuleSetHandler(ctx *server.CommandContext) interface{} {
 }
 
 func updateRuleSet(cmd *updateRuleSetCmd) interface{} {
-
-	tree := server.NewParserFromShowConfiguration().Tree
 	nic, err := utils.GetNicNameByMac(cmd.Mac)
 	utils.PanicOnError(err)
 	ruleSetName := buildRuleSetName(nic, cmd.Forward)
@@ -652,6 +648,7 @@ func updateRuleSet(cmd *updateRuleSetCmd) interface{} {
 		err := updateRuleSetByIptables(ruleSetName, cmd.ActionType)
 		utils.PanicOnError(err)
 	} else {
+		tree := server.NewParserFromShowConfiguration().Tree
 		tree.SetFirewalRuleSetAction(ruleSetName, cmd.ActionType)
 		tree.AttachRuleSetOnInterface(nic, cmd.Forward, ruleSetName)
 		tree.Apply(false)
