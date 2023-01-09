@@ -9,8 +9,10 @@ from zssdk import *
 
 parser = argparse.ArgumentParser(description='zstack-vyos ut')
 parser.add_argument('configFile')
+parser.add_argument('--case')
 args = parser.parse_args()
 configFile = args.configFile
+caseName=args.case
 
 CREATE_NEW_VYOS = True
 VYOS_VM_UUID = "0bb2c6867c434f22a90dc42868db2397"
@@ -136,27 +138,29 @@ class TestZStackVyos:
                 exit(1)
 
     def __release(self):
-        for nicUuid in self.envIpMaps[self.testEnv.mgtL3NetworkUuid]:
-            deleteNic = DeleteVmNicAction()
-            deleteNic.uuid = nicUuid
-            try:
-                deleteNic.accessKeyId = self.testEnv.accessKeyId
-                deleteNic.accessKeySecret = self.testEnv.accessKeySecret
-                deleteNic.call()
-            except Exception as e1:
-                print("delete vmnic [%s] failed, because %s",
-                      self.envIpMaps[self.testEnv.mgtL3NetworkUuid][nicUuid], e1)
+        if self.testEnv.mgtL3NetworkUuid in self.envIpMaps:
+            for nicUuid in self.envIpMaps[self.testEnv.mgtL3NetworkUuid]:
+                deleteNic = DeleteVmNicAction()
+                deleteNic.uuid = nicUuid
+                try:
+                    deleteNic.accessKeyId = self.testEnv.accessKeyId
+                    deleteNic.accessKeySecret = self.testEnv.accessKeySecret
+                    deleteNic.call()
+                except Exception as e1:
+                    print("delete vmnic [%s] failed, because %s",
+                        self.envIpMaps[self.testEnv.mgtL3NetworkUuid][nicUuid], e1)
 
-        for nicUuid in self.envIpMaps[self.testEnv.pubL3Uuid_1]:
-            deleteNic = DeleteVmNicAction()
-            deleteNic.uuid = nicUuid
-            try:
-                deleteNic.accessKeyId = self.testEnv.accessKeyId
-                deleteNic.accessKeySecret = self.testEnv.accessKeySecret
-                deleteNic.call()
-            except Exception as e1:
-                print("delete vmnic [%s] failed, because %s",
-                      self.envIpMaps[self.testEnv.pubL3Uuid_1][nicUuid], e1)
+        if self.testEnv.pubL3Uuid_1 in self.envIpMaps:
+            for nicUuid in self.envIpMaps[self.testEnv.pubL3Uuid_1]:
+                deleteNic = DeleteVmNicAction()
+                deleteNic.uuid = nicUuid
+                try:
+                    deleteNic.accessKeyId = self.testEnv.accessKeyId
+                    deleteNic.accessKeySecret = self.testEnv.accessKeySecret
+                    deleteNic.call()
+                except Exception as e1:
+                    print("delete vmnic [%s] failed, because %s",
+                        self.envIpMaps[self.testEnv.pubL3Uuid_1][nicUuid], e1)
 
     def createTestVyosVm(self, imageuuid, version):
         cVyos = CreateVmInstanceAction()
@@ -273,15 +277,15 @@ class TestZStackVyos:
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         # try to wait in 300 seconds
         count = 0
-        while count < 30 :
+        while count < 60 :
             try:
                 ssh.connect(vyosVmIp, 22, username=VYOS_USER, password=VYOS_PASSWORD, timeout=300)
                 break
             except Exception as e:
                 print("ssh to %s failed %s for %d times" % (vyosVmIp, e, count + 1))
                 count = count + 1
-                time.sleep(10)
-        if count == 30:
+                time.sleep(5)
+        if count == 60:
             print("ssh to %s failed" % vyosVmIp)
             exit(1)
 
@@ -308,7 +312,11 @@ class TestZStackVyos:
 
         test_log("##########runing test case")
         exec_command(ssh, "mkdir -p /home/vyos/vyos_ut/testLog/; chmod 777 /home/vyos/vyos_ut/testLog/")
-        ret = exec_command(ssh, "sudo bash -x /home/vyos/vyos_ut/zstack-vyos/test/run_test.sh")
+        if caseName == None:
+            ret = exec_command(ssh, "sudo bash -x /home/vyos/vyos_ut/zstack-vyos/test/run_test.sh")
+        else:
+            ret = exec_command(ssh, "sudo focus=%s bash -x /home/vyos/vyos_ut/zstack-vyos/test/run_test.sh" % caseName)
+
 
         folder = os.getcwd()
         if self.testEnv.testLogFolder != "":
