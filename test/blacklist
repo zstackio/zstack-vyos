@@ -1,0 +1,51 @@
+[plugin]
+    zsn_test
+    vip_linux_test
+    ospf_linux_test
+    configure_nic_linux_test
+    route_linux_test
+    policy_route_test
+    dhcp_iptables_test
+    dhcp_test
+    dnat_iptables_test
+    dns_iptables_test
+    eip_iptables_test
+    eip_test
+    firewall_ipset_test
+    snat_test
+    configure_nic_test
+    lb_iptables_test
+    pimd_iptables_test
+    configure_nic_perf_test
+    vyosha_iptables_test
+    vyosha_test
+    eip_perf_test
+    misc_test
+    firewall_iptables_test
+    ipsec_test
+    ipsec_iptables_test
+    lb_perf_test
+    ospf_iptables_test
+    route_test
+    vip_test
+    dnat_perf_test
+    dns_test
+    lb_test
+    snat_iptables_test
+    configure_nic_iptables_test
+[utils]
+    bash_test
+    iproute_test
+    ipset_test
+    iptables_test
+    radvd_test
+    vyosIptables_test
+    cronjob_test
+    ip_addr_test
+    ip_link_test
+[server]
+    server_test
+    sys_test
+    vyos_parser_test
+[zvrboot]
+    zvrboot_test

@@ -97,3 +97,25 @@ test: clean package
 	source newenv/bin/activate;\
 	pip install -r test/requirements.txt;\
 	python3 test/ut.py test/$(TestEnv)
+
+.PHONY: test
+
+unittest:
+	python=$$(which python3);\
+	if [ $$? == 1 ];then\
+		echo "can not find python3, please install python3";\
+		exit 1;\
+	fi;\
+	if [ "$$focus" == "" ];then\
+		echo "1 env variable is needed: focus='case name'";\
+		exit 1;\
+	fi;\
+	if [ "$(shell find . -type f | grep ${focus} | grep -v ${fucus}.log | wc -l)" != 1 ];then\
+		echo "Error: no/multiple cases were found through focus:${focus}";\
+		exit 1;\
+	fi;\
+	pip install virtualenv;\
+	virtualenv -p $$python newenv;\
+	source newenv/bin/activate;\
+	pip install -r test/requirements.txt;\
+	python3 test/ut.py test/$(TestEnv) --case=$$focus
