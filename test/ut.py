@@ -315,7 +315,7 @@ class TestZStackVyos:
         if caseName == None:
             ret = exec_command(ssh, "sudo bash -x /home/vyos/vyos_ut/zstack-vyos/test/run_test.sh")
         else:
-            ret = exec_command(ssh, "sudo focus=%s bash -x /home/vyos/vyos_ut/zstack-vyos/test/run_test.sh" % caseName)
+            ret = exec_command(ssh, "sudo focus=%s bash /home/vyos/vyos_ut/zstack-vyos/test/run_test.sh" % caseName)
 
 
         folder = os.getcwd()
