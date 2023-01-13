@@ -12,9 +12,12 @@ import (
 
 var _ = Describe("configure_nic_test", func() {
 	var cmd *configureNicCmd
+	var sinfo1, sinfo2 snatInfo
 
 	It("configure_nic_test preparing", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"configure_nic_test.log", false)
+		log.Debugf("############### prea env for configure_nic_test ###############")
+		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		cmd = &configureNicCmd{}
 	})
@@ -146,12 +149,20 @@ var _ = Describe("configure_nic_test", func() {
 		pubNic := utils.PubNicForUT
 		privNic0 := utils.PrivateNicsForUT[0]
 		privNic1 := utils.PrivateNicsForUT[1]
+		cmd.Nics = append(cmd.Nics, pubNic)
+		cmd.Nics = append(cmd.Nics, privNic0)
+		cmd.Nics = append(cmd.Nics, privNic1)
+		removeNic(cmd)
+		cmd = &configureNicCmd{}
 
 		pubNic.Ip6 = "2001::1"
+		pubNic.PrefixLength = 64
 		pubNic.AddressMode = "Stateless-DHCP"
 		privNic0.Ip6 = "2001::2"
+		privNic0.PrefixLength = 64
 		privNic0.AddressMode = "Stateful-DHCP"
 		privNic1.Ip6 = "2001::3"
+		privNic1.PrefixLength = 64
 		privNic1.AddressMode = "SLAAC"
 		cmd.Nics = append(cmd.Nics, pubNic)
 		cmd.Nics = append(cmd.Nics, privNic0)
@@ -170,14 +181,19 @@ var _ = Describe("configure_nic_test", func() {
 	})
 
 	It("configure_nic_test destroying", func() {
-		cmd := &configureNicCmd{}
-		cmd.Nics = append(cmd.Nics, utils.AdditionalPubNicsForUT[0])
-		cmd.Nics = append(cmd.Nics, utils.PubNicForUT)
-		cmd.Nics = append(cmd.Nics, utils.PrivateNicsForUT[0])
-		cmd.Nics = append(cmd.Nics, utils.PrivateNicsForUT[1])
-		removeNic(cmd)
+		utils.CleanTestEnvForUT()
 	})
 })
+
+func configureAllNicsForUT() {
+	nicCmd := &configureNicCmd{}
+	nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
+	nicCmd.Nics = append(nicCmd.Nics, utils.AdditionalPubNicsForUT[0])
+	nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
+	nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[1])
+	configureNic(nicCmd)
+	configureNicFirewall([]utils.NicInfo{utils.MgtNicForUT})
+}
 
 func checkNicFirewall(nic utils.NicInfo) {
 	tree := server.NewParserFromShowConfiguration().Tree

@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"fmt"
+
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	gomega "github.com/onsi/gomega"
@@ -12,15 +13,12 @@ import (
 var _ = Describe("eip_test", func() {
 	It("eip test preparing", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"eip_test.log", false)
+		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
+		configureAllNicsForUT()
 	})
 
 	It("test create eip", func() {
-		nicCmd := &configureNicCmd{}
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
-		configureNic(nicCmd)
-
 		ipInPubL3, _ := utils.GetFreePubL3Ip()
 		eip1 := eipInfo{VipIp: ipInPubL3, PublicMac: utils.PubNicForUT.Mac,
 			GuestIp: "192.168.1.200", PrivateMac: utils.PrivateNicsForUT[0].Mac,
@@ -90,16 +88,12 @@ var _ = Describe("eip_test", func() {
 		checkEipDelete(eip2)
 		checkEipGroupAddress(eip2, false)
 
-		removeNic(nicCmd)
 		utils.ReleasePubL3Ip(ipInPubL3)
 		utils.ReleasePubL3Ip(ipInPubL3_2)
 	})
 
 	It("destroying env", func() {
-		var nicCmd configureNicCmd
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
-		removeNic(&nicCmd)
+		utils.CleanTestEnvForUT()
 	})
 })
 

@@ -13,6 +13,7 @@ var _ = Describe("ipsec_iptables_test", func() {
 
 	It("[IPTABLES]IPSEC : prepare", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"ipsec_iptables_test.log", false)
+		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)
 		ipsecMap = make(map[string]ipsecInfo, IPSecInfoMaxSize)
@@ -22,11 +23,12 @@ var _ = Describe("ipsec_iptables_test", func() {
 		nicCmd := &configureNicCmd{}
 		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
 		configureNic(nicCmd)
-		createIPsecCmd1 := createIPsecCmd{}
+		IpsecInit()
+		createIPsecCmd1 := &createIPsecCmd{}
 		syncIPsecCmd1 := syncIPsecCmd{}
 		deleteIPsecCmd1 := deleteIPsecCmd{}
 
-		info := &ipsecInfo{}
+		info := ipsecInfo{}
 		info.Uuid = "b7d5e47f11124661bf59905dfafe99a2"
 		info.Vip = "172.24.3.157"
 		info.LocalCidrs = []string{"192.169.100.0/24"}
@@ -45,20 +47,20 @@ var _ = Describe("ipsec_iptables_test", func() {
 		info.ExcludeSnat = true
 
 		createIPsecCmd1.AutoRestartVpn = false
-		createIPsecCmd1.Infos = []ipsecInfo{*info}
+		createIPsecCmd1.Infos = []ipsecInfo{info}
 		syncIPsecCmd1.AutoRestartVpn = false
-		syncIPsecCmd1.Infos = []ipsecInfo{*info}
-		deleteIPsecCmd1.Infos = []ipsecInfo{*info}
+		syncIPsecCmd1.Infos = []ipsecInfo{info}
+		deleteIPsecCmd1.Infos = []ipsecInfo{info}
 
 		log.Debugf("#####test create ipsec#######")
-		createIPsecConnection(&createIPsecCmd1)
+		createIPsecConnection(createIPsecCmd1)
 		checkSyncIpSecRulesByIptables()
 
 		nicInfo := nicTypeInfo{Mac: utils.PubNicForUT.Mac, NicType: "public"}
 		gcmd := getConfigCmd{NicTypeInfos: []nicTypeInfo{nicInfo}}
 		rsp := getFirewallConfig(&gcmd)
 		grsp, _ := rsp.(getConfigRsp)
-		checkFirewallRuleOfIpSec(*info, nicInfo, grsp.Refs)
+		checkFirewallRuleOfIpSec(info, nicInfo, grsp.Refs)
 
 		log.Debugf("#####test sync ipsec#######")
 		syncIPsecConnection(&syncIPsecCmd1)
@@ -74,13 +76,7 @@ var _ = Describe("ipsec_iptables_test", func() {
 	//It("[IPTABLES]IPSEC : test update ipsec", func() {})  //not supported
 
 	It("[IPTABLES]IPSEC : ipsec test destroying", func() {
-		var nicCmd configureNicCmd
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		removeNic(&nicCmd)
-		for i, _ := range nicCmd.Nics {
-			checkNicFirewallDeleteByIpTables(nicCmd.Nics[i])
-		}
-		utils.SetSkipVyosIptablesForUT(false)
+		utils.CleanTestEnvForUT()
 	})
 })
 

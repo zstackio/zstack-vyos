@@ -13,14 +13,12 @@ var _ = Describe("vip_linux_test", func() {
 
 	It("[REPLACE_VYOS]: pre test env", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"vip_linux_test.log", false)
-		cleanUpNicConfig()
+		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetEnableVyosCmdForUT(false)
 		utils.SetSkipVyosIptablesForUT(true)
 
-		nicCmd := &configureNicCmd{}
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		configureNic(nicCmd)
+		configureAllNicsForUT()
 	})
 
 	It("[REPLACE_VYOS]: test set vip with no-ha", func() {
@@ -82,14 +80,10 @@ var _ = Describe("vip_linux_test", func() {
 
 		removeVipByLinux(rcmd)
 		checkVipDeleteByLinux(vips, utils.PubNicForUT)
-
-		removeNic(nicCmd)
 	})
 
 	It("[REPLACE_VYOS]: test destory env", func() {
-		cleanUpNicConfig()
-		utils.SetEnableVyosCmdForUT(true)
-		utils.SetSkipVyosIptablesForUT(false)
+		utils.CleanTestEnvForUT()
 	})
 })
 

@@ -1,5 +1,8 @@
 #!/bin/bash
 
+IPTABLES_RULES_FOR_UT="/home/vyos/vyos_ut/zstack-vyos/iptables.rules"
+iptables-save > ${IPTABLES_RULES_FOR_UT}
+
 cd /home/vyos/vyos_ut/zstack-vyos
 export PATH=$PATH:/home/vyos/vyos_ut/go/bin
 export ACK_GINKGO_RC=true

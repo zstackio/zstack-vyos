@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"reflect"
 	"text/template"
@@ -14,15 +15,12 @@ import (
 )
 
 var _ = Describe("misc_test", func() {
-	var nicCmd *configureNicCmd
 
 	It("prepare env ...", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"misc_test.log", false)
+		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
-		nicCmd = &configureNicCmd{}
-		nicCmd.Nics = append(nicCmd.Nics, utils.MgtNicForUT)
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		configureNic(nicCmd)
+		configureAllNicsForUT()
 	})
 
 	It("test add callback route", func() {
@@ -57,11 +55,7 @@ var _ = Describe("misc_test", func() {
 	})
 
 	It("destroy env ...", func() {
-		utils.SetEnableVyosCmdForUT(true)
-		nicCmd = &configureNicCmd{}
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		removeNic(nicCmd)
-		deleteMgtNicFirewall(true)
+		utils.CleanTestEnvForUT()
 	})
 })
 
@@ -86,9 +80,9 @@ func checkCrondProcess() bool {
 func checkTaskScheduler() {
 	job1 := utils.NewCronjob().SetId(1).SetCommand(utils.Cronjob_file_ssh).SetMinute("*/1")
 	job2 := utils.NewCronjob().SetId(2).SetCommand(utils.Cronjob_file_zvrMonitor).SetMinute("*/1")
-	job3 := utils.NewCronjob().SetId(3).SetCommand(utils.Cronjob_file_fileMonitor).SetMinute("*/1")
+	job3 := utils.NewCronjob().SetId(3).SetCommand(fmt.Sprintf("flock -xn /tmp/file-monitor.lock -c %s", utils.Cronjob_file_fileMonitor)).SetMinute("*/1")
 	job4 := utils.NewCronjob().SetId(4).SetCommand(utils.Cronjob_file_rsyslog).SetMinute("*/1")
-	job5 := utils.NewCronjob().SetId(5).SetCommand("/usr/bin/top b -n 1 -H >> /var/log/top.log").SetMinute("*/1")
+	job5 := utils.NewCronjob().SetId(5).SetCommand("/usr/bin/top -b -n 1 -H >> /var/log/top.log").SetMinute("*/1")
 
 	c := utils.CronjobMap{
 		1: job1,

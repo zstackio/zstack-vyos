@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"fmt"
+
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
 
@@ -11,15 +12,18 @@ import (
 )
 
 var _ = Describe("vyosHa_test", func() {
-	var peerIp string
-	var vipIp string
-	var vipIp1 string
-	var vip macVipPair
-	var cmd *setVyosHaCmd
-	var nicCmd *configureNicCmd
+	var (
+		peerIp string
+		vipIp  string
+		vipIp1 string
+		vip    macVipPair
+		cmd    *setVyosHaCmd
+		nicCmd *configureNicCmd
+	)
 
 	It("vyosHa test preparing", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"vyosha_test.log", false)
+		utils.CleanTestEnvForUT()
 		peerIp, _ = utils.GetFreeMgtIp()
 		vipIp, _ = utils.GetFreeMgtIp()
 		vipIp1, _ = utils.GetFreeMgtIp()
@@ -52,10 +56,7 @@ var _ = Describe("vyosHa_test", func() {
 	})
 
 	It("vyosHa test destroying", func() {
-		utils.ReleaseMgtIp(peerIp)
-		utils.ReleaseMgtIp(vipIp)
-		utils.ReleaseMgtIp(vipIp1)
-		deleteMgtNicFirewall(false)
+		utils.CleanTestEnvForUT()
 	})
 })
 

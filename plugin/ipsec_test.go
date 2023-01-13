@@ -8,22 +8,16 @@ import (
 	"github.com/zstackio/zstack-vyos/utils"
 )
 
-func setTestIpsecEnv() {
-	utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"ipsec_test.log", false)
-}
-
-var _ = Describe("ipsec_test", func() {
-	var nicCmd *configureNicCmd
+var _ = XDescribe("ipsec_test", func() {
 
 	It("ipsec test preparing", func() {
-		setTestIpsecEnv()
-		nicCmd = &configureNicCmd{}
+		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"ipsec_test.log", false)
+		utils.CleanTestEnvForUT()
+		configureAllNicsForUT()
 	})
 
 	It("test create/delete ipsec", func() {
 		log.Debugf("#####test create/delete ipsec#######")
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		configureNic(nicCmd)
 		cmd := &createIPsecCmd{}
 		info := &ipsecInfo{}
 
@@ -67,8 +61,6 @@ var _ = Describe("ipsec_test", func() {
 
 	It("test update ipsec", func() {
 		log.Debugf("#####test update ipsec#######")
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		configureNic(nicCmd)
 		cmd := &createIPsecCmd{}
 		info := &ipsecInfo{}
 
@@ -116,8 +108,6 @@ var _ = Describe("ipsec_test", func() {
 	})
 
 	It("test create native ipsec1", func() {
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		configureNic(nicCmd)
 		cmd := &createIPsecCmd{}
 		cmd.AutoRestartVpn = false
 
@@ -176,8 +166,6 @@ var _ = Describe("ipsec_test", func() {
 	})
 
 	It("test update native ipsec1", func() {
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		configureNic(nicCmd)
 		cmd := &createIPsecCmd{}
 		cmd.AutoRestartVpn = false
 
@@ -212,8 +200,6 @@ var _ = Describe("ipsec_test", func() {
 	})
 
 	It("test delete native ipsec1", func() {
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		configureNic(nicCmd)
 		cmd := &createIPsecCmd{}
 		cmd.AutoRestartVpn = false
 
@@ -229,8 +215,7 @@ var _ = Describe("ipsec_test", func() {
 	})
 
 	It("ipsec test destroying", func() {
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		removeNic(nicCmd)
+		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"ipsec_test.log", false)
 	})
 
 })

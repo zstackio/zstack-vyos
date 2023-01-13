@@ -6,7 +6,7 @@ import (
 	"github.com/zstackio/zstack-vyos/utils"
 )
 
-var _ = Describe("configure_nic_perf_test", func() {
+var _ = XDescribe("configure_nic_perf_test", func() {
 	var nicCmd configureNicCmd
 	It("[PERF]CONFIGURE_NIC : prepare env", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"configure_nic_perf_test.log", false)

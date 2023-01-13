@@ -9,21 +9,18 @@ import (
 	"github.com/zstackio/zstack-vyos/utils"
 )
 
-func setTestDnsEnv() {
-	utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"dns_test.log", false)
-}
-
 var _ = Describe("dns_test", func() {
-	var nicCmd *configureNicCmd
 
 	It("dns test preparing", func() {
-		setTestDnsEnv()
-		nicCmd = &configureNicCmd{}
+		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"dns_test.log", false)
+		utils.CleanTestEnvForUT()
+		configureAllNicsForUT()
+		if utils.IsSkipVyosIptables() {
+			By("is skip iptables")
+		}
 	})
 
 	It("test set dns", func() {
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		configureNic(nicCmd)
 		cmd := &setDnsCmd{}
 		dns := &dnsInfo{}
 
@@ -40,8 +37,6 @@ var _ = Describe("dns_test", func() {
 	})
 
 	It("test remove dns", func() {
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		configureNic(nicCmd)
 		cmd := &setDnsCmd{}
 		dns := &dnsInfo{}
 
@@ -55,16 +50,12 @@ var _ = Describe("dns_test", func() {
 		removeCmd.Dns = []dnsInfo{*dns}
 		removeDns(removeCmd)
 
-		gomega.Expect(checkDnsProcess()).NotTo(gomega.BeTrue(), "dnsmasq start failed")
+		gomega.Expect(checkDnsProcess()).To(gomega.BeTrue(), "dnsmasq should be running")
 
 		checkFirewall(utils.PubNicForUT, false)
 	})
 
 	It("test add vpcdns and check config", func() {
-		removeNic(nicCmd)
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
-		configureNic(nicCmd)
 		vpcCmd1 := &setVpcDnsCmd{
 			Dns:    []string{"223.5.5.5"},
 			NicMac: []string{utils.PubNicForUT.Mac, utils.PrivateNicsForUT[0].Mac},
@@ -124,7 +115,7 @@ var _ = Describe("dns_test", func() {
 	})
 
 	It("dns test destroying", func() {
-		removeNic(nicCmd)
+		utils.CleanTestEnvForUT()
 	})
 })
 

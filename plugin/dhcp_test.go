@@ -2,20 +2,18 @@ package plugin
 
 import (
 	"fmt"
+	"io/ioutil"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	"github.com/zstackio/zstack-vyos/utils"
-	"io/ioutil"
 )
-
-func setTestDhcpEnv() {
-	utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"dhcp_test.log", false)
-}
 
 var _ = Describe("dhcp_test", func() {
 
 	It("dhcp test preparing", func() {
-		setTestDhcpEnv()
+		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"dhcp_test.log", false)
+		utils.CleanTestEnvForUT()
 	})
 
 	It("test add dhcp", func() {
@@ -79,9 +77,7 @@ var _ = Describe("dhcp_test", func() {
 	})
 
 	It("dhcp test destroying", func() {
-		nicCmd := &configureNicCmd{}
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		removeNic(nicCmd)
+		utils.CleanTestEnvForUT()
 	})
 })
 

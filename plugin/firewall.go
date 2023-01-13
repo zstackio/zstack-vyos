@@ -457,7 +457,7 @@ func createRule(cmd *createRuleCmd) interface{} {
 	utils.PanicOnError(err)
 	ruleSetName := buildRuleSetName(nic, ref.Forward)
 	if utils.IsSkipVyosIptables() {
-		err :=  createRuleByIptables(nic, ruleSetName, ref)
+		err := createRuleByIptables(nic, ruleSetName, ref)
 		utils.PanicOnError(err)
 
 		return nil

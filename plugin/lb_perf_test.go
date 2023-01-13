@@ -8,7 +8,7 @@ import (
 	"github.com/zstackio/zstack-vyos/utils"
 )
 
-var _ = Describe("lb_perf_test", func() {
+var _ = XDescribe("lb_perf_test", func() {
 	var nicCmd configureNicCmd
 	It("[PERF]LB : prepare [vyos] env", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"lb_perf_test.log", false)

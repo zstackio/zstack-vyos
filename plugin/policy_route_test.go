@@ -2,10 +2,11 @@ package plugin
 
 import (
 	"fmt"
+	"net"
+
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
-	"net"
 
 	"github.com/zstackio/zstack-vyos/utils"
 )
@@ -15,6 +16,7 @@ var _ = Describe("policy_route_test", func() {
 
 	It("policy_route : test preparing", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"policy_route_test.log", false)
+		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 	})
 
@@ -114,12 +116,7 @@ var _ = Describe("policy_route_test", func() {
 	})
 
 	It("policy_route : destroying", func() {
-		nicCmd = &configureNicCmd{}
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		nicCmd.Nics = append(nicCmd.Nics, utils.AdditionalPubNicsForUT[0])
-		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
-		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[1])
-		removeNic(nicCmd)
+		utils.CleanTestEnvForUT()
 	})
 })
 

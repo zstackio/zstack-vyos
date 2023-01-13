@@ -12,8 +12,9 @@ import (
 )
 
 var _ = Describe("vip_test", func() {
-	BeforeEach(func() {
+	It("vip_test prepare env", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"vip_test.log", false)
+		utils.CleanTestEnvForUT()
 	})
 
 	It("test set vip for no ha", func() {
@@ -210,6 +211,10 @@ var _ = Describe("vip_test", func() {
 		utils.SetHaStatus(oldHaStatus)
 		utils.ReleaseMgtIp(ipInMgt1)
 		utils.ReleaseMgtIp(ipInMgt2)
+	})
+
+	It("vip_test clean env", func() {
+		utils.CleanTestEnvForUT()
 	})
 })
 

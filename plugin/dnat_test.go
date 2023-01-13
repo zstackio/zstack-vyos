@@ -2,25 +2,29 @@ package plugin
 
 import (
 	"fmt"
+	"strings"
+
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
-	"strings"
 )
 
 var _ = Describe("dnat_test", func() {
-	var nicCmd *configureNicCmd
-	var ipInPubL3 string
-	var ipInPubL32 string
-	var rule1 dnatInfo
-	var rule2 dnatInfo
-	var rule3 dnatInfo
-	var setCmd *setDnatCmd
+	var (
+		nicCmd     *configureNicCmd
+		ipInPubL3  string
+		ipInPubL32 string
+		rule1      dnatInfo
+		rule2      dnatInfo
+		rule3      dnatInfo
+		setCmd     *setDnatCmd
+	)
 
 	It("config nic for dnat test", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"dnat_test.log", false)
+		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		nicCmd = &configureNicCmd{}
 		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
@@ -106,6 +110,10 @@ var _ = Describe("dnat_test", func() {
 
 		utils.ReleasePubL3Ip(ipInPubL3)
 		utils.ReleasePubL3Ip(ipInPubL32)
+	})
+
+	It("dnat_test clean test env", func() {
+		utils.CleanTestEnvForUT()
 	})
 })
 

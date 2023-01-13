@@ -2,37 +2,36 @@ package plugin
 
 import (
 	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
 )
 
-var sinfo1 snatInfo
-var sinfo2 snatInfo
-
-func init() {
-	sinfo1 = snatInfo{
-		PublicNicMac:  utils.PubNicForUT.Mac,
-		PublicIp:      utils.PubNicForUT.Ip,
-		PrivateNicMac: utils.PrivateNicsForUT[0].Mac,
-		PrivateNicIp:  utils.PrivateNicsForUT[0].Ip,
-		SnatNetmask:   utils.PrivateNicsForUT[0].Netmask,
-	}
-
-	sinfo2 = snatInfo{
-		PublicNicMac:  utils.PubNicForUT.Mac,
-		PublicIp:      utils.PubNicForUT.Ip,
-		PrivateNicMac: utils.PrivateNicsForUT[1].Mac,
-		PrivateNicIp:  utils.PrivateNicsForUT[1].Ip,
-		SnatNetmask:   utils.PrivateNicsForUT[1].Netmask,
-	}
-}
-
 var _ = Describe("snat_test", func() {
-	BeforeEach(func() {
+	var sinfo1, sinfo2 snatInfo
+
+	It("test snat pre env", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"snat_test.log", false)
+		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
+		utils.SetSkipVyosIptablesForUT(false)
+		sinfo1 = snatInfo{
+			PublicNicMac:  utils.PubNicForUT.Mac,
+			PublicIp:      utils.PubNicForUT.Ip,
+			PrivateNicMac: utils.PrivateNicsForUT[0].Mac,
+			PrivateNicIp:  utils.PrivateNicsForUT[0].Ip,
+			SnatNetmask:   utils.PrivateNicsForUT[0].Netmask,
+		}
+
+		sinfo2 = snatInfo{
+			PublicNicMac:  utils.PubNicForUT.Mac,
+			PublicIp:      utils.PubNicForUT.Ip,
+			PrivateNicMac: utils.PrivateNicsForUT[1].Mac,
+			PrivateNicIp:  utils.PrivateNicsForUT[1].Ip,
+			SnatNetmask:   utils.PrivateNicsForUT[1].Netmask,
+		}
 	})
 
 	It("test set snat", func() {
@@ -168,6 +167,10 @@ var _ = Describe("snat_test", func() {
 			checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[0], false)
 			checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[1], false)
 		}
+	})
+
+	It("snat_test clean env", func() {
+		utils.CleanTestEnvForUT()
 	})
 })
 
