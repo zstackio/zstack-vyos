@@ -31,7 +31,7 @@ if [ x$virtualRouterUuid = x"" ]; then
     exit
 fi
 
-abnormalFileMaxSize=$(grep "abnormalFileMaxSize" $BOOTSTRAPINFO |awk '{print $2}')
+abnormalFileMaxSize=$(grep "abnormalFileMaxSize" $BOOTSTRAPINFO |awk '{print $2}' | sed 's/,//g')
 if [ x$abnormalFileMaxSize = x"" ]; then
     echo "$(date '+%Y-%m-%d %H:%M:%S') get abnormalFileMaxSize failed " >> $LOGFILE
     exit
