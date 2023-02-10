@@ -30,11 +30,17 @@ elif [ "$OSVERSION" = "5.4.80-amd64-vyos" ]; then
 fi
 
 ZVR_DATA_DIR="/home/vyos/zvr/data"
-if [ -d ${ZVR_DATA_DIR} ]; then
-	sudo rm -rf ${ZVR_DATA_DIR}
+ZVR_DATA_DIR_TEMP="/home/vyos/zvr/data_temp"
+if [ -d ${ZVR_DATA_DIR_TEMP} ]; then
+	sudo rm -rf ${ZVR_DATA_DIR_TEMP}
 fi
-sudo mkdir -p ${ZVR_DATA_DIR}
-tar zxf zvr-data.tar.gz -C ${ZVR_DATA_DIR}
+sudo mkdir -p ${ZVR_DATA_DIR_TEMP}
+tar zxf zvr-data.tar.gz -C ${ZVR_DATA_DIR_TEMP}
+# use `cp -an` skip file which exist to keep mode and attribute
+sudo cp -an ${ZVR_DATA_DIR_TEMP}/. ${ZVR_DATA_DIR}
+if [ -d ${ZVR_DATA_DIR_TEMP} ]; then
+	sudo rm -rf ${ZVR_DATA_DIR_TEMP}
+fi
 if [ -f "${ZVR_DATA_DIR}/hooks/00_exec_hooks.sh" ]; then
     sudo chmod +x /home/vyos/zvr/data/hooks/00_exec_hooks.sh
     sudo /bin/bash /home/vyos/zvr/data/hooks/00_exec_hooks.sh
