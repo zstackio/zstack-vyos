@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html/template"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -1144,12 +1145,22 @@ func (this *GBListener) stopPidMonitor() {
 }
 
 func (this *GBListener) startListenerService() (int, error) {
-	ret, err := startGobetween(this.confPath, this.pidPath)
-	if err != nil || ret != 0 {
-		return ret, err
+	var (
+		udpAddr *net.UDPAddr
+		udpConn *net.UDPConn
+		err     error
+	)
+
+	if udpAddr, err = net.ResolveUDPAddr("udp", fmt.Sprintf("0.0.0.0:%d", this.lb.LoadBalancerPort)); err != nil {
+		return 0, err
 	}
 
-	return ret, err
+	if udpConn, err = net.ListenUDP("udp", udpAddr); err != nil {
+		return 0, err
+	}
+	udpConn.Close()
+
+	return startGobetween(this.confPath, this.pidPath)
 }
 
 /*get the md5 vaule of a file, return null string if the file not exist */
@@ -1630,12 +1641,12 @@ type loadBalancerCollector struct {
 	curSessionUsageEntry        *prom.Desc
 	concurrentSessionUsageEntry *prom.Desc
 	// just for l7 layer lb
-	hrsp1xxEntry                *prom.Desc
-	hrsp2xxEntry                *prom.Desc
-	hrsp3xxEntry                *prom.Desc
-	hrsp4xxEntry                *prom.Desc
-	hrsp5xxEntry                *prom.Desc
-	hrspOtherEntry              *prom.Desc
+	hrsp1xxEntry   *prom.Desc
+	hrsp2xxEntry   *prom.Desc
+	hrsp3xxEntry   *prom.Desc
+	hrsp4xxEntry   *prom.Desc
+	hrsp5xxEntry   *prom.Desc
+	hrspOtherEntry *prom.Desc
 }
 
 const (
@@ -1788,7 +1799,7 @@ func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
 			ch <- prom.MustNewConstMetric(c.totalSessionNumEntry, prom.GaugeValue, float64(cnt.totalSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
 			ch <- prom.MustNewConstMetric(c.concurrentSessionUsageEntry, prom.GaugeValue, float64(cnt.concurrentSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
 		}
-		
+
 		ch <- prom.MustNewConstMetric(c.curSessionUsageEntry, prom.GaugeValue, float64(sessionNum*100/maxSessionNum), listenerUuid, lbUuid)
 
 		if _, ok := listener.(*HaproxyListener); ok {
@@ -1818,12 +1829,12 @@ type LbCounter struct {
 	totalSessionNumber      uint64
 	concurrentSessionNumber uint64
 	// just for l7 layer lb
-	hrsp1xx                 uint64
-	hrsp2xx                 uint64
-	hrsp3xx                 uint64
-	hrsp4xx                 uint64
-	hrsp5xx                 uint64
-	hrspOther               uint64
+	hrsp1xx   uint64
+	hrsp2xx   uint64
+	hrsp3xx   uint64
+	hrsp4xx   uint64
+	hrsp5xx   uint64
+	hrspOther uint64
 }
 
 func getIpFromLbStat(name string) string {
