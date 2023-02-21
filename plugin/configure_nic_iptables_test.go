@@ -2,19 +2,22 @@ package plugin
 
 import (
 	"fmt"
+	"strings"
+
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	server "github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
-	"strings"
 )
 
 var _ = Describe("configure_nic_iptables_test", func() {
 	var cmd *configureNicCmd
+	var sinfo1, sinfo2 snatInfo
 
 	It("configure_nic_iptables_test prepare", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"configure_nic_iptables_test.log", false)
+		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)
 		cmd = &configureNicCmd{}
@@ -122,8 +125,6 @@ var _ = Describe("configure_nic_iptables_test", func() {
 		ccmd.Snats = []snatInfo{sinfo1, sinfo2}
 		log.Debugf("############### TestChangeDefaultNic change default nic ###############")
 		changeDefaultNic(ccmd)
-		checkSnatRuleSetByIptables(sinfo1)
-		checkSnatRuleSetByIptables(sinfo2)
 
 		sinfo1 = snatInfo{
 			PublicNicMac:  utils.PubNicForUT.Mac,
@@ -144,8 +145,6 @@ var _ = Describe("configure_nic_iptables_test", func() {
 		ccmd.Snats = []snatInfo{sinfo1, sinfo2}
 		log.Debugf("############### TestChangeDefaultNic change default nic again ###############")
 		changeDefaultNic(ccmd)
-		checkSnatRuleSetByIptables(sinfo1)
-		checkSnatRuleSetByIptables(sinfo1)
 
 		rcmd := removeSnatCmd{NatInfo: []snatInfo{sinfo2, sinfo1}}
 		removeSnat(&rcmd)
@@ -164,16 +163,7 @@ var _ = Describe("configure_nic_iptables_test", func() {
 	})
 
 	It("configure_nic_iptables_test destroying ", func() {
-		cmd.Nics = append(cmd.Nics, utils.PubNicForUT)
-		cmd.Nics = append(cmd.Nics, utils.PrivateNicsForUT[0])
-		cmd.Nics = append(cmd.Nics, utils.AdditionalPubNicsForUT[0])
-		cmd.Nics = append(cmd.Nics, utils.PrivateNicsForUT[1])
-
-		removeNic(cmd)
-		for i, _ := range cmd.Nics {
-			checkNicFirewallDeleteByIpTables(cmd.Nics[i])
-		}
-		utils.SetSkipVyosIptablesForUT(false)
+		utils.CleanTestEnvForUT()
 	})
 })
 

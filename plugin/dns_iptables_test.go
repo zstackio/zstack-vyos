@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/zstackio/zstack-vyos/utils"
@@ -11,6 +12,7 @@ var _ = Describe("dns_iptables_test", func() {
 	var nicCmd *configureNicCmd
 	It("[IPTABLES]dns : test preparing", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"dns_iptables_test.log", false)
+		utils.CleanTestEnvForUT()
 		utils.SetSkipVyosIptablesForUT(true)
 		nicCmd = &configureNicCmd{}
 	})
@@ -50,10 +52,7 @@ var _ = Describe("dns_iptables_test", func() {
 	})
 
 	It("[IPTABLES]dns : destroying", func() {
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
-		removeNic(nicCmd)
-		utils.SetSkipVyosIptablesForUT(false)
+		utils.CleanTestEnvForUT()
 	})
 })
 

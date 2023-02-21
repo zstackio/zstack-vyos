@@ -3,27 +3,33 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"io/ioutil"
 	"math/rand"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
-	BOOTSTRAP_INFO_UT = "/home/vyos/vyos_ut/zstack-vyos/bootstrapinfo"
+	BOOT_CONFIG_FILE      = "/home/vyos/vyos_ut/zstack-vyos/test/boot_config.sh"
+	IPTABLES_RULE_FILE_UT = "/home/vyos/vyos_ut/zstack-vyos/iptables.rules"
+	BOOTSTRAP_INFO_UT     = "/home/vyos/vyos_ut/zstack-vyos/bootstrapinfo"
 )
 
-var MgtNicForUT NicInfo
-var PubNicForUT NicInfo
-var PrivateNicsForUT []NicInfo
-var AdditionalPubNicsForUT []NicInfo
-var reservedIpForMgt []string
-var reservedIpForPubL3 []string
-var freeIpsForMgt []string
-var freeIpsForPubL3 []string
+var (
+	MgtNicForUT            NicInfo
+	PubNicForUT            NicInfo
+	PrivateNicsForUT       []NicInfo
+	AdditionalPubNicsForUT []NicInfo
+	reservedIpForMgt       []string
+	reservedIpForPubL3     []string
+	freeIpsForMgt          []string
+	freeIpsForPubL3        []string
+)
 
 func init() {
 	if !IsRuingUT() {
@@ -32,7 +38,11 @@ func init() {
 
 	InitBootStrapInfoForUT()
 	ParseBootStrapNicInfo()
+	ReserveIpForUT()
 	rand.Seed(time.Now().UnixNano())
+}
+
+func ReserveIpForUT() {
 	for _, ip := range reservedIpForMgt {
 		freeIpsForMgt = append(freeIpsForMgt, ip)
 	}
@@ -40,6 +50,55 @@ func init() {
 	for _, ip := range reservedIpForPubL3 {
 		freeIpsForPubL3 = append(freeIpsForPubL3, ip)
 	}
+}
+
+func CleanTestEnvForUT() {
+	b := Bash{
+		Command: fmt.Sprintf("sg vyattacfg -c '/bin/vbash %s'", BOOT_CONFIG_FILE),
+		Sudo:    true,
+	}
+	if ret, _, _, err := b.RunWithReturn(); ret != 0 || err != nil {
+		log.Debugf("clean vyos commit err, ret: %d, err : %+v", ret, err)
+	}
+
+	ifaces, err := net.Interfaces()
+	PanicOnError(err)
+	for _, iface := range ifaces {
+		if iface.Name == "eth0" || iface.Name == "lo" {
+			continue
+		}
+		if strings.HasPrefix(iface.Name, "ifb") {
+			IpLinkDel(iface.Name)
+			continue
+		}
+		IpAddrFlush(iface.Name)
+		IpLinkSetAlias(iface.Name, "")
+	}
+
+	file_lists := []string{ZSTACK_CONFIG_PATH, CROND_CONFIG_FILE}
+	for _, f := range file_lists {
+		if ok, err := PathExists(f); ok || err != nil {
+			log.Debugf("cleanUpConfigDir: file [%s] will be delete", f)
+			if err := DeleteAllFiles(f); err != nil {
+				log.Debugf("cleanUpConfigDir: delete file [%s] error: %+v", f, err)
+			}
+		}
+	}
+
+	BootstrapInfo = make(map[string]interface{})
+
+	InitBootStrapInfoForUT()
+	ParseBootStrapNicInfo()
+	ReserveIpForUT()
+	restoreConfigure()
+}
+
+func restoreConfigure() {
+	bash := Bash{
+		Command: fmt.Sprintf("iptables-restore < %s", IPTABLES_RULE_FILE_UT),
+		Sudo:    true,
+	}
+	bash.Run()
 }
 
 func InitBootStrapInfoForUT() {
@@ -57,140 +116,145 @@ func InitBootStrapInfoForUT() {
 	}
 }
 
-func getNic(m map[string]interface{}, tempNic *NicInfo) error {
+func parseNicForUT(m map[string]interface{}) (NicInfo, error) {
+	nicInfo := NicInfo{}
 	name, ok := m["deviceName"].(string)
 	if !ok {
-		return fmt.Errorf("there is no nic name for %+v", m)
+		return nicInfo, fmt.Errorf("there is no nic name for %+v", m)
 	}
-	tempNic.Name = name
+	nicInfo.Name = name
 
 	mac, ok := m["mac"].(string)
 	if !ok {
-		return fmt.Errorf("there is no nic mac for %+v", m)
+		return nicInfo, fmt.Errorf("there is no nic mac for %+v", m)
 	}
-	tempNic.Mac = mac
+	nicInfo.Mac = mac
 
 	ip, ok := m["ip"].(string)
 	if !ok {
-		tempNic.Ip = ""
+		nicInfo.Ip = ""
 	} else {
-		tempNic.Ip = ip
+		nicInfo.Ip = ip
 	}
 
 	netmask, ok := m["netmask"].(string)
 	if !ok {
-		tempNic.Netmask = ""
+		nicInfo.Netmask = ""
 	} else {
-		tempNic.Netmask = netmask
+		nicInfo.Netmask = netmask
 	}
 
 	gateway, ok := m["gateway"].(string)
 	if !ok {
-		tempNic.Gateway = ""
+		nicInfo.Gateway = ""
 	} else {
-		tempNic.Gateway = gateway
+		nicInfo.Gateway = gateway
 	}
 
 	ip6, ok := m["ip6"].(string)
 	if !ok {
-		tempNic.Ip6 = ""
+		nicInfo.Ip6 = ""
 	} else {
-		tempNic.Ip6 = ip6
+		nicInfo.Ip6 = ip6
 	}
 
 	prefixLength, ok := m["prefixLength"].(float64)
 	if !ok {
-		tempNic.PrefixLength = 0
+		nicInfo.PrefixLength = 0
 	} else {
-		tempNic.PrefixLength = int(prefixLength)
+		nicInfo.PrefixLength = int(prefixLength)
 	}
 
 	gateway6, ok := m["gateway6"].(string)
 	if !ok {
-		tempNic.Gateway6 = ""
+		nicInfo.Gateway6 = ""
 	} else {
-		tempNic.Gateway6 = gateway6
+		nicInfo.Gateway6 = gateway6
 	}
 
 	isDefault, ok := m["isDefaultRoute"].(bool)
 	if !ok {
-		tempNic.IsDefault = false
+		nicInfo.IsDefault = false
 	} else {
-		tempNic.IsDefault = isDefault
+		nicInfo.IsDefault = isDefault
 	}
 
 	category, ok := m["category"].(string)
 	if !ok {
-		return fmt.Errorf("there is no nic category for %+v", m)
+		return nicInfo, fmt.Errorf("there is no nic category for %+v", m)
 	}
-	tempNic.Category = category
+	nicInfo.Category = category
 
 	l2Type, ok := m["l2type"].(string)
 	if !ok {
-		tempNic.L2Type = ""
+		nicInfo.L2Type = ""
 	} else {
-		tempNic.L2Type = l2Type
+		nicInfo.L2Type = l2Type
 	}
 
 	physicalInterface, ok := m["physicalInterface"].(string)
 	if !ok {
-		tempNic.PhysicalInterface = ""
+		nicInfo.PhysicalInterface = ""
 	} else {
-		tempNic.PhysicalInterface = physicalInterface
+		nicInfo.PhysicalInterface = physicalInterface
 	}
 
 	vni, ok := m["vni"].(int)
 	if !ok {
-		tempNic.Vni = 0
+		nicInfo.Vni = 0
 	} else {
-		tempNic.Vni = vni
+		nicInfo.Vni = vni
 	}
 
 	mtu, ok := m["mtu"].(int)
 	if !ok {
-		tempNic.Mtu = 1450
+		nicInfo.Mtu = 1450
 	} else {
-		tempNic.Mtu = mtu
+		nicInfo.Mtu = mtu
 	}
 
 	addressMode, ok := m["addressMode"].(string)
 	if !ok {
-		tempNic.AddressMode = "Stateful-DHCP"
+		nicInfo.AddressMode = "Stateful-DHCP"
 	} else {
-		tempNic.AddressMode = addressMode
+		nicInfo.AddressMode = addressMode
 	}
 
-	tempNic.FirewallDefaultAction = "reject"
+	nicInfo.FirewallDefaultAction = "reject"
 
-	return nil
+	return nicInfo, nil
 }
 
 func ParseBootStrapNicInfo() {
+	PrivateNicsForUT = []NicInfo{}
+	AdditionalPubNicsForUT = []NicInfo{}
+	reservedIpForMgt = []string{}
+	reservedIpForPubL3 = []string{}
+	freeIpsForMgt = []string{}
+	freeIpsForPubL3 = []string{}
 	nicString := BootstrapInfo["managementNic"].(map[string]interface{})
 	if nicString != nil {
-		if err := getNic(nicString, &MgtNicForUT); err != nil {
-			return
-		}
+		nicInfo, err := parseNicForUT(nicString)
+		PanicOnError(err)
+		MgtNicForUT = nicInfo
 	}
 
 	otherNics := BootstrapInfo["additionalNics"].([]interface{})
 	if otherNics != nil {
 		for _, o := range otherNics {
 			onic := o.(map[string]interface{})
-			var additionalNic NicInfo
-			if err := getNic(onic, &additionalNic); err != nil {
-				return
-			}
+			nicInfo, err := parseNicForUT(onic)
+			PanicOnError(err)
 
-			if additionalNic.IsDefault {
-				PubNicForUT = additionalNic
+			if nicInfo.IsDefault {
+				PubNicForUT = nicInfo
 				continue
 			}
 
-			if additionalNic.Category == NIC_TYPE_PRIVATE {
-				PrivateNicsForUT = append(PrivateNicsForUT, additionalNic)
+			if nicInfo.Category == NIC_TYPE_PRIVATE {
+				PrivateNicsForUT = append(PrivateNicsForUT, nicInfo)
 			} else {
-				AdditionalPubNicsForUT = append(AdditionalPubNicsForUT, additionalNic)
+				AdditionalPubNicsForUT = append(AdditionalPubNicsForUT, nicInfo)
 			}
 		}
 	}

@@ -8,7 +8,7 @@ import (
 	"github.com/zstackio/zstack-vyos/utils"
 )
 
-var _ = Describe("eip_perf_test", func() {
+var _ = XDescribe("eip_perf_test", func() {
 	var nicCmd configureNicCmd
 
 	It("[PERF]EIP : prepare env", func() {

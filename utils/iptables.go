@@ -461,7 +461,7 @@ func (t *IpTables) restore() error {
 	//log.Debugf("iptables-restore content: %s", content)
 	_, _, _, err = cmd.RunWithReturn()
 	if err != nil {
-		log.Debugf("iptables-restore failed %s", err.Error())
+		log.Debugf("iptables-restore content: %s\n\niptables-restore failed: %+v", content, err)
 		bash := Bash{
 			Command: fmt.Sprintf("iptables-restore  --table=%s < %s 2>&1 | grep 'Error occurred at line' | awk '{print $(NF)}' | xargs -i sed -n '{}p' %s", t.Name, tmpFile.Name(), tmpFile.Name()),
 			Sudo:    true,

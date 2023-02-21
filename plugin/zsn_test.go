@@ -15,6 +15,7 @@ import (
 var _ = Describe("zsn_test", func() {
 	It("[REPLACE_VYOS]: pre test env", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"zsn_test.log", false)
+		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetEnableVyosCmdForUT(false)
 		cleanUpCrondConfig()
@@ -32,6 +33,7 @@ var _ = Describe("zsn_test", func() {
 		//Expect(err).To(BeNil(), "setDistributedRouting error: %+v", err)
 		checkZsnCronJob(false)
 		utils.SetEnableVyosCmdForUT(true)
+		utils.CleanTestEnvForUT()
 	})
 })
 

@@ -7,20 +7,20 @@ import (
 )
 
 var _ = Describe("route_linux_test", func() {
-	var nextHopInPubL3 string
-	var nextHopInPubL32 string
-	var nextHopInmgt string
-	var r0, r1, r2, r3, r4, r5, r6, r7, r8 routeInfo
-	var nicCmd *configureNicCmd
+	var (
+		nextHopInPubL3                     string
+		nextHopInmgt                       string
+		r0, r1, r2, r3, r4, r5, r6, r7, r8 routeInfo
+		nicCmd                             *configureNicCmd
+	)
 
 	It("[REPLACE_VYOS]: pre test env", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"route_linux_test.log", false)
-		cleanUpNicConfig()
+		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetEnableVyosCmdForUT(false)
 		utils.SetSkipVyosIptables(true)
 		nextHopInPubL3, _ = utils.GetFreePubL3Ip()
-		nextHopInPubL32, _ = utils.GetFreePubL3Ip()
 		nextHopInmgt, _ = utils.GetFreeMgtIp()
 		r0 = routeInfo{Destination: "172.16.90.0/24", Target: utils.GetMgtGateway(), Distance: 1}
 		r1 = routeInfo{Destination: "1.1.1.0/24", Target: nextHopInPubL3, Distance: 100}
@@ -58,17 +58,11 @@ var _ = Describe("route_linux_test", func() {
 		checkRoutesByLinux(routes1, []routeInfo{})
 		routes2 := []routeInfo{r7, r2, r3, r8, r5, r6, r1, r4}
 		setZebraRoutes(routes2)
-		checkRoutesByLinux(routes1, []routeInfo{r7, r8})
+		checkRoutesByLinux(routes2, []routeInfo{})
 	})
 
 	It("[REPLACE_VYOS]: clean test env", func() {
-		utils.ReleasePubL3Ip(nextHopInPubL3)
-		utils.ReleasePubL3Ip(nextHopInPubL32)
-		utils.ReleaseMgtIp(nextHopInmgt)
-
-		cleanUpNicConfig()
-		utils.SetEnableVyosCmdForUT(true)
-		utils.SetSkipVyosIptables(false)
+		utils.CleanTestEnvForUT()
 	})
 })
 

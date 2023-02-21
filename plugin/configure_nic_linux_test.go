@@ -11,10 +11,11 @@ import (
 
 var _ = Describe("configure_nic_linux_test", func() {
 	var cmd *configureNicCmd
+	var sinfo1, sinfo2 snatInfo
 
 	It("[REPLACE_VYOS]: test pre env", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"configure_nic_linux_test.log", false)
-		cleanUpNicConfig()
+		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetEnableVyosCmdForUT(false)
 		utils.SetSkipVyosIptablesForUT(true)
@@ -73,15 +74,7 @@ var _ = Describe("configure_nic_linux_test", func() {
 		removeSnat(&rcmd)
 	})
 	It("[REPLACE_VYOS]: test remove nic by linux", func() {
-		cmd = &configureNicCmd{}
-		cmd.Nics = append(cmd.Nics, utils.AdditionalPubNicsForUT[0])
-		cmd.Nics = append(cmd.Nics, utils.PubNicForUT)
-		cmd.Nics = append(cmd.Nics, utils.PrivateNicsForUT[0])
-		cmd.Nics = append(cmd.Nics, utils.PrivateNicsForUT[1])
-		err := removeNic(cmd)
-		Expect(err).To(BeNil(), "removeNic error: %+v", err)
-		utils.SetEnableVyosCmdForUT(true)
-		utils.SetSkipVyosIptablesForUT(false)
+		utils.CleanTestEnvForUT()
 	})
 })
 
@@ -148,18 +141,4 @@ func checkConfiureNicByLinux(cmd *configureNicCmd) {
 			Expect(linkAttr.State).To(Equal("up"), "nic[%s] should be up", nicname)
 		}
 	}
-}
-
-func cleanUpNicConfig() {
-	cmd := &configureNicCmd{}
-	cmd.Nics = append(cmd.Nics, utils.PubNicForUT)
-	cmd.Nics = append(cmd.Nics, utils.AdditionalPubNicsForUT[0])
-	cmd.Nics = append(cmd.Nics, utils.PrivateNicsForUT[0])
-	cmd.Nics = append(cmd.Nics, utils.PrivateNicsForUT[1])
-	oldStatus := utils.IsEnableVyosCmd()
-	utils.SetEnableVyosCmdForUT(true)
-	removeNic(cmd)
-	utils.SetEnableVyosCmdForUT(false)
-	removeNic(cmd)
-	utils.SetEnableVyosCmdForUT(oldStatus)
 }

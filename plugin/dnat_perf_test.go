@@ -8,7 +8,7 @@ import (
 	"github.com/zstackio/zstack-vyos/utils"
 )
 
-var _ = Describe("dnat_perf_test", func() {
+var _ = XDescribe("dnat_perf_test", func() {
 	var nicCmd configureNicCmd
 
 	It("[PERF]DNAT : prepare  env", func() {

@@ -30,6 +30,7 @@ var _ = Describe("firewall_ipset_test", func() {
 	Context("[IPTABLES]FIREWALL: env prepare", func() {
 		It("firewall_ipset prepare", func() {
 			utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"firewall_ipset_test.log", false)
+			utils.CleanTestEnvForUT()
 			SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 			utils.SetSkipVyosIptablesForUT(true)
 
@@ -55,14 +56,7 @@ var _ = Describe("firewall_ipset_test", func() {
 	})
 	Context("[IPTABLES]FIREWALL: env destroy", func() {
 		It("[IPTABLES]FIREWALL : firewall_ipset destroying env", func() {
-			nicCmd := &configureNicCmd{}
-			nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-			nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
-			removeNic(nicCmd)
-			for i, _ := range nicCmd.Nics {
-				checkNicFirewallDeleteByIpTables(nicCmd.Nics[i])
-			}
-			utils.SetSkipVyosIptablesForUT(false)
+			utils.CleanTestEnvForUT()
 		})
 	})
 })

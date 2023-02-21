@@ -12,27 +12,16 @@ import (
 	"github.com/zstackio/zstack-vyos/utils"
 )
 
-func setTestLbEnv() {
-	utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"lb_test.log", false)
-}
-
 var _ = Describe("lb_test", func() {
-	var nicCmd *configureNicCmd
 
-	BeforeEach(func() {
-		nicCmd = &configureNicCmd{}
-		setTestLbEnv()
+	It("LB:test prepare env", func() {
+		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"lb_test.log", false)
+		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
-	})
-
-	AfterEach(func() {
-		removeNic(nicCmd)
+		configureAllNicsForUT()
 	})
 
 	It("LB:test lb will delete firewall rule after start failed", func() {
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		configureNic(nicCmd)
-
 		var vips []vipInfo
 		vip1 := vipInfo{Ip: "100.64.1.200", Netmask: utils.PubNicForUT.Netmask, Gateway: utils.PubNicForUT.Gateway,
 			OwnerEthernetMac: utils.PubNicForUT.Mac}
@@ -114,8 +103,6 @@ var _ = Describe("lb_test", func() {
 		   4.check haproxy pid
 		   5.check haproxy configuration
 		*/
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		configureNic(nicCmd)
 
 		var vips []vipInfo
 		vip1 := vipInfo{Ip: "100.64.1.200", Netmask: utils.PubNicForUT.Netmask, Gateway: utils.PubNicForUT.Gateway,
@@ -134,7 +121,6 @@ var _ = Describe("lb_test", func() {
 		rcmd := &removeVipCmd{Vips: vips}
 		defer func() {
 			removeVip(rcmd)
-			removeNic(nicCmd)
 
 		}()
 		testLbSuccess()
@@ -142,9 +128,6 @@ var _ = Describe("lb_test", func() {
 	})
 
 	It("LB:test enable or disable haproxy log", func() {
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		configureNic(nicCmd)
-
 		var vips []vipInfo
 		vip1 := vipInfo{Ip: "100.64.1.200", Netmask: utils.PubNicForUT.Netmask, Gateway: utils.PubNicForUT.Gateway,
 			OwnerEthernetMac: utils.PubNicForUT.Mac}
@@ -201,12 +184,16 @@ var _ = Describe("lb_test", func() {
 		checkHaproxyLog(*lb, false)
 	})
 
-	It("LB：test refresh lb log", func() {
+	It("LB: test refresh lb log", func() {
 		testLbRefreshLbLog()
 	})
 
 	It("LB: test operate Certificate", func() {
 		testCreateCertificate()
+	})
+
+	It("LB: test clean env", func() {
+		utils.CleanTestEnvForUT()
 	})
 })
 

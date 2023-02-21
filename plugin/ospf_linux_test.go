@@ -19,7 +19,7 @@ var _ = Describe("ospf_linux_test", func() {
 
 	It("[REPLACE_VYOS]: test pre env", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"ospf_linux_test.log", false)
-		cleanUpNicConfig()
+		utils.CleanTestEnvForUT()
 		cleanUpOspfConfig()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetEnableVyosCmdForUT(false)
@@ -148,9 +148,7 @@ var _ = Describe("ospf_linux_test", func() {
 	})
 
 	It("[REPLACE_VYOS]: test destory env", func() {
-		cleanUpNicConfig()
-		utils.SetEnableVyosCmdForUT(true)
-		utils.SetSkipVyosIptables(false)
+		utils.CleanTestEnvForUT()
 	})
 })
 

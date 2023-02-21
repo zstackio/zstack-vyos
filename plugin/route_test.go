@@ -11,19 +11,20 @@ import (
 )
 
 var _ = Describe("route_test", func() {
-	var oldHaStatus string
-	var nextHopInPubL3 string
-	var nextHopInPubL32 string
-	var nextHopInmgt string
-	var r0, r1, r2, r3, r4, r5, r6, r7, r8 routeInfo
-	var nicCmd *configureNicCmd
+	var (
+		nextHopInPubL3                     string
+		nextHopInPubL32                    string
+		nextHopInmgt                       string
+		r0, r1, r2, r3, r4, r5, r6, r7, r8 routeInfo
+		nicCmd                             *configureNicCmd
+	)
 
 	It("prepare for route set", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"route_test.log", false)
+		utils.CleanTestEnvForUT()
 		utils.InitVyosVersion()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 
-		oldHaStatus = utils.GetHaStatus()
 		nextHopInPubL3, _ = utils.GetFreePubL3Ip()
 		nextHopInPubL32, _ = utils.GetFreePubL3Ip()
 		nextHopInmgt, _ = utils.GetFreeMgtIp()
@@ -81,13 +82,7 @@ var _ = Describe("route_test", func() {
 	})
 
 	It("release after route delte", func() {
-		utils.ReleasePubL3Ip(nextHopInPubL3)
-		utils.ReleasePubL3Ip(nextHopInPubL32)
-		utils.ReleaseMgtIp(nextHopInmgt)
-		nicCmd = &configureNicCmd{}
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		removeNic(nicCmd)
-		utils.SetHaStatus(oldHaStatus)
+		utils.CleanTestEnvForUT()
 	})
 
 })

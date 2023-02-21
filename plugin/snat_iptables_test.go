@@ -16,23 +16,26 @@ var _ = Describe("snat_iptables_test", func() {
 
 	It("[IPTABLES]snat : test preparing", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"snat_iptables_test.log", false)
+		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)
 		sinfo1 = snatInfo{
-			PublicNicMac:  utils.PubNicForUT.Mac,
-			PublicIp:      utils.PubNicForUT.Ip,
-			PrivateNicMac: utils.PrivateNicsForUT[0].Mac,
-			PrivateNicIp:  utils.PrivateNicsForUT[0].Ip,
-			SnatNetmask:   utils.PrivateNicsForUT[0].Netmask,
-			State:         true,
+			PublicNicMac:     utils.PubNicForUT.Mac,
+			PublicIp:         utils.PubNicForUT.Ip,
+			PrivateNicMac:    utils.PrivateNicsForUT[0].Mac,
+			PrivateNicIp:     utils.PrivateNicsForUT[0].Ip,
+			SnatNetmask:      utils.PrivateNicsForUT[0].Netmask,
+			PrivateGatewayIp: utils.PrivateNicsForUT[0].Gateway,
+			State:            true,
 		}
 		sinfo2 = snatInfo{
-			PublicNicMac:  utils.PubNicForUT.Mac,
-			PublicIp:      utils.PubNicForUT.Ip,
-			PrivateNicMac: utils.PrivateNicsForUT[1].Mac,
-			PrivateNicIp:  utils.PrivateNicsForUT[1].Ip,
-			SnatNetmask:   utils.PrivateNicsForUT[1].Netmask,
-			State:         true,
+			PublicNicMac:     utils.PubNicForUT.Mac,
+			PublicIp:         utils.PubNicForUT.Ip,
+			PrivateNicMac:    utils.PrivateNicsForUT[1].Mac,
+			PrivateNicIp:     utils.PrivateNicsForUT[1].Ip,
+			SnatNetmask:      utils.PrivateNicsForUT[1].Netmask,
+			PrivateGatewayIp: utils.PrivateNicsForUT[1].Gateway,
+			State:            true,
 		}
 		rmCmd = &removeSnatCmd{NatInfo: []snatInfo{sinfo1, sinfo2}}
 		nicCmd = &configureNicCmd{}
@@ -74,36 +77,24 @@ var _ = Describe("snat_iptables_test", func() {
 	})
 
 	It("[IPTABLES]snat : test sync non-public networksnat", func() {
-		sinfo1.State = true
-		sinfo2.State = false
 		syncCmd := &syncSnatCmd{Snats: []snatInfo{sinfo1, sinfo2}, Enable: true}
 		syncSnat(syncCmd)
-		checkSyncSnatByIptables(syncCmd.Snats, syncCmd.Enable)
+		checkSyncSnatByIptables(syncCmd.Snats, true)
 
-		sinfo2.State = true
-		setState := &setSnatStateCmd{Snats: []snatInfo{sinfo2}, Enable: true}
+		setState := &setSnatStateCmd{Snats: []snatInfo{sinfo1, sinfo2}, Enable: true}
 		setSnatState(setState)
-		checkSyncSnatByIptables(syncCmd.Snats, syncCmd.Enable)
+		checkSyncSnatByIptables(syncCmd.Snats, true)
 
-		sinfo2.State = false
-		setState1 := &setSnatStateCmd{Snats: []snatInfo{sinfo2}, Enable: false}
+		setState1 := &setSnatStateCmd{Snats: []snatInfo{sinfo1, sinfo2}, Enable: false}
 		setSnatState(setState1)
-		checkSyncSnatByIptables(syncCmd.Snats, syncCmd.Enable)
+		checkSyncSnatByIptables(syncCmd.Snats, false)
 
 		removeSnat(rmCmd)
 		checkSnatRuleDelIptables(rmCmd)
 	})
 
 	It("[IPTABLES]snat : destroying", func() {
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
-		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[1])
-		removeNic(nicCmd)
-		for i, _ := range nicCmd.Nics {
-			checkNicFirewallDeleteByIpTables(nicCmd.Nics[i])
-		}
-
-		utils.SetSkipVyosIptablesForUT(false)
+		utils.CleanTestEnvForUT()
 	})
 })
 
@@ -169,7 +160,7 @@ func checkSyncSnatByIptables(Snats []snatInfo, state bool) {
 		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
 		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(outNic).SetSnatTargetIp(s.PublicIp)
 		res := table.Check(rule)
-		if s.State == true {
+		if state == true {
 			Expect(res).To(BeTrue(), fmt.Sprintf("firewall rule [%s] should exist", rule.String()))
 		} else {
 			Expect(res).To(BeFalse(), fmt.Sprintf("firewall rule [%s] should not exist", rule.String()))
@@ -180,7 +171,7 @@ func checkSyncSnatByIptables(Snats []snatInfo, state bool) {
 		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s-%s", s.PrivateGatewayIp, s.PrivateGatewayIp)).
 			SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
 		res = table.Check(rule)
-		if s.State == true {
+		if state == true {
 			Expect(res).To(BeTrue(), fmt.Sprintf("firewall rule [%s] should exist", rule.String()))
 		} else {
 			Expect(res).To(BeFalse(), fmt.Sprintf("firewall rule [%s] should not exist", rule.String()))

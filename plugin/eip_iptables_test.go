@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"fmt"
+
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	gomega "github.com/onsi/gomega"
@@ -12,17 +13,14 @@ var _ = Describe("eip_iptables_test", func() {
 
 	It("[IPTABLES]EIP : prepare", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"eip_iptables_test.log", false)
+		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)
+		configureAllNicsForUT()
 		eipMap = make(map[string]eipInfo, EipInfoMaxSize)
 	})
 
 	It("[IPTABLES]EIP : test create sync remove eip", func() {
-		nicCmd := &configureNicCmd{}
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
-		configureNic(nicCmd)
-
 		ipInPubL3, _ := utils.GetFreePubL3Ip()
 		eip1 := eipInfo{VipIp: ipInPubL3, PublicMac: utils.PubNicForUT.Mac,
 			GuestIp: "192.168.1.200", PrivateMac: utils.PrivateNicsForUT[0].Mac,
@@ -96,14 +94,7 @@ var _ = Describe("eip_iptables_test", func() {
 	})
 
 	It("[IPTABLES]EIP : destroying env", func() {
-		var nicCmd configureNicCmd
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
-		removeNic(&nicCmd)
-		for i, _ := range nicCmd.Nics {
-			checkNicFirewallDeleteByIpTables(nicCmd.Nics[i])
-		}
-		utils.SetSkipVyosIptablesForUT(false)
+		utils.CleanTestEnvForUT()
 	})
 })
 

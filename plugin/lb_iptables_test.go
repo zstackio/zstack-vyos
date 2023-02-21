@@ -2,25 +2,21 @@ package plugin
 
 import (
 	"fmt"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/zstackio/zstack-vyos/utils"
-	"time"
 )
 
-var _ = Describe("lb_iptables", func() {
+var _ = Describe("lb_iptables_test", func() {
 
 	It("[IPTABLES]LOADBALANCER:preparing env", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"lb_iptables_test.log", false)
+		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)
-
-		var nicCmd configureNicCmd
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
-		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[1])
-		nicCmd.Nics = append(nicCmd.Nics, utils.AdditionalPubNicsForUT[0])
-		configureNic(&nicCmd)
+		configureAllNicsForUT()
 	})
 
 	It("[IPTABLES]LOADBALANCER:test lb will delete firewall rule after start failed", func() {
@@ -60,15 +56,15 @@ var _ = Describe("lb_iptables", func() {
 			"healthCheckInterval::5",
 			"unhealthyThreshold::2")
 		bs := backendServerInfo{
-			Ip: "192.168.100.10",
+			Ip:     "192.168.100.10",
 			Weight: 100,
 		}
-		sg := serverGroupInfo{Name:"default-server-group",
+		sg := serverGroupInfo{Name: "default-server-group",
 			ServerGroupUuid: "8e52bcc526074521894162aa8db73c24",
-		    BackendServers: []backendServerInfo{bs},
-			IsDefault: false,
+			BackendServers:  []backendServerInfo{bs},
+			IsDefault:       false,
 		}
-		lb.ServerGroups = []serverGroupInfo {sg}
+		lb.ServerGroups = []serverGroupInfo{sg}
 		lb.RedirectRules = nil
 
 		setLb(*lb)
@@ -77,15 +73,15 @@ var _ = Describe("lb_iptables", func() {
 		pid1, _ := utils.ReadPid(haproxyListeners[lb.ListenerUuid].pidPath)
 		lb.NicIps = append(lb.NicIps, "192.168.100.11")
 		bs2 := backendServerInfo{
-			Ip: "192.168.100.11",
+			Ip:     "192.168.100.11",
 			Weight: 100,
 		}
-		sg = serverGroupInfo{Name:"default-server-group",
+		sg = serverGroupInfo{Name: "default-server-group",
 			ServerGroupUuid: "8e52bcc526074521894162aa8db73c24",
-			BackendServers: []backendServerInfo{bs, bs2},
-			IsDefault: false,
+			BackendServers:  []backendServerInfo{bs, bs2},
+			IsDefault:       false,
 		}
-		lb.ServerGroups = []serverGroupInfo {sg}
+		lb.ServerGroups = []serverGroupInfo{sg}
 		setLb(*lb)
 
 		time.Sleep(1 * time.Second)
@@ -99,10 +95,8 @@ var _ = Describe("lb_iptables", func() {
 		delLb(*lb)
 		checkLbIptablesRules(*lb, true)
 
-		defer func() {
-			rcmd := &removeVipCmd{Vips: vips}
-			removeVip(rcmd)
-		}()
+		rcmd := &removeVipCmd{Vips: vips}
+		removeVip(rcmd)
 	})
 
 	It("[IPTABLES]LOADBALANCER:test create udp proto loadbalancer", func() {
@@ -145,20 +139,12 @@ var _ = Describe("lb_iptables", func() {
 		delLb(*lb)
 		checkLbIptablesRules(*lb, true)
 
-		defer func() {
-			rcmd := &removeVipCmd{Vips: vips}
-			removeVip(rcmd)
-		}()
+		rcmd := &removeVipCmd{Vips: vips}
+		removeVip(rcmd)
 	})
 
-	It("[IPTABLES]LOADBALANCER:destroying env", func() {
-		var nicCmd configureNicCmd
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
-		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[1])
-		nicCmd.Nics = append(nicCmd.Nics, utils.AdditionalPubNicsForUT[0])
-		removeNic(&nicCmd)
-		utils.SetSkipVyosIptablesForUT(false)
+	It("[IPTABLES]LOADBALANCER: destroying env", func() {
+		utils.CleanTestEnvForUT()
 	})
 })
 

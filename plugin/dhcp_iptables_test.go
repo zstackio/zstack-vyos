@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/zstackio/zstack-vyos/utils"
@@ -12,6 +13,7 @@ var _ = Describe("dhcp_iptables_test", func() {
 
 	It("[IPTABLES]dhcp : test preparing", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"dhcp_iptables_test.log", false)
+		utils.CleanTestEnvForUT()
 		utils.SetSkipVyosIptablesForUT(true)
 		nicCmd = &configureNicCmd{}
 	})
@@ -68,14 +70,7 @@ var _ = Describe("dhcp_iptables_test", func() {
 	})
 
 	It("[IPTABLES]dhcp : test destroying", func() {
-		//nicCmd := &configureNicCmd{}
-		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
-		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
-		removeNic(nicCmd)
-		for i, _ := range nicCmd.Nics {
-			checkNicFirewallDeleteByIpTables(nicCmd.Nics[i])
-		}
-		utils.SetSkipVyosIptablesForUT(false)
+		utils.CleanTestEnvForUT()
 	})
 })
 
