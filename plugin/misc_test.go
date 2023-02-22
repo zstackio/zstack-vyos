@@ -80,7 +80,7 @@ func checkCrondProcess() bool {
 func checkTaskScheduler() {
 	job1 := utils.NewCronjob().SetId(1).SetCommand(utils.Cronjob_file_ssh).SetMinute("*/1")
 	job2 := utils.NewCronjob().SetId(2).SetCommand(utils.Cronjob_file_zvrMonitor).SetMinute("*/1")
-	job3 := utils.NewCronjob().SetId(3).SetCommand(fmt.Sprintf("flock -xn /tmp/file-monitor.lock -c %s", utils.Cronjob_file_fileMonitor)).SetMinute("*/1")
+	job3 := utils.NewCronjob().SetId(3).SetCommand(fmt.Sprintf("/usr/bin/flock -xn /tmp/file-monitor.lock -c %s", utils.Cronjob_file_fileMonitor)).SetMinute("*/1")
 	job4 := utils.NewCronjob().SetId(4).SetCommand(utils.Cronjob_file_rsyslog).SetMinute("*/1")
 	job5 := utils.NewCronjob().SetId(5).SetCommand("/usr/bin/top -b -n 1 -H >> /var/log/top.log").SetMinute("*/1")
 

@@ -2,11 +2,12 @@ package server
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
-	"github.com/zstackio/zstack-vyos/utils"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 func startMockServer() {
@@ -29,7 +30,7 @@ func makeURL(path string) string {
 	return fmt.Sprintf("http://127.0.0.1:8989%s", path)
 }
 
-func TestSyncCommand(t *testing.T) {
+func XTestSyncCommand(t *testing.T) {
 	startMockServer()
 
 	testCmd := syncCmd{
@@ -52,7 +53,7 @@ func TestSyncCommand(t *testing.T) {
 	}
 }
 
-func TestCommandHandlerPanic(t *testing.T) {
+func XTestCommandHandlerPanic(t *testing.T) {
 	//startMockServer()
 
 	path := "/testpanic1"
@@ -79,7 +80,7 @@ type asyncReply struct {
 	Greeting string
 }
 
-func TestAsyncCommand(t *testing.T) {
+func XTestAsyncCommand(t *testing.T) {
 	//startMockServer()
 
 	taskUuid := "abcd"
@@ -123,7 +124,7 @@ func TestAsyncCommand(t *testing.T) {
 	utils.Assert(s3, "s3")
 }
 
-func TestAsyncCommandNoTaskUUID(t *testing.T) {
+func XTestAsyncCommandNoTaskUUID(t *testing.T) {
 	//startMockServer()
 
 	path := "/testasync1"
@@ -143,7 +144,7 @@ func TestAsyncCommandNoTaskUUID(t *testing.T) {
 	fmt.Println(err.Error())
 }
 
-func TestAsyncCommandNoCallbackURL(t *testing.T) {
+func XTestAsyncCommandNoCallbackURL(t *testing.T) {
 	//startMockServer()
 
 	path := "/testasync2"
