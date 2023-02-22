@@ -119,3 +119,39 @@ func checkDiffConfig(srcfile string, dstfile string) {
 	isEqual := bytes.Equal(src, dst)
 	Expect(isEqual).To(BeTrue(), "src file should equal dst file, but not")
 }
+
+func cleanPluginMaps() {
+	// dns map
+	dnsServers = map[string]string{}
+	nicNames = map[string]string{}
+	
+	// pf map
+	pfMap = make(map[string]dnatInfo, PortForwardingInfoMaxSize)
+
+	// qos map
+	totalQosRules = make(map[string]interfaceInOutQosRules, MAX_PUBLIC_INTERFACE)
+
+	// eip map
+	eipMap = make(map[string]eipInfo, EipInfoMaxSize)
+	eipIpset = nil
+	ipsets, _ := utils.GetCurrentIpSet()
+	for _, ipset := range ipsets {
+		if ipset.Name == EIP_IPSET_NAME {
+			eipIpset = ipset
+			break
+		}
+	}
+
+	// lb map
+	gobetweenListeners = map[string]*GBListener{}
+	haproxyListeners = map[string]*HaproxyListener{}
+
+	// ipsec map
+	ipsecMap = make(map[string]ipsecInfo, IPSecInfoMaxSize)
+
+	// nic map
+	nicIps := utils.GetBootStrapNicInfo()
+	for _, nic := range nicIps {
+		nicsMap[nic.Name] = nic
+	}
+}

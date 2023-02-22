@@ -17,6 +17,7 @@ var _ = Describe("eip_iptables_test", func() {
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)
 		configureAllNicsForUT()
+		cleanPluginMaps()
 		eipMap = make(map[string]eipInfo, EipInfoMaxSize)
 	})
 

@@ -11,7 +11,7 @@ export ACK_GINKGO_DEPRECATIONS=1.16.4
 rm -rf /home/vyos/vyos_ut/testLog/*
 if [ "${focus}" == "" ];then
     # make test
-    ginkgo  -v -r --failFast --cover -trace -skipMeasurements | tee ${OUTPUT_LOG}
+    ginkgo  -v -r --failFast --cover -trace -skipMeasurements --randomizeAllSpecs=false | tee ${OUTPUT_LOG}
     if cat ${OUTPUT_LOG} | grep "FAIL!" > /dev/null; then
         result="fail"
     else

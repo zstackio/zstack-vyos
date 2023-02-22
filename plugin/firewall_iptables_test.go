@@ -19,6 +19,7 @@ var _ = Describe("firewall_iptables_test", func() {
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)
+		cleanPluginMaps()
 		configureAllNicsForUT()
 	})
 

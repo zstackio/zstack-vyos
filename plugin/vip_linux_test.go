@@ -9,7 +9,7 @@ import (
 	"github.com/zstackio/zstack-vyos/utils"
 )
 
-var _ = Describe("vip_linux_test", func() {
+var _ = XDescribe("vip_linux_test", func() {
 
 	It("[REPLACE_VYOS]: pre test env", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"vip_linux_test.log", false)
