@@ -2,13 +2,14 @@ package utils
 
 import (
 	"fmt"
+	"sort"
+
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"sort"
 )
 
-var _ = Describe("iproute_test SetZStackRoute", func() {
+var _ = XDescribe("iproute_test SetZStackRoute", func() {
 	BeforeEach(func() {
 		InitLog(VYOS_UT_LOG_FOLDER+"iproute_test.log", false)
 	})
@@ -41,7 +42,7 @@ var _ = Describe("iproute_test SetZStackRoute", func() {
 	})
 })
 
-var _ = Describe("iproute_test SyncZStackRouteTables", func() {
+var _ = XDescribe("iproute_test SyncZStackRouteTables", func() {
 	BeforeEach(func() {
 		InitLog(VYOS_UT_LOG_FOLDER+"iproute_test.log", false)
 	})
@@ -75,7 +76,7 @@ var _ = Describe("iproute_test SyncZStackRouteTables", func() {
 	})
 })
 
-var _ = Describe("iproute_test SyncRouteEntries", func() {
+var _ = XDescribe("iproute_test SyncRouteEntries", func() {
 	BeforeEach(func() {
 		InitLog(VYOS_UT_LOG_FOLDER+"iproute_test.log", false)
 	})

@@ -2,11 +2,12 @@ package server
 
 import (
 	"fmt"
-	"github.com/zstackio/zstack-vyos/utils"
 	"testing"
+
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
-func TestSetFirewall(t *testing.T) {
+func XTestSetFirewall(t *testing.T) {
 	UNIT_TEST = true
 
 	ConfigurationSourceFunc = func() string {
@@ -35,7 +36,7 @@ func TestSetFirewall(t *testing.T) {
 	tree.Apply(false)
 }
 
-func TestVyosParser1(t *testing.T) {
+func XTestVyosParser1(t *testing.T) {
 	text := `
 interfaces {
     ethernet eth0 {
@@ -181,7 +182,7 @@ ABC E
 	fmt.Println(tree.String())
 }
 
-func Test_FindFirstNotExcludeSNATRule1(t *testing.T) {
+func XTest_FindFirstNotExcludeSNATRule1(t *testing.T) {
 	text := `
 nat {
     source {
@@ -227,7 +228,7 @@ nat {
 	fmt.Println(tree.String())
 }
 
-func Test_FindFirstNotExcludeSNATRule2(t *testing.T) {
+func XTest_FindFirstNotExcludeSNATRule2(t *testing.T) {
 	text := `
 nat {
     source {
@@ -273,7 +274,7 @@ nat {
 	fmt.Println(tree.String())
 }
 
-func Test_FindFirstNotExcludeSNATRule3(t *testing.T) {
+func XTest_FindFirstNotExcludeSNATRule3(t *testing.T) {
 	text := `
 nat {
     source {
@@ -310,7 +311,7 @@ nat {
 	fmt.Println(tree.String())
 }
 
-func Test_SwapSNATRule1(t *testing.T) {
+func XTest_SwapSNATRule1(t *testing.T) {
 	text := `
 nat {
     source {

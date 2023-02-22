@@ -9,12 +9,16 @@ import (
 
 var _ = Describe("ip_link_test", func() {
 	var (
-		linkName  string = "eth2"
-		err       error
-		linkAttrs *IpLinkAttrs
+		linkName   string = "eth2"
+		err        error
+		linkAttrs  *IpLinkAttrs
+		mac, alias string
 	)
 
 	It("test ip-link down/up", func() {
+		linkAttrs, err = IpLinkShowAttrs(linkName)
+		mac = linkAttrs.MAC
+		alias = linkAttrs.Alias
 		err := IpLinkSetUp(linkName)
 		Expect(err).To(BeNil(), fmt.Sprintf("ip link set dev up error: %s", err))
 		err = IpLinkSetDown(linkName)
@@ -47,6 +51,8 @@ var _ = Describe("ip_link_test", func() {
 		Expect(linkAttrs.MAC).To(Equal("00:0c:29:7b:0a:00"))
 
 		IpLinkSetName("testName", linkName)
+		IpLinkSetMAC(linkName, mac)
+		IpLinkSetAlias(linkName, alias)
 		IpLinkSetUp(linkName)
 	})
 	It("test ip-link add/del deivce", func() {

@@ -19,6 +19,8 @@ var _ = Describe("ip_route_test", func() {
 		Expect(err).To(BeNil(), fmt.Sprintf("ip addr6 flush error: %s", err))
 		err = IpAddrAdd(link, "2001::1002/64")
 		Expect(err).To(BeNil(), fmt.Sprintf("ip addr6 add error: %s", err))
+
+		_ = IpLinkSetUp(link)
 	})
 	It("test ip-route ipv4", func() {
 		routeEntry := NewIpRoute().SetDst("10.10.10.120").SetGW("10.10.10.1").SetSrc("10.10.10.10").SetDev(link).SetMetric(161).SetProto(RT_PROTOS_STATIC)
