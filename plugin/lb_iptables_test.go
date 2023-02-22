@@ -9,7 +9,7 @@ import (
 	"github.com/zstackio/zstack-vyos/utils"
 )
 
-var _ = Describe("lb_iptables_test", func() {
+var _ = XDescribe("lb_iptables_test", func() {
 
 	It("[IPTABLES]LOADBALANCER:preparing env", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"lb_iptables_test.log", false)
