@@ -12,7 +12,7 @@ if [ "${focus}" == "" ];then
     # make test
     ginkgo  -v -r --failFast --cover -trace -skipMeasurements && result="success"
 else
-    # make unittest focus=( support 1 _test.go file )
+    # make unittest focus=xxx_test (support only one test file)
     case_dir=`find ./ -name "${focus}.go" | xargs dirname`
     ginkgo -focus=${focus} -v --failFast -trace ${case_dir} | tee output.log
     if cat output.log | grep "SUCCESS" > /dev/null; then

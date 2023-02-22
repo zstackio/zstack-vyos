@@ -98,9 +98,9 @@ test: clean package
 	pip install -r test/requirements.txt;\
 	python3 test/ut.py test/$(TestEnv)
 
-.PHONY: test
+.PHONY: unittest
 
-unittest:
+unittest: clean package
 	python=$$(which python3);\
 	if [ $$? == 1 ];then\
 		echo "can not find python3, please install python3";\
@@ -110,7 +110,7 @@ unittest:
 		echo "1 env variable is needed: focus='case name'";\
 		exit 1;\
 	fi;\
-	if [ "$(shell find . -type f | grep ${focus} | grep -v ${fucus}.log | wc -l)" != 1 ];then\
+	if [ "$(shell find . -type f | grep /${focus}.go | grep -v ${fucus}.log | wc -l)" != 1 ];then\
 		echo "Error: no/multiple cases were found through focus:${focus}";\
 		exit 1;\
 	fi;\
