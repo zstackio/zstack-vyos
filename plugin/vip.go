@@ -480,7 +480,7 @@ func (rules *interfaceQosRules) InterfaceQosRuleCleanUp() interface{} {
 			if n := tree.Getf("interfaces ethernet %s redirect", rules.name); n != nil {
 				n.Delete()
 			}
-			if n := tree.Getf("interfaces input %s", rules.ifbName); n == nil {
+			if n := tree.Getf("interfaces input %s", rules.ifbName); n != nil {
 				n.Delete()
 			}
 			tree.Apply(false)

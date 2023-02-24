@@ -9,7 +9,7 @@ import (
 	"github.com/zstackio/zstack-vyos/utils"
 )
 
-var _ = XDescribe("lb_iptables_test", func() {
+var _ = Describe("lb_iptables_test", func() {
 
 	It("[IPTABLES]LOADBALANCER:preparing env", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"lb_iptables_test.log", false)
@@ -34,8 +34,8 @@ var _ = XDescribe("lb_iptables_test", func() {
 
 		lb := &lbInfo{}
 		lb.SecurityPolicyType = "TLS_CIPHER_POLICY_1_0"
-		lb.LbUuid = "f2c7b2ff2f834e1ea20363f49122a3b4"
-		lb.ListenerUuid = "23fb656e4f324e74a4889582104fcbf0"
+		lb.LbUuid = "f2c7b2ff2f834e1ea20363f49122a3b1"
+		lb.ListenerUuid = "23fb656e4f324e74a4889582104fcbf1"
 		lb.InstancePort = 433
 		lb.LoadBalancerPort = 433
 		lb.Vip = "100.64.1.201"
@@ -77,7 +77,7 @@ var _ = XDescribe("lb_iptables_test", func() {
 			Weight: 100,
 		}
 		sg = serverGroupInfo{Name: "default-server-group",
-			ServerGroupUuid: "8e52bcc526074521894162aa8db73c24",
+			ServerGroupUuid: "8e52bcc526074521894162aa8db73c21",
 			BackendServers:  []backendServerInfo{bs, bs2},
 			IsDefault:       false,
 		}
@@ -110,8 +110,8 @@ var _ = XDescribe("lb_iptables_test", func() {
 		setVip(cmd)
 
 		lb := &lbInfo{}
-		lb.LbUuid = "b702108ea6014b65bea2faf2e5f5e31c"
-		lb.ListenerUuid = "7f8e9159ab5f46bd8fe64aa44248f124"
+		lb.LbUuid = "b702108ea6014b65bea2faf2e5f5e311"
+		lb.ListenerUuid = "7f8e9159ab5f46bd8fe64aa44248f121"
 		lb.InstancePort = 21002
 		lb.LoadBalancerPort = 21002
 		lb.Vip = "100.64.1.200"
@@ -175,11 +175,11 @@ func checkLbIptablesRules(info lbInfo, delete bool) {
 	table := utils.NewIpTables(utils.FirewallTable)
 	if delete {
 		for _, rule := range allRules {
-			Expect(table.Check(rule)).To(BeFalse(), fmt.Sprintf("firewall still exsit, firewall rule [%s] check failed", rule.String()))
+			Expect(table.Check(rule)).To(BeFalse(), fmt.Sprintf("firewall not exsit, firewall still exsit firewall rule [%s] check failed", rule.String()))
 		}
 	} else {
 		for _, rule := range allRules {
-			Expect(table.Check(rule)).To(BeTrue(), fmt.Sprintf("firewall not exsit, firewall still exsit, firewall rule [%s] check failed", rule.String()))
+			Expect(table.Check(rule)).To(BeTrue(), fmt.Sprintf("firewall still exsit firewall rule [%s] check failed", rule.String()))
 		}
 	}
 }
