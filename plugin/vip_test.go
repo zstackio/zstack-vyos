@@ -11,7 +11,7 @@ import (
 	"github.com/zstackio/zstack-vyos/utils"
 )
 
-var _ = XDescribe("vip_test", func() {
+var _ = Describe("vip_test", func() {
 	It("vip_test prepare env", func() {
 		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"vip_test.log", false)
 		utils.CleanTestEnvForUT()
