@@ -7,7 +7,7 @@ DEFAULT_DIR="bin boot config dev etc home install.log lib lib64 lost+found media
 DEFAULT_MONIOTOR_DIR="/home /root /tmp /usr /var /opt /etc"
 MAX_NUM_OF_MONITOR_DIR=10
 template='{"filePath":"var1","fileSize":"var2"}'
-ret_template='{"virtualRouterUuid":"var1", "abnormalFiles":[var2], "diskTotal":"var3","diskUsed":"var4","diskUsedutilization":"var5"}'
+ret_template='{"applianceVmUuid":"var1", "abnormalFiles":[var2], "diskTotal":"var3","diskUsed":"var4","diskUsedutilization":"var5"}'
 ret=""
 NEED_REPORT_MN="false"
 sizeFilesMap=""
@@ -25,9 +25,9 @@ if [ x$managementNodeIp = x"" ]; then
     exit
 fi
 
-virtualRouterUuid=$(grep "uuid" $BOOTSTRAPINFO |awk '{print $2}'| sed -e s/,// | sed -e s/\"//g)
-if [ x$virtualRouterUuid = x"" ]; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') get virtualRouterUuid failed " >> $LOGFILE
+applianceVmUuid=$(grep "uuid" $BOOTSTRAPINFO |awk '{print $2}'| sed -e s/,// | sed -e s/\"//g)
+if [ x$applianceVmUuid = x"" ]; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') get applianceVmUuid failed " >> $LOGFILE
     exit
 fi
 
@@ -52,7 +52,7 @@ checkFileSize() {
 }
 
 reportToManagementNode() {
-    (echo "curl -H \"Content-Type: application/json\" -H \"commandpath: /vpc/abnormalfiles/report\" -X POST -d '$retToMn' http://$managementNodeIp:8080/zstack/asyncrest/sendcommand" |sh) &
+    (echo "curl -H \"Content-Type: application/json\" -H \"commandpath: /appliancevm/abnormalfiles/report\" -X POST -d '$retToMn' http://$managementNodeIp:8080/zstack/asyncrest/sendcommand" |sh) &
 }
 
 getDiskInfo() {
@@ -101,7 +101,7 @@ if [ x$NEED_REPORT_MN = x"true" ]; then
     diskTotal=$(echo $di|awk '{print $1}')
     diskUsed=$(echo $di|awk '{print $2}')
     diskUsedutilization=$(echo $di|awk '{print $3}')
-    retToMn=$(echo $ret_template | sed "s#var1#$virtualRouterUuid#g" | sed "s#var2#${retJson%?}#g" |sed "s#var3#$diskTotal#g" | sed "s#var4#$diskUsed#g" | sed "s#var5#$diskUsedutilization#g")
+    retToMn=$(echo $ret_template | sed "s#var1#$applianceVmUuid#g" | sed "s#var2#${retJson%?}#g" |sed "s#var3#$diskTotal#g" | sed "s#var4#$diskUsed#g" | sed "s#var5#$diskUsedutilization#g")
     reportToManagementNode
     echo "$(date '+%Y-%m-%d %H:%M:%S') report abnormal files: $retToMn to mn" >> $LOGFILE
 fi
