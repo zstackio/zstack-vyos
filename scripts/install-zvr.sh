@@ -36,8 +36,9 @@ if [ -d ${ZVR_DATA_DIR_TEMP} ]; then
 fi
 sudo mkdir -p ${ZVR_DATA_DIR_TEMP}
 tar zxf zvr-data.tar.gz -C ${ZVR_DATA_DIR_TEMP}
-# use `cp -an` skip file which exist to keep mode and attribute
-sudo cp -an ${ZVR_DATA_DIR_TEMP}/. ${ZVR_DATA_DIR}
+
+# rsync data_temp/ to data
+sudo rsync -a ${ZVR_DATA_DIR_TEMP}/ ${ZVR_DATA_DIR}
 if [ -d ${ZVR_DATA_DIR_TEMP} ]; then
 	sudo rm -rf ${ZVR_DATA_DIR_TEMP}
 fi
