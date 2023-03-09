@@ -335,7 +335,7 @@ func configureNicByVyos(nicList []utils.NicInfo) interface{} {
 			tree.Setf(fmt.Sprintf("interfaces ethernet %s address %v", nicname, addr))
 		}
 		if nic.Ip6 != "" {
-			tree.Setf("interfaces ethernet %s address %s", nicname, fmt.Sprintf("%s/%d", nic.Ip6, nic.PrefixLength))
+			tree.SetfWithoutCheckExisting("interfaces ethernet %s address %s", nicname, fmt.Sprintf("%s/%d", nic.Ip6, nic.PrefixLength))
 		}
 
 		tree.SetfWithoutCheckExisting("interfaces ethernet %s duplex auto", nicname)
