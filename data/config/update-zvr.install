@@ -27,6 +27,7 @@ pimd             /opt/vyatta/sbin/pimd           0755      vyos:users
 uacctd           /opt/vyatta/sbin/uacctd         0755      vyos:users
 goprlimit        /opt/vyatta/sbin/goprlimit      0755      vyos:users
 zvr              /opt/vyatta/sbin/zvr            0755      vyos:users
+pmacct           /home/vyos/pmacct/pmacct        0755      vyos:users
 
 [[ARM]]
 # this files just for aarch64

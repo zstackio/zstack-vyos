@@ -2,12 +2,13 @@ package plugin
 
 import (
 	"fmt"
+	"io/ioutil"
+	"strings"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
-	"io/ioutil"
-	"strings"
 )
 
 const (
@@ -78,6 +79,8 @@ type flowConfig struct {
 	NicsNames    []string
 	NicsNamesStr string
 }
+
+var flowNicMap map[string]string
 
 func configFlowMeterByVyos(config flowMeterInfo) error {
 	/*
@@ -172,10 +175,12 @@ func configFlowMeterByLinuxCommand(config flowMeterInfo) error {
 	}
 
 	cfg.NicsNames = []string{}
+	flowNicMap = make(map[string]string)
 	for _, n := range config.NetworkInfos {
 		nic, err := utils.GetNicNameByMac(n.NicMac)
 		utils.PanicOnError(err)
 		cfg.NicsNames = append(cfg.NicsNames, nic)
+		flowNicMap[n.NicMac] = nic
 	}
 
 	cfg.startPmacctdServers()
@@ -239,8 +244,40 @@ func parseCounter(input string) ([]counter, error) {
 	return counters, nil
 }
 
+func getFlowCounterByPmacct() []counter {
+	counters := []counter{}
+	for nicMac, nicName := range flowNicMap {
+		bash := utils.Bash{
+			Command: fmt.Sprintf("/home/vyos/pmacct/pmacct -p /tmp/uacctd.pipe -c dst_mac -N '%s' -S -n all", nicMac),
+			Sudo:    true,
+		}
+		ret, o, _, err := bash.RunWithReturn()
+		if ret != 0 || err != nil {
+			utils.PanicOnError(errors.Errorf("pmacct get flow ret: %d, error: %+v", ret, err))
+		}
+		records := strings.Split(strings.ReplaceAll(o, "\n", ""), " ")
+		if len(records) != 4 {
+			utils.PanicOnError(errors.Errorf("pmacct get counter error: there should be 4 records, but %d", len(records)))
+		}
+		count := counter{}
+		count.Device = nicName
+		count.TotalPkts = records[0]
+		count.TotalBytes = records[1]
+		count.TotalFlows = records[2]
+		count.TotalEntries = records[3]
+		counters = append(counters, count)
+	}
+
+	return counters
+}
+
 func getFlowCounter(ctx *server.CommandContext) interface{} {
 	log.Debugf(fmt.Sprintf("start get flow counter: %v", ctx))
+	if utils.Kernel_version == utils.Kernel_5_4_80 {
+		counters := getFlowCounterByPmacct()
+		return getFlowCounterRsp{Counters: counters}
+	}
+
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo /opt/vyatta/bin/sudo-users/vyatta-show-acct.pl -a show |egrep 'flow-accounting|Total' 2>/dev/null"),
 	}
