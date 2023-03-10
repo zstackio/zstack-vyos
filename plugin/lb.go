@@ -1151,7 +1151,7 @@ func (this *GBListener) startListenerService() (int, error) {
 		err     error
 	)
 
-	if udpAddr, err = net.ResolveUDPAddr("udp", fmt.Sprintf("0.0.0.0:%d", this.lb.LoadBalancerPort)); err != nil {
+	if udpAddr, err = net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", this.lb.Vip, this.lb.LoadBalancerPort)); err != nil {
 		return 0, err
 	}
 
