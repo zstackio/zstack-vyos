@@ -3,13 +3,14 @@ package plugin
 import (
 	"bytes"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/zstackio/zstack-vyos/utils"
 	"html/template"
 	"io/ioutil"
 	"os/exec"
 	"strconv"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/zstackio/zstack-vyos/utils"
 )
 
 const (
