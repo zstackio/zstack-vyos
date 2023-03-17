@@ -1,14 +1,14 @@
-// Copyright 2021 The Go Authors. All rights reserved.
+// Copyright 2019 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build (darwin || dragonfly || freebsd || netbsd || openbsd) && gc
-// +build darwin dragonfly freebsd netbsd openbsd
-// +build gc
+// +build !gccgo
 
 #include "textflag.h"
 
-// System call support for AMD64 BSD
+//
+// System call support for arm64, OpenBSD
+//
 
 // Just jump to package syscall's implementation for all these functions.
 // The runtime may know about them.
