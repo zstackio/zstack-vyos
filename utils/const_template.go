@@ -1,5 +1,49 @@
 package utils
 
+const sshdTemplateArm = `# Auto Create by Zstack, Do Not Modify It
+#
+# Non-configurable defaults
+Protocol 2
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_dsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+HostKey /etc/ssh/ssh_host_ed25519_key
+SyslogFacility AUTH
+LoginGraceTime 120
+StrictModes yes
+PubkeyAuthentication yes
+IgnoreRhosts yes
+HostbasedAuthentication no
+PermitEmptyPasswords no
+ChallengeResponseAuthentication no
+X11Forwarding yes
+X11DisplayOffset 10
+PrintMotd no
+PrintLastLog yes
+TCPKeepAlive yes
+Banner /etc/issue.net
+Subsystem sftp /usr/lib/openssh/sftp-server
+UsePAM yes
+HostKey /etc/ssh/ssh_host_rsa_key
+
+# Specifies whether sshd should look up the remote host name,
+# and to check that the resolved host name for the remote IP
+# address maps back to the very same IP address.
+UseDNS yes
+
+# Specifies the port number and local addresses that sshd listens on.  The default port is 22.
+# Port 22
+ListenAddress {{.ListenAddress}}:{{.Port}}
+
+# Gives the verbosity level that is used when logging messages from sshd
+LogLevel INFO
+
+# Specifies whether root can log in using ssh
+PermitRootLogin no
+
+# Specifies whether password authentication is allowed
+PasswordAuthentication no`
+
 const sshdTemplate = `# Auto Create by Zstack, Do Not Modify It
 #
 

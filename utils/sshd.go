@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
+	"runtime"
 	"strings"
 	"text/template"
+
+	"github.com/pkg/errors"
 )
 
 const (
@@ -61,7 +65,23 @@ func (s *SshdInfo) ConfigService() error {
 		err  error
 	)
 
-	if tmpl, err = template.New("ssh.conf").Parse(sshdTemplate); err != nil {
+	text := sshdTemplate
+
+	if runtime.GOARCH == "arm64" {
+		text = sshdTemplateArm
+		_ = Retry(func() error {
+			var e error
+			listener, e := net.Listen("tcp", fmt.Sprintf("%s:%d", s.ListenAddress, s.Port))
+			if e != nil {
+				return nil
+			} else {
+				_ = listener.Close()
+				return errors.New("ssh is not configured, wait 5 seconds")
+			}
+		}, 5, 5)
+	}
+
+	if tmpl, err = template.New("ssh.conf").Parse(text); err != nil {
 		return err
 	}
 	if err = tmpl.Execute(&buf, s); err != nil {
