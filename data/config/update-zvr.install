@@ -15,6 +15,7 @@ file-monitor.sh         /home/vyos/zvr/ssh/file-monitor.sh               0755   
 zsn-crontab.sh          /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh   0755     vyos:users
 ipsec.sh                /home/vyos/zvr/keepalived/temp/ipsec.sh          0755     vyos:users
 zstack-virtualrouteragent        /etc/init.d/zstack-virtualrouteragent        0755        root:root
+zstack-logrotate        /etc/logrotate.d/zstack-logrotate                0644     root:root
 
 [[X86]]
 # this files just for x86_64
