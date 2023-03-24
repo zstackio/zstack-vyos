@@ -6,3 +6,11 @@
     notifempty
     missingok
 }
+/var/log/zstack/zsn-agent/zsn-agent.log {
+    size 50M
+    rotate 10
+    compress
+    copytruncate
+    notifempty
+    missingok
+}
