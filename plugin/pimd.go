@@ -360,6 +360,7 @@ func getMrouteHandler(ctx *server.CommandContext) interface{} {
 		}
 		
 		var ingress, egress []string
+		line = strings.Split(line, "State")[0]
 		src := strings.Split(line, ",")[0]
 		src = strings.TrimSpace(src)
 		src = strings.TrimPrefix(src, "(")
