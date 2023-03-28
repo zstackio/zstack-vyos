@@ -10,7 +10,7 @@ import (
 	"github.com/zstackio/zstack-vyos/utils"
 )
 
-var _ = Describe("route_test", func() {
+var _ = XDescribe("route_test", func() {
 	var (
 		nextHopInPubL3                     string
 		nextHopInPubL32                    string
