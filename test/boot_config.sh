@@ -3,7 +3,7 @@ source /opt/vyatta/etc/functions/script-template
 
 configure
 
-load /config/config.boot
+load /opt/vyatta/etc/config/config.boot
 
 commit
 

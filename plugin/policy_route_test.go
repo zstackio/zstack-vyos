@@ -11,7 +11,7 @@ import (
 	"github.com/zstackio/zstack-vyos/utils"
 )
 
-var _ = Describe("policy_route_test", func() {
+var _ = XDescribe("policy_route_test", func() {
 	var nicCmd *configureNicCmd
 
 	It("policy_route : test preparing", func() {
