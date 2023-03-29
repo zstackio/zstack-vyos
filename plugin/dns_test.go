@@ -121,16 +121,12 @@ var _ = Describe("dns_test", func() {
 
 func checkDnsProcess() bool {
 	bash := utils.Bash{
-		Command: fmt.Sprintf("ps -ef|grep dnsmasq|grep -v grep"),
+		Command: fmt.Sprintf("ps -ef | grep '%s' | grep -v grep", DNSMASQ_BIN_PATH),
+		Sudo:    true,
 	}
+	ret, _, _, _ := bash.RunWithReturn()
 
-	code, _, _, _ := bash.RunWithReturn()
-
-	if code == 0 {
-		return true
-	} else {
-		return false
-	}
+	return ret == 0
 }
 
 func checkFirewall(nic utils.NicInfo, start bool) {
