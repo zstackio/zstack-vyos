@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -124,7 +125,10 @@ func (r *IpTableRule) SetSrcIp(srcIp string) *IpTableRule {
 }
 
 func (r *IpTableRule) SetDstIp(dstIp string) *IpTableRule {
-	r.dstIp = dstIp
+	if _, _, err := net.ParseCIDR(dstIp); err == nil {
+		r.dstIp = dstIp
+	}
+
 	return r
 }
 
