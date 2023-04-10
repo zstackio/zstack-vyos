@@ -162,6 +162,28 @@ var _ = Describe("configure_nic_iptables_test", func() {
 		utils.ReleasePubL3Ip(ipPubL3)
 	})
 
+	It("Test add ipv6 single stack and delete", func() {
+		cmd := configureNicCmd{
+			Nics: []utils.NicInfo{utils.PrivateNicsForUT[0]},
+		}
+		removeNic(&cmd)
+
+		targetNic := utils.PrivateNicsForUT[0]
+		targetNic.Ip = ""
+		targetNic.Gateway = ""
+		targetNic.Netmask = ""
+		targetNic.Ip6 = "2001::1"
+		targetNic.PrefixLength = 64
+		targetNic.AddressMode = "Stateless-DHCP"
+
+		cmd = configureNicCmd{
+			Nics: []utils.NicInfo{targetNic},
+		}
+		err := configureNic(&cmd)
+		Expect(err).To(BeNil(), "configure nic with ipv6 single stack error: %+v", err)
+		removeNic(&cmd)
+	})
+
 	It("configure_nic_iptables_test destroying ", func() {
 		utils.CleanTestEnvForUT()
 	})
