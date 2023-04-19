@@ -575,13 +575,13 @@ ERROR_OUT:
 func deleteUserRuleByIpTables(cmd *getConfigCmd) error {
 	table := utils.NewIpTables(utils.FirewallTable)
 	table = deleteFirewallUserRule(table)
-	/* only public nic has rule number: 9999 */
-	nics := utils.GetBootStrapNicInfo()
-	for _, nic := range nics {
-		if nic.Catatory == "Private" {
-			continue
-		}
 
+	nics, err := utils.GetAllNics()
+	if err != nil {
+		return err
+	}
+
+	for _, nic := range nics {
 		rulesetName := buildRuleSetName(nic.Name, FIREWALL_DIRECTION_IN)
 		rule := utils.NewDefaultIpTableRule(rulesetName, utils.IPTABLES_RULENUMBER_9999)
 		rule.SetAction(utils.IPTABLES_ACTION_RETURN)
