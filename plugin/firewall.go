@@ -872,9 +872,6 @@ func moveNicInForwardFirewall() {
 func allowNewStateTrafficOnPubNic(nicInfos []nicTypeInfo) {
 	tree := server.NewParserFromShowConfiguration().Tree
 	for _, nicInfo := range nicInfos {
-		if nicInfo.NicType == "Private" {
-			continue
-		}
 		nicName, err := utils.GetNicNameByMac(nicInfo.Mac)
 		utils.PanicOnError(err)
 		eNode := tree.Getf("firewall name %s.in rule", nicName)
