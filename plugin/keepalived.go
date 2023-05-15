@@ -63,7 +63,7 @@ const (
 var (
 	KeepalivedRootPath           = filepath.Join(utils.GetZvrRootPath(), "keepalived/")
 	KeepalivedConfigPath         = filepath.Join(KeepalivedRootPath, "conf/")
-	KeepalivedSciptPath          = filepath.Join(KeepalivedRootPath, "script/")
+	KeepalivedScriptPath         = filepath.Join(KeepalivedRootPath, "script/")
 	KeepalivedConfigFile         = filepath.Join(KeepalivedRootPath, "conf/keepalived.conf")
 	ConntrackdConfigFile         = filepath.Join(KeepalivedRootPath, "conf/conntrackd.conf")
 	KeepalivedScriptMasterDoGARP = filepath.Join(KeepalivedRootPath, "script/garp.sh")
@@ -201,14 +201,14 @@ func NewKeepalivedNotifyConf(vyosHaVips, mgmtVips []nicVipPair) *KeepalivedNotif
 		NicIps:         nicIps,
 		VrUuid:         utils.GetVirtualRouterUuid(),
 		CallBackUrl:    haStatusCallbackUrl,
-		IpsecScript:    filepath.Join(KeepalivedSciptPath, "ipsec.sh"),
-		FlowScript:     filepath.Join(KeepalivedSciptPath, "flow.sh"),
-		PimdScript:     filepath.Join(KeepalivedSciptPath, "pimd.sh"),
-		DhcpdScript:    filepath.Join(KeepalivedSciptPath, "dhcpd.sh"),
+		IpsecScript:    filepath.Join(KeepalivedScriptPath, "ipsec.sh"),
+		FlowScript:     filepath.Join(KeepalivedScriptPath, "flow.sh"),
+		PimdScript:     filepath.Join(KeepalivedScriptPath, "pimd.sh"),
+		DhcpdScript:    filepath.Join(KeepalivedScriptPath, "dhcpd.sh"),
 		DoGARPScript:   KeepalivedScriptMasterDoGARP,
 		KeepalivedCfg:  KeepalivedConfigFile,
 		PrimaryBackupScript: ConntrackScriptPrimaryBackup,
-		DefaultRouteScript:  filepath.Join(KeepalivedSciptPath, "defaultroute.sh"),
+		DefaultRouteScript:  filepath.Join(KeepalivedScriptPath, "defaultroute.sh"),
 
 	}
 
@@ -275,7 +275,7 @@ type KeepalivedConf struct {
 	PeerIp              string
 	MasterScript        string
 	BackupScript        string
-	SciptPath           string
+	ScriptPath          string
 	PrimaryBackupScript string
 }
 
@@ -288,7 +288,7 @@ func NewKeepalivedConf(hearbeatNic, LocalIp, PeerIp string, MonitorIps []string,
 		PeerIp:        PeerIp,
 		MasterScript:  KeepalivedScriptNotifyMaster,
 		BackupScript:  KeepalivedScriptNotifyBackup,
-		SciptPath:     KeepalivedSciptPath,
+		ScriptPath:    KeepalivedScriptPath,
 		PrimaryBackupScript: ConntrackScriptPrimaryBackup,
 	}
 
@@ -352,7 +352,7 @@ global_defs {
 }
 
 vrrp_script monitor_zvr {
-       script "{{.SciptPath}}/check_zvr.sh"        # cheaper than pidof
+       script "{{.ScriptPath}}/check_zvr.sh"        # cheaper than pidof
        interval 2                      # check every 2 seconds
        fall 2                          # require 2 failures for KO
        rise 2                          # require 2 successes for OK
@@ -360,7 +360,7 @@ vrrp_script monitor_zvr {
 
 {{ range .MonitorIps }}
 vrrp_script monitor_{{.}} {
-	script "{{.SciptPath}}/check_monitor_{{.}}.sh"
+	script "{{$.ScriptPath}}/check_monitor_{{.}}.sh"
 	interval 2
 	weight -2
 	fall 3
@@ -400,13 +400,13 @@ sudo /usr/bin/pgrep -u %s -f %s > /dev/null
 `	
 	zvr_bin := filepath.Join(utils.GetThirdPartyBinPath(), "zvr")
 	check_zvr := fmt.Sprintf(check_zvr_tmp, utils.GetZvrUser(), zvr_bin)
-	err := ioutil.WriteFile(KeepalivedSciptPath+"check_zvr.sh", []byte(check_zvr), 0644)
+	err := ioutil.WriteFile(KeepalivedScriptPath+"check_zvr.sh", []byte(check_zvr), 0644)
 	utils.PanicOnError(err)
 
 	for _, ip := range k.MonitorIps {
 		check_monitor := fmt.Sprintf("#! /bin/bash\nsudo /bin/ping %s -w 1 -c 1 > /dev/null", ip)
 		script_name := fmt.Sprintf("check_monitor_%s.sh", ip)
-		err := ioutil.WriteFile(KeepalivedSciptPath+script_name, []byte(check_monitor), 0644)
+		err := ioutil.WriteFile(KeepalivedScriptPath+script_name, []byte(check_monitor), 0644)
 		utils.PanicOnError(err)
 	}
 	return nil
@@ -669,7 +669,7 @@ func init() {
 	os.Remove(_zvr_shm)
 	os.Mkdir(KeepalivedRootPath, os.ModePerm)
 	os.Mkdir(KeepalivedConfigPath, os.ModePerm)
-	os.Mkdir(KeepalivedSciptPath, os.ModePerm)
+	os.Mkdir(KeepalivedScriptPath, os.ModePerm)
 	os.Remove(KeepalivedScriptNotifyMaster)
 	os.Remove(KeepalivedScriptNotifyBackup)
 

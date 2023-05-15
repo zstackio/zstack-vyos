@@ -440,7 +440,8 @@ func (rules *interfaceQosRules) InterfaceQosRuleInit(direct direction) interface
 	}
 	_, _, e, err := bash.RunWithReturn()
 	if err != nil {
-		utils.Assertf(strings.Contains(e, "with handle of zero"), "Failed to del rules from dev %s", name)
+		ignore := strings.Contains(e, "with handle of zero") || strings.Contains(e, "No such file")
+		utils.Assertf(ignore, "Failed to del rules from dev %s", name)
 	}
 	
 	bash1 := utils.Bash{
@@ -467,7 +468,8 @@ func (rules *interfaceQosRules) InterfaceQosRuleCleanUp() interface{} {
 	}
 	_, _, e, err := bash.RunWithReturn()
 	if err != nil {
-		utils.Assertf(strings.Contains(e, "with handle of zero"), "Failed to del rules from dev %s", name)
+		ignore := strings.Contains(e, "with handle of zero") || strings.Contains(e, "No such file")
+		utils.Assertf(ignore, "Failed to del rules from dev %s", name)
 	}
 
 
@@ -1130,7 +1132,8 @@ func (vipQos *vipQosRemoveNic) RemoveNic(nicName string) error {
 	}
 	_, _, e, err := bash.RunWithReturn()
 	if err != nil {
-		utils.Assertf(strings.Contains(e, "with handle of zero"), "Failed to del rules from dev %s", nicName)
+		ignore := strings.Contains(e, "with handle of zero") || strings.Contains(e, "No such file")
+		utils.Assertf(ignore, "Failed to del rules from dev %s", nicName)
 	}
 
 	delete(totalQosRules, nicName)
