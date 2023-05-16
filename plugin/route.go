@@ -157,6 +157,15 @@ func getRoutes(ctx *server.CommandContext) interface{} {
 	return GetRoutesRsp{RawRoutes: o}
 }
 
+func init() {
+	if !utils.IsVYOS() {
+		bash := utils.Bash{
+			Command: fmt.Sprintf("sudo systemctl start zebra"),
+		}
+		bash.Run()
+	}
+}
+
 func RouteEntryPoint() {
 	server.RegisterAsyncCommandHandler(SYNC_ROUTES, server.VyosLock(syncRoutes))
 	server.RegisterAsyncCommandHandler(GET_ROUTES, server.VyosLock(getRoutes))

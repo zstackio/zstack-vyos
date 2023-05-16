@@ -89,5 +89,8 @@ func (z *ZebraRoute) Apply() error {
 		Command: fmt.Sprintf("vtysh -c 'configure terminal' -c '%s'", cmd),
 	}
 
-	return bash.Run()
+	if _, _, _, err := bash.RunWithReturn(); err != nil {
+		return err
+	}
+	return nil
 }
