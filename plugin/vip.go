@@ -1192,14 +1192,14 @@ func (c *vipCollector) Update(ch chan<- prom.Metric) error {
 		return nil
 	}
 
-	rules := getMonitoringRules(INGRESS)
+	rules := getMonitoringRules(EGRESS)
 	for _, rule := range rules {
 		vipUuid := rule.vipUuid
 		ch <- prom.MustNewConstMetric(c.outByteEntry, prom.GaugeValue, float64(rule.bytes), vipUuid)
 		ch <- prom.MustNewConstMetric(c.outPktEntry, prom.GaugeValue, float64(rule.pkts), vipUuid)
 	}
 
-	rules = getMonitoringRules(EGRESS)
+	rules = getMonitoringRules(INGRESS)
 	for _, rule := range rules {
 		vipUuid := rule.vipUuid
 		ch <- prom.MustNewConstMetric(c.inByteEntry, prom.GaugeValue, float64(rule.bytes), vipUuid)
