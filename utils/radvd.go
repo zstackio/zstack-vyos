@@ -5,17 +5,19 @@ import (
 	"fmt"
 	"io/ioutil"
 	"text/template"
+	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 )
 
+var RADVD_CONFIG_FILE_TEMP = filepath.Join(GetUserHomePath(), "radvd.conf")
+var RADVD_JSON_FILE        = filepath.Join(GetZvrRootPath(), ".zstack_config/radvd")
+
 const (
 	RADVD_BIN_PATH         = "/usr/sbin/radvd -u radvd -p /var/run/radvd/radvd.pid"
 	RADVD_CONFIG_FILE      = "/etc/radvd.conf"
-	RADVD_CONFIG_FILE_TEMP = "/home/vyos/radvd.conf"
 	RADVD_PID_FILE         = "/var/run/radvd/radvd.pid"
 	RADVD_CHROOT_DIR       = "/var/run/radvd"
-	RADVD_JSON_FILE        = "/home/vyos/zvr/.zstack_config/radvd"
 	RA_MAX_INTERVAL        = 60
 	RA_MIN_INTERVAL        = 15
 	FLAG_ON                = "on"

@@ -55,3 +55,46 @@ func ValidVersionString(version string) bool {
 	}
 	return true
 }
+
+func IsVYOS() bool {
+	// vbash is a special bash in VyOS image that removed
+	// most of the system informations, such as release info, kernel info...,
+	// so there is no elegant way to identify VyOS guest.
+	//
+	// If u think of a better way, thanks to modify it.
+	// PS: The way should be universal on different platform.
+	//     x86: vyos/generic-linux, arm64: vyos/generic-linux, loong64: generic-linux
+	if exist, _ := PathExists("/bin/vbash"); !exist {
+		return false
+	}
+	return true
+}
+
+func GetZvrUser() string {
+	if IsVYOS() {
+		return "vyos"
+	}
+	return "zstack"
+}
+
+func GetUserHomePath() string {
+	if IsVYOS() {
+		return "/home/vyos/"
+	}
+	return "/home/zstack/"
+}
+
+func GetZvrRootPath() string {
+	return GetUserHomePath() + "zvr/"
+}
+
+func GetZvrZsConfigPath() string {
+	return GetZvrRootPath() + ".zstack_config/"
+}
+
+func GetThirdPartyBinPath() string {
+	if IsVYOS() {
+		return "/opt/vyatta/sbin/"
+	}
+	return "/usr/local/bin/"
+}

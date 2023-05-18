@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
@@ -16,11 +17,10 @@ import (
 
 const (
 	VIRTIO_PORT_PATH     = "/dev/virtio-ports/applianceVm.vport"
-	BOOTSTRAP_INFO_CACHE = "/home/vyos/zvr/bootstrap-info.json"
+	BOOTSTRAP_INFO_FILE  = "bootstrap-info.json"
 	TMP_LOCATION_FOR_ESX = "/tmp/bootstrap-info.json"
 	// use this rule number to set a rule which confirm route entry work issue ZSTAC-6170
 	ROUTE_STATE_NEW_ENABLE_FIREWALL_RULE_NUMBER = 9999
-	NETWORK_HEALTH_STATUS_PATH                  = "/home/vyos/zvr/.duplicate"
 )
 
 type nic struct {
@@ -41,8 +41,13 @@ type nic struct {
 	addressMode         string
 }
 
-var bootstrapInfo map[string]interface{} = make(map[string]interface{})
-var nics map[string]*nic = make(map[string]*nic)
+var bootstrapInfo map[string]interface{} 	= make(map[string]interface{})
+var nics map[string]*nic 					= make(map[string]*nic)
+
+var zvrRootPath 			= utils.GetZvrRootPath()
+var bootstrapInfoPath 		= filepath.Join(zvrRootPath, BOOTSTRAP_INFO_FILE)
+var networkHealthStatusPath = filepath.Join(zvrRootPath, ".duplicate")
+var zvrbootLogPath			= filepath.Join(zvrRootPath, "zvrboot.log")
 
 func waitIptablesServiceOnline() {
 	bash := utils.Bash{
@@ -70,8 +75,10 @@ func waitVirtioPortOnline() {
 }
 
 func isOnVMwareHypervisor() bool {
+	log.Debugf("is VMware")
 	bash := utils.Bash{
 		Command: "dmesg | grep -q 'Hypervisor.*VMware'",
+		Sudo: true,
 	}
 
 	if ret, _, _, err := bash.RunWithReturn(); ret == 0 && err == nil {
@@ -100,9 +107,9 @@ func parseEsxBootInfo() {
 			panic(errors.Wrap(err, fmt.Sprintf("unable to JSON parse:\n %s", string(content))))
 		}
 
-		err = utils.MkdirForFile(BOOTSTRAP_INFO_CACHE, 0666)
+		err = utils.MkdirForFile(bootstrapInfoPath, 0666)
 		utils.PanicOnError(err)
-		err = ioutil.WriteFile(BOOTSTRAP_INFO_CACHE, content, 0777)
+		err = ioutil.WriteFile(bootstrapInfoPath, content, 0777)
 		utils.PanicOnError(err)
 		os.Remove(TMP_LOCATION_FOR_ESX)
 		return true
@@ -122,12 +129,12 @@ func parseKvmBootInfo() {
 		if err := json.Unmarshal(content, &bootstrapInfo); err != nil {
 			panic(errors.Wrap(err, fmt.Sprintf("unable to JSON parse:\n %s", string(content))))
 		}
-
-		err = utils.MkdirForFile(BOOTSTRAP_INFO_CACHE, 0666)
+		log.Debugf("%s", zvrRootPath)
+		err = utils.MkdirForFile(bootstrapInfoPath, 0666)
 		utils.PanicOnError(err)
-		err = ioutil.WriteFile(BOOTSTRAP_INFO_CACHE, content, 0666)
+		err = ioutil.WriteFile(bootstrapInfoPath, content, 0666)
 		utils.PanicOnError(err)
-		err = os.Chmod(BOOTSTRAP_INFO_CACHE, 0777)
+		err = os.Chmod(bootstrapInfoPath, 0777)
 		utils.PanicOnError(err)
 		return true
 	}, time.Duration(300)*time.Second, time.Duration(1)*time.Second)
@@ -185,9 +192,9 @@ func checkIpDuplicate() {
 	}
 	if !strings.EqualFold(dupinfo, "") {
 		log.Error(dupinfo)
-		err := utils.MkdirForFile(NETWORK_HEALTH_STATUS_PATH, 0755)
+		err := utils.MkdirForFile(networkHealthStatusPath, 0755)
 		utils.PanicOnError(err)
-		err = ioutil.WriteFile(NETWORK_HEALTH_STATUS_PATH, []byte(dupinfo), 0755)
+		err = ioutil.WriteFile(networkHealthStatusPath, []byte(dupinfo), 0755)
 		utils.PanicOnError(err)
 	}
 }
@@ -624,11 +631,11 @@ func startZvr() {
 }
 
 func init() {
-	os.Remove(NETWORK_HEALTH_STATUS_PATH)
+	os.Remove(networkHealthStatusPath)
 }
 
 func main() {
-	utils.InitLog("/home/vyos/zvr/zvrboot.log", false)
+	utils.InitLog(zvrbootLogPath, false)
 	waitIptablesServiceOnline()
 	if isOnVMwareHypervisor() {
 		parseEsxBootInfo()

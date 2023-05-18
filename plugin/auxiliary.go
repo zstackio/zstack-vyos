@@ -272,7 +272,7 @@ func setZebraRoutes(infos []routeInfo) {
 
 		if err = newEntry.Apply(); err != nil {
 			log.Debugf("apply route[%+v] error: %+v", r, err)
-			continue
+			utils.PanicOnError(err)
 		}
 
 		newRoutes = append(newRoutes, newEntry)

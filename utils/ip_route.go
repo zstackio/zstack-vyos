@@ -18,7 +18,6 @@ func IpRouteAdd(r *IpRouteEntry) error {
 	if netlinkRoute, err = convertNetlinkRoute(r); err != nil {
 		return err
 	}
-
 	if err = netlink.RouteAdd(netlinkRoute); err != nil {
 		if IpRouteIsExist(r) {
 			return nil

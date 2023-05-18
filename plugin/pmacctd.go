@@ -11,13 +11,12 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/zstackio/zstack-vyos/utils"
+	"path/filepath"
 )
 
-const (
-	uacctd_bin_file      = "/opt/vyatta/sbin/uacctd"
-	uacctd_conf_file     = "/etc/pmacct/uacctd.conf"
-	uacctd_conf_tmp_file = "/home/vyos/pmacct/pmacctd.conf.tmp"
-)
+var uacctd_conf_file     = "/etc/pmacct/uacctd.conf"
+var uacctd_bin_file      = filepath.Join(utils.GetThirdPartyBinPath(), "uacctd")
+var uacctd_conf_tmp_file = filepath.Join(utils.GetUserHomePath(), "pmacct/pmacctd.conf.tmp")
 
 const tUacctdConf = `# This file is auto-generated, don't edit with !!!
 daemonize: true

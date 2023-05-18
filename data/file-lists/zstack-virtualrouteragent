@@ -2,12 +2,13 @@
 
 export PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
+id -u vyos > /dev/null 2>&1 && USER="vyos" || USER="zstack"
 DIR=$(dirname $(readlink -f "$0"))
-SERVER=/opt/vyatta/sbin/zvr
-HOMDIR=/home/vyos/zvr
+[ x"$USER" == x"vyos" ] && SERVER="/opt/vyatta/sbin/zvr" || SERVER="/usr/local/bin/zvr"
+HOMDIR=/home/$USER/zvr
 LOGFILE=$HOMDIR/zvr.log
 BOOTLOG=$HOMDIR/zvrstartup.log
-LOCKFILE=$HOMDIR/.vyosfilelock
+LOCKFILE=$HOMDIR/.zvrfilelock
 
 if [ $# -eq 0 ]; then
     echo "usage: $0 [start|stop|restart|status]"
@@ -65,9 +66,9 @@ server_status() {
 
 do_start() {
     cleanup_tmp_dir
-    chown -R vyos:users $HOMDIR
-    su - vyos -c "echo $(date) start zstack virtual router >> $BOOTLOG"
-    su - vyos -c "sudo nohup $SERVER -ip $ETH0_IP -logfile $LOGFILE >>$BOOTLOG 2>&1 < /dev/null &"
+    chown -R $USER:users $HOMDIR
+    su - $USER -c "echo $(date) start zstack virtual router >> $BOOTLOG"
+    su - $USER -c "sudo nohup $SERVER -ip $ETH0_IP -logfile $LOGFILE >>$BOOTLOG 2>&1 < /dev/null &"
 
     sleep 1
 
@@ -79,8 +80,8 @@ do_start() {
         if [ x"$c" = x"1" ]
         then
             echo "failed, retrying the $retry time"
-            su - vyos -c "echo $(date) start zstack virtual router failed, retrying the $retry time >> $BOOTLOG"
-            su - vyos -c "sudo nohup $SERVER -ip $ETH0_IP -logfile $LOGFILE >>$BOOTLOG 2>&1 < /dev/null &"
+            su - $USER -c "echo $(date) start zstack virtual router failed, retrying the $retry time >> $BOOTLOG"
+            su - $USER -c "sudo nohup $SERVER -ip $ETH0_IP -logfile $LOGFILE >>$BOOTLOG 2>&1 < /dev/null &"
             sleep $(( retry++ ))
         else
             ((retry=maxRetries+1))
@@ -98,7 +99,7 @@ start_server() {
     if [ $ret -eq 0 ]; then
         pid=$(get_pid)
         echo "zstack virtual router agent [PID:$pid] is running already"
-        su - vyos -c "echo $(date) zstack virtual router agent [PID:$pid] is running already >> $BOOTLOG"
+        su - $USER -c "echo $(date) zstack virtual router agent [PID:$pid] is running already >> $BOOTLOG"
     elif [ $ret -eq 1 ]; then
         do_start
     fi
@@ -106,13 +107,13 @@ start_server() {
 
 do_stop() {
     pid=$(get_pid)
-    su - vyos -c "echo $(date) stop virtual router agent pid: $pid >> $BOOTLOG"
+    su - $USER -c "echo $(date) stop virtual router agent pid: $pid >> $BOOTLOG"
     if [ x"$pid" != x"" ]; then
         kill -SIGINT $pid
         sleep 1
         kill -SIGTERM $pid 2> /dev/null
         while kill -0 $pid 2> /dev/null; do
-            su - vyos -c "echo $(date) stop virtual router agent pid: $pid >> $BOOTLOG"
+            su - $USER -c "echo $(date) stop virtual router agent pid: $pid >> $BOOTLOG"
             sleep 1
         done
     fi
@@ -123,7 +124,7 @@ stop_server() {
     ret=$?
     if [ $ret -ne 0 ]; then
         echo "zstack virtual router agent stopped already"
-        su - vyos -c "echo $(date) zstack virtual router agent stopped already >> $BOOTLOG"
+        su - $USER -c "echo $(date) zstack virtual router agent stopped already >> $BOOTLOG"
         return
     fi
     (
@@ -144,7 +145,7 @@ restart_server() {
     TMP=$SERVER.guard.$$
     trap "rm -f $TMP 2>/dev/null" EXIT
     echo "sleep 3" > $TMP
-    sudo -u vyos bash $TMP &
+    sudo -u $USER bash $TMP &
 
     echo "backgroup pid: $!"
     disown $!

@@ -10,14 +10,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 )
 
-const (
-	BOOT_CONFIG_FILE      = "/home/vyos/vyos_ut/zstack-vyos/test/boot_config.sh"
-	IPTABLES_RULE_FILE_UT = "/home/vyos/vyos_ut/zstack-vyos/iptables.rules"
-	BOOTSTRAP_INFO_UT     = "/home/vyos/vyos_ut/zstack-vyos/bootstrapinfo"
+var (
+	BOOT_CONFIG_FILE        = filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/test/boot_config.sh")
+	IPTABLES_RULE_FILE_UT   = filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/iptables.rules")
+	BOOTSTRAP_INFO_UT       = filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/bootstrapinfo")
 )
 
 var (
@@ -108,11 +109,11 @@ func InitBootStrapInfoForUT() {
 		return
 	}
 	if len(content) == 0 {
-		log.Debugf("no content in %s, can not get mgmt gateway", BOOTSTRAP_INFO_CACHE)
+		log.Debugf("no content in %s, can not get mgmt gateway", bootstrapInfoPath)
 	}
 
 	if err := json.Unmarshal(content, &BootstrapInfo); err != nil {
-		log.Debugf("can not parse info from %s, can not get mgmt gateway", BOOTSTRAP_INFO_CACHE)
+		log.Debugf("can not parse info from %s, can not get mgmt gateway", bootstrapInfoPath)
 	}
 }
 

@@ -1,6 +1,8 @@
 #!/bin/bash
 
-HOMDIR=/home/vyos/zvr
+id -u vyos > /dev/null 2>&1 && USER="vyos" || USER="zstack"
+
+HOMDIR=/home/$USER/zvr
 LOGFILE=$HOMDIR/systemMonitor.log
 BOOTSTRAPINFO=$HOMDIR/bootstrap-info.json
 DEFAULT_DIR="bin boot config dev etc home install.log lib lib64 lost+found media mnt opt proc root sbin srv sys tmp usr var"

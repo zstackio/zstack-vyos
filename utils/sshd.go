@@ -2,22 +2,21 @@ package utils
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
 	"runtime"
 	"strings"
 	"text/template"
+	"fmt"
 
 	"github.com/pkg/errors"
+	"path/filepath"
 )
 
 const (
 	SSHD_CONFIG_FILE      = "/etc/ssh/sshd_config"
-	SSHD_CONFIG_FILE_TEMP = "/home/vyos/sshd_config"
 	SSHD_TEMPLATE_FILE    = "template/sshd_tmpl"
-	SSH_KEYS_PATH         = "/home/vyos/.ssh/authorized_keys"
 )
 
 type SshdInfo struct {
@@ -25,6 +24,9 @@ type SshdInfo struct {
 	ListenAddress string
 	Keys          []string
 }
+
+var sshConfigFileTemp 	= filepath.Join(GetUserHomePath(), "sshd_config")
+var sshKeysPath 		= filepath.Join(GetUserHomePath(), ".ssh/authorized_keys")
 
 func NewSshServer() *SshdInfo {
 	sshAttr := SshdInfo{
@@ -87,26 +89,33 @@ func (s *SshdInfo) ConfigService() error {
 	if err = tmpl.Execute(&buf, s); err != nil {
 		return err
 	}
-	if err = ioutil.WriteFile(SSHD_CONFIG_FILE_TEMP, buf.Bytes(), 0664); err != nil {
+	if err = ioutil.WriteFile(sshConfigFileTemp, buf.Bytes(), 0664); err != nil {
 		return err
 	}
-	bash := Bash{
-		Command: fmt.Sprintf("mv %s %s", SSHD_CONFIG_FILE_TEMP, SSHD_CONFIG_FILE),
-		Sudo:    true,
+	// bash := Bash{
+	// 	Command: fmt.Sprintf("mv %s %s", sshConfigFileTemp, SSHD_CONFIG_FILE),
+	// 	Sudo:    true,
+	// }
+	// bash.Run()
+
+	if err = CopyFile(sshConfigFileTemp, SSHD_CONFIG_FILE);err != nil {
+		return err
 	}
-	bash.Run()
 
 	if len(s.Keys) != 0 {
 		keys_str := strings.Join(s.Keys, "\n")
-		file, err := CreateFileIfNotExists(SSH_KEYS_PATH, os.O_WRONLY|os.O_TRUNC, 0660)
+		file, err := CreateFileIfNotExists(sshKeysPath, os.O_WRONLY|os.O_TRUNC, 0660)
 		if err != nil {
 			return err
 		}
+
+		SetFileOwner(sshKeysPath, GetZvrUser(), "users")
 		defer file.Close()
 
 		if _, err := file.WriteString(keys_str); err != nil {
 			return err
 		}
+
 	}
 
 	s.RestareServer()
@@ -115,19 +124,9 @@ func (s *SshdInfo) ConfigService() error {
 }
 
 func (s *SshdInfo) RestareServer() error {
-	bash := Bash{
-		Command: "/etc/init.d/ssh restart",
-		Sudo:    true,
-	}
-
-	return bash.Run()
+	return ServiceOperation("ssh", "restart")
 }
 
 func (s *SshdInfo) StopService() error {
-	bash := Bash{
-		Command: "/etc/init.d/ssh stop",
-		Sudo:    true,
-	}
-
-	return bash.Run()
+	return ServiceOperation("ssh", "stop")
 }

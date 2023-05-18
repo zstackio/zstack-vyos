@@ -6,16 +6,18 @@ import (
 	"io/ioutil"
 	"strconv"
 	"strings"
+	"path/filepath"
 )
 
 const (
 	POLICY_ROUTE_TABLE_FILE      = "/etc/iproute2/rt_tables"
-	POLICY_ROUTE_TABLE_FILE_TEMP = "/home/vyos/zvr/.zs_rt_tables"
 
 	ROUTETABLE_ID_MIN  = 1
 	ROUTETABLE_ID_MAX  = 250
 	ROUTETABLE_ID_MAIN = 254
 )
+
+var POLICY_ROUTE_TABLE_FILE_TEMP = filepath.Join(GetZvrRootPath(), ".zs_rt_tables")
 
 type ZStackRouteTable struct {
 	TableId int

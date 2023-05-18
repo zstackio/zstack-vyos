@@ -56,6 +56,10 @@ type nic struct {
 	category string
 }
 
+var zvrHomePath     = utils.GetUserHomePath()
+var zvrRootPath     = utils.GetZvrRootPath()
+var zvrZsConfigPath = utils.GetZvrZsConfigPath()
+
 // Note: there shouldn't be 'daily' etc. in the following config files.
 var logfiles = []string{
 	"/etc/logrotate.d/haproxy",

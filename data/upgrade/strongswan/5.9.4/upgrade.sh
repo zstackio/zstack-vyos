@@ -2,11 +2,13 @@
 
 set -ex
 
+id -u vyos > /dev/null 2>&1 && USER="vyos" || USER="zstack"
+
 if [ `grep -c "1.1.7" /opt/vyatta/etc/version` -eq '0' ] && [ `grep -c "1.2" /opt/vyatta/etc/version` -eq '0' ]; then
     exit 0
 fi
 
-DATA_PATH="/home/vyos/zvr/data"
+DATA_PATH="/home/$USER/zvr/data"
 SW_594_PATH="${DATA_PATH}/upgrade/strongswan/5.9.4"
 CURRENT_ARCH=`uname -m`
 

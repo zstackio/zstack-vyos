@@ -9,14 +9,16 @@ import (
 	"github.com/pkg/errors"
 	"github.com/zstackio/zstack-vyos/server"
 	"github.com/zstackio/zstack-vyos/utils"
+	"path/filepath"
 )
 
 const (
 	FLOW_METER_REFRESH     = "/flowmeter/refresh"
 	FLOW_METER_GET_COUNTER = "/flowmeter/count"
 
-	VYOSHA_FLOW_SCRIPT = "/home/vyos/zvr/keepalived/script/flow.sh"
 )
+
+var VYOSHA_FLOW_SCRIPT = filepath.Join(utils.GetZvrRootPath(), "keepalived/script/flow.sh")
 
 type FlowType string
 type FlowVersion string
@@ -248,7 +250,7 @@ func getFlowCounterByPmacct() []counter {
 	counters := []counter{}
 	for nicMac, nicName := range flowNicMap {
 		bash := utils.Bash{
-			Command: fmt.Sprintf("/home/vyos/pmacct/pmacct -p /tmp/uacctd.pipe -c dst_mac -N '%s' -S -n all", nicMac),
+			Command: fmt.Sprintf("%s -p /tmp/uacctd.pipe -c dst_mac -N '%s' -S -n all", filepath.Join(utils.GetZvrRootPath(), "pmacct/pmacct"), nicMac),
 			Sudo:    true,
 		}
 		ret, o, _, err := bash.RunWithReturn()

@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+var RADVD_JSON_FILE	= filepath.Join(GetZvrRootPath(), ".zstack_config/radvd")
 
 var _ = Describe("radvd_test", func() {
 	var globalMap RadvdAttrsMap
@@ -100,7 +101,7 @@ var _ = Describe("radvd_test", func() {
 
 func cleanUpConfig() {
 	bash := Bash{
-		Command: "rm -f /home/vyos/zvr/.zstack_config/radvd; sudo pkill -9 radvd",
+		Command: fmt.Sprintf("rm -f %s; sudo pkill -9 radvd", RADVD_JSON_FILE)
 		Sudo:    true,
 	}
 	bash.Run()

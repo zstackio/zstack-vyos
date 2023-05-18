@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/zstackio/zstack-vyos/server"
@@ -23,7 +24,6 @@ const (
 
 	DHCPD_BIN_PATH_VYOS_1_1_7 = "/usr/sbin/dhcpd3"
 	DHCPD_BIN_PATH_VYOS_1_2   = "/usr/sbin/dhcpd"
-	DHCPD_PATH                = "/home/vyos/zvr/dhcp3"
 	HOST_HOST_FILE_TEMP       = "/tmp/.dhcphosts"
 	HOST_HOST_FILE            = "/etc/hosts"
 
@@ -34,7 +34,12 @@ const (
 
 	MAX_LEASE_TIME = 691200 /* 8 days */
 
-	DHCP_DHCP_SCRIPT = "/home/vyos/zvr/keepalived/script/dhcpd.sh"
+)
+
+var (
+	DHCPD_PATH       = filepath.Join(utils.GetZvrRootPath(), "dhcp3")
+	DHCP_DHCP_SCRIPT = filepath.Join(utils.GetZvrRootPath(), "keepalived/script/dhcpd.sh")
+
 )
 
 type dhcpInfo struct {
@@ -631,7 +636,7 @@ missingok
 
 	zvr_start_up_log_rotatoe_file, err := ioutil.TempFile(DHCPD_PATH, "zvrStartUpRotation")
 	utils.PanicOnError(err)
-	zvr_start_up_rotate_conf := `/home/vyos/zvr/zvrstartup.log {
+	zvr_start_up_rotate_conf_tmp := `%s {
 size 10240k
 daily
 rotate 10
@@ -640,12 +645,14 @@ copytruncate
 notifempty
 missingok
 }`
+	zvr_start_up_log_path := filepath.Join(utils.GetZvrRootPath(), "zvrstartup.log")
+	zvr_start_up_rotate_conf := fmt.Sprintf(zvr_start_up_rotate_conf_tmp, zvr_start_up_log_path)
 	_, err = zvr_start_up_log_rotatoe_file.Write([]byte(zvr_start_up_rotate_conf))
 	utils.PanicOnError(err)
 
 	zvr_log_rotatoe_file, err := ioutil.TempFile(DHCPD_PATH, "zvrRotation")
 	utils.PanicOnError(err)
-	zvr_rotate_conf := `/home/vyos/zvr/zvr.log {
+	zvr_rotate_conf_tmp := `%s {
 size 10240k
 rotate 40
 compress
@@ -653,6 +660,8 @@ copytruncate
 notifempty
 missingok
 }`
+	zvr_log_path := filepath.Join(utils.GetZvrRootPath(), "zvr.log")
+	zvr_rotate_conf := fmt.Sprintf(zvr_rotate_conf_tmp, zvr_log_path)
 	_, err = zvr_log_rotatoe_file.Write([]byte(zvr_rotate_conf))
 	utils.PanicOnError(err)
 

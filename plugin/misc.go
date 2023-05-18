@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/zstackio/zstack-vyos/server"
@@ -17,17 +18,19 @@ const (
 	INIT_PATH          = "/init"
 	PING_PATH          = "/ping"
 	ECHO_PATH          = "/echo"
+	TYPE_PATH          = "/type"
 	TEST_PATH          = "/test"
 	CONFIGURE_NTP_PATH = "/configurentp"
-	/* please follow following rule to change the version:
-	   http://confluence.zstack.io/pages/viewpage.action?pageId=34014178 */
-	VERSION_FILE_PATH          = "/home/vyos/zvr/version"
-	NETWORK_HEALTH_STATUS_PATH = "/home/vyos/zvr/.duplicate"
-	NTP_CONF_DIR               = "/home/vyos/zvr/ntp/conf/"
+	NTPD_CONFIG_FILE   = "/etc/ntp.conf"
 )
 
 var (
-	VERSION = ""
+	/* please follow following rule to change the version:
+	   http://confluence.zstack.io/pages/viewpage.action?pageId=34014178 */
+	VERSION                    = ""
+	VERSION_FILE_PATH          = filepath.Join(ZVR_ROOT_PATH, "version")
+	NETWORK_HEALTH_STATUS_PATH = filepath.Join(ZVR_ROOT_PATH, ".duplicate")
+	NTP_CONF_DIR               = filepath.Join(ZVR_ROOT_PATH, "ntp/conf/")
 )
 
 type InitConfig struct {
@@ -64,6 +67,11 @@ type pingRsp struct {
 	Healthy           bool                         `json:"healthy"`
 	HealthDetail      string                       `json:"healthDetail"`
 	ServiceHealthList map[string]map[string]string `json:"serviceHealthList"`
+}
+
+type typeRsp struct {
+	Success    bool   `json:"success"`
+	IsVyos     bool   `json:"isVyos"`
 }
 
 type testRsp struct {
@@ -183,11 +191,10 @@ interface listen ::1
 	_, err = ntp_conf_file.Write(conf.Bytes())
 	utils.PanicOnError(err)
 
-	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo mv %s /etc/ntp.conf; sudo /etc/init.d/ntp restart",
-			ntp_conf_file.Name()),
-	}
-	err = bash.Run()
+	err = utils.CopyFile(ntp_conf_file.Name(), NTPD_CONFIG_FILE)
+	utils.PanicOnError(err)
+
+	err = utils.ServiceOperation("ntp", "restart")
 	utils.PanicOnError(err)
 }
 
@@ -292,6 +299,11 @@ func echoHandler(ctx *server.CommandContext) interface{} {
 	return nil
 }
 
+func typeHandler(ctx *server.CommandContext) interface{} {
+	return typeRsp{IsVyos: utils.IsVYOS(), Success: true}
+}
+
+
 func testHandler(ctx *server.CommandContext) interface{} {
 	return testRsp{ZvrVersion: string(VERSION), Success: true}
 }
@@ -307,6 +319,7 @@ func MiscEntryPoint() {
 	server.RegisterAsyncCommandHandler(INIT_PATH, server.VyosLock(initHandler))
 	server.RegisterAsyncCommandHandler(PING_PATH, pingHandler)
 	server.RegisterSyncCommandHandler(ECHO_PATH, echoHandler)
+	server.RegisterSyncCommandHandler(TYPE_PATH, typeHandler)
 	server.RegisterSyncCommandHandler(TEST_PATH, server.VyosLock(testHandler))
 	server.RegisterAsyncCommandHandler(CONFIGURE_NTP_PATH, configureNtpHandle)
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/vishvananda/netlink"
+
 )
 
 // Equivalent to `ip addr add $ipString dev $linkName`
@@ -18,7 +19,6 @@ func IpAddrAdd(linkName string, ipString string) error {
 	if linkName == "" || ipString == "" {
 		return errors.New("link name or address can not be empty")
 	}
-
 	if l, err = netlink.LinkByName(linkName); err != nil {
 		return err
 	}
@@ -32,7 +32,14 @@ func IpAddrAdd(linkName string, ipString string) error {
 			return nil
 		}
 	}
+	
+	// bash :=  Bash{
+	// 	Command: fmt.Sprintf("sudo ip addr add %s dev %s", ipString, linkName),
+	// }
 
+	// if ret, _, _, err := bash.RunWithReturn(); ret == 0 && err == nil {
+	// 	return nil
+	// }
 	return err
 }
 
