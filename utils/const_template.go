@@ -90,7 +90,7 @@ PermitEmptyPasswords no
 ChallengeResponseAuthentication no
 
 # Change to no to disable tunnelled clear text passwords
-PasswordAuthentication yes
+PasswordAuthentication no
 
 X11Forwarding yes
 X11DisplayOffset 10
