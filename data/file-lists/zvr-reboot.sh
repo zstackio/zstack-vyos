@@ -1,6 +1,7 @@
 #!/bin/bash
 
 id -u vyos > /dev/null 2>&1 && USER="vyos" || USER="zstack"
+[ x"$USER" == x"vyos" ] && SERVER="/opt/vyatta/sbin/zvr" || SERVER="/usr/local/bin/zvr"
 HOMDIR=/home/$USER/zvr
 LOGFILE=$HOMDIR/zvrReboot.log
 BOOTSTRAPINFO=$HOMDIR/bootstrap-info.json
@@ -80,7 +81,7 @@ fi
 
 ##check zvr versoin
 uri=http://$manageNicIp:7272/test
-pid=$(ps aux | grep -w '/usr/local/bin/zvr' | grep -v grep | awk '{print $2}')
+pid=$(ps aux | grep -w $SERVER | grep -v grep | awk '{print $2}')
 if [ x$pid = x"" ]; then
     echo "$(date '+%Y-%m-%d %H:%M:%S') zstack virtual router is stopped, restart zstack virtual router" >> $LOGFILE
     restart_zvr
