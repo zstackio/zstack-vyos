@@ -3,9 +3,9 @@ package plugin
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -49,12 +49,12 @@ const (
 )
 
 var (
-	zvrRootPath 				= utils.GetZvrRootPath()	
-	AutoRestartVpn 				= false
-	AutoRestartThreadCreated	= false
-	ipsecStrongSWanDataPath		= filepath.Join(zvrRootPath, "data/upgrade/strongswan/")
-	haIpsecScript				= filepath.Join(zvrRootPath, "keepalived/script/ipsec.sh")
-	ipsecTempScript				= filepath.Join(zvrRootPath, "keepalived/temp/ipsec.sh")
+	zvrRootPath              = utils.GetZvrRootPath()
+	AutoRestartVpn           = false
+	AutoRestartThreadCreated = false
+	ipsecStrongSWanDataPath  = filepath.Join(zvrRootPath, "data/upgrade/strongswan/")
+	haIpsecScript            = filepath.Join(zvrRootPath, "keepalived/script/ipsec.sh")
+	ipsecTempScript          = filepath.Join(zvrRootPath, "keepalived/temp/ipsec.sh")
 )
 
 type ipsecInfo struct {
@@ -579,7 +579,7 @@ func getStrongswanSoftwareVersion() (string, error) {
 func updateOriginVersion(version string) error {
 	log.Infof("TEMP: updateOriginVersion for version=%s.", version)
 
-	originPath := filepath.Join(ipsecStrongSWanDataPath , "origin")
+	originPath := filepath.Join(ipsecStrongSWanDataPath, "origin")
 	if exist, _ := utils.PathExists(originPath); !exist {
 		return errors.New("no origin version in " + ipsecStrongSWanDataPath)
 	}
@@ -594,8 +594,8 @@ func updateOriginVersion(version string) error {
 		return nil
 	}
 
-	if err := utils.CopyFile(originPath+"/"+ipsec_strongswan_upgrade_cmd,
-		versionPath+"/"+ipsec_strongswan_upgrade_cmd); err != nil {
+	if err := utils.CopyFile(filepath.Join(originPath, ipsec_strongswan_upgrade_cmd),
+		filepath.Join(versionPath, ipsec_strongswan_upgrade_cmd)); err != nil {
 		return err
 	}
 
@@ -661,7 +661,7 @@ func getVersionSupport() []string {
 			}
 
 			supports = append(supports, name)
-			os.Chmod(ipsecStrongSWanDataPath+name+"/"+ipsec_strongswan_upgrade_cmd, 0777)
+			os.Chmod(filepath.Join(ipsecStrongSWanDataPath, name, ipsec_strongswan_upgrade_cmd), 0777)
 		}
 	}
 
@@ -695,7 +695,7 @@ func upDownStrongswanSoftware(version string, down bool) error {
 		}
 	}()
 
-	upgradePath := ipsecStrongSWanDataPath + version + "/" + ipsec_strongswan_upgrade_cmd
+	upgradePath := filepath.Join(ipsecStrongSWanDataPath, version, ipsec_strongswan_upgrade_cmd)
 	if exist, _ := utils.PathExists(upgradePath); !exist {
 		return fmt.Errorf("upgrade.sh for strongswan version %s not existed", version)
 	}
