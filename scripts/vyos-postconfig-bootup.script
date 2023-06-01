@@ -2,6 +2,8 @@
 
 CONFIG_FILE="/home/vyos/zvr/data/config/bootup-config.install"
 FILE_LISTS_PATH="/home/vyos/zvr/data/file-lists"
+VYATTA_BIN_PATH="/opt/vyatta/sbin"
+VYOS_ZVR_ROOT_PATH="/home/vyos/zvr"
 LOG_FILE="/var/log/zstack-boot.log"
 RUNNER_FILE="/usr/local/zstack/.zstack_runner"
 FLAG_X86="X86"
@@ -54,6 +56,10 @@ chown vyos:users /home/vyos/ -R
 chmod +x /usr/local/zstack/zsn-agent/bin/zsn-agent
 chmod +x /etc/init.d/zstack-network-agent
 chown vyos:users /usr/local/zstack/zsn-agent/bin/zsn-agent
+
+sed -i "s%__ZVR_ROOT_PATH__%${VYOS_ZVR_ROOT_PATH}%g"     ${CONFIG_FILE}
+sed -i "s%__BIN_PATH__%${VYATTA_BIN_PATH}%g"             ${CONFIG_FILE}
+sed -i "s%__USER__%vyos%g"                               ${CONFIG_FILE}
 
 if [ ! -f "${CONFIG_FILE}" ]; then
     log_info "can not find build-image.install, should check data directory"
