@@ -19,12 +19,14 @@ case "$1" in
         fi
 
         ipsec stop 2>/dev/null
+        rm -rf /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock 2>/dev/null
         /usr/bin/dpkg -r strongswan-zstack
         ;;
     *)
         if [[ x"$CURRENT_ARCH" == x"x86_64" ]]; then
             /usr/bin/dpkg -i ${SW_594_PATH}/strongswan-zstack_5.9.4-1_amd64.deb
         elif [[ x"$CURRENT_ARCH" == x"aarch64" ]];then
+            rm -rf /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock 2>/dev/null
             /usr/bin/dpkg -i ${SW_594_PATH}/strongswan-zstack_5.9.4-1_arm64.deb
         fi
         cp ${SW_594_PATH}/ipsec.conf /usr/local/etc/ipsec.conf

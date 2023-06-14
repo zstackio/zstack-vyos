@@ -708,7 +708,7 @@ func upDownStrongswanSoftware(version string, down bool) error {
 	b := utils.Bash{
 		Command:  upgradePath + downOpt,
 		Sudo:     true,
-		Timeout:  10,
+		Timeout:  60,
 		IsScript: true,
 	}
 	err = b.Run()
