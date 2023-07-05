@@ -10,6 +10,7 @@ if [ -L ${ZSN_LOG_FILE} ]; then
     rm -f ${ZSN_LOG_FILE}
     mkdir -p ${ZSN_DIR}
     touch ${ZSN_LOG_FILE}
+    find ${ZSN_DIR} -name "zsn-agent.log.*[0-9]" | xargs rm -f
 else
     log_info "zsn-agent.log not soft link, nothing to do ..."
 fi
