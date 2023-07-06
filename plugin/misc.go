@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
-	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/zstackio/zstack-vyos/server"
@@ -70,8 +70,8 @@ type pingRsp struct {
 }
 
 type typeRsp struct {
-	Success    bool   `json:"success"`
-	IsVyos     bool   `json:"isVyos"`
+	Success bool `json:"success"`
+	IsVyos  bool `json:"isVyos"`
 }
 
 type testRsp struct {
@@ -202,7 +202,7 @@ func configTaskScheduler() {
 	if !utils.IsEnableVyosCmd() {
 		sshJob := utils.NewCronjob().SetId(1).SetCommand(utils.Cronjob_file_ssh).SetMinute("*/1")
 		zvrMonitorJob := utils.NewCronjob().SetId(2).SetCommand(utils.Cronjob_file_zvrMonitor).SetMinute("*/1")
-		fileMonitorJob := utils.NewCronjob().SetId(3).SetCommand(fmt.Sprintf("/usr/bin/flock -xn /tmp/file-monitor.lock -c %s", utils.Cronjob_file_fileMonitor)).SetMinute("*/1")
+		fileMonitorJob := utils.NewCronjob().SetId(3).SetCommand(fmt.Sprintf("/usr/bin/flock -xn /tmp/file-monitor.lock -c %s", utils.Cronjob_file_fileMonitor)).SetMinute("0").SetHour("*/1")
 		rsyslogJob := utils.NewCronjob().SetId(4).SetCommand(utils.Cronjob_file_rsyslog).SetMinute("*/1")
 		topJob := utils.NewCronjob().SetId(5).SetCommand("/usr/bin/top -b -n 1 -H >> /var/log/top.log").SetMinute("*/1")
 
@@ -238,7 +238,7 @@ func configTaskScheduler() {
 			tree.Set("system task-scheduler task cpu-monitor executable arguments '-b -n 1 -H >> /var/log/top.log'")
 		}
 		if tree.Get("system task-scheduler task file-monitor") == nil {
-			tree.Set("system task-scheduler task file-monitor interval 1")
+			tree.Set("system task-scheduler task file-monitor interval 1h")
 			tree.Set("system task-scheduler task file-monitor executable path /usr/bin/flock")
 			tree.Set(fmt.Sprintf("system task-scheduler task file-monitor executable arguments '-xn /tmp/file-monitor.lock -c %s'", utils.Cronjob_file_fileMonitor))
 		}
@@ -302,7 +302,6 @@ func echoHandler(ctx *server.CommandContext) interface{} {
 func typeHandler(ctx *server.CommandContext) interface{} {
 	return typeRsp{IsVyos: utils.IsVYOS(), Success: true}
 }
-
 
 func testHandler(ctx *server.CommandContext) interface{} {
 	return testRsp{ZvrVersion: string(VERSION), Success: true}

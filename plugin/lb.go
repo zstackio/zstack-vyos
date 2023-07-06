@@ -50,12 +50,12 @@ const (
 )
 
 var (
-	ZVR_ROOT_PATH          = utils.GetZvrRootPath()
-	LB_ROOT_DIR            = filepath.Join(ZVR_ROOT_PATH, "lb/")
-	LB_CONF_DIR            = filepath.Join(ZVR_ROOT_PATH, "lb/conf/")
-	LB_PID_DIR             = filepath.Join(ZVR_ROOT_PATH, "pid/")
-	CERTIFICATE_ROOT_DIR   = filepath.Join(ZVR_ROOT_PATH, "certificate/")
-	LB_SOCKET_DIR          = filepath.Join(ZVR_ROOT_PATH, "lb/sock/")
+	ZVR_ROOT_PATH        = utils.GetZvrRootPath()
+	LB_ROOT_DIR          = filepath.Join(ZVR_ROOT_PATH, "lb/")
+	LB_CONF_DIR          = filepath.Join(ZVR_ROOT_PATH, "lb/conf/")
+	LB_PID_DIR           = filepath.Join(ZVR_ROOT_PATH, "pid/")
+	CERTIFICATE_ROOT_DIR = filepath.Join(ZVR_ROOT_PATH, "certificate/")
+	LB_SOCKET_DIR        = filepath.Join(ZVR_ROOT_PATH, "lb/sock/")
 )
 
 var (
@@ -2033,8 +2033,7 @@ missingok
 	auth_rotatoe_file, err := ioutil.TempFile(LB_CONF_DIR, "auth")
 	utils.PanicOnError(err)
 	auth_rotate_conf := `/var/log/auth.log {
-size 102400k
-daily
+size 50M
 rotate 10
 compress
 copytruncate
