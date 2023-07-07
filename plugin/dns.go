@@ -43,15 +43,21 @@ func setDnsFirewallRules(nicName string) error {
 	table := utils.NewIpTables(utils.FirewallTable)
 
 	var rules []*utils.IpTableRule
-
+	nicIp, _ := utils.GetIpByNicName(nicName)
 	rule := utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
 	rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
 	rule.SetProto(utils.IPTABLES_PROTO_UDP).SetDstPort("53")
+	if nicIp != "" {
+		rule.SetDstIp(nicIp + "/32")
+	}
 	rules = append(rules, rule)
 
 	rule = utils.NewIpTableRule(utils.GetRuleSetName(nicName, utils.RULESET_LOCAL))
 	rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
 	rule.SetProto(utils.IPTABLES_PROTO_TCP).SetDstPort("53")
+	if nicIp != "" {
+		rule.SetDstIp(nicIp + "/32")
+	}
 	rules = append(rules, rule)
 
 	table.AddIpTableRules(rules)
@@ -105,16 +111,19 @@ func setDns(cmd *setDnsCmd) interface{} {
 			err := setDnsFirewallRules(eth)
 			utils.PanicOnError(err)
 		} else {
+			nicIp, _ := utils.GetIpByNicName(eth)
 			tree := server.NewParserFromShowConfiguration().Tree
 			des := makeDnsFirewallRuleDescription(eth)
 			if r := tree.FindFirewallRuleByDescription(eth, "local", des); r == nil {
-				tree.SetFirewallOnInterface(eth, "local",
+				currentRuleNum := tree.SetFirewallOnInterface(eth, "local",
 					fmt.Sprintf("description %v", des),
 					"destination port 53",
 					"protocol tcp_udp",
 					"action accept",
 				)
-
+				if nicIp != "" {
+					tree.SetFirewallWithRuleNumber(eth, "local", currentRuleNum, fmt.Sprintf("destination address %v", nicIp))
+				}
 				tree.AttachFirewallToInterface(eth, "local")
 			}
 
@@ -189,13 +198,17 @@ func setVpcDns(cmd *setVpcDnsCmd) interface{} {
 			utils.PanicOnError(err)
 		} else {
 			des := makeDnsFirewallRuleDescription(nic)
+			nicIp, _ := utils.GetIpByNicName(nic)
 			if r := tree.FindFirewallRuleByDescription(nic, "local", des); r == nil {
-				tree.SetFirewallOnInterface(nic, "local",
+				currentRuleNum := tree.SetFirewallOnInterface(nic, "local",
 					fmt.Sprintf("description %v", des),
 					"destination port 53",
 					"protocol tcp_udp",
 					"action accept",
 				)
+				if nicIp != "" {
+					tree.SetFirewallWithRuleNumber(nic, "local", currentRuleNum, fmt.Sprintf("destination address %v", nicIp))
+				}
 
 				tree.AttachFirewallToInterface(nic, "local")
 			}
