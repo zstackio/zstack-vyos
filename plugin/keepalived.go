@@ -87,6 +87,7 @@ type KeepalivedNotify struct {
 	FlowScript          string
 	PimdScript          string
 	DhcpdScript         string
+	DnsmasqScript       string
 	KeepalivedCfg       string
 	DefaultRouteScript  string
 	PrimaryBackupScript string
@@ -128,6 +129,9 @@ sudo ip link set up dev {{$name}} || true
 
 #start dhcp server
 (/bin/bash {{.DhcpdScript}}) &
+
+#start dns server
+(/bin/bash {{.DnsmasqScript}}) &
 
 #add default route
 (/bin/bash {{.DefaultRouteScript}}) &
@@ -205,6 +209,7 @@ func NewKeepalivedNotifyConf(vyosHaVips, mgmtVips []nicVipPair) *KeepalivedNotif
 		FlowScript:     filepath.Join(KeepalivedScriptPath, "flow.sh"),
 		PimdScript:     filepath.Join(KeepalivedScriptPath, "pimd.sh"),
 		DhcpdScript:    filepath.Join(KeepalivedScriptPath, "dhcpd.sh"),
+		DnsmasqScript:	filepath.Join(KeepalivedScriptPath, "dnsmasq.sh"),
 		DoGARPScript:   KeepalivedScriptMasterDoGARP,
 		KeepalivedCfg:  KeepalivedConfigFile,
 		PrimaryBackupScript: ConntrackScriptPrimaryBackup,
