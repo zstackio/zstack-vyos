@@ -33,6 +33,7 @@ log-facility=/var/log/dnsmasq.log
 no-poll
 edns-packet-max=4096
 cache-size=150
+bind-interfaces
 {{ range $index, $name := .NicNames }}
 interface={{$name}}
 {{ end }}
