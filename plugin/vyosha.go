@@ -12,7 +12,9 @@ import (
 )
 
 const (
-	SET_VYOSHA_PATH = "/enableVyosha"
+	SET_VYOSHA_PATH         = "/enableVyosha"
+	SYNC_VPC_ROUTER_HA_PATH = "/syncVpcRouterHa"
+	RESTART_KEEPALIVED_PATH = "/restartKeepalived"
 )
 
 type setVyosHaCmd struct {
@@ -37,6 +39,10 @@ var (
 	getKeepAlivedStatusStart = false
 	keepAlivedCheckStart     = false
 )
+
+type syncVpcRouterHaRsp struct {
+	HaStatus string `json:"haStatus"`
+}
 
 func setVyosHaHandler(ctx *server.CommandContext) interface{} {
 	cmd := &setVyosHaCmd{}
@@ -172,6 +178,27 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 		return fmt.Errorf("keepalived master election not finished")
 	}, 5, uint(cmd.Keepalive))
 	utils.PanicOnError(err)
+	return nil
+}
+
+func syncVpcRouterHaHandler(ctx *server.CommandContext) interface{} {
+	var haStatus string
+	if !utils.IsHaEnabled() {
+		haStatus = utils.NOHA
+	} else if IsMaster() {
+		haStatus = utils.HAMASTER
+	} else {
+		haStatus = utils.HABACKUP
+	}
+	return syncVpcRouterHaRsp{HaStatus: haStatus}
+}
+
+func restartKeepalivedHandler(ctx *server.CommandContext) interface{} {
+	err := doRestartKeepalived(KeepAlivedProcess_Restart)
+	if err != nil {
+		utils.PanicOnError(err)
+	}
+
 	return nil
 }
 
@@ -387,6 +414,8 @@ var haVipPairs = vyosNicVipPairs{
 
 func VyosHaEntryPoint() {
 	server.RegisterAsyncCommandHandler(SET_VYOSHA_PATH, server.VyosLock(setVyosHaHandler))
+	server.RegisterAsyncCommandHandler(SYNC_VPC_ROUTER_HA_PATH, server.VyosLock(syncVpcRouterHaHandler))
+	server.RegisterAsyncCommandHandler(RESTART_KEEPALIVED_PATH, server.VyosLock(restartKeepalivedHandler))
 	if utils.IsHaEnabled() {
 		/* set as unknown, then getKeepAlivedStatusTask will get master or backup, then will the right script  */
 		keepAlivedStatus = KeepAlivedStatus_Unknown
