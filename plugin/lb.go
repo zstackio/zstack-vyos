@@ -464,6 +464,9 @@ frontend {{.ListenerUuid}}
 {{ end }}
     timeout client {{.ConnectionIdleTimeout}}s
 
+{{- if eq $.HttpRedirectHttps "enable"}}
+    http-request redirect location https://%[req.hdr(host),regsub(:\d+$,,)]:{{$.RedirectPort}}%[capture.req.uri,regsub(/$,,)] code {{$.StatusCode}} unless { ssl_fc }
+{{- end }}
 
 {{- if eq .AccessControlStatus "enable" }}
 {{- if eq .AclType "black" "white" }}
