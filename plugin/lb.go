@@ -108,7 +108,9 @@ type lbInfo struct {
 	LbUuid             string             `json:"lbUuid"`
 	ListenerUuid       string             `json:"listenerUuid"`
 	Vip                string             `json:"vip"`
+	Vip6               string             `json:"vip6"`
 	PublicNic          string             `json:"publicNic"`
+	EnableFullLog      bool               `json:"enableFullLog"`
 	NicIps             []string           `json:"nicIps"`
 	InstancePort       int                `json:"instancePort"`
 	LoadBalancerPort   int                `json:"loadBalancerPort"`
@@ -357,6 +359,43 @@ func parseListenerPrameter(lb lbInfo) (map[string]interface{}, error) {
 		m["ServerGroups"] = []serverGroupInfo{}
 	}
 
+	if m["TcpProxyProtocol"] == "v1" {
+		m["ServerSendProxy"] = "send-proxy"
+	} else if m["TcpProxyProtocol"] == "v2" {
+		m["ServerSendProxy"] = "send-proxy-v2"
+	} else {
+		m["ServerSendProxy"] = ""
+	}
+
+	if m["HttpCompressAlgos"] != nil && m["HttpCompressAlgos"] != "" {
+		m["HttpCompressAlgos"] = "compression algo " + m["HttpCompressAlgos"].(string)
+		m["HttpCompressType"] = "compression type text/xml text/plain text/css application/javascript application/x-javascript application/rss+xml application/atom+xml application/xml application/json"
+	}
+
+	if lb.EnableFullLog {
+		if lb.Mode == "tcp" {
+			m["OptionLog"] = "option tcplog"
+		} else if lb.Mode == "http" || lb.Mode == "https" {
+			m["OptionLog"] = "option httplog"
+		}
+	}
+
+	vips := make([]string, 0)
+	if lb.Vip != "" {
+		vips = append(vips, lb.Vip)
+	}
+	if lb.Vip6 != "" {
+		vips = append(vips, lb.Vip6)
+	}
+	if m["HttpVersions"] != nil {
+		m["HttpVersions"] = fmt.Sprintf("alpn %s", m["HttpVersions"])
+	} else {
+		m["HttpVersions"] = ""
+	}
+
+	m["Vips"] = vips
+	log.Debugf("refresh lb vips %+v", vips)
+	log.Debugf("refresh lb httpvertsion %+v", m["HttpVersions"])
 	return m, nil
 }
 
@@ -445,6 +484,8 @@ defaults
 {{- if eq .Mode "https" "http"}}
     option {{.HttpMode}}
 {{end}}
+    {{.HttpCompressAlgos}}
+    {{.HttpCompressType}}
 
 
 frontend {{.ListenerUuid}}
@@ -457,15 +498,23 @@ frontend {{.ListenerUuid}}
     option forwardfor
 {{end}}
 
-{{- if eq .Mode "https"}}
-    bind {{.Vip}}:{{.LoadBalancerPort}} ssl crt {{.CertificatePath}}
+{{- with .Vips }}
+{{- range . }}
+{{- if eq $.Mode "https"}}
+    bind {{ . }}:{{$.LoadBalancerPort}} ssl crt {{$.CertificatePath}} {{$.HttpVersions}}
 {{- else }}
-    bind {{.Vip}}:{{.LoadBalancerPort}}
-{{ end }}
-    timeout client {{.ConnectionIdleTimeout}}s
+    bind {{ . }}:{{$.LoadBalancerPort}}
+{{- end }}
+{{- end }}
+{{- end }}
 
+    timeout client {{.ConnectionIdleTimeout}}s
+    {{.OptionLog}}
+
+{{- if  $.HttpRedirectHttps}}
 {{- if eq $.HttpRedirectHttps "enable"}}
     http-request redirect location https://%[req.hdr(host),regsub(:\d+$,,)]:{{$.RedirectPort}}%[capture.req.uri,regsub(/$,,)] code {{$.StatusCode}} unless { ssl_fc }
+{{- end }}
 {{- end }}
 {{- if eq .Mode "https"}}
 	http-request redirect scheme https code 301 unless { ssl_fc }
@@ -531,15 +580,15 @@ backend {{ .ServerGroupUuid}}
 {{- range . }}
 {{- if eq $.BalancerAlgorithm "static-rr" }}
 {{- if eq $.SessionPersistence "insert" "rewrite"}}
-    server nic-{{.Ip}} {{.Ip}}:{{$.InstancePort}} cookie {{.Ip}} weight {{.Weight}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
+    server nic-{{.Ip}} {{.Ip}}:{{$.InstancePort}} cookie {{.Ip}} weight {{.Weight}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}} {{$.ServerSendProxy}}
 {{- else }}    
-    server nic-{{.Ip}} {{.Ip}}:{{$.InstancePort}} weight {{.Weight}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
+    server nic-{{.Ip}} {{.Ip}}:{{$.InstancePort}} weight {{.Weight}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}} {{$.ServerSendProxy}}
 {{- end }}
 {{- else }}
 {{- if eq $.SessionPersistence "insert" "rewrite"}}
-    server nic-{{.Ip}} {{.Ip}}:{{$.InstancePort}} cookie {{.Ip}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
+    server nic-{{.Ip}} {{.Ip}}:{{$.InstancePort}} cookie {{.Ip}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}} {{$.ServerSendProxy}}
 {{- else }}
-    server nic-{{.Ip}} {{.Ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}}
+    server nic-{{.Ip}} {{.Ip}}:{{$.InstancePort}} check port {{$.CheckPort}} inter {{$.HealthCheckInterval}}s rise {{$.HealthyThreshold}} fall {{$.UnhealthyThreshold}} {{$.ServerSendProxy}}
 {{- end }}
 {{- end }}
 {{- end }}

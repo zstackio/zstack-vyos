@@ -61,15 +61,16 @@ const (
 )
 
 var (
-	KeepalivedRootPath           = filepath.Join(utils.GetZvrRootPath(), "keepalived/")
-	KeepalivedConfigPath         = filepath.Join(KeepalivedRootPath, "conf/")
-	KeepalivedScriptPath         = filepath.Join(KeepalivedRootPath, "script/")
-	KeepalivedConfigFile         = filepath.Join(KeepalivedRootPath, "conf/keepalived.conf")
-	ConntrackdConfigFile         = filepath.Join(KeepalivedRootPath, "conf/conntrackd.conf")
-	KeepalivedScriptMasterDoGARP = filepath.Join(KeepalivedRootPath, "script/garp.sh")
-	KeepalivedScriptNotifyMaster = filepath.Join(KeepalivedRootPath, "script/notifyMaster")
-	KeepalivedScriptNotifyBackup = filepath.Join(KeepalivedRootPath, "script/notifyBackup")
-	ConntrackScriptPrimaryBackup = filepath.Join(KeepalivedRootPath, "script/primary-backup.sh")
+	KeepalivedRootPath              = filepath.Join(utils.GetZvrRootPath(), "keepalived/")
+	KeepalivedConfigPath            = filepath.Join(KeepalivedRootPath, "conf/")
+	KeepalivedScriptPath            = filepath.Join(KeepalivedRootPath, "script/")
+	KeepalivedConfigFile            = filepath.Join(KeepalivedRootPath, "conf/keepalived.conf")
+	ConntrackdConfigFile            = filepath.Join(KeepalivedRootPath, "conf/conntrackd.conf")
+	KeepalivedScriptMasterDoGARP    = filepath.Join(KeepalivedRootPath, "script/garp.sh")
+	KeepalivedScriptMasterDoIpv6Dad = filepath.Join(KeepalivedRootPath, "script/ipv6Dad.sh")
+	KeepalivedScriptNotifyMaster    = filepath.Join(KeepalivedRootPath, "script/notifyMaster")
+	KeepalivedScriptNotifyBackup    = filepath.Join(KeepalivedRootPath, "script/notifyBackup")
+	ConntrackScriptPrimaryBackup    = filepath.Join(KeepalivedRootPath, "script/primary-backup.sh")
 )
 
 type KeepalivedNotify struct {
@@ -83,6 +84,7 @@ type KeepalivedNotify struct {
 	VrUuid              string
 	CallBackUrl         string
 	DoGARPScript        string
+	DoIpv6DadScript     string
 	IpsecScript         string
 	FlowScript          string
 	PimdScript          string
@@ -98,11 +100,36 @@ const tSendGratiousARP = `#!/bin/sh
 logger "Sending gratious ARP" || true
 
 {{ range .VyosHaVipPairs }}
+{{ if .Vip }}
 (sudo arping -q -A -c 3 -I {{.NicName}} {{.Vip}}) &
+{{ else if .Vip6 }}
+(ndsend {{.Vip6}} {{.NicName}}) &
+{{end}}
 {{ end }}
 {{ range .NicIps }}
 (sudo arping -q -A -c 3 -I {{.NicName}} {{.Vip}}) &
 {{ end }}
+`
+
+const tSetIpv6InterfaceDadSuccess = `#!/bin/sh
+# This file is auto-generated, DO NOT EDIT! DO NOT EDIT!! DO NOT EDIT!!!
+logger "set ipv6 interface dad success" || true
+seconds=0
+
+while [ $seconds -lt 60 ]; do
+{{- range .VyosHaVipPairs }}
+{{- if .Vip6 }}
+ipv6=$(ip -6 addr show dev {{.NicName}} | grep {{.Vip6}}|awk '/dad/{print $2}')
+if [ x$ipv6 != x"" ]; then
+	ip -6 a del $ipv6 dev {{.NicName}} && ip -6 a add $ipv6 dev {{.NicName}}
+	ndsend {{.Vip6}} {{.NicName}}
+fi
+{{- end}}
+{{- end}}
+sleep 3
+
+seconds=$((seconds + 3))
+done
 `
 
 const tKeepalivedNotifyMaster = `#!/bin/sh
@@ -117,6 +144,9 @@ sudo ip link set up dev {{$name}} || true
 
 #send Gratuitous ARP
 (/bin/bash {{.DoGARPScript}}) &
+
+#do ipv6 dad
+(/bin/bash {{.DoIpv6DadScript}}) &
 
 #restart ipsec process
 (/bin/bash {{.IpsecScript}}) &
@@ -211,6 +241,7 @@ func NewKeepalivedNotifyConf(vyosHaVips, mgmtVips []nicVipPair) *KeepalivedNotif
 		DhcpdScript:         filepath.Join(KeepalivedScriptPath, "dhcpd.sh"),
 		DnsmasqScript:       filepath.Join(KeepalivedScriptPath, "dnsmasq.sh"),
 		DoGARPScript:        KeepalivedScriptMasterDoGARP,
+		DoIpv6DadScript:     KeepalivedScriptMasterDoIpv6Dad,
 		KeepalivedCfg:       KeepalivedConfigFile,
 		PrimaryBackupScript: ConntrackScriptPrimaryBackup,
 		DefaultRouteScript:  filepath.Join(KeepalivedScriptPath, "defaultroute.sh"),
@@ -230,6 +261,17 @@ func (k *KeepalivedNotify) generateGarpScript() error {
 	return ioutil.WriteFile(KeepalivedScriptMasterDoGARP, buf.Bytes(), 0755)
 }
 
+func (k *KeepalivedNotify) generateIpv6DadScript() error {
+	tmpl, err := template.New("ipv6Dad.sh").Parse(tSetIpv6InterfaceDadSuccess)
+	utils.PanicOnError(err)
+
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, k)
+	utils.PanicOnError(err)
+
+	return ioutil.WriteFile(KeepalivedScriptMasterDoIpv6Dad, buf.Bytes(), 0755)
+}
+
 func (k *KeepalivedNotify) CreateMasterScript() error {
 	tmpl, err := template.New("master.conf").Parse(tKeepalivedNotifyMaster)
 	utils.PanicOnError(err)
@@ -242,6 +284,9 @@ func (k *KeepalivedNotify) CreateMasterScript() error {
 	utils.PanicOnError(err)
 
 	err = k.generateGarpScript()
+	utils.PanicOnError(err)
+
+	err = k.generateIpv6DadScript()
 	utils.PanicOnError(err)
 
 	log.Debugf("%s: %s", KeepalivedScriptNotifyMaster, buf.String())

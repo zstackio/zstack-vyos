@@ -318,7 +318,16 @@ func keepAlivedCheckTask() {
 type nicVipPair struct {
 	NicName string
 	Vip     string
+	Vip6    string
 	Prefix  int
+}
+
+func (vip nicVipPair) getVip() string {
+	if vip.Vip != "" {
+		return vip.Vip
+	} else {
+		return vip.Vip6
+	}
 }
 
 type vyosNicVipPairs struct {
@@ -344,7 +353,7 @@ func addHaNicVipPair(pairs []nicVipPair, callscript bool) {
 	for _, p := range pairs {
 		found := false
 		for _, op := range haVipPairs.pairs {
-			if p.NicName == op.NicName && p.Vip == op.Vip {
+			if p.NicName == op.NicName && (p.getVip() == op.getVip()) {
 				found = true
 				break
 			}
@@ -400,8 +409,9 @@ func InitHaNicState() {
 	/* if ha is enable, shutdown all interface except eth0 */
 	var cmds []string
 	cmds = append(cmds, fmt.Sprintf("sudo sysctl -w net.ipv4.ip_nonlocal_bind=1"))
+	cmds = append(cmds, fmt.Sprintf("sudo sysctl -w net.ipv6.ip_nonlocal_bind=1"))
 	b = utils.Bash{
-		Command: strings.Join(cmds, "\n"),
+		Command: strings.Join(cmds, ";"),
 	}
 
 	b.Run()

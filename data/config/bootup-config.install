@@ -24,6 +24,7 @@ zstack-virtualrouteragent        /etc/init.d/zstack-virtualrouteragent        07
 #
 keepalived       /usr/sbin/keepalived        0755      __USER__:users
 haproxy          __BIN_PATH__/haproxy        0755      __USER__:users
+ndsend           /usr/sbin/ndsend            0755      __USER__:users
 gobetween        __BIN_PATH__/gobetween      0755      __USER__:users
 pimd             __BIN_PATH__/pimd           0755      __USER__:users
 uacctd           __BIN_PATH__/uacctd         0755      __USER__:users
