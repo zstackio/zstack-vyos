@@ -320,6 +320,13 @@ func configureNicByVyos(nicList []utils.NicInfo) interface{} {
 			}
 		}, 5, 1)
 		utils.PanicOnError(err)
+		if !IsMaster() {
+			/* avoid both master and backup interface up when add nic */
+			tree.Setf("interfaces ethernet %s disable", nicname)
+			tree.Apply(false)
+			tree = server.NewParserFromShowConfiguration().Tree
+		}
+
 		err = utils.Retry(func() error {
 			bash := utils.Bash{
 				Command: fmt.Sprintf("sudo /sbin/ethtool %s", nicname),

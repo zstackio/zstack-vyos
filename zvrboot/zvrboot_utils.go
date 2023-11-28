@@ -181,6 +181,7 @@ func configureNicInfo(nic *utils.NicInfo) {
 		utils.PanicOnError(err)
 		ipString := fmt.Sprintf("%v/%v", nic.Ip, cidr)
 		log.Debugf("[addip]")
+		log.Debugf("nic [%s] add ipv4 address %s", nic.Name, ipString)
 		err = utils.IpAddrAdd(nic.Name, ipString)
 		utils.Assertf(err == nil, "IpAddrAdd[%s, %s] error: %+v", nic.Name, ipString, err)
 	}
@@ -188,6 +189,7 @@ func configureNicInfo(nic *utils.NicInfo) {
 		err := utils.Ip6AddrFlush(nic.Name)
 		utils.Assertf(err == nil, "IpAddr6Flush[%s] error: %+v", nic.Name, err)
 		ip6String := fmt.Sprintf("%s/%d", nic.Ip6, nic.PrefixLength)
+		log.Debugf("nic [%s] add ipv6 address %s", nic.Name, ip6String)
 		err = utils.IpAddrAdd(nic.Name, ip6String)
 		utils.Assertf(err == nil, "IpAddrAdd[%s, %s] error: %+v", nic.Name, ip6String, err)
 	}
