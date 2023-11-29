@@ -17,18 +17,6 @@ for f in *.sh; do
         "00_exec_hooks.sh")
             continue
             ;;
-        "02_install_package.sh")
-            chmod +x $f
-            timeout 30 /bin/bash $f >> ${LOG_FILE} 2>&1
-            ;;
-        "03_load_driver.sh")
-            if [ "${kernel_version}" == "5.4.80-amd64-vyos" ]; then
-                chmod +x $f
-                timeout 30 /bin/bash $f >> ${LOG_FILE} 2>&1
-            else
-                log_info "Kernel version is: ${kernel_version}, no need load driver"
-            fi
-            ;;
         *)
             chmod +x $f
             timeout 30 /bin/bash $f >> ${LOG_FILE} 2>&1

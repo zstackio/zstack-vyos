@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
-	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
@@ -41,13 +41,13 @@ type nic struct {
 	addressMode         string
 }
 
-var bootstrapInfo map[string]interface{} 	= make(map[string]interface{})
-var nics map[string]*nic 					= make(map[string]*nic)
+var bootstrapInfo map[string]interface{} = make(map[string]interface{})
+var nics map[string]*nic = make(map[string]*nic)
 
-var zvrRootPath 			= utils.GetZvrRootPath()
-var bootstrapInfoPath 		= filepath.Join(zvrRootPath, BOOTSTRAP_INFO_FILE)
+var zvrRootPath = utils.GetZvrRootPath()
+var bootstrapInfoPath = filepath.Join(zvrRootPath, BOOTSTRAP_INFO_FILE)
 var networkHealthStatusPath = filepath.Join(zvrRootPath, ".duplicate")
-var zvrbootLogPath			= filepath.Join(zvrRootPath, "zvrboot.log")
+var zvrbootLogPath = filepath.Join(zvrRootPath, "zvrboot.log")
 
 func waitIptablesServiceOnline() {
 	bash := utils.Bash{
@@ -78,7 +78,7 @@ func isOnVMwareHypervisor() bool {
 	log.Debugf("is VMware")
 	bash := utils.Bash{
 		Command: "dmesg | grep -q 'Hypervisor.*VMware'",
-		Sudo: true,
+		Sudo:    true,
 	}
 
 	if ret, _, _, err := bash.RunWithReturn(); ret == 0 && err == nil {
@@ -401,6 +401,17 @@ func configureVyos() {
 	}
 
 	setNicTree := server.NewParserFromShowConfiguration().Tree
+	if haStatus != utils.NOHA {
+		/* for vpc ha router, set interface down, it will be up when ha selection is finished */
+		for _, nic := range nics {
+			if nic.name != "eth0" {
+				setNicTree.Setf("interfaces ethernet %s disable", nic.name)
+			}
+		}
+		setNicTree.Apply(true)
+		setNicTree = server.NewParserFromShowConfiguration().Tree
+	}
+
 	setNic := func(nic *nic) {
 		if nic.ip != "" {
 			cidr, err := utils.NetmaskToCIDR(nic.netmask)
@@ -429,10 +440,6 @@ func configureVyos() {
 
 		if nic.l2type != "" {
 			setNicTree.Setf("interfaces ethernet %s description '%s'", nic.name, makeAlias(nic))
-		}
-
-		if haStatus != utils.NOHA && nic.name != "eth0" {
-			setNicTree.Setf("interfaces ethernet %s disable", nic.name)
 		}
 	}
 

@@ -13,6 +13,6 @@ function pre_install(){
     done
 }
 
-path="../scripts/preinstall/"
-pre_install $path
+#path="../scripts/preinstall/"
+#pre_install $path
 exit 0

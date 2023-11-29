@@ -13,6 +13,9 @@ function post_install(){
     done
 }
 
-path="../scripts/postinstall/"
-post_install $path
+sudo sysctl -w net.ipv4.ip_nonlocal_bind=1
+sudo sysctl -w net.ipv6.ip_nonlocal_bind=1
+
+#path="../scripts/postinstall/"
+#post_install $path
 exit 0
