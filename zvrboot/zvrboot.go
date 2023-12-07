@@ -424,6 +424,18 @@ func configureVyos() {
 		if nic.ip6 != "" {
 			setNicTree.SetfWithoutCheckExisting("interfaces ethernet %s address %s", nic.name, fmt.Sprintf("%s/%d", nic.ip6, nic.prefixLength))
 		}
+
+		//set kernel arguments for specific nic
+		err := os.WriteFile(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/keep_addr_on_down", nic.name), []byte("1"), 0644)
+		if err != nil {
+			log.Warningf("enable nic %s keep_addr_on_down failed: %s!", nic.name, err)
+		}
+
+		err = os.WriteFile(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_dad", nic.name), []byte("0"), 0644)
+		if err != nil {
+			log.Warningf("disable nic %s accept_dad failed: %s!", nic.name, err)
+		}
+
 		setNicTree.Setf("interfaces ethernet %s duplex auto", nic.name)
 		setNicTree.SetNicSmpAffinity(nic.name, "auto")
 		setNicTree.Setf("interfaces ethernet %s speed auto", nic.name)
