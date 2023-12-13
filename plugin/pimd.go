@@ -3,15 +3,15 @@ package plugin
 import (
 	"bytes"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"github.com/fatih/structs"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
 	"html/template"
 	"io/ioutil"
-	"strings"
 	"path/filepath"
-	/*log "github.com/Sirupsen/logrus"*/)
+	"strings"
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
+	/*log "github.com/sirupsen/logrus"*/)
 
 const (
 	ENABLE_PIMD_PATH  = "/pimd/enable"
@@ -19,10 +19,10 @@ const (
 	GET_MROUTE_PATH   = "/pimd/route"
 )
 
-var PIMD_CONF_DIR    = filepath.Join(utils.GetUserHomePath(), "pimd/")
-var PIMD_CONF_PATH   = filepath.Join(utils.GetUserHomePath(), "/pimd/pimd.conf")
+var PIMD_CONF_DIR = filepath.Join(utils.GetUserHomePath(), "pimd/")
+var PIMD_CONF_PATH = filepath.Join(utils.GetUserHomePath(), "/pimd/pimd.conf")
 var PIMD_BINARY_PATH = filepath.Join(utils.GetThirdPartyBinPath(), "pimd")
-var HA_PIMD_SCRIPT   = filepath.Join(utils.GetZvrRootPath(), "keepalived/script/pimd.sh")
+var HA_PIMD_SCRIPT = filepath.Join(utils.GetZvrRootPath(), "keepalived/script/pimd.sh")
 
 type rendezvousPointInfo struct {
 	RpAddress     string `json:"rpAddress"`
@@ -347,7 +347,7 @@ func getMrouteHandler(ctx *server.CommandContext) interface{} {
 	}
 
 	/* in different version of ip
-	line of mroute is: 
+	line of mroute is:
 	(10.86.5.99, 239.1.1.1)          Iif: eth0       Oifs: eth1 pimreg
 	or
 	(172.24.202.204,239.255.255.250) Iif: eth0       Oifs: pimreg  State: resolved
@@ -358,7 +358,7 @@ func getMrouteHandler(ctx *server.CommandContext) interface{} {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		
+
 		var ingress, egress []string
 		line = strings.Split(line, "State")[0]
 		src := strings.Split(line, ",")[0]
@@ -369,7 +369,7 @@ func getMrouteHandler(ctx *server.CommandContext) interface{} {
 		group := strings.Split(remain, ")")[0]
 		group = strings.TrimSpace(group)
 		remain = strings.Split(remain, ")")[1]
-		
+
 		in := false
 		out := false
 		items := strings.Split(remain, " ")
@@ -378,7 +378,7 @@ func getMrouteHandler(ctx *server.CommandContext) interface{} {
 			if item == " " || item == "" {
 				continue
 			}
-			
+
 			if item == "pimreg" {
 				break
 			}

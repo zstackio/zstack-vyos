@@ -3,8 +3,8 @@ package utils
 import (
 	"bytes"
 	"fmt"
-	"github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os/exec"
 	"strings"

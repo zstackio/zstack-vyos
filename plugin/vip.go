@@ -8,10 +8,10 @@ import (
 	"strings"
 	"unicode"
 
-	log "github.com/Sirupsen/logrus"
 	prom "github.com/prometheus/client_golang/prometheus"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
 )
 
 const (
@@ -443,7 +443,7 @@ func (rules *interfaceQosRules) InterfaceQosRuleInit(direct direction) interface
 		ignore := strings.Contains(e, "with handle of zero") || strings.Contains(e, "No such file")
 		utils.Assertf(ignore, "Failed to del rules from dev %s", name)
 	}
-	
+
 	bash1 := utils.Bash{
 		Command: fmt.Sprintf("sudo tc qdisc replace dev %s root handle 1: htb default 1;"+
 			"sudo tc class add dev %s parent 1:0 classid 1:1 htb rate 10gbit ceil 10gbit;"+
@@ -471,7 +471,6 @@ func (rules *interfaceQosRules) InterfaceQosRuleCleanUp() interface{} {
 		ignore := strings.Contains(e, "with handle of zero") || strings.Contains(e, "No such file")
 		utils.Assertf(ignore, "Failed to del rules from dev %s", name)
 	}
-
 
 	if rules.direct == INGRESS {
 		if !utils.IsEnableVyosCmd() {

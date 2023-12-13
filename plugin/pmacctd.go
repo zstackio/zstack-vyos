@@ -9,13 +9,13 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
 	"path/filepath"
+	"zstack-vyos/utils"
 )
 
-var uacctd_conf_file     = "/etc/pmacct/uacctd.conf"
-var uacctd_bin_file      = filepath.Join(utils.GetThirdPartyBinPath(), "uacctd")
+var uacctd_conf_file = "/etc/pmacct/uacctd.conf"
+var uacctd_bin_file = filepath.Join(utils.GetThirdPartyBinPath(), "uacctd")
 var uacctd_conf_tmp_file = filepath.Join(utils.GetUserHomePath(), "pmacct/pmacctd.conf.tmp")
 
 const tUacctdConf = `# This file is auto-generated, don't edit with !!!

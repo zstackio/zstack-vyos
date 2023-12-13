@@ -6,7 +6,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
-	"github.com/zstackio/zstack-vyos/utils"
+	"zstack-vyos/utils"
 )
 
 var _ = Describe("dhcp_test", func() {

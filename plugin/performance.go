@@ -2,11 +2,11 @@ package plugin
 
 import (
 	"fmt"
-	"github.com/zstackio/zstack-vyos/utils"
 	"strconv"
 	"strings"
+	"zstack-vyos/utils"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 const (

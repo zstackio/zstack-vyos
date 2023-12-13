@@ -3,7 +3,7 @@ package server
 import (
 	"testing"
 
-	"github.com/zstackio/zstack-vyos/utils"
+	"zstack-vyos/utils"
 )
 
 func XTestFindNicNameByMac(t *testing.T) {

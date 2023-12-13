@@ -6,13 +6,13 @@ import (
 	"html/template"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
-	"path/filepath"
 
-	log "github.com/Sirupsen/logrus"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
 )
 
 const (
@@ -39,7 +39,6 @@ const (
 var (
 	DHCPD_PATH       = filepath.Join(utils.GetZvrRootPath(), "dhcp3")
 	DHCP_DHCP_SCRIPT = filepath.Join(utils.GetZvrRootPath(), "keepalived/script/dhcpd.sh")
-
 )
 
 type dhcpInfo struct {

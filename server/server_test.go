@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/zstackio/zstack-vyos/utils"
+	"zstack-vyos/utils"
 )
 
 func startMockServer() {

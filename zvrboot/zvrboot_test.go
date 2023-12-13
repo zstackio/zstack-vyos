@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strings"
-	"path/filepath"
 	_ "strings"
 
-	_ "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/zstackio/zstack-vyos/utils"
+	_ "github.com/sirupsen/logrus"
+	"zstack-vyos/utils"
 )
 
 var _ = Describe("zvrboot_test", func() {

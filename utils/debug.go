@@ -2,8 +2,8 @@ package utils
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 func Assertf(expression bool, f string, args ...interface{}) {

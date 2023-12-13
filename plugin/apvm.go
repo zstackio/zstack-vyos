@@ -1,7 +1,7 @@
 package plugin
 
 import (
-	"github.com/zstackio/zstack-vyos/server"
+	"zstack-vyos/server"
 )
 
 // This plugin is largely to keep the mgmt server appliance vm

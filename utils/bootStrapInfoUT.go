@@ -6,19 +6,19 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-	"path/filepath"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
-	BOOT_CONFIG_FILE        = filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/test/boot_config.sh")
-	IPTABLES_RULE_FILE_UT   = filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/iptables.rules")
-	BOOTSTRAP_INFO_UT       = filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/bootstrapinfo")
+	BOOT_CONFIG_FILE      = filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/test/boot_config.sh")
+	IPTABLES_RULE_FILE_UT = filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/iptables.rules")
+	BOOTSTRAP_INFO_UT     = filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/bootstrapinfo")
 )
 
 var (

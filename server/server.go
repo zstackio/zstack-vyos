@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net/http"
 	"time"
+	"zstack-vyos/utils"
 )
 
 type commandHandlerWrap struct {

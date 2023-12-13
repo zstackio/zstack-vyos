@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
 )
 
 const (
@@ -460,7 +460,7 @@ func createRule(cmd *createRuleCmd) interface{} {
 
 		return nil
 	}
-	
+
 	tree := server.NewParserFromShowConfiguration().Tree
 	if rs := tree.Get(fmt.Sprintf("firewall name %s", ruleSetName)); rs == nil {
 		tree.CreateFirewallRuleSet(ruleSetName, []string{"default-action accept"})

@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path"
 	"text/template"
+	"zstack-vyos/utils"
 )
 
 var (
@@ -74,14 +75,28 @@ tar cf $targettar -C $targetdir/ .
 cat >> $tmpdir/setup.sh <<'EOF'
 #!/bin/bash
 PATH=/bin:/usr/bin
+params=$@
+set -- $(getopt -o V -l version -q -- "$@")
+while :
+do
+    [ -z "$1" ] && break;
+    case "$1" in
+		-V|--version ) PRINT_VERSION='y' && params=(${params[*]/$1});shift;;
+        -- ) shift;;
+	esac
+done
+if [ ! -z "$PRINT_VERSION" ]; then
+    echo -en "{{.VersionInfo}}"
+    exit 0
+fi
 line=$(wc -l $0 | awk '{print $1}')
-line=$((line - 12))
+line=$((line - 26))
 tmpdir=/home/zstack/zvr/target
 rm -rf $tmpdir
 mkdir -p $tmpdir
 tail -n $line $0 | tar x -C $tmpdir
 cd $tmpdir
-{{.Env}} bash {{.InstallScript}} $@
+{{.Env}} bash {{.InstallScript}} ${params[*]}
 ret=$?
 rm -rf $tmpdir
 exit $ret
@@ -92,6 +107,7 @@ cat $tmpdir/setup.sh $targettar > {{.BinaryPath}}
 chmod a+x {{.BinaryPath}}
 rm -rf $tmpdir
 `
+	utils.ModuleName = project.name
 	binaryPath := fmt.Sprintf("%s/%s.bin", *project.config.Location, project.name)
 	context := map[string]string{
 		"Dir":           *project.config.Dir,
@@ -99,6 +115,7 @@ rm -rf $tmpdir
 		"BinaryPath":    binaryPath,
 		"InstallScript": path.Base(*project.config.Installer),
 		"Env":           project.config.Env,
+		"VersionInfo":   utils.GetBuildInfo(),
 	}
 
 	tmpl, err := template.New("script").Parse(script)
@@ -123,6 +140,12 @@ rm -rf $tmpdir
 
 func init() {
 	flag.StringVar(&configPath, "conf", "", "path to the configuration file")
+	flag.StringVar(&utils.Version, "version", "", "version for build")
+	flag.StringVar(&utils.GitInfo, "gitInfo", "", "git info for build")
+	flag.StringVar(&utils.User, "user", "", "git user for build")
+	flag.StringVar(&utils.Time, "time", "", "time for build")
+	flag.StringVar(&utils.Platform, "platform", "", "target platform for build")
+	flag.StringVar(&utils.GoVersion, "goVersion", "", "go version for build")
 	flag.Parse()
 
 	if flag.NArg() > 0 {

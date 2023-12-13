@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	gomega "github.com/onsi/gomega"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
+	"zstack-vyos/utils"
 )
 
 var _ = Describe("firewall_iptables_test", func() {

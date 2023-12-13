@@ -3,11 +3,11 @@ package server
 import (
 	"bufio"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
+	"zstack-vyos/utils"
 )
 
 type VyosParser struct {

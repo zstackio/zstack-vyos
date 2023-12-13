@@ -6,8 +6,8 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
 )
 
 var _ = XDescribe("route_test", func() {

@@ -9,7 +9,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	gomega "github.com/onsi/gomega"
-	"github.com/zstackio/zstack-vyos/utils"
+	"zstack-vyos/utils"
 )
 
 type firewallJsonData struct {

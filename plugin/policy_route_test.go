@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"net"
 
-	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 
-	"github.com/zstackio/zstack-vyos/utils"
+	"zstack-vyos/utils"
 )
 
 var _ = XDescribe("policy_route_test", func() {
