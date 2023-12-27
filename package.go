@@ -81,9 +81,9 @@ while :
 do
     [ -z "$1" ] && break;
     case "$1" in
-		-V|--version ) PRINT_VERSION='y' && params=(${params[*]/$1});shift;;
+        -V|--version ) PRINT_VERSION='y' && params=(${params[*]/$1});shift;;
         -- ) shift;;
-	esac
+    esac
 done
 if [ ! -z "$PRINT_VERSION" ]; then
     echo -en "{{.VersionInfo}}"
