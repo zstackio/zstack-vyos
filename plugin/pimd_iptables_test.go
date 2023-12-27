@@ -2,10 +2,10 @@ package plugin
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
+	"zstack-vyos/utils"
 )
 
 var _ = Describe("pimd_iptables_test", func() {
@@ -78,13 +78,13 @@ func checkAddPimdFirewallByIptables(nics map[string]utils.Nic) {
 				Expect(rule.GetRuleNumber() < utils.LOCAL_CHAIN_SYSTEM_RULE_RULE_NUMBER_MAX).To(BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
 			}
 			if rule.GetProto() == utils.IPTABLES_PROTO_IGMP {
-				Expect(rule.GetRuleNumber() <  utils.LOCAL_CHAIN_SYSTEM_RULE_RULE_NUMBER_MAX).To(BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
+				Expect(rule.GetRuleNumber() < utils.LOCAL_CHAIN_SYSTEM_RULE_RULE_NUMBER_MAX).To(BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
 			}
 		}
 		rules = table.Found(utils.GetRuleSetName(nic.Name, utils.RULESET_IN), utils.SystemTopRule)
 		for _, rule := range rules {
 			if rule.GetDstIp() == "224.0.0.0/4" {
-				Expect(rule.GetRuleNumber() >  utils.LOCAL_CHAIN_SYSTEM_RULE_RULE_NUMBER_MAX).To(BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
+				Expect(rule.GetRuleNumber() > utils.LOCAL_CHAIN_SYSTEM_RULE_RULE_NUMBER_MAX).To(BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
 			}
 		}
 

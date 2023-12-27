@@ -1,8 +1,8 @@
 package plugin
 
 import (
-	"github.com/zstackio/zstack-vyos/utils"
 	"time"
+	"zstack-vyos/utils"
 )
 
 /*

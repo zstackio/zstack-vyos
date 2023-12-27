@@ -5,17 +5,16 @@ import (
 	"io/ioutil"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
 	"path/filepath"
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
 )
 
 const (
 	FLOW_METER_REFRESH     = "/flowmeter/refresh"
 	FLOW_METER_GET_COUNTER = "/flowmeter/count"
-
 )
 
 var VYOSHA_FLOW_SCRIPT = filepath.Join(utils.GetZvrRootPath(), "keepalived/script/flow.sh")

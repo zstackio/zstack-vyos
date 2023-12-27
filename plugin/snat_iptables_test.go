@@ -5,7 +5,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/zstackio/zstack-vyos/utils"
+	"zstack-vyos/utils"
 )
 
 var _ = Describe("snat_iptables_test", func() {

@@ -2,13 +2,13 @@ package plugin
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	prom "github.com/prometheus/client_golang/prometheus"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"regexp"
 	"strconv"
 	"strings"
+	"zstack-vyos/utils"
 )
 
 // the name of metric data label

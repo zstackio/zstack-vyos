@@ -6,18 +6,18 @@ import (
 	"fmt"
 	"html/template"
 	"io/ioutil"
-	"sort"
 	"path/filepath"
+	"sort"
 
-	log "github.com/Sirupsen/logrus"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
+	"zstack-vyos/utils"
 )
 
 const (
-	DNSMASQ_BIN_PATH         = "/usr/sbin/dnsmasq -x /var/run/dnsmasq.pid -u dnsmasq -7 /etc/dnsmasq.d"
-	DNSMASQ_CONF_PATH        = "/etc/dnsmasq.conf"
-	DNSMASQ_RESOLV_FILE      = "/etc/resolv.conf"
-	DNSMASQ_PID_FILE         = "/var/run/dnsmasq.pid"
+	DNSMASQ_BIN_PATH    = "/usr/sbin/dnsmasq -x /var/run/dnsmasq.pid -u dnsmasq -7 /etc/dnsmasq.d"
+	DNSMASQ_CONF_PATH   = "/etc/dnsmasq.conf"
+	DNSMASQ_RESOLV_FILE = "/etc/resolv.conf"
+	DNSMASQ_PID_FILE    = "/var/run/dnsmasq.pid"
 )
 
 var (
@@ -110,7 +110,7 @@ func (d *DnsmasqConf) RestartDnsmasq() error {
 	err = bash.Run()
 	utils.PanicOnError(err)
 
-	if (utils.IsHaEnabled() && !IsMaster()) {
+	if utils.IsHaEnabled() && !IsMaster() {
 		return nil
 	}
 

@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 func MkdirForFile(filepath string, perm os.FileMode) error {

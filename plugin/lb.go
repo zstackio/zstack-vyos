@@ -20,12 +20,12 @@ import (
 	"time"
 
 	cidrman "github.com/EvilSuperstars/go-cidrman"
-	log "github.com/Sirupsen/logrus"
 	haproxy "github.com/bcicen/go-haproxy"
 	"github.com/fatih/structs"
 	prom "github.com/prometheus/client_golang/prometheus"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
 )
 
 const (
@@ -1620,27 +1620,6 @@ func deleteCertificate(cmd *deleteCertificateCmd) interface{} {
 	return nil
 }
 
-func init() {
-	os.Mkdir(LB_ROOT_DIR, os.ModePerm)
-	os.Mkdir(LB_CONF_DIR, os.ModePerm)
-	os.Mkdir(LB_PID_DIR, os.ModePerm)
-	os.Chmod(LB_PID_DIR, os.ModePerm)
-	os.Mkdir(LB_SOCKET_DIR, os.ModePerm|os.ModeSocket)
-	LbListeners = make(map[string]interface{}, LISTENER_MAP_SIZE)
-	enableLbLog()
-	RegisterPrometheusCollector(NewLbPrometheusCollector())
-
-	bash := utils.Bash{
-		Command: fmt.Sprintf("/opt/vyatta/sbin/haproxy -ver | grep version"),
-	}
-
-	if ret, out, _, err := bash.RunWithReturn(); ret == 0 && err == nil {
-		if strings.Contains(out, HAPROXY_VERSION_2_1_0) {
-			haproxyVersion = HAPROXY_VERSION_2_1_0
-		}
-	}
-}
-
 type loadBalancerCollector struct {
 	statusEntry                 *prom.Desc
 	inByteEntry                 *prom.Desc
@@ -2054,6 +2033,25 @@ missingok
 }
 
 func init() {
+	os.Mkdir(LB_ROOT_DIR, os.ModePerm)
+	os.Mkdir(LB_CONF_DIR, os.ModePerm)
+	os.Mkdir(LB_PID_DIR, os.ModePerm)
+	os.Chmod(LB_PID_DIR, os.ModePerm)
+	os.Mkdir(LB_SOCKET_DIR, os.ModePerm|os.ModeSocket)
+	LbListeners = make(map[string]interface{}, LISTENER_MAP_SIZE)
+	enableLbLog()
+	RegisterPrometheusCollector(NewLbPrometheusCollector())
+
+	bash := utils.Bash{
+		Command: fmt.Sprintf("/opt/vyatta/sbin/haproxy -ver | grep version"),
+	}
+
+	if ret, out, _, err := bash.RunWithReturn(); ret == 0 && err == nil {
+		if strings.Contains(out, HAPROXY_VERSION_2_1_0) {
+			haproxyVersion = HAPROXY_VERSION_2_1_0
+		}
+	}
+
 	gobetweenListeners = map[string]*GBListener{}
 	haproxyListeners = map[string]*HaproxyListener{}
 }

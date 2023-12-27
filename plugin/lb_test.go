@@ -5,11 +5,11 @@ import (
 	"io/ioutil"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
 )
 
 var _ = Describe("lb_test", func() {

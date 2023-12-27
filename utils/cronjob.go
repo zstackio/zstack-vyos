@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"text/template"
 	"path/filepath"
+	"text/template"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 var (

@@ -3,21 +3,21 @@ package utils
 import (
 	"fmt"
 	"io/ioutil"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
-	"path/filepath"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 type CompareStringFunc func(string, string) bool
 
 const (
-	VYOS_1_1_7         = "1.1.7"
-	VYOS_1_2           = "1.2"
-	TIME_ZONE_FILE     = "/etc/timezone"
-	LOCAL_TIME_FILE    = "/etc/localtime"
+	VYOS_1_1_7      = "1.1.7"
+	VYOS_1_2        = "1.2"
+	TIME_ZONE_FILE  = "/etc/timezone"
+	LOCAL_TIME_FILE = "/etc/localtime"
 )
 
 var (
@@ -94,9 +94,9 @@ func Arping(nicname string, ip string, gateway string) {
 
 func SetUserPasswd(user string, password string) error {
 	var err error
-	bash :=  Bash{
+	bash := Bash{
 		Command: fmt.Sprintf("echo '%s:%s' | chpasswd", user, password),
-		Sudo: true,
+		Sudo:    true,
 	}
 
 	if ret, _, _, err := bash.RunWithReturn(); ret == 0 && err == nil {

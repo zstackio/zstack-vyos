@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
+	"zstack-vyos/utils"
 )
 
 var _ = Describe("dnat_iptables_test", func() {
@@ -114,7 +114,7 @@ var _ = Describe("dnat_iptables_test", func() {
 		utils.ReleasePubL3Ip(ipInPubL32)
 		utils.SetSkipVyosIptablesForUT(false)
 	})
-	
+
 	It("[IPTABLES]DNAT : clean test env", func() {
 		utils.CleanTestEnvForUT()
 	})

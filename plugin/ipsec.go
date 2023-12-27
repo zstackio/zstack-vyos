@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
 )
 
 const (

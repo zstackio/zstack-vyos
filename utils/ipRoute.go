@@ -2,15 +2,15 @@ package utils
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"io/ioutil"
+	"path/filepath"
 	"strconv"
 	"strings"
-	"path/filepath"
 )
 
 const (
-	POLICY_ROUTE_TABLE_FILE      = "/etc/iproute2/rt_tables"
+	POLICY_ROUTE_TABLE_FILE = "/etc/iproute2/rt_tables"
 
 	ROUTETABLE_ID_MIN  = 1
 	ROUTETABLE_ID_MAX  = 250

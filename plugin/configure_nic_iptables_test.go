@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	server "github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
+	server "zstack-vyos/server"
+	"zstack-vyos/utils"
 )
 
 var _ = Describe("configure_nic_iptables_test", func() {

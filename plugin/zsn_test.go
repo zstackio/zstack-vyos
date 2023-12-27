@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"text/template"
 
-	"github.com/zstackio/zstack-vyos/utils"
+	"zstack-vyos/utils"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

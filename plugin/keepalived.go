@@ -7,14 +7,14 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
-	"path/filepath"
 
-	log "github.com/Sirupsen/logrus"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
 )
 
 type KeepAlivedStatus int
@@ -55,9 +55,9 @@ func (s KeepAlivedStatus) string() string {
 }
 
 const (
-	ConntrackdBinaryFile         = "/usr/sbin/conntrackd"
-	KeepalivedPidFile            = "/var/run/keepalived.pid"
-	KeepalivedBinaryFile         = "/usr/sbin/keepalived"
+	ConntrackdBinaryFile = "/usr/sbin/conntrackd"
+	KeepalivedPidFile    = "/var/run/keepalived.pid"
+	KeepalivedBinaryFile = "/usr/sbin/keepalived"
 )
 
 var (
@@ -199,22 +199,21 @@ func NewKeepalivedNotifyConf(vyosHaVips, mgmtVips []nicVipPair) *KeepalivedNotif
 	}
 
 	knc := &KeepalivedNotify{
-		VyosHaVipPairs: vyosHaVips,
-		MgmtVipPairs:   mgmtVips,
-		NicNames:       nicNames,
-		NicIps:         nicIps,
-		VrUuid:         utils.GetVirtualRouterUuid(),
-		CallBackUrl:    haStatusCallbackUrl,
-		IpsecScript:    filepath.Join(KeepalivedScriptPath, "ipsec.sh"),
-		FlowScript:     filepath.Join(KeepalivedScriptPath, "flow.sh"),
-		PimdScript:     filepath.Join(KeepalivedScriptPath, "pimd.sh"),
-		DhcpdScript:    filepath.Join(KeepalivedScriptPath, "dhcpd.sh"),
-		DnsmasqScript:	filepath.Join(KeepalivedScriptPath, "dnsmasq.sh"),
-		DoGARPScript:   KeepalivedScriptMasterDoGARP,
-		KeepalivedCfg:  KeepalivedConfigFile,
+		VyosHaVipPairs:      vyosHaVips,
+		MgmtVipPairs:        mgmtVips,
+		NicNames:            nicNames,
+		NicIps:              nicIps,
+		VrUuid:              utils.GetVirtualRouterUuid(),
+		CallBackUrl:         haStatusCallbackUrl,
+		IpsecScript:         filepath.Join(KeepalivedScriptPath, "ipsec.sh"),
+		FlowScript:          filepath.Join(KeepalivedScriptPath, "flow.sh"),
+		PimdScript:          filepath.Join(KeepalivedScriptPath, "pimd.sh"),
+		DhcpdScript:         filepath.Join(KeepalivedScriptPath, "dhcpd.sh"),
+		DnsmasqScript:       filepath.Join(KeepalivedScriptPath, "dnsmasq.sh"),
+		DoGARPScript:        KeepalivedScriptMasterDoGARP,
+		KeepalivedCfg:       KeepalivedConfigFile,
 		PrimaryBackupScript: ConntrackScriptPrimaryBackup,
 		DefaultRouteScript:  filepath.Join(KeepalivedScriptPath, "defaultroute.sh"),
-
 	}
 
 	return knc
@@ -286,14 +285,14 @@ type KeepalivedConf struct {
 
 func NewKeepalivedConf(hearbeatNic, LocalIp, PeerIp string, MonitorIps []string, Interval int) *KeepalivedConf {
 	kc := &KeepalivedConf{
-		HeartBeatNic:  hearbeatNic,
-		Interval:      Interval,
-		MonitorIps:    MonitorIps,
-		LocalIp:       LocalIp,
-		PeerIp:        PeerIp,
-		MasterScript:  KeepalivedScriptNotifyMaster,
-		BackupScript:  KeepalivedScriptNotifyBackup,
-		ScriptPath:    KeepalivedScriptPath,
+		HeartBeatNic:        hearbeatNic,
+		Interval:            Interval,
+		MonitorIps:          MonitorIps,
+		LocalIp:             LocalIp,
+		PeerIp:              PeerIp,
+		MasterScript:        KeepalivedScriptNotifyMaster,
+		BackupScript:        KeepalivedScriptNotifyBackup,
+		ScriptPath:          KeepalivedScriptPath,
 		PrimaryBackupScript: ConntrackScriptPrimaryBackup,
 	}
 
@@ -402,7 +401,7 @@ vrrp_instance vyos-ha {
 func (k *KeepalivedConf) BuildCheckScript() error {
 	check_zvr_tmp := `#! /bin/bash
 sudo /usr/bin/pgrep -u %s -f %s > /dev/null
-`	
+`
 	zvr_bin := filepath.Join(utils.GetThirdPartyBinPath(), "zvr")
 	check_zvr := fmt.Sprintf(check_zvr_tmp, utils.GetZvrUser(), zvr_bin)
 	err := ioutil.WriteFile(KeepalivedScriptPath+"check_zvr.sh", []byte(check_zvr), 0644)

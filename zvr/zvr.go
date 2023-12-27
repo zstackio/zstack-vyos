@@ -10,13 +10,14 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
-
 	"github.com/pkg/errors"
-	"github.com/zstackio/zstack-vyos/plugin"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
+	"zstack-vyos/plugin"
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
 )
+
+const ModuleName = "zvr"
 
 func loadPlugins() {
 	plugin.ApvmEntryPoint()
@@ -56,8 +57,8 @@ type nic struct {
 	category string
 }
 
-var zvrHomePath     = utils.GetUserHomePath()
-var zvrRootPath     = utils.GetZvrRootPath()
+var zvrHomePath = utils.GetUserHomePath()
+var zvrRootPath = utils.GetZvrRootPath()
 var zvrZsConfigPath = utils.GetZvrZsConfigPath()
 
 // Note: there shouldn't be 'daily' etc. in the following config files.
@@ -135,8 +136,15 @@ func parseCommandOptions() {
 	flag.UintVar(&options.ReadTimeout, "readtimeout", 10, "The socket read timeout")
 	flag.UintVar(&options.WriteTimeout, "writetimeout", 10, "The socket write timeout")
 	flag.StringVar(&options.LogFile, "logfile", "zvr.log", "The log file path")
+	flag.BoolVar(&utils.CommandVersion, "version", false, "version for zvr")
 
 	flag.Parse()
+
+	if utils.CommandVersion {
+		utils.ModuleName = ModuleName
+		utils.PrintBuildInfo()
+		os.Exit(0)
+	}
 
 	if options.Ip == "" {
 		abortOnWrongOption("error: the options 'ip' is required")
@@ -311,7 +319,11 @@ func main() {
 	loadPlugins()
 	setupRotates()
 	server.VyosLockInterface(configureZvrFirewall)()
-	utils.StartDiskMon(getHeartBeatFile(options.LogFile), func(e error) { if utils.IsHaEnabled() {os.Exit(1)} }, 2*time.Second)
+	utils.StartDiskMon(getHeartBeatFile(options.LogFile), func(e error) {
+		if utils.IsHaEnabled() {
+			os.Exit(1)
+		}
+	}, 2*time.Second)
 
 	server.Start()
 }

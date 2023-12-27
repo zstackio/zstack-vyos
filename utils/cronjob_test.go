@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"path/filepath"
 	"reflect"
 	"text/template"
 
@@ -80,7 +81,7 @@ var _ = Describe("cronjob_test", func() {
 
 func cleanUpCrondConfig() {
 	bash := Bash{
-		Command: fmt.Sprintf("rm -f %s", filepath.Join(zvrZsConfigPath, "cronjob")),
+		Command: fmt.Sprintf("rm -f %s", filepath.Join(GetZvrZsConfigPath(), "cronjob")),
 		Sudo:    true,
 	}
 	bash.Run()

@@ -6,16 +6,16 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"strings"
 	"path/filepath"
+	"strings"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
-	BOOTSTRAP_INFO_FILE         = "bootstrap-info.json"
-	DEFAULT_SSH_PORT            = 22
-	HA_DEFAULT_ROUTE_SCRIPT 	= "keepalived/script/defaultroute.sh"
+	BOOTSTRAP_INFO_FILE     = "bootstrap-info.json"
+	DEFAULT_SSH_PORT        = 22
+	HA_DEFAULT_ROUTE_SCRIPT = "keepalived/script/defaultroute.sh"
 )
 
 const (
@@ -28,7 +28,6 @@ const (
 
 	NIC_TYPE_PRIVATE = "Private"
 	NIC_TYPE_PUBLIC  = "Public"
-
 )
 
 type NicInfo struct {
@@ -60,9 +59,9 @@ func (n NicArray) Less(i, j int) bool { return n[i].Name < n[j].Name }
 
 var BootstrapInfo map[string]interface{} = make(map[string]interface{})
 
-var VYOS_UT_LOG_FOLDER 		= fmt.Sprintf("%s/vyos_ut/testLog/", GetUserHomePath())
-var bootstrapInfoPath 		= filepath.Join(GetZvrRootPath(), BOOTSTRAP_INFO_FILE)
-var haDefaultRouteScript 	= filepath.Join(GetZvrRootPath(), HA_DEFAULT_ROUTE_SCRIPT)
+var VYOS_UT_LOG_FOLDER = fmt.Sprintf("%s/vyos_ut/testLog/", GetUserHomePath())
+var bootstrapInfoPath = filepath.Join(GetZvrRootPath(), BOOTSTRAP_INFO_FILE)
+var haDefaultRouteScript = filepath.Join(GetZvrRootPath(), HA_DEFAULT_ROUTE_SCRIPT)
 
 func MakeIfaceAlias(nic *NicInfo) string {
 	result := ""

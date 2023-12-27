@@ -3,7 +3,7 @@ package plugin
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/zstackio/zstack-vyos/utils"
+	"zstack-vyos/utils"
 )
 
 var _ = XDescribe("configure_nic_perf_test", func() {

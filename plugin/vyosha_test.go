@@ -3,12 +3,12 @@ package plugin
 import (
 	"fmt"
 
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
 
-	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 )
 
 var _ = Describe("vyosHa_test", func() {

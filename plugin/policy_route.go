@@ -2,9 +2,9 @@ package plugin
 
 import (
 	"fmt"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
 	"strings"
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
 )
 
 const (

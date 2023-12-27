@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -9,13 +10,14 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
-	"github.com/zstackio/zstack-vyos/server"
-	"github.com/zstackio/zstack-vyos/utils"
+	log "github.com/sirupsen/logrus"
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
 )
 
 const (
+	ModuleName           = "zvrboot"
 	VIRTIO_PORT_PATH     = "/dev/virtio-ports/applianceVm.vport"
 	BOOTSTRAP_INFO_FILE  = "bootstrap-info.json"
 	TMP_LOCATION_FOR_ESX = "/tmp/bootstrap-info.json"
@@ -639,9 +641,18 @@ func startZvr() {
 
 func init() {
 	os.Remove(networkHealthStatusPath)
+	flag.BoolVar(&utils.CommandVersion, "version", false, "version for zvr")
 }
 
 func main() {
+	flag.Parse()
+
+	if utils.CommandVersion {
+		utils.ModuleName = ModuleName
+		utils.PrintBuildInfo()
+		os.Exit(0)
+	}
+
 	utils.InitLog(zvrbootLogPath, false)
 	waitIptablesServiceOnline()
 	if isOnVMwareHypervisor() {
