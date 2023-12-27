@@ -467,6 +467,9 @@ frontend {{.ListenerUuid}}
 {{- if eq $.HttpRedirectHttps "enable"}}
     http-request redirect location https://%[req.hdr(host),regsub(:\d+$,,)]:{{$.RedirectPort}}%[capture.req.uri,regsub(/$,,)] code {{$.StatusCode}} unless { ssl_fc }
 {{- end }}
+{{- if eq .Mode "https"}}
+	http-request redirect scheme https code 301 unless { ssl_fc }
+{{- end}}
 
 {{- if eq .AccessControlStatus "enable" }}
 {{- if eq .AclType "black" "white" }}
