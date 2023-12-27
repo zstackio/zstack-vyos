@@ -45,7 +45,7 @@ func loadPlugins() {
 
 func initPlugins() {
 	if err := plugin.IpsecInit(); err != nil {
-		utils.PanicOnError(err)
+		log.Warningf("init plugin ipsec failed, %v", err.Error())
 	}
 	plugin.InitHaNicState()
 }
