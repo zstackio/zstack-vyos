@@ -122,7 +122,7 @@ func setVipByLinux(cmd *setVipCmd) interface{} {
 		for _, nicIp := range cmd.NicIps {
 			nicname, err := utils.GetNicNameByMac(nicIp.OwnerEthernetMac)
 			utils.PanicOnError(err)
-			linuxNicIps, err := utils.Ip4AddrShow(nicname)
+			linuxNicIps, err := utils.IpAddrShow(nicname)
 			utils.PanicOnError(err)
 			cidr, err := utils.NetmaskToCIDR(nicIp.Netmask)
 			utils.PanicOnError(err)
@@ -146,9 +146,7 @@ func setVipByLinux(cmd *setVipCmd) interface{} {
 		for _, vip := range cmd.Vips {
 			nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
 			utils.PanicOnError(err)
-			cidr, err := utils.NetmaskToCIDR(vip.Netmask)
-			utils.PanicOnError(err)
-			addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
+			addr, _ := vip.GetIpWithCidr()
 			err = utils.IpAddrAdd(nicname, addr)
 			utils.PanicOnError(err)
 		}
@@ -156,12 +154,10 @@ func setVipByLinux(cmd *setVipCmd) interface{} {
 		for _, vip := range cmd.Vips {
 			nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
 			utils.PanicOnError(err)
-			cidr, err := utils.NetmaskToCIDR(vip.Netmask)
-			utils.PanicOnError(err)
-			addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
+			addr, _ := vip.GetIpWithCidr()
 
 			/* vip on mgt nic will not configure in vyos config */
-			if utils.IsInManagementCidr(vip.Ip) {
+			if vip.Ip != "" && utils.IsInManagementCidr(vip.Ip) {
 				if IsMaster() {
 					err := utils.IpAddrAdd(nicname, addr)
 					utils.PanicOnError(err)
@@ -177,7 +173,8 @@ func setVipByLinux(cmd *setVipCmd) interface{} {
 		for _, vip := range cmd.Vips {
 			publicInterface, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
 			utils.PanicOnError(err)
-			ingressrule := qosRule{ip: vip.Ip, port: 0, bandwidth: MAX_BINDWIDTH, vipUuid: vip.VipUuid}
+			ip := vip.GetIpWithOutCidr()
+			ingressrule := newQosRule(ip, 0, MAX_BINDWIDTH, vip.VipUuid)
 			if biRule, ok := totalQosRules[publicInterface]; ok {
 				if biRule[INGRESS].InterfaceQosRuleFind(ingressrule) == nil {
 					addQosRule(publicInterface, INGRESS, ingressrule)
@@ -186,7 +183,7 @@ func setVipByLinux(cmd *setVipCmd) interface{} {
 				addQosRule(publicInterface, INGRESS, ingressrule)
 			}
 
-			egressrule := qosRule{ip: vip.Ip, port: 0, bandwidth: MAX_BINDWIDTH, vipUuid: vip.VipUuid}
+			egressrule := newQosRule(ip, 0, MAX_BINDWIDTH, vip.VipUuid)
 			if biRule, ok := totalQosRules[publicInterface]; ok {
 				if biRule[EGRESS].InterfaceQosRuleFind(egressrule) == nil {
 					addQosRule(publicInterface, EGRESS, egressrule)
@@ -201,10 +198,13 @@ func setVipByLinux(cmd *setVipCmd) interface{} {
 	for _, vip := range cmd.Vips {
 		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
 		utils.PanicOnError(err)
-		cidr, err := utils.NetmaskToCIDR(vip.Netmask)
-		utils.PanicOnError(err)
-
-		vyosVips = append(vyosVips, nicVipPair{NicName: nicname, Vip: vip.Ip, Prefix: cidr})
+		ip := vip.GetIpWithOutCidr()
+		_, cidr := vip.GetIpWithCidr()
+		if utils.IsIpv4Address(ip) {
+			vyosVips = append(vyosVips, nicVipPair{NicName: nicname, Vip: ip, Prefix: cidr})
+		} else {
+			vyosVips = append(vyosVips, nicVipPair{NicName: nicname, Vip6: ip, Prefix: cidr})
+		}
 	}
 
 	if utils.IsHaEnabled() {
@@ -226,9 +226,7 @@ func removeVipByLinux(cmd *removeVipCmd) interface{} {
 	for _, vip := range cmd.Vips {
 		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
 		utils.PanicOnError(err)
-		cidr, err := utils.NetmaskToCIDR(vip.Netmask)
-		utils.PanicOnError(err)
-		addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
+		addr, _ := vip.GetIpWithCidr()
 		if err = utils.IpAddrDel(nicname, addr); err != nil {
 			return fmt.Errorf("IpAddrDel[%s, %s] error: %v", nicname, addr, err)
 		}
@@ -239,10 +237,10 @@ func removeVipByLinux(cmd *removeVipCmd) interface{} {
 	for _, vip := range cmd.Vips {
 		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
 		utils.PanicOnError(err)
-		cidr, err := utils.NetmaskToCIDR(vip.Netmask)
-		utils.PanicOnError(err)
+		_, cidr := vip.GetIpWithCidr()
+		ip := vip.GetIpWithOutCidr()
 
-		vyosVips = append(vyosVips, nicVipPair{NicName: nicname, Vip: vip.Ip, Prefix: cidr})
+		vyosVips = append(vyosVips, nicVipPair{NicName: nicname, Vip: ip, Prefix: cidr})
 	}
 	removeHaNicVipPair(vyosVips)
 

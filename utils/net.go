@@ -21,26 +21,28 @@ const (
 )
 
 func NetmaskToCIDR(netmask string) (int, error) {
-	countBit := func(num uint) int {
-		count := uint(0)
-		var i uint
-		for i = 31; i > 0; i-- {
-			count += ((num << i) >> uint(31)) & uint(1)
-		}
+	if strings.Contains(netmask, ".") {
+		ipv4Mask := net.IPMask(net.ParseIP(netmask).To4())
+		return calculateMaskLength(ipv4Mask), nil
+	} else {
+		ipv6Mask := net.IPMask(net.ParseIP(netmask).To16())
+		return calculateMaskLength(ipv6Mask), nil
+	}
+}
 
-		return int(count)
+func calculateMaskLength(mask net.IPMask) int {
+	maskBytes := []byte(mask)
+	length := 0
+
+	for _, byteValue := range maskBytes {
+		for i := 7; i >= 0; i-- {
+			if (byteValue>>i)&1 == 1 {
+				length++
+			}
+		}
 	}
 
-	cidr := 0
-	for _, o := range strings.Split(netmask, ".") {
-		num, err := strconv.ParseUint(o, 10, 32)
-		if err != nil {
-			return -1, err
-		}
-		cidr += countBit(uint(num))
-	}
-
-	return cidr, nil
+	return length
 }
 
 func GetNetworkNumber(ip, netmask string) (string, error) {

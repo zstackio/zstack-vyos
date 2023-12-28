@@ -30,6 +30,13 @@ const (
 	MAX_BINDWIDTH = uint64(0x4FFFFFFFF)
 )
 
+const (
+	IP_NONE    = 0
+	IPv4       = 4
+	IPv6       = 6
+	DUAL_STACK = 46
+)
+
 type direction int
 
 const (
@@ -51,7 +58,9 @@ type qosRule struct {
 		 * tc class add dev eth0 parent 1:0 classid 1:2 htb rate 1mbit ceil 1mbit burst 15k cburst 15k
 	         * tc qdisc add dev eth0 parent 1:2 sfq
 	*/
-	classId uint32
+	qosProtocol    string
+	matchIpversion string
+	classId        uint32
 
 	/* all tc filters is attached to htb class 1:0, there are 4095 filter handlers, each handle contains 4095 filters. Totally FFFFFF rules
 	 * rules from same IP address will be put in same filter handler. so totally there will have 4095 ip address
@@ -65,6 +74,23 @@ type qosRule struct {
 	port      uint16
 	bandwidth uint64
 	vipUuid   string
+}
+
+func newQosRule(ip string, port uint16, bandwidth uint64, vipUuid string) *qosRule {
+	var qosProtocol = "ip"
+	var matchIpversion = "ip"
+	if !utils.IsIpv4Address(ip) {
+		qosProtocol = "ipv6"
+		matchIpversion = "ip6"
+	}
+	return &qosRule{
+		ip:             ip,
+		port:           port,
+		bandwidth:      bandwidth,
+		vipUuid:        vipUuid,
+		qosProtocol:    qosProtocol,
+		matchIpversion: matchIpversion,
+	}
 }
 
 type qosRuleHook interface {
@@ -126,15 +152,15 @@ func (rule *qosRule) AddFilter(nic string, direct direction) interface{} {
 		if direct == INGRESS {
 			bash = utils.Bash{
 				Command: fmt.Sprintf(
-					"tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32 match ip dst %s/32 match ip dport %d 0xffff flowid 1:%x",
-					nic, rule.prioId, rule.filterId, rule.filterPos, rule.ip, rule.port, rule.classId),
+					"tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol %s u32 match %s dst %s match %s dport %d 0xffff flowid 1:%x",
+					nic, rule.prioId, rule.filterId, rule.filterPos, rule.qosProtocol, rule.matchIpversion, rule.ip, rule.matchIpversion, rule.port, rule.classId),
 				Sudo: true,
 			}
 		} else {
 			bash = utils.Bash{
 				Command: fmt.Sprintf(
-					"tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32 match ip src %s/32 match ip sport %d 0xffff flowid 1:%x",
-					nic, rule.prioId, rule.filterId, rule.filterPos, rule.ip, rule.port, rule.classId),
+					"tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol %s u32 match %s src %s match %s sport %d 0xffff flowid 1:%x",
+					nic, rule.prioId, rule.filterId, rule.filterPos, rule.qosProtocol, rule.matchIpversion, rule.ip, rule.matchIpversion, rule.port, rule.classId),
 				Sudo: true,
 			}
 		}
@@ -142,15 +168,15 @@ func (rule *qosRule) AddFilter(nic string, direct direction) interface{} {
 		if direct == INGRESS {
 			bash = utils.Bash{
 				Command: fmt.Sprintf(
-					"tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32 match ip dst %s/32 flowid 1:%x",
-					nic, rule.prioId, rule.filterId, rule.filterPos, rule.ip, rule.classId),
+					"tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol %s u32 match %s dst %s flowid 1:%x",
+					nic, rule.prioId, rule.filterId, rule.filterPos, rule.qosProtocol, rule.matchIpversion, rule.ip, rule.classId),
 				Sudo: true,
 			}
 		} else {
 			bash = utils.Bash{
 				Command: fmt.Sprintf(
-					"tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32 match ip src %s/32 flowid 1:%x",
-					nic, rule.prioId, rule.filterId, rule.filterPos, rule.ip, rule.classId),
+					"tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol %s u32 match %s src %s/32 flowid 1:%x",
+					nic, rule.prioId, rule.filterId, rule.filterPos, rule.qosProtocol, rule.matchIpversion, rule.ip, rule.classId),
 				Sudo: true,
 			}
 		}
@@ -163,8 +189,8 @@ func (rule *qosRule) AddFilter(nic string, direct direction) interface{} {
 
 func (rule *qosRule) DelFilter(nic string, direct direction) interface{} {
 	bash := utils.Bash{
-		Command: fmt.Sprintf("tc filter del dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32",
-			nic, rule.prioId, rule.filterId, rule.filterPos),
+		Command: fmt.Sprintf("tc filter del dev %s parent 1:0 prio %d handle %03x::%03x protocol %s u32",
+			nic, rule.prioId, rule.filterId, rule.filterPos, rule.qosProtocol),
 		Sudo: true,
 	}
 	bash.Run()
@@ -232,7 +258,22 @@ type vipQosRules struct {
 	filterHandleID uint32
 	filterMap      Bitmap
 	vipUuid        string
+	qosProtocol    string
 }
+
+func newVipQosRules(portRules map[uint16]*qosRule, vip string, prioId uint32, vipUuid string) *vipQosRules {
+	var qosProtocol = "ip"
+	if !utils.IsIpv4Address(vip) {
+		qosProtocol = "ipv6"
+	}
+	return &vipQosRules{
+		portRules:   portRules,
+		vip:         vip,
+		prioId:      prioId,
+		vipUuid:     vipUuid,
+		qosProtocol: qosProtocol}
+}
+
 type vipQosHook interface {
 	VipQosRulesInit(string) interface{}
 	VipQosAddRule(qosRule, string, direction) interface{}
@@ -243,10 +284,10 @@ func (vipRules *vipQosRules) VipQosRulesInit(nicName string) interface{} {
 
 	/* generate the filter handler */
 	filterBash := utils.Bash{
-		Command: fmt.Sprintf("tc filter add dev %s parent 1:0 prio %d protocol ip u32; "+
-			"tc filter show dev %s prio %d protocol ip | grep 'ht divisor'",
-			nicName, vipRules.prioId,
-			nicName, vipRules.prioId),
+		Command: fmt.Sprintf("tc filter add dev %s parent 1:0 prio %d protocol %s u32; "+
+			"tc filter show dev %s prio %d protocol %s | grep 'ht divisor'",
+			nicName, vipRules.prioId, vipRules.qosProtocol,
+			nicName, vipRules.prioId, vipRules.qosProtocol),
 		Sudo: true,
 	}
 	_, o, _, _ := filterBash.RunWithReturn()
@@ -271,7 +312,7 @@ func (vipRules *vipQosRules) VipQosRulesInit(nicName string) interface{} {
 	return nil
 }
 
-func (vipRules *vipQosRules) VipQosAddRule(rule qosRule, nicName string, direct direction) interface{} {
+func (vipRules *vipQosRules) VipQosAddRule(rule *qosRule, nicName string, direct direction) interface{} {
 	rule.prioId = vipRules.prioId
 	rule.filterId = vipRules.filterHandleID
 	if rule.port == 0 {
@@ -285,7 +326,7 @@ func (vipRules *vipQosRules) VipQosAddRule(rule qosRule, nicName string, direct 
 	rule.AddRule(nicName, direct)
 
 	/* add rules to map */
-	vipRules.portRules[rule.port] = &rule
+	vipRules.portRules[rule.port] = rule
 
 	log.Debugf("AddRuleToInterface ip %s port %d, classId %d, prio %d, filter %03x:%03x, port number %d",
 		rule.ip, rule.port, rule.classId, rule.prioId, rule.filterId, rule.filterPos, len(vipRules.portRules))
@@ -303,8 +344,8 @@ func (vipRules *vipQosRules) VipQosDelRule(rule qosRule, nicName string, direct 
 		log.Debugf("DelRule clean ip %s prio %d", rule.ip, rule.prioId)
 		/* delete filter */
 		bash := utils.Bash{
-			Command: fmt.Sprintf("tc filter del dev %s parent 1:0 prio %d protocol ip u32",
-				nicName, rule.prioId),
+			Command: fmt.Sprintf("tc filter del dev %s parent 1:0 prio %d protocol %s u32",
+				nicName, rule.prioId, rule.qosProtocol),
 			Sudo: true,
 		}
 		bash.Run()
@@ -347,7 +388,7 @@ func getInterfaceIndex(name string) string {
 	return strings.TrimFunc(name, f)
 }
 
-func (rules *interfaceQosRules) InterfaceQosRuleFind(newRule qosRule) *qosRule {
+func (rules *interfaceQosRules) InterfaceQosRuleFind(newRule *qosRule) *qosRule {
 	if _, ok := rules.rules[newRule.ip]; ok == false {
 		return nil
 	}
@@ -398,7 +439,8 @@ func (rules *interfaceQosRules) InterfaceQosRuleInit(direct direction) interface
 			_ = utils.IpLinkSetUp(rules.ifbName)
 			bash := utils.Bash{
 				Command: fmt.Sprintf("tc qdisc add dev %s handle ffff: ingress;"+
-					"tc filter add dev %s parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev %s", rules.name, rules.name, rules.ifbName),
+					"tc filter add dev %s parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev %s;"+
+					"tc filter add dev %s parent ffff: protocol ipv6 u32 match u32 0 0 action mirred egress redirect dev %s", rules.name, rules.name, rules.ifbName, rules.name, rules.name, rules.ifbName),
 				Sudo: true,
 			}
 			bash.Run()
@@ -476,7 +518,8 @@ func (rules *interfaceQosRules) InterfaceQosRuleCleanUp() interface{} {
 		if !utils.IsEnableVyosCmd() {
 			bash := utils.Bash{
 				Command: fmt.Sprintf("tc qdisc del dev %s handle ffff: ingress;"+
-					"tc filter del dev %s parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev %s", rules.name, rules.ifbName, rules.ifbName),
+					"tc filter del dev %s parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev %s;"+
+					"tc filter del dev %s parent ffff: protocol ipv6 u32 match u32 0 0 action mirred egress redirect dev %s", rules.name, rules.ifbName, rules.ifbName, rules.name, rules.ifbName, rules.ifbName),
 				Sudo: true,
 			}
 			bash.Run()
@@ -502,7 +545,7 @@ func (rules *interfaceQosRules) InterfaceQosRuleCleanUp() interface{} {
 	return nil
 }
 
-func (rules *interfaceQosRules) InterfaceQosRuleAddRule(rule qosRule) interface{} {
+func (rules *interfaceQosRules) InterfaceQosRuleAddRule(rule *qosRule) interface{} {
 	name := rules.name
 	if rules.direct == INGRESS {
 		name = rules.ifbName
@@ -516,7 +559,7 @@ func (rules *interfaceQosRules) InterfaceQosRuleAddRule(rule qosRule) interface{
 		}
 		prioId := rules.prioBitMap.FindFirstAvailable()
 		rules.prioBitMap.AddNumber(prioId)
-		rules.rules[rule.ip] = &(vipQosRules{vip: rule.ip, prioId: prioId, portRules: make(map[uint16]*qosRule), vipUuid: rule.vipUuid})
+		rules.rules[rule.ip] = newVipQosRules(make(map[uint16]*qosRule), rule.ip, prioId, rule.vipUuid)
 		rules.rules[rule.ip].VipQosRulesInit(name)
 	}
 
@@ -539,7 +582,7 @@ func (rules *interfaceQosRules) InterfaceQosRuleAddRule(rule qosRule) interface{
 			}
 			prioId := rules.prioBitMap.FindFirstAvailable()
 			rules.prioBitMap.AddNumber(prioId)
-			rules.rules[rule.ip] = &(vipQosRules{vip: rule.ip, prioId: prioId, portRules: make(map[uint16]*qosRule), vipUuid: rule.vipUuid})
+			rules.rules[rule.ip] = newVipQosRules(make(map[uint16]*qosRule), rule.ip, prioId, rule.vipUuid)
 			rules.rules[rule.ip].VipQosRulesInit(name)
 		}
 	}
@@ -602,7 +645,7 @@ type interfaceInOutQosRules [DIRECTION_MAX]*interfaceQosRules
 
 var totalQosRules map[string]interfaceInOutQosRules
 
-func addQosRule(publicInterface string, direct direction, qosRule qosRule) interface{} {
+func addQosRule(publicInterface string, direct direction, qosRule *qosRule) interface{} {
 	if _, ok := totalQosRules[publicInterface]; !ok {
 		log.Debugf("init data struct for %s", publicInterface)
 		totalQosRules[publicInterface] = interfaceInOutQosRules([DIRECTION_MAX]*interfaceQosRules{
@@ -660,6 +703,49 @@ type vipInfo struct {
 	OwnerEthernetMac string `json:"ownerEthernetMac"`
 	Nic              string `json:"nic"` /* this is used for delete */
 	VipUuid          string `json:"vipUuid"`
+	Ip6              string `json:"ip6"`
+	PrefixLength     int    `json:"prefixLength"`
+	Gateway6         string `json:"gateway6"`
+	AddressMode      string `json:"addressMode"`
+}
+
+func (vip vipInfo) GetIpWithOutCidr() string {
+	if vip.Ip != "" {
+		return vip.Ip
+	} else {
+		return vip.Ip6
+	}
+}
+
+func (vip vipInfo) GetIpWithCidr() (string, int) {
+	if vip.Ip != "" {
+		cidr, err := utils.NetmaskToCIDR(vip.Netmask)
+		utils.PanicOnError(err)
+		addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
+		return addr, cidr
+	} else {
+		return fmt.Sprintf("%s/%d", vip.Ip6, vip.PrefixLength), vip.PrefixLength
+	}
+}
+
+func (vip vipInfo) GetIpVersion() int {
+	if vip.Ip != "" {
+		return IPv4
+	} else if vip.Ip6 != "" {
+		return IPv6
+	} else {
+		return IP_NONE
+	}
+}
+
+func (vip vipInfo) GetPrefix() int {
+	if vip.Ip != "" {
+		cidr, err := utils.NetmaskToCIDR(vip.Netmask)
+		utils.PanicOnError(err)
+		return cidr
+	} else {
+		return vip.PrefixLength
+	}
 }
 
 type nicIpInfo struct {
@@ -715,10 +801,7 @@ func getVyosNicVips(tree *server.VyosConfigTree, nicName string) []string {
 	}
 
 	for _, key := range ipNode.ChildNodeKeys() {
-		ip := strings.Split(key, "/")[0]
-		if utils.IsIpv4Address(ip) {
-			ips = append(ips, key)
-		}
+		ips = append(ips, key)
 	}
 	return ips
 }
@@ -727,7 +810,7 @@ func getLinuxNicVips(nicName string) []string {
 	var linuxIps []string
 
 	bash := utils.Bash{
-		Command: fmt.Sprintf("ip -4 add show dev %s | grep -w inet | awk '{print $2}'", nicName),
+		Command: fmt.Sprintf("ip add show dev %s | grep -E \"inet|inet6\" | awk '{print $2}'", nicName),
 	}
 	ret, o, _, err := bash.RunWithReturn()
 	if ret != 0 || err != nil {
@@ -738,7 +821,7 @@ func getLinuxNicVips(nicName string) []string {
 	ips := strings.Split(o, "\n")
 	for _, key := range ips {
 		ip := strings.Split(key, "/")[0]
-		if ip != "" && utils.IsIpv4Address(ip) {
+		if ip != "" {
 			linuxIps = append(linuxIps, key)
 		}
 
@@ -753,6 +836,7 @@ func setVipHandler(ctx *server.CommandContext) interface{} {
 	if !utils.IsEnableVyosCmd() {
 		return setVipByLinux(cmd)
 	}
+
 	return setVip(cmd)
 }
 
@@ -836,9 +920,7 @@ func setVip(cmd *setVipCmd) interface{} {
 		for _, vip := range cmd.Vips {
 			nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
 			utils.PanicOnError(err)
-			cidr, err := utils.NetmaskToCIDR(vip.Netmask)
-			utils.PanicOnError(err)
-			addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
+			addr, _ := vip.GetIpWithCidr()
 			if n := tree.Getf("interfaces ethernet %s address %v", nicname, addr); n == nil {
 				tree.SetfWithoutCheckExisting("interfaces ethernet %s address %v", nicname, addr)
 			}
@@ -847,12 +929,10 @@ func setVip(cmd *setVipCmd) interface{} {
 		for _, vip := range cmd.Vips {
 			nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
 			utils.PanicOnError(err)
-			cidr, err := utils.NetmaskToCIDR(vip.Netmask)
-			utils.PanicOnError(err)
-			addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
+			addr, _ := vip.GetIpWithCidr()
 
 			/* vip on mgt nic will not configure in vyos config */
-			if utils.IsInManagementCidr(vip.Ip) {
+			if vip.Ip != "" && utils.IsInManagementCidr(vip.Ip) {
 				if n := tree.Getf("interfaces ethernet %s address %v", nicname, addr); n != nil {
 					/* delete old config if existed */
 					n.Delete()
@@ -882,7 +962,8 @@ func setVip(cmd *setVipCmd) interface{} {
 		for _, vip := range cmd.Vips {
 			publicInterface, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
 			utils.PanicOnError(err)
-			ingressrule := qosRule{ip: vip.Ip, port: 0, bandwidth: MAX_BINDWIDTH, vipUuid: vip.VipUuid}
+			addr := vip.GetIpWithOutCidr()
+			ingressrule := newQosRule(addr, 0, MAX_BINDWIDTH, vip.VipUuid)
 			if biRule, ok := totalQosRules[publicInterface]; ok {
 				if biRule[INGRESS].InterfaceQosRuleFind(ingressrule) == nil {
 					addQosRule(publicInterface, INGRESS, ingressrule)
@@ -891,7 +972,7 @@ func setVip(cmd *setVipCmd) interface{} {
 				addQosRule(publicInterface, INGRESS, ingressrule)
 			}
 
-			egressrule := qosRule{ip: vip.Ip, port: 0, bandwidth: MAX_BINDWIDTH, vipUuid: vip.VipUuid}
+			egressrule := newQosRule(addr, 0, MAX_BINDWIDTH, vip.VipUuid)
 			if biRule, ok := totalQosRules[publicInterface]; ok {
 				if biRule[EGRESS].InterfaceQosRuleFind(egressrule) == nil {
 					addQosRule(publicInterface, EGRESS, egressrule)
@@ -906,10 +987,14 @@ func setVip(cmd *setVipCmd) interface{} {
 	for _, vip := range cmd.Vips {
 		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
 		utils.PanicOnError(err)
-		cidr, err := utils.NetmaskToCIDR(vip.Netmask)
-		utils.PanicOnError(err)
+		addr := vip.GetIpWithOutCidr()
+		prefix := vip.GetPrefix()
 
-		vyosVips = append(vyosVips, nicVipPair{NicName: nicname, Vip: vip.Ip, Prefix: cidr})
+		if utils.IsIpv4Address(addr) {
+			vyosVips = append(vyosVips, nicVipPair{NicName: nicname, Vip: addr, Prefix: prefix})
+		} else {
+			vyosVips = append(vyosVips, nicVipPair{NicName: nicname, Vip6: addr, Prefix: prefix})
+		}
 	}
 
 	if utils.IsHaEnabled() {
@@ -982,9 +1067,7 @@ func removeVip(cmd *removeVipCmd) interface{} {
 	for _, vip := range cmd.Vips {
 		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
 		utils.PanicOnError(err)
-		cidr, err := utils.NetmaskToCIDR(vip.Netmask)
-		utils.PanicOnError(err)
-		addr := fmt.Sprintf("%v/%v", vip.Ip, cidr)
+		addr, _ := vip.GetIpWithCidr()
 		tree.Deletef("interfaces ethernet %s address %v", nicname, addr)
 		deleteQosRulesOfVip(nicname, vip.Ip)
 	}
@@ -995,8 +1078,15 @@ func removeVip(cmd *removeVipCmd) interface{} {
 		for _, vip := range toDeletelVip {
 			cidr, err := utils.NetmaskToCIDR(vip.Netmask)
 			utils.PanicOnError(err)
+			var cmds []string
+			if vip.Ip != "" {
+				cmds = append(cmds, fmt.Sprintf("sudo ip add del %s/%d dev %s ", vip.Ip, cidr, vip.Nic))
+			} else if vip.Ip6 != "" {
+				cmds = append(cmds, fmt.Sprintf("sudo ip -6 add del %s/%d dev %s ", vip.Ip, cidr, vip.Nic))
+			}
+
 			bash := utils.Bash{
-				Command: fmt.Sprintf("sudo ip add del %s/%d dev %s ", vip.Ip, cidr, vip.Nic),
+				Command: strings.Join(cmds, ";"),
 			}
 			bash.Run()
 		}
@@ -1014,8 +1104,7 @@ func removeVip(cmd *removeVipCmd) interface{} {
 	for _, vip := range cmd.Vips {
 		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
 		utils.PanicOnError(err)
-		cidr, err := utils.NetmaskToCIDR(vip.Netmask)
-		utils.PanicOnError(err)
+		_, cidr := vip.GetIpWithCidr()
 
 		vyosVips = append(vyosVips, nicVipPair{NicName: nicname, Vip: vip.Ip, Prefix: cidr})
 	}
@@ -1040,13 +1129,11 @@ func setVipQos(ctx *server.CommandContext) interface{} {
 		publicInterface, err := utils.GetNicNameByMac(setting.PublicNic)
 		utils.PanicOnError(err)
 		if setting.InboundBandwidth != 0 {
-			ingressrule := qosRule{ip: setting.Vip, port: uint16(setting.Port), bandwidth: uint64(setting.InboundBandwidth),
-				vipUuid: setting.VipUuid}
+			ingressrule := newQosRule(setting.Vip, uint16(setting.Port), uint64(setting.InboundBandwidth), setting.VipUuid)
 			addQosRule(publicInterface, INGRESS, ingressrule)
 		}
 		if setting.OutboundBandwidth != 0 {
-			egressrule := qosRule{ip: setting.Vip, port: uint16(setting.Port), bandwidth: uint64(setting.OutboundBandwidth),
-				vipUuid: setting.VipUuid}
+			egressrule := newQosRule(setting.Vip, uint16(setting.Port), uint64(setting.InboundBandwidth), setting.VipUuid)
 			addQosRule(publicInterface, EGRESS, egressrule)
 		}
 	}
@@ -1079,7 +1166,7 @@ func deleteVipQos(ctx *server.CommandContext) interface{} {
 
 		publicInterface, error := utils.GetNicNameByMac(setting.PublicNic)
 		utils.PanicOnError(error)
-		qosRule := qosRule{ip: setting.Vip, port: 0, bandwidth: MAX_BINDWIDTH, vipUuid: setting.VipUuid}
+		qosRule := newQosRule(setting.Vip, 0, MAX_BINDWIDTH, setting.VipUuid)
 		addQosRule(publicInterface, INGRESS, qosRule)
 		addQosRule(publicInterface, EGRESS, qosRule)
 	}
@@ -1096,8 +1183,8 @@ func syncVipQos(ctx *server.CommandContext) interface{} {
 		publicInterface, err := utils.GetNicNameByMac(setting.PublicNic)
 		utils.PanicOnError(err)
 		if setting.InboundBandwidth != 0 {
-			ingressrule := qosRule{ip: setting.Vip, port: uint16(setting.Port), bandwidth: uint64(setting.InboundBandwidth),
-				vipUuid: setting.VipUuid}
+
+			ingressrule := newQosRule(setting.Vip, uint16(setting.Port), uint64(setting.InboundBandwidth), setting.VipUuid)
 			if biRule, ok := totalQosRules[publicInterface]; !ok {
 				if biRule[INGRESS].InterfaceQosRuleFind(ingressrule) == nil {
 					addQosRule(publicInterface, INGRESS, ingressrule)
@@ -1108,8 +1195,7 @@ func syncVipQos(ctx *server.CommandContext) interface{} {
 		}
 
 		if setting.OutboundBandwidth != 0 {
-			egressrule := qosRule{ip: setting.Vip, port: uint16(setting.Port), bandwidth: uint64(setting.OutboundBandwidth),
-				vipUuid: setting.VipUuid}
+			egressrule := newQosRule(setting.Vip, uint16(setting.Port), uint64(setting.InboundBandwidth), setting.VipUuid)
 			if biRule, ok := totalQosRules[publicInterface]; !ok {
 				if biRule[EGRESS].InterfaceQosRuleFind(egressrule) == nil {
 					addQosRule(publicInterface, EGRESS, egressrule)
