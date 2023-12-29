@@ -7,20 +7,28 @@ ifndef GOROOT
     $(error GOROOT is not set)
 endif
 
-GOROOT_LA ?= $(GOROOT)
-GO_LA := $(GOROOT_LA)/bin/go
-
-
 ARCH?=amd64 arm64
+# ZStack is currently compatible with loongarch64 abi1.0 distribution iso.
+# Support for loongarch64 abi1.0 cross-compilation requires specific go and is currently only supported.
+# download page for specific go: http://www.loongnix.cn/zh/toolchain/Golang/
+# Loongarch64 abi2.0 cross-compilation is supported after go1.19.
+ifeq ($(findstring loong64,$(ARCH)),loong64)
+    ifndef GOROOT_LA
+        $(error GOROOT for loong64 is not set)
+    endif
+endif
 
-export GO=$(GOROOT)/bin/go
+GO=$${GOROOT}/bin/go
+GO_BUILD=$(shell echo 'GOOS=$${GOOS} GOARCH=$${GOARCH} $(GO) build')
 #export GOPATH=$(shell pwd)
 export GOPROXY=https://goproxy.cn,direct
 export GO111MODULE=on
-SUPPORT_GO_WORKSPACE := $(shell $(GO) work help >/dev/null 2>&1 ; echo $$?)
+# GOROOT has not set to environment variable before target, so use $(GOROOT) instead
+SUPPORT_GO_WORKSPACE := $(shell $(GOROOT)/bin/go work help >/dev/null 2>&1 ; echo $$?)
 ifneq ($(SUPPORT_GO_WORKSPACE), 0)
     $(error workspace mode is not supported, and requires go version greater than 1.18)
 endif
+
 export TestEnv=devTestEnv.json
 
 TARGET_DIR=target
@@ -32,8 +40,6 @@ DATA_TAR_DIR=$(PKG_TAR_DIR)/data
 FILE_LIST_ZVR=$(DATA_ZVR_DIR)/file-lists
 FILE_LIST_TAR=$(DATA_TAR_DIR)/file-lists
 VERSION_FILE=data/file-lists/version
-
-DEPS=github.com/sirupsen/logrus github.com/pkg/errors github.com/fatih/structs github.com/prometheus/client_golang/prometheus github.com/bcicen/go-haproxy github.com/vishvananda/netlink
 
 # for build version
 VERSION=`cat data/file-lists/version`
@@ -50,9 +56,6 @@ LDFLAGS=-X 'zstack-vyos/utils.Version=${VERSION}' \
 -X 'zstack-vyos/utils.GoVersion=${GO_VERSION}'
 PACKAGE_FLAG=-gitInfo "${GIT_INFO}" -user "${USER}" -time "${TIME}" -version "${VERSION}" -goVersion "${GO_VERSION}"
 
-deps:
-	$(GO) get $(DEPS)
-
 clean:
 	rm -rf target/
 
@@ -60,30 +63,27 @@ clean:
 #package: clean zvr zvrarm zvrboot zvrbootarm
 package: clean
 	for arch in ${ARCH}; do \
-		if [ $${arch} = amd64 ]; then \
-			GOOS="linux" GOARCH="amd64"; $(GO) build -o $(TARGET_DIR)/zvr_x86_64 -ldflags="${LDFLAGS}" zvr/zvr.go; \
-			GOOS="linux" GOARCH="amd64"; $(GO) build -o $(TARGET_DIR)/zvrboot_x86_64 -ldflags="${LDFLAGS}" zvrboot/zvrboot.go zvrboot/zvrboot_utils.go; fi; \
-		if [ $${arch} = arm64 ]; then \
-			CGO_ENABLED=0 GOOS="linux" GOARCH="arm64"; $(GO) build -o $(TARGET_DIR)/zvr_aarch64 -ldflags="${LDFLAGS}" zvr/zvr.go; \
-			CGO_ENABLED=0 GOOS="linux" GOARCH="arm64"; $(GO) build -o $(TARGET_DIR)/zvrboot_aarch64 -ldflags="${LDFLAGS}" zvrboot/zvrboot.go zvrboot/zvrboot_utils.go; fi; \
-		if [ $${arch} = loong64 ]; then \
-			GOROOT=$(GOROOT_LA) CGO_ENABLED=0 GOOS="linux" GOARCH="loong64"; $(GO_LA) build -o $(TARGET_DIR)/zvr_loongarch64 -ldflags="${LDFLAGS}" zvr/zvr.go; \
-			GOROOT=$(GOROOT_LA) GOOS="linux" GOARCH="loong64"; $(GO_LA) build -o $(TARGET_DIR)/zvrboot_loongarch64 -ldflags="${LDFLAGS}" zvrboot/zvrboot.go zvrboot/zvrboot_utils.go; fi; \
+		GOOS=linux GOARCH=$${arch}; \
+		if [ $${arch} = amd64 ]; then UNAME=x86_64; \
+		elif [ $${arch} = arm64 ]; then UNAME=aarch64; \
+		elif [ $${arch} = loong64 ]; then UNAME=loongarch64 GOROOT=$(GOROOT_LA); \
+		else echo "$${arch} is not supported"; exit 1; \
+		fi; \
+		CGO_ENABLED=0 $(GO_BUILD) -o $(TARGET_DIR)/zvr_$${UNAME} -ldflags="${LDFLAGS}" zvr/zvr.go; \
+		CGO_ENABLED=0 $(GO_BUILD) -o $(TARGET_DIR)/zvrboot_$${UNAME} -ldflags="${LDFLAGS}" zvrboot/zvrboot.go zvrboot/zvrboot_utils.go; \
 	done
 	mkdir -p $(PKG_ZVR_DIR)
 	mkdir -p $(PKG_ZVRBOOT_DIR)
 	cp -f $(VERSION_FILE) $(TARGET_DIR)
 	cp -a data/ $(PKG_ZVR_DIR)
-	for arch in ${ARCH};do\
-		if [ $${arch} = amd64 ]; then \
-			cp -f $(TARGET_DIR)/zvr_x86_64 $(FILE_LIST_ZVR); \
-			cp -f $(TARGET_DIR)/zvrboot_x86_64 $(PKG_ZVRBOOT_DIR); fi; \
-		if [ $${arch} = arm64 ]; then \
-			cp -f $(TARGET_DIR)/zvr_aarch64 $(FILE_LIST_ZVR); \
-			cp -f $(TARGET_DIR)/zvrboot_aarch64 $(PKG_ZVRBOOT_DIR); fi; \
-		if [ $${arch} = loong64 ]; then \
-			cp -f $(TARGET_DIR)/zvr_loongarch64 $(FILE_LIST_ZVR); \
-			cp -f $(TARGET_DIR)/zvrboot_loongarch64 $(PKG_ZVRBOOT_DIR); fi; \
+	for arch in ${ARCH}; do \
+  		if [ $${arch} = amd64 ]; then UNAME=x86_64; \
+  		elif [ $${arch} = arm64 ]; then UNAME=aarch64; \
+  		elif [ $${arch} = loong64 ]; then UNAME=loongarch64 GOROOT=$(GOROOT_LA); \
+  		else echo "$${arch} is not supported"; exit 1; \
+  		fi; \
+		cp -f $(TARGET_DIR)/zvr_$${UNAME} $(FILE_LIST_ZVR); \
+		cp -f $(TARGET_DIR)/zvrboot_$${UNAME} $(PKG_ZVRBOOT_DIR); \
 	done
 	cp -f scripts/grub.cfg.5.4.80 $(PKG_ZVR_DIR)
 	cp -f scripts/grub.cfg.3.13 $(PKG_TAR_DIR)
@@ -96,15 +96,13 @@ tar:
 	mkdir -p $(PKG_TAR_DIR)
 	cp -a data/ $(PKG_TAR_DIR)
 	for arch in ${ARCH}; do \
-		if [ $${arch} = amd64 ]; then \
-			cp -f $(TARGET_DIR)/zvr_x86_64 $(FILE_LIST_TAR); \
-			cp -f $(TARGET_DIR)/zvrboot_x86_64 $(FILE_LIST_TAR); fi; \
-		if [ $${arch} = arm64 ]; then \
-			cp -f $(TARGET_DIR)/zvr_aarch64 $(FILE_LIST_TAR); \
-			cp -f $(TARGET_DIR)/zvrboot_aarch64 $(FILE_LIST_TAR); fi; \
-		if [ $${arch} = loong64 ]; then \
-			cp -f $(TARGET_DIR)/zvr_loongarch64 $(FILE_LIST_TAR); \
-			cp -f $(TARGET_DIR)/zvrboot_loongarch64 $(FILE_LIST_TAR); fi; \
+		if [ $${arch} = amd64 ]; then UNAME=x86_64; \
+		elif [ $${arch} = arm64 ]; then UNAME=aarch64; \
+		elif [ $${arch} = loong64 ]; then UNAME=loongarch64 GOROOT=$(GOROOT_LA); \
+		else echo "$${arch} is not supported"; exit 1; \
+		fi; \
+		cp -f $(TARGET_DIR)/zvr_$${UNAME} $(FILE_LIST_TAR); \
+		cp -f $(TARGET_DIR)/zvrboot_$${UNAME} $(FILE_LIST_TAR);
 	done
 	cp -f scripts/grub.cfg.5.4.80 $(PKG_TAR_DIR)
 	cp -f scripts/grub.cfg.3.13 $(PKG_TAR_DIR)
