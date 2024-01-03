@@ -531,7 +531,11 @@ func updateIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
 func updateIPsecVersionHandler(ctx *server.CommandContext) interface{} {
 	cmd := &updateIpsecVersionCmd{}
 	ctx.GetCommand(cmd)
-	return updateIpsecVersion(cmd)
+	err := updateIpsecVersion(cmd)
+	if err != nil {
+		panic(err)
+	}
+	return nil
 }
 
 type ipsecVersionMgr struct {
@@ -591,7 +595,6 @@ func updateOriginVersion(version string) error {
 		}
 
 		log.Infof("TEMP: updateOriginVersion create origin dir %s.", versionPath)
-		return nil
 	}
 
 	if err := utils.CopyFile(filepath.Join(originPath, ipsec_strongswan_upgrade_cmd),
@@ -799,7 +802,13 @@ func updateIpsecVersion(cmd *updateIpsecVersionCmd) error {
 		return fmt.Errorf("version %s is not support", cmd.Version)
 	}
 
-	err := ipsecVerMgr.currentDriver.DeleteIpsecConns(&deleteIPsecCmd{cmd.Infos})
+	//create origin ipsec upgrade dir
+	_, err := getCurrentVersionInuse()
+	if err != nil {
+		return err
+	}
+
+	err = ipsecVerMgr.currentDriver.DeleteIpsecConns(&deleteIPsecCmd{cmd.Infos})
 	if err != nil {
 		return err
 	}
