@@ -1,8 +1,3 @@
-GO_118_PATH := /usr/lib/golang1.18
-ifneq ($(wildcard $(GO_118_PATH)),)
-    GOROOT := $(GO_118_PATH)
-endif
-
 ifndef GOROOT
     $(error GOROOT is not set)
 endif
@@ -46,13 +41,11 @@ VERSION=`cat data/file-lists/version`
 GIT_INFO=`git name-rev --name-only HEAD | sed 's/remotes\/origin\///g'`/`git rev-parse HEAD`
 USER=`git config user.email`
 TIME=`TZ=Asia/Shanghai date +"%Y-%m-%d %H:%M:%S"`
-PLATFORM=$${GOOS}/$${GOARCH}
 GO_VERSION=`${GO} version | sed "s/go version //"`
 LDFLAGS=-X 'zstack-vyos/utils.Version=${VERSION}' \
 -X 'zstack-vyos/utils.GitInfo=${GIT_INFO}' \
 -X 'zstack-vyos/utils.User=${USER}' \
 -X 'zstack-vyos/utils.Time=${TIME}' \
--X 'zstack-vyos/utils.Platform=${PLATFORM}' \
 -X 'zstack-vyos/utils.GoVersion=${GO_VERSION}'
 PACKAGE_FLAG=-gitInfo "${GIT_INFO}" -user "${USER}" -time "${TIME}" -version "${VERSION}" -goVersion "${GO_VERSION}"
 
@@ -64,26 +57,26 @@ clean:
 package: clean
 	for arch in ${ARCH}; do \
 		GOOS=linux GOARCH=$${arch}; \
-		if [ $${arch} = amd64 ]; then UNAME=x86_64; \
-		elif [ $${arch} = arm64 ]; then UNAME=aarch64; \
-		elif [ $${arch} = loong64 ]; then UNAME=loongarch64 GOROOT=$(GOROOT_LA); \
+		if [ $${arch} = amd64 ]; then UNAME_I=x86_64; \
+		elif [ $${arch} = arm64 ]; then UNAME_I=aarch64; \
+		elif [ $${arch} = loong64 ]; then UNAME_I=loongarch64 GOROOT=$(GOROOT_LA); \
 		else echo "$${arch} is not supported"; exit 1; \
 		fi; \
-		CGO_ENABLED=0 $(GO_BUILD) -o $(TARGET_DIR)/zvr_$${UNAME} -ldflags="${LDFLAGS}" zvr/zvr.go; \
-		CGO_ENABLED=0 $(GO_BUILD) -o $(TARGET_DIR)/zvrboot_$${UNAME} -ldflags="${LDFLAGS}" zvrboot/zvrboot.go zvrboot/zvrboot_utils.go; \
+		CGO_ENABLED=0 $(GO_BUILD) -o $(TARGET_DIR)/zvr_$${UNAME_I} -ldflags="${LDFLAGS}" zvr/zvr.go; \
+		CGO_ENABLED=0 $(GO_BUILD) -o $(TARGET_DIR)/zvrboot_$${UNAME_I} -ldflags="${LDFLAGS}" zvrboot/zvrboot.go zvrboot/zvrboot_utils.go; \
 	done
 	mkdir -p $(PKG_ZVR_DIR)
 	mkdir -p $(PKG_ZVRBOOT_DIR)
 	cp -f $(VERSION_FILE) $(TARGET_DIR)
 	cp -a data/ $(PKG_ZVR_DIR)
 	for arch in ${ARCH}; do \
-  		if [ $${arch} = amd64 ]; then UNAME=x86_64; \
-  		elif [ $${arch} = arm64 ]; then UNAME=aarch64; \
-  		elif [ $${arch} = loong64 ]; then UNAME=loongarch64 GOROOT=$(GOROOT_LA); \
+  		if [ $${arch} = amd64 ]; then UNAME_I=x86_64; \
+  		elif [ $${arch} = arm64 ]; then UNAME_I=aarch64; \
+  		elif [ $${arch} = loong64 ]; then UNAME_I=loongarch64 GOROOT=$(GOROOT_LA); \
   		else echo "$${arch} is not supported"; exit 1; \
   		fi; \
-		cp -f $(TARGET_DIR)/zvr_$${UNAME} $(FILE_LIST_ZVR); \
-		cp -f $(TARGET_DIR)/zvrboot_$${UNAME} $(PKG_ZVRBOOT_DIR); \
+		cp -f $(TARGET_DIR)/zvr_$${UNAME_I} $(FILE_LIST_ZVR); \
+		cp -f $(TARGET_DIR)/zvrboot_$${UNAME_I} $(PKG_ZVRBOOT_DIR); \
 	done
 	cp -f scripts/grub.cfg.5.4.80 $(PKG_ZVR_DIR)
 	cp -f scripts/grub.cfg.3.13 $(PKG_TAR_DIR)
@@ -106,9 +99,9 @@ tar: clean
 		CGO_ENABLED=0 $(GO_BUILD) -o $(TARGET_DIR)/zvrboot_$${UNAME} -ldflags="${LDFLAGS}" zvrboot/zvrboot.go zvrboot/zvrboot_utils.go; \
 	done
 	for arch in ${ARCH}; do \
-		if [ $${arch} = amd64 ]; then UNAME=x86_64; \
-		elif [ $${arch} = arm64 ]; then UNAME=aarch64; \
-		elif [ $${arch} = loong64 ]; then UNAME=loongarch64 GOROOT=$(GOROOT_LA); \
+		if [ $${arch} = amd64 ]; then UNAME_I=x86_64; \
+		elif [ $${arch} = arm64 ]; then UNAME_I=aarch64; \
+		elif [ $${arch} = loong64 ]; then UNAME_I=loongarch64 GOROOT=$(GOROOT_LA); \
 		else echo "$${arch} is not supported"; exit 1; \
 		fi; \
 		cp -f $(TARGET_DIR)/zvr_$${UNAME} $(FILE_LIST_TAR); \
