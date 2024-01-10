@@ -540,14 +540,19 @@ func configureVyos() {
 	setNicTree.Apply(true)
 	log.Debugf("[configure: radvd service]")
 	radvdMap := make(utils.RadvdAttrsMap)
-	for _, nic := range nics {
-		if nic.ip6 != "" && nic.prefixLength > 0 && nic.category == "Private" {
-			radvdAttr := utils.NewRadvdAttrs().SetNicName(nic.name).SetIp6(nic.ip6, nic.prefixLength).SetMode(nic.addressMode)
-			radvdMap[nic.name] = radvdAttr
+	if utils.IsSLB() {
+		_ = radvdMap.StopService()
+		log.Debugf("skip configure radvd service with SLB")
+	} else {
+		for _, nic := range nics {
+			if nic.ip6 != "" && nic.prefixLength > 0 && nic.category == "Private" {
+				radvdAttr := utils.NewRadvdAttrs().SetNicName(nic.name).SetIp6(nic.ip6, nic.prefixLength).SetMode(nic.addressMode)
+				radvdMap[nic.name] = radvdAttr
+			}
 		}
+		err := radvdMap.ConfigService()
+		log.Debugf("configure radvd service error: %+v", err)
 	}
-	err := radvdMap.ConfigService()
-	log.Debugf("configure radvd service error: %+v", err)
 	log.Debugf("[configure: ssh service]")
 	setSshTree := server.NewParserFromShowConfiguration().Tree
 	utils.Assert(sshport != 0, "sshport not found in bootstrap info")

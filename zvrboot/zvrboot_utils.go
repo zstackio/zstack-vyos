@@ -121,15 +121,20 @@ func configureSshServer() {
 func configureRadvdServer() {
 	log.Debugf("[configure: radvd service]")
 	radvdMap := make(utils.RadvdAttrsMap)
-	for _, nic := range nicsMap {
-		if nic.Ip6 != "" && nic.PrefixLength > 0 && nic.Category == "Private" {
-			radvdAttr := utils.NewRadvdAttrs().SetNicName(nic.Name).SetIp6(nic.Ip6, nic.PrefixLength).SetMode(nic.AddressMode)
-			radvdMap[nic.Name] = radvdAttr
+	if utils.IsSLB() {
+		_ = radvdMap.StopService()
+		log.Debugf("skip configure radvd service with SLB")
+	} else {
+		for _, nic := range nicsMap {
+			if nic.Ip6 != "" && nic.PrefixLength > 0 && nic.Category == "Private" {
+				radvdAttr := utils.NewRadvdAttrs().SetNicName(nic.Name).SetIp6(nic.Ip6, nic.PrefixLength).SetMode(nic.AddressMode)
+				radvdMap[nic.Name] = radvdAttr
+			}
 		}
-	}
 
-	if err := radvdMap.ConfigService(); err != nil {
-		log.Debugf("configure radvd service error: %+v", err)
+		if err := radvdMap.ConfigService(); err != nil {
+			log.Debugf("configure radvd service error: %+v", err)
+		}
 	}
 }
 

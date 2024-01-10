@@ -122,6 +122,9 @@ func (r *RadvdAttrs) SetMode(addressMode string) *RadvdAttrs {
 }
 
 func (r RadvdAttrsMap) ConfigService() error {
+	if IsSLB() {
+		return nil
+	}
 	var (
 		buf  bytes.Buffer
 		tmpl *template.Template
