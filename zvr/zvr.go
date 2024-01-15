@@ -48,6 +48,11 @@ func initPlugins() {
 	if err := plugin.IpsecInit(); err != nil {
 		log.Warningf("init plugin ipsec failed, %v", err.Error())
 	}
+	if utils.IsSLB() {
+		radvdService := make(utils.RadvdAttrsMap)
+		_ = radvdService.StopService()
+		log.Debugf("stop radvd service with SLB")
+	}
 	plugin.InitHaNicState()
 }
 
