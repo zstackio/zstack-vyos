@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strings"
+	"os"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -171,6 +172,18 @@ func configureNicInfo(nic *utils.NicInfo) {
 	var err error
 	// TODO ....
 	//setNicTree.SetNicSmpAffinity(nic.name, "auto")
+
+	//set kernel arguments for specific nic
+	err = os.WriteFile(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/keep_addr_on_down", nic.Name), []byte("1"), 0644)
+	if err != nil {
+		log.Warningf("enable nic %s keep_addr_on_down failed: %s!", nic.Name, err)
+	}
+
+	err = os.WriteFile(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_dad", nic.Name), []byte("0"), 0644)
+	if err != nil {
+		log.Warningf("disable nic %s accept_dad failed: %s!", nic.Name, err)
+	}
+
 	utils.SetNicOption(nic.Name)
 	err = utils.IpLinkSetUp(nic.Name)
 	utils.Assertf(err == nil, "IpLinkSetUp[%s] error: %s", nic.Name, err)
