@@ -91,10 +91,20 @@ package: clean
 	rm -rf $(DATA_ZVR_DIR)
 	$(GO) run package.go -conf package-config.json ${PACKAGE_FLAG} -platform "linux/(${ARCH})"
 
-tar:
+tar: clean
 	rm -rf $(PKG_TAR_DIR)
 	mkdir -p $(PKG_TAR_DIR)
 	cp -a data/ $(PKG_TAR_DIR)
+		for arch in ${ARCH}; do \
+		GOOS=linux GOARCH=$${arch}; \
+		if [ $${arch} = amd64 ]; then UNAME=x86_64; \
+		elif [ $${arch} = arm64 ]; then UNAME=aarch64; \
+		elif [ $${arch} = loong64 ]; then UNAME=loongarch64 GOROOT=$(GOROOT_LA); \
+		else echo "$${arch} is not supported"; exit 1; \
+		fi; \
+		CGO_ENABLED=0 $(GO_BUILD) -o $(TARGET_DIR)/zvr_$${UNAME} -ldflags="${LDFLAGS}" zvr/zvr.go; \
+		CGO_ENABLED=0 $(GO_BUILD) -o $(TARGET_DIR)/zvrboot_$${UNAME} -ldflags="${LDFLAGS}" zvrboot/zvrboot.go zvrboot/zvrboot_utils.go; \
+	done
 	for arch in ${ARCH}; do \
 		if [ $${arch} = amd64 ]; then UNAME=x86_64; \
 		elif [ $${arch} = arm64 ]; then UNAME=aarch64; \
@@ -102,7 +112,7 @@ tar:
 		else echo "$${arch} is not supported"; exit 1; \
 		fi; \
 		cp -f $(TARGET_DIR)/zvr_$${UNAME} $(FILE_LIST_TAR); \
-		cp -f $(TARGET_DIR)/zvrboot_$${UNAME} $(FILE_LIST_TAR);
+		cp -f $(TARGET_DIR)/zvrboot_$${UNAME} $(FILE_LIST_TAR); \
 	done
 	cp -f scripts/grub.cfg.5.4.80 $(PKG_TAR_DIR)
 	cp -f scripts/grub.cfg.3.13 $(PKG_TAR_DIR)
