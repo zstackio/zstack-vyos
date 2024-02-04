@@ -1133,7 +1133,7 @@ func setVipQos(ctx *server.CommandContext) interface{} {
 			addQosRule(publicInterface, INGRESS, ingressrule)
 		}
 		if setting.OutboundBandwidth != 0 {
-			egressrule := newQosRule(setting.Vip, uint16(setting.Port), uint64(setting.InboundBandwidth), setting.VipUuid)
+			egressrule := newQosRule(setting.Vip, uint16(setting.Port), uint64(setting.OutboundBandwidth), setting.VipUuid)
 			addQosRule(publicInterface, EGRESS, egressrule)
 		}
 	}
@@ -1195,7 +1195,7 @@ func syncVipQos(ctx *server.CommandContext) interface{} {
 		}
 
 		if setting.OutboundBandwidth != 0 {
-			egressrule := newQosRule(setting.Vip, uint16(setting.Port), uint64(setting.InboundBandwidth), setting.VipUuid)
+			egressrule := newQosRule(setting.Vip, uint16(setting.Port), uint64(setting.OutboundBandwidth), setting.VipUuid)
 			if biRule, ok := totalQosRules[publicInterface]; !ok {
 				if biRule[EGRESS].InterfaceQosRuleFind(egressrule) == nil {
 					addQosRule(publicInterface, EGRESS, egressrule)
