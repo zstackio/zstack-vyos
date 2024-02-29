@@ -19,13 +19,14 @@ import (
 	"strings"
 	"time"
 
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
+
 	cidrman "github.com/EvilSuperstars/go-cidrman"
 	haproxy "github.com/bcicen/go-haproxy"
 	"github.com/fatih/structs"
 	prom "github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
-	"zstack-vyos/server"
-	"zstack-vyos/utils"
 )
 
 const (
@@ -140,11 +141,22 @@ type Listener interface {
 	postActionListenerServiceStart() (err error)
 	stopListenerService() (err error)
 	postActionListenerServiceStop() (ret int, err error)
-	getLbCounters(listenerUuid string) ([]*LbCounter, int)
+	getLbCounters(listenerUuid string, listener Listener) <-chan CounterChanData
 	getIptablesRule() ([]*utils.IpTableRule, string)
 	getLbInfo() (lb lbInfo)
 	startPidMonitor()
 	stopPidMonitor()
+	getLastCounters() (lastCounters *CachedCounters)
+	getMaxSession() int
+}
+
+type CachedCounters struct {
+	counters []*LbCounter
+	ch       <-chan CounterChanData
+}
+
+type CounterChanData struct {
+	counters []*LbCounter
 }
 
 // the listener implemented with HaProxy
@@ -159,6 +171,7 @@ type HaproxyListener struct {
 	maxSession           int //same to maxConnect
 	aclPath              string
 	pm                   *utils.PidMon
+	lastCounters         *CachedCounters
 }
 
 // the listener implemented with gobetween
@@ -173,6 +186,7 @@ type GBListener struct {
 	maxSession           int //same to maxConnect
 	aclPath              string
 	pm                   *utils.PidMon
+	lastCounters         *CachedCounters
 }
 
 func getGBApiPort(confPath string, pidPath string) (port string) {
@@ -232,9 +246,11 @@ func getListener(lb lbInfo) Listener {
 			log.Errorf("there is no free port for rest api for listener: %v \n", lb.ListenerUuid)
 			return nil
 		}
-		return &GBListener{lb: lb, confPath: confPath, pidPath: pidPath, firewallDes: des, firewallLocalICMPDes: localICMPDes, apiPort: port, aclPath: aclPath}
+		lastCounters := &CachedCounters{}
+		return &GBListener{lb: lb, confPath: confPath, pidPath: pidPath, firewallDes: des, firewallLocalICMPDes: localICMPDes, apiPort: port, aclPath: aclPath, lastCounters: lastCounters}
 	case "tcp", "https", "http":
-		return &HaproxyListener{lb: lb, confPath: confPath, pidPath: pidPath, firewallDes: des, firewallLocalICMPDes: localICMPDes, sockPath: sockPath, aclPath: aclPath}
+		lastCounters := &CachedCounters{}
+		return &HaproxyListener{lb: lb, confPath: confPath, pidPath: pidPath, firewallDes: des, firewallLocalICMPDes: localICMPDes, sockPath: sockPath, aclPath: aclPath, lastCounters: lastCounters}
 	default:
 		utils.PanicOnError(fmt.Errorf("No such listener %v", lb.Mode))
 	}
@@ -995,6 +1011,14 @@ func (this *HaproxyListener) getLbInfo() (lb lbInfo) {
 	return
 }
 
+func (this *HaproxyListener) getLastCounters() *CachedCounters {
+	return this.lastCounters
+}
+
+func (this *HaproxyListener) getMaxSession() int {
+	return this.maxSession
+}
+
 func (this *GBListener) adaptListenerParameter(m map[string]interface{}) (map[string]interface{}, error) {
 	if strings.EqualFold(m["BalancerAlgorithm"].(string), "weightroundrobin") {
 		m["BalancerAlgorithm"] = "weight"
@@ -1431,6 +1455,14 @@ func (this *GBListener) postActionListenerServiceStop() (ret int, err error) {
 	return 0, err
 }
 
+func (this *GBListener) getLastCounters() *CachedCounters {
+	return this.lastCounters
+}
+
+func (this *GBListener) getMaxSession() int {
+	return this.maxSession
+}
+
 func makeLbAclConfFilePath(lb lbInfo) string {
 	return filepath.Join(LB_ROOT_DIR, "conf", fmt.Sprintf("listener-%v-acl.cfg", lb.ListenerUuid))
 }
@@ -1788,68 +1820,116 @@ func (c *loadBalancerCollector) Describe(ch chan<- *prom.Desc) error {
 	return nil
 }
 
-func (c *loadBalancerCollector) Update(ch chan<- prom.Metric) error {
+func TransformToMetric(c *loadBalancerCollector, listenerUuid string, listener Listener, ch chan<- prom.Metric) {
+	var counters []*LbCounter
+	num := 0
+
+	var maxSessionNum, sessionNum uint64
+	sessionNum = 0
+	lbUuid := ""
+
+	lbUuid = listener.getLbInfo().LbUuid
+	counters = listener.getLastCounters().counters
+	num = len(counters)
+	maxSessionNum = (uint64)(listener.getMaxSession())
+	/* get total count */
+	for _, cnt := range counters {
+		sessionNum += cnt.sessionNumber
+	}
+
+	for i := 0; i < num; i++ {
+		cnt := counters[i]
+		ch <- prom.MustNewConstMetric(c.statusEntry, prom.GaugeValue, float64(cnt.status), cnt.listenerUuid, cnt.ip, lbUuid)
+		ch <- prom.MustNewConstMetric(c.inByteEntry, prom.GaugeValue, float64(cnt.bytesIn), cnt.listenerUuid, cnt.ip, lbUuid)
+		ch <- prom.MustNewConstMetric(c.outByteEntry, prom.GaugeValue, float64(cnt.bytesOut), cnt.listenerUuid, cnt.ip, lbUuid)
+		ch <- prom.MustNewConstMetric(c.curSessionNumEntry, prom.GaugeValue, float64(cnt.sessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
+		ch <- prom.MustNewConstMetric(c.refusedSessionNumEntry, prom.GaugeValue, float64(cnt.refusedSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
+		ch <- prom.MustNewConstMetric(c.totalSessionNumEntry, prom.GaugeValue, float64(cnt.totalSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
+		ch <- prom.MustNewConstMetric(c.concurrentSessionUsageEntry, prom.GaugeValue, float64(cnt.concurrentSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
+	}
+
+	ch <- prom.MustNewConstMetric(c.curSessionUsageEntry, prom.GaugeValue, float64(sessionNum*100/maxSessionNum), listenerUuid, lbUuid)
+
+	if _, ok := listener.(*HaproxyListener); ok {
+		for i := 0; i < num; i++ {
+			cnt := counters[i]
+			ch <- prom.MustNewConstMetric(c.hrsp1xxEntry, prom.GaugeValue, float64(cnt.hrsp1xx), cnt.listenerUuid, cnt.ip, lbUuid)
+			ch <- prom.MustNewConstMetric(c.hrsp2xxEntry, prom.GaugeValue, float64(cnt.hrsp2xx), cnt.listenerUuid, cnt.ip, lbUuid)
+			ch <- prom.MustNewConstMetric(c.hrsp3xxEntry, prom.GaugeValue, float64(cnt.hrsp3xx), cnt.listenerUuid, cnt.ip, lbUuid)
+			ch <- prom.MustNewConstMetric(c.hrsp4xxEntry, prom.GaugeValue, float64(cnt.hrsp4xx), cnt.listenerUuid, cnt.ip, lbUuid)
+			ch <- prom.MustNewConstMetric(c.hrsp5xxEntry, prom.GaugeValue, float64(cnt.hrsp5xx), cnt.listenerUuid, cnt.ip, lbUuid)
+			ch <- prom.MustNewConstMetric(c.hrspOtherEntry, prom.GaugeValue, float64(cnt.hrspOther), cnt.listenerUuid, cnt.ip, lbUuid)
+		}
+	}
+}
+
+func (c *loadBalancerCollector) Update(metricCh chan<- prom.Metric) error {
 	if !IsMaster() {
 		return nil
 	}
 
+	//start goroutine to get data on demand
+	//case 1. The last launched goroutine has received the data and written to the ch and closed the ch.
+	//        action: read the data from ch, push it to cache, start new goroutine
+	//case 2. The last launched goroutine timeout and closed the ch
+	//        action: start new goroutine
+	//case 3. The last launched goroutine is still running, ch is opened
+	//		  action: do nothing(not block)
+	//case 4. The last launched goroutine has been fully processed last time, the data has been read last time,
+	//        and the corresponding ch variable has been set to nil
+	//		  action: start new goroutine
+	//case 5. this func is called first, the corresponding ch variable is initialized as nil
+	//		  action: start new goroutine
 	for listenerUuid, listener := range LbListeners {
-		var counters []*LbCounter
-		num := 0
-
-		var maxSessionNum, sessionNum uint64
-		sessionNum = 0
-		lbUuid := ""
-		switch listener.(type) {
-		case *GBListener:
-			gbListener, _ := listener.(*GBListener)
-			lbUuid = gbListener.lb.LbUuid
-			counters, num = gbListener.getLbCounters(listenerUuid)
-			maxSessionNum = (uint64)(gbListener.maxSession)
-			/* get total count */
-			for _, cnt := range counters {
-				sessionNum += cnt.sessionNumber
+		if listener.getLastCounters().ch != nil {
+			select {
+			case data, ok := <-listener.getLastCounters().ch:
+				if ok { // case 1
+					listener.getLastCounters().counters = data.counters
+					listener.getLastCounters().ch = listener.getLbCounters(listenerUuid, listener)
+				} else { // case 2
+					listener.getLastCounters().ch = listener.getLbCounters(listenerUuid, listener)
+				}
+			default: //case 3
 			}
-			break
-		case *HaproxyListener:
-			haproxyListener, _ := listener.(*HaproxyListener)
-			lbUuid = haproxyListener.lb.LbUuid
-			counters, num = haproxyListener.getLbCounters(listenerUuid)
-			maxSessionNum = (uint64)(haproxyListener.maxSession)
-			/* get total count */
-			for _, cnt := range counters {
-				sessionNum += cnt.sessionNumber
-			}
-
-			break
-		default:
-			log.Infof("can not assert listerner[uuid %s] type", listenerUuid)
-			break
+		} else { // case 4 and case 5
+			listener.getLastCounters().ch = listener.getLbCounters(listenerUuid, listener)
 		}
+	}
 
-		for i := 0; i < num; i++ {
-			cnt := counters[i]
-			ch <- prom.MustNewConstMetric(c.statusEntry, prom.GaugeValue, float64(cnt.status), cnt.listenerUuid, cnt.ip, lbUuid)
-			ch <- prom.MustNewConstMetric(c.inByteEntry, prom.GaugeValue, float64(cnt.bytesIn), cnt.listenerUuid, cnt.ip, lbUuid)
-			ch <- prom.MustNewConstMetric(c.outByteEntry, prom.GaugeValue, float64(cnt.bytesOut), cnt.listenerUuid, cnt.ip, lbUuid)
-			ch <- prom.MustNewConstMetric(c.curSessionNumEntry, prom.GaugeValue, float64(cnt.sessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
-			ch <- prom.MustNewConstMetric(c.refusedSessionNumEntry, prom.GaugeValue, float64(cnt.refusedSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
-			ch <- prom.MustNewConstMetric(c.totalSessionNumEntry, prom.GaugeValue, float64(cnt.totalSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
-			ch <- prom.MustNewConstMetric(c.concurrentSessionUsageEntry, prom.GaugeValue, float64(cnt.concurrentSessionNumber), cnt.listenerUuid, cnt.ip, lbUuid)
-		}
-
-		ch <- prom.MustNewConstMetric(c.curSessionUsageEntry, prom.GaugeValue, float64(sessionNum*100/maxSessionNum), listenerUuid, lbUuid)
-
-		if _, ok := listener.(*HaproxyListener); ok {
-			for i := 0; i < num; i++ {
-				cnt := counters[i]
-				ch <- prom.MustNewConstMetric(c.hrsp1xxEntry, prom.GaugeValue, float64(cnt.hrsp1xx), cnt.listenerUuid, cnt.ip, lbUuid)
-				ch <- prom.MustNewConstMetric(c.hrsp2xxEntry, prom.GaugeValue, float64(cnt.hrsp2xx), cnt.listenerUuid, cnt.ip, lbUuid)
-				ch <- prom.MustNewConstMetric(c.hrsp3xxEntry, prom.GaugeValue, float64(cnt.hrsp3xx), cnt.listenerUuid, cnt.ip, lbUuid)
-				ch <- prom.MustNewConstMetric(c.hrsp4xxEntry, prom.GaugeValue, float64(cnt.hrsp4xx), cnt.listenerUuid, cnt.ip, lbUuid)
-				ch <- prom.MustNewConstMetric(c.hrsp5xxEntry, prom.GaugeValue, float64(cnt.hrsp5xx), cnt.listenerUuid, cnt.ip, lbUuid)
-				ch <- prom.MustNewConstMetric(c.hrspOtherEntry, prom.GaugeValue, float64(cnt.hrspOther), cnt.listenerUuid, cnt.ip, lbUuid)
+	//try to read and use the data if there is data in the corresponding ch
+	copiedListeners := make(map[string]Listener, len(LbListeners))
+	for key, value := range LbListeners {
+		copiedListeners[key] = value
+	}
+	attempts := 0
+	maxAttempts := 3
+	for len(copiedListeners) > 0 && attempts < maxAttempts {
+		attempts++
+		for listenerUuid, listener := range copiedListeners {
+			if listener.getLastCounters().ch != nil {
+				select {
+				case data, ok := <-listener.getLastCounters().ch:
+					if ok {
+						listener.getLastCounters().counters = data.counters
+						TransformToMetric(c, listenerUuid, listener, metricCh)
+						delete(copiedListeners, listenerUuid)
+						listener.getLastCounters().ch = nil
+						//log.Debugf("use new counters: %s", listenerUuid)
+					}
+				default:
+					//do nothing
+				}
 			}
+		}
+		time.Sleep(time.Duration(1) * time.Second)
+	}
+
+	//if there is still goroutines running(not finished), use last cached data
+	for listenerUuid, listener := range copiedListeners {
+		if listener.getLastCounters().counters != nil {
+			//log.Debugf("use last cached counters: %s", listenerUuid)
+			TransformToMetric(c, listenerUuid, listener, metricCh)
 		}
 	}
 
@@ -1891,47 +1971,57 @@ func statusFormat(status string) int {
 	}
 }
 
-func (this *HaproxyListener) getLbCounters(listenerUuid string) ([]*LbCounter, int) {
-	var counters []*LbCounter
-	num := 0
+func (this *HaproxyListener) getLbCounters(listenerUuid string, listener Listener) <-chan CounterChanData {
+	ch := make(chan CounterChanData)
+	go func() {
+		//log.Debugf("getLbCounters gorotine start: %s", listenerUuid)
+		defer func() { close(ch) }()
+		var counters []*LbCounter
+		num := 0
 
-	client := &haproxy.HAProxyClient{
-		Addr:    "unix://" + this.sockPath,
-		Timeout: 5,
-	}
-
-	stats, err := client.Stats()
-	if err != nil {
-		log.Infof("client.Stats failed %v", err)
-		return nil, 0
-	}
-
-	for _, stat := range stats {
-		if m, err := regexp.MatchString(LB_BACKEND_PREFIX_REG, stat.SvName); err != nil || !m {
-			continue
+		client := &haproxy.HAProxyClient{
+			Addr:    "unix://" + this.sockPath,
+			Timeout: 5 * 60,
 		}
 
-		counter := LbCounter{}
-		counter.listenerUuid = listenerUuid
-		counter.ip = getIpFromLbStat(stat.SvName)
-		counter.status = (uint64)(statusFormat(stat.Status))
-		counter.bytesIn = stat.Bin
-		counter.bytesOut = stat.Bout
-		counter.sessionNumber = stat.Scur
-		counter.refusedSessionNumber = stat.Dreq
-		counter.concurrentSessionNumber = stat.Scur + stat.Qcur
-		counter.totalSessionNumber = stat.Stot
-		counter.hrsp1xx = stat.Hrsp1xx
-		counter.hrsp2xx = stat.Hrsp2xx
-		counter.hrsp3xx = stat.Hrsp3xx
-		counter.hrsp4xx = stat.Hrsp4xx
-		counter.hrsp5xx = stat.Hrsp5xx
-		counter.hrspOther = stat.HrspOther
-		counters = append(counters, &counter)
-		num++
-	}
+		stats, err := client.Stats()
+		if err != nil {
+			log.Infof("client.Stats failed %v", err)
+		}
 
-	return counters, num
+		for _, stat := range stats {
+			if m, err := regexp.MatchString(LB_BACKEND_PREFIX_REG, stat.SvName); err != nil || !m {
+				continue
+			}
+
+			counter := LbCounter{}
+			counter.listenerUuid = listenerUuid
+			counter.ip = getIpFromLbStat(stat.SvName)
+			counter.status = (uint64)(statusFormat(stat.Status))
+			counter.bytesIn = stat.Bin
+			counter.bytesOut = stat.Bout
+			counter.sessionNumber = stat.Scur
+			counter.refusedSessionNumber = stat.Dreq
+			counter.concurrentSessionNumber = stat.Scur + stat.Qcur
+			counter.totalSessionNumber = stat.Stot
+			counter.hrsp1xx = stat.Hrsp1xx
+			counter.hrsp2xx = stat.Hrsp2xx
+			counter.hrsp3xx = stat.Hrsp3xx
+			counter.hrsp4xx = stat.Hrsp4xx
+			counter.hrsp5xx = stat.Hrsp5xx
+			counter.hrspOther = stat.HrspOther
+			counters = append(counters, &counter)
+			num++
+		}
+
+		if len(counters) > 0 {
+			ch <- CounterChanData{
+				counters: counters,
+			}
+		}
+		//log.Debugf("getLbCounters gorotine end: %s", listenerUuid)
+	}()
+	return ch
 }
 
 type GoBetweenServerBackendStat struct {
@@ -1954,7 +2044,7 @@ type GoBetweenServerStat struct {
 }
 
 /* map to store: <listenerUuid, GBListerner> pair or  or <listenerUuid, HaProxyListener> */
-var LbListeners map[string]interface{}
+var LbListeners map[string]Listener
 var goBetweenClient = &http.Client{
 	Timeout: time.Second * 5,
 }
@@ -1997,38 +2087,46 @@ func getGoBetweenStat(port string, server string) (*GoBetweenServerStat, error) 
 	return stats, nil
 }
 
-func (this *GBListener) getLbCounters(listenerUuid string) ([]*LbCounter, int) {
-	var counters []*LbCounter
-	var stats *GoBetweenServerStat
-	var err error
-	num := 0
+func (this *GBListener) getLbCounters(listenerUuid string, listener Listener) <-chan CounterChanData {
+	ch := make(chan CounterChanData)
+	go func() {
+		defer func() { close(ch) }()
 
-	port := this.apiPort
-	if stats, err = getGoBetweenStat(port, listenerUuid); err != nil {
-		log.Debugf("get getGoBetweenStat stats failed because %+v", err)
-		return nil, 0
-	}
+		var counters []*LbCounter
+		var stats *GoBetweenServerStat
+		var err error
+		num := 0
 
-	for _, stat := range stats.Backends {
-		counter := LbCounter{}
-		counter.listenerUuid = listenerUuid
-		counter.ip = stat.Host
-		if stat.Stats.Live {
-			counter.status = 1
-		} else {
-			counter.status = 0
+		port := this.apiPort
+		if stats, err = getGoBetweenStat(port, listenerUuid); err != nil {
+			log.Debugf("get getGoBetweenStat stats failed because %+v", err)
 		}
-		counter.bytesIn = stat.Stats.Tx //the direction of LB is different from backend direction
-		counter.bytesOut = stat.Stats.Rx
-		counter.sessionNumber = stat.Stats.Active_connections
-		counter.refusedSessionNumber = stat.Stats.Refused_connections
-		counter.totalSessionNumber = stat.Stats.Total_connections
-		counter.concurrentSessionNumber = stat.Stats.Active_connections
-		counters = append(counters, &counter)
-		num++
-	}
 
-	return counters, num
+		for _, stat := range stats.Backends {
+			counter := LbCounter{}
+			counter.listenerUuid = listenerUuid
+			counter.ip = stat.Host
+			if stat.Stats.Live {
+				counter.status = 1
+			} else {
+				counter.status = 0
+			}
+			counter.bytesIn = stat.Stats.Tx //the direction of LB is different from backend direction
+			counter.bytesOut = stat.Stats.Rx
+			counter.sessionNumber = stat.Stats.Active_connections
+			counter.refusedSessionNumber = stat.Stats.Refused_connections
+			counter.totalSessionNumber = stat.Stats.Total_connections
+			counter.concurrentSessionNumber = stat.Stats.Active_connections
+			counters = append(counters, &counter)
+			num++
+		}
+		if len(counters) > 0 {
+			ch <- CounterChanData{
+				counters: counters,
+			}
+		}
+	}()
+	return ch
 }
 
 func enableLbLog() {
@@ -2087,7 +2185,7 @@ func init() {
 	os.Mkdir(LB_PID_DIR, os.ModePerm)
 	os.Chmod(LB_PID_DIR, os.ModePerm)
 	os.Mkdir(LB_SOCKET_DIR, os.ModePerm|os.ModeSocket)
-	LbListeners = make(map[string]interface{}, LISTENER_MAP_SIZE)
+	LbListeners = make(map[string]Listener, LISTENER_MAP_SIZE)
 	enableLbLog()
 	RegisterPrometheusCollector(NewLbPrometheusCollector())
 
