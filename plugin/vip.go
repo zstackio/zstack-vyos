@@ -440,7 +440,10 @@ func (rules *interfaceQosRules) InterfaceQosRuleInit(direct direction) interface
 			bash := utils.Bash{
 				Command: fmt.Sprintf("tc qdisc add dev %s handle ffff: ingress;"+
 					"tc filter add dev %s parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev %s;"+
-					"tc filter add dev %s parent ffff: protocol ipv6 u32 match u32 0 0 action mirred egress redirect dev %s", rules.name, rules.name, rules.ifbName, rules.name, rules.name, rules.ifbName),
+					"tc filter add dev %s parent ffff: protocol ipv6 u32 match u32 0 0 action mirred egress redirect dev %s",
+					rules.name,
+					rules.name, rules.ifbName,
+					rules.name, rules.ifbName),
 				Sudo: true,
 			}
 			bash.Run()
@@ -519,7 +522,10 @@ func (rules *interfaceQosRules) InterfaceQosRuleCleanUp() interface{} {
 			bash := utils.Bash{
 				Command: fmt.Sprintf("tc qdisc del dev %s handle ffff: ingress;"+
 					"tc filter del dev %s parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev %s;"+
-					"tc filter del dev %s parent ffff: protocol ipv6 u32 match u32 0 0 action mirred egress redirect dev %s", rules.name, rules.ifbName, rules.ifbName, rules.name, rules.ifbName, rules.ifbName),
+					"tc filter del dev %s parent ffff: protocol ipv6 u32 match u32 0 0 action mirred egress redirect dev %s",
+					rules.name,
+					rules.ifbName, rules.ifbName,
+					rules.name, rules.ifbName),
 				Sudo: true,
 			}
 			bash.Run()
