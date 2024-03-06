@@ -82,7 +82,7 @@ do
     [ -z "$1" ] && break;
     case "$1" in
         -V|--version ) PRINT_VERSION='y' && params=(${params[*]/$1});shift;;
-        -- ) shift;;
+        -- ) break;;
     esac
 done
 if [ ! -z "$PRINT_VERSION" ]; then
@@ -107,7 +107,7 @@ cat $tmpdir/setup.sh $targettar > {{.BinaryPath}}
 chmod a+x {{.BinaryPath}}
 rm -rf $tmpdir
 `
-	utils.ModuleName = project.name
+	utils.InitBuildInfo(project.name, "")
 	binaryPath := fmt.Sprintf("%s/%s.bin", *project.config.Location, project.name)
 	context := map[string]string{
 		"Dir":           *project.config.Dir,

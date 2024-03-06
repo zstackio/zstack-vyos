@@ -3,7 +3,9 @@ package utils
 import (
 	"bytes"
 	"html/template"
+	"io"
 	"os"
+	"runtime"
 	"strings"
 )
 
@@ -15,8 +17,6 @@ go version: {{.GoVersion}}
 `
 
 var (
-	CommandVersion bool
-
 	Version    string
 	ModuleName string
 	GitInfo    string
@@ -38,10 +38,23 @@ func getInfoMap() map[string]string {
 	}
 }
 
-func PrintBuildInfo() {
+func InitBuildInfo(moduleName string, version string) {
+	ModuleName = moduleName
+
+	if len(version) != 0 {
+		Version = version
+	}
+
+	if len(Platform) == 0 {
+		Platform = runtime.GOOS + "/" + runtime.GOARCH
+	}
+}
+
+func ShowVersionAndExit(w io.Writer) {
 	tmpl, _ := template.New("buildInfo").Parse(infoStr)
 
-	_ = tmpl.Execute(os.Stdout, getInfoMap())
+	_ = tmpl.Execute(w, getInfoMap())
+	os.Exit(0)
 }
 
 func GetBuildInfo() string {
