@@ -75,8 +75,6 @@ var logfiles = []string{
 
 var logrotateFolder string = "/etc/logrotate.d/"
 
-var commandVersion bool
-
 func doLogRotate(fpath string) {
 	exec.Command("sudo", "/usr/sbin/logrotate", fpath).Run()
 }
@@ -143,13 +141,14 @@ func parseCommandOptions() {
 	flag.UintVar(&options.ReadTimeout, "readtimeout", 10, "The socket read timeout")
 	flag.UintVar(&options.WriteTimeout, "writetimeout", 10, "The socket write timeout")
 	flag.StringVar(&options.LogFile, "logfile", "zvr.log", "The log file path")
-	flag.BoolVar(&commandVersion, "version", false, "version for zvr")
+	flag.BoolVar(&utils.CommandVersion, "version", false, "version for zvr")
 
 	flag.Parse()
 
-	if commandVersion {
-		utils.InitBuildInfo(ModuleName, "")
-		utils.ShowVersionAndExit(os.Stdout)
+	if utils.CommandVersion {
+		utils.ModuleName = ModuleName
+		utils.PrintBuildInfo()
+		os.Exit(0)
 	}
 
 	if options.Ip == "" {
