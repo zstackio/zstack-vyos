@@ -50,7 +50,6 @@ var zvrRootPath = utils.GetZvrRootPath()
 var bootstrapInfoPath = filepath.Join(zvrRootPath, BOOTSTRAP_INFO_FILE)
 var networkHealthStatusPath = filepath.Join(zvrRootPath, ".duplicate")
 var zvrbootLogPath = filepath.Join(zvrRootPath, "zvrboot.log")
-var commandVersion bool
 
 func waitIptablesServiceOnline() {
 	bash := utils.Bash{
@@ -659,15 +658,16 @@ func startZvr() {
 
 func init() {
 	os.Remove(networkHealthStatusPath)
-	flag.BoolVar(&commandVersion, "version", false, "version for zvr")
+	flag.BoolVar(&utils.CommandVersion, "version", false, "version for zvr")
 }
 
 func main() {
 	flag.Parse()
 
-	if commandVersion {
-		utils.InitBuildInfo(ModuleName, "")
-		utils.ShowVersionAndExit(os.Stdout)
+	if utils.CommandVersion {
+		utils.ModuleName = ModuleName
+		utils.PrintBuildInfo()
+		os.Exit(0)
 	}
 
 	utils.InitLog(zvrbootLogPath, false)
