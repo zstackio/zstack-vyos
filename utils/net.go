@@ -514,12 +514,12 @@ func AddIp4DefaultRoute(gw4, dev string) {
 }
 
 func IsIpv4Address(address string) bool {
-	ip := net.ParseIP(address)
-	if ip == nil {
-		return false
+	parsedIP := net.ParseIP(address)
+	if parsedIP != nil && parsedIP.To4() != nil {
+		return true
 	}
 
-	return strings.Contains(address, ".")
+	return false
 }
 
 func IsMgtNic(name string) bool {

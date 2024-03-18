@@ -3,8 +3,9 @@ package plugin
 import (
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
 	"zstack-vyos/utils"
+
+	log "github.com/sirupsen/logrus"
 )
 
 func configureNicByLinux(nicList []utils.NicInfo) interface{} {
@@ -22,7 +23,7 @@ func configureNicByLinux(nicList []utils.NicInfo) interface{} {
 		utils.PanicOnError(err)
 		utils.SetNicOption(nicname)
 		/* avoid both master and backup interface up when add nic */
-		if !IsMaster() {
+		if !IsMaster() && !utils.IsSLB() { /* slb don't need set interface down */
 			log.Debugf("set interface %s down", nicname)
 			err := utils.IpLinkSetDown(nicname)
 			utils.Assertf(err == nil, "IpLinkSetDown[%s] error: %+v", nicname, err)
@@ -39,7 +40,7 @@ func configureNicByLinux(nicList []utils.NicInfo) interface{} {
 			cidr, err := utils.NetmaskToCIDR(nic.Netmask)
 			utils.PanicOnError(err)
 			ipString := fmt.Sprintf("%v/%v", nic.Ip, cidr)
-			log.Debugf("nic [%s] add ipv4 address %s", nic.Name, ipString)
+			log.Debugf("nic [%s] add ipv4 address %s", nicname, ipString)
 			err = utils.IpAddrAdd(nicname, ipString)
 			utils.Assertf(err == nil, "IpAddrAdd[%s, %s] error: %+v", nicname, ipString, err)
 		}
@@ -47,7 +48,7 @@ func configureNicByLinux(nicList []utils.NicInfo) interface{} {
 			err := utils.Ip6AddrFlush(nicname)
 			utils.Assertf(err == nil, "IpAddr6Flush[%s] error: %+v", nicname, err)
 			ip6String := fmt.Sprintf("%s/%d", nic.Ip6, nic.PrefixLength)
-			log.Debugf("nic [%s] add ipv6 address %s", nic.Name, ip6String)
+			log.Debugf("nic [%s] add ipv6 address %s", nicname, ip6String)
 			err = utils.IpAddrAdd(nicname, ip6String)
 			utils.Assertf(err == nil, "IpAddrAdd[%s, %s] error: %+v", nicname, ip6String, err)
 		}

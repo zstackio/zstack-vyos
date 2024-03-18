@@ -10,10 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"zstack-vyos/server"
 	"zstack-vyos/utils"
+
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -403,7 +404,7 @@ func configureVyos() {
 	}
 
 	setNicTree := server.NewParserFromShowConfiguration().Tree
-	if haStatus != utils.NOHA {
+	if haStatus != utils.NOHA && !utils.IsSLB() {
 		/* for vpc ha router, set interface down, it will be up when ha selection is finished */
 		for _, nic := range nics {
 			if nic.name != "eth0" {
@@ -603,10 +604,26 @@ func configureVyos() {
 		b.Run()
 	}
 
+	arping6 := func(nicname, ip, gateway string) {
+		b := utils.Bash{Command: fmt.Sprintf("sudo arping -6 -q -A -w 2 -c 1 -I %s %s > /dev/null", nicname, ip)}
+		b.Run()
+	}
+
 	// arping to advocate our mac addresses
-	arping("eth0", eth0.ip, eth0.gateway)
+	if eth0.ip != "" {
+		arping("eth0", eth0.ip, eth0.gateway)
+	}
+	if eth0.ip6 != "" {
+		arping6("eth0", eth0.ip6, eth0.gateway)
+	}
+
 	for _, nic := range nics {
-		arping(nic.name, nic.ip, nic.gateway)
+		if (nic.ip != "") {
+			arping(nic.name, nic.ip, nic.gateway)
+		}
+		if (nic.ip6 != "") {
+			arping6(nic.name, nic.ip6, eth0.gateway)
+		}
 	}
 
 	mgmtNodeCidr := bootstrapInfo["managementNodeCidr"]

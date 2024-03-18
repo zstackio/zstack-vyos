@@ -232,7 +232,7 @@ func configureNicInfo(nic *utils.NicInfo) {
 		err := utils.IpLinkSetAlias(nic.Name, utils.MakeIfaceAlias(nic))
 		utils.Assertf(err == nil, "IpLinkSetAlias[%s] error: %+v", nic.Name, err)
 	}
-	if utils.GetHaStatus() != utils.NOHA && nic.Name != "eth0" {
+	if utils.GetHaStatus() != utils.NOHA && nic.Name != "eth0" && !utils.IsSLB() {
 		err := utils.IpLinkSetDown(nic.Name)
 		utils.Assertf(err == nil, "IpLinkSetDown[%s] error: %+v", nic.Name, err)
 	}

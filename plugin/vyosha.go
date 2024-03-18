@@ -2,13 +2,16 @@ package plugin
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
-	"io/ioutil"
+	"net"
 	"strconv"
 	"strings"
 	"time"
 	"zstack-vyos/server"
 	"zstack-vyos/utils"
+
+	"os"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -21,17 +24,20 @@ type setVyosHaCmd struct {
 	Keepalive    int          `json:"keepalive"`
 	HeartbeatNic string       `json:"heartbeatNic"`
 	LocalIp      string       `json:"localIp"`
+	LocalIpV6    string       `json:"localIpV6"`
 	PeerIp       string       `json:"peerIp"`
+	PeerIpV6     string       `json:"peerIpV6"`
 	Monitors     []string     `json:"monitors"`
 	Vips         []macVipPair `json:"vips"`
 	CallbackUrl  string       `json:"callbackUrl"`
 }
 
 type macVipPair struct {
-	NicMac   string `json:"nicMac"`
-	NicVip   string `json:"nicVip"`
-	Netmask  string `json:"netmask"`
-	Category string `json:"category"`
+	NicMac    string `json:"nicMac"`
+	NicVip    string `json:"nicVip"`
+	Netmask   string `json:"netmask"`
+	Category  string `json:"category"`
+	PrefixLen int    `json:"prefixLen"`
 }
 
 var (
@@ -63,16 +69,20 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 		table := utils.NewIpTables(utils.FirewallTable)
 		var rules []*utils.IpTableRule
 
-		rule := utils.NewIpTableRule(utils.GetRuleSetName(heartbeatNicNme, utils.RULESET_LOCAL))
-		rule.SetAction(utils.IPTABLES_ACTION_ACCEPT).SetComment(utils.SystemTopRule)
-		rule.SetProto(utils.IPTABLES_PROTO_VRRP).SetSrcIp(cmd.PeerIp + "/32")
-		rules = append(rules, rule)
+		parsedIP := net.ParseIP(cmd.PeerIp)
+		/* todo: we need ip6tables */
+		if parsedIP != nil && parsedIP.To4() != nil {
+			rule := utils.NewIpTableRule(utils.GetRuleSetName(heartbeatNicNme, utils.RULESET_LOCAL))
+			rule.SetAction(utils.IPTABLES_ACTION_ACCEPT).SetComment(utils.SystemTopRule)
+			rule.SetProto(utils.IPTABLES_PROTO_VRRP).SetSrcIp(cmd.PeerIp + "/32")
+			rules = append(rules, rule)
 
-		rule = utils.NewIpTableRule(utils.GetRuleSetName(heartbeatNicNme, utils.RULESET_LOCAL))
-		rule.SetAction(utils.IPTABLES_ACTION_ACCEPT).SetComment(utils.SystemTopRule)
-		rule.SetProto(utils.IPTABLES_PROTO_UDP).SetSrcIp(cmd.PeerIp + "/32").SetDstPort("3780")
-		rules = append(rules, rule)
-		table.AddIpTableRules(rules)
+			rule = utils.NewIpTableRule(utils.GetRuleSetName(heartbeatNicNme, utils.RULESET_LOCAL))
+			rule.SetAction(utils.IPTABLES_ACTION_ACCEPT).SetComment(utils.SystemTopRule)
+			rule.SetProto(utils.IPTABLES_PROTO_UDP).SetSrcIp(cmd.PeerIp + "/32").SetDstPort("3780")
+			rules = append(rules, rule)
+			table.AddIpTableRules(rules)
+		}
 
 		if err := table.Apply(); err != nil {
 			log.Debugf("apply vrrp firewall table failed")
@@ -80,7 +90,7 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 		}
 
 		natTable := utils.NewIpTables(utils.NatTable)
-		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
+		rule := utils.NewIpTableRule(utils.RULESET_SNAT.String())
 		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.SystemTopRule)
 		rule.SetProto(utils.IPTABLES_PROTO_VRRP)
 		natTable.AddIpTableRules([]*utils.IpTableRule{rule})
@@ -127,9 +137,13 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 	for _, p := range cmd.Vips {
 		nicname, err := utils.GetNicNameByMac(p.NicMac)
 		utils.PanicOnError(err)
-		cidr, err := utils.NetmaskToCIDR(p.Netmask)
-		utils.PanicOnError(err)
-		pairs = append(pairs, nicVipPair{NicName: nicname, Vip: p.NicVip, Prefix: cidr})
+		prefix := p.PrefixLen
+		parsedIP := net.ParseIP(p.NicVip)
+		if parsedIP != nil && parsedIP.To4() != nil {
+			prefix, err = utils.NetmaskToCIDR(p.Netmask)
+			utils.PanicOnError(err)
+		}
+		pairs = append(pairs, nicVipPair{NicName: nicname, Vip: p.NicVip, Prefix: prefix})
 
 		/* if vip is same to nic Ip, there is no need to add firewall again */
 		if nicIp := getNicIp(nicname); nicIp == p.NicVip {
@@ -150,9 +164,18 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 	checksum, err := getFileChecksum(KeepalivedConfigFile)
 	utils.PanicOnError(err)
 
-	keepalivedConf := NewKeepalivedConf(heartbeatNicNme, cmd.LocalIp, cmd.PeerIp, cmd.Monitors, cmd.Keepalive)
+	keepalivedConf := NewKeepalivedConf(heartbeatNicNme, cmd.LocalIp, cmd.LocalIpV6, cmd.PeerIp, cmd.PeerIpV6, cmd.Monitors, cmd.Keepalive, pairs)
 	keepalivedConf.BuildCheckScript()
-	keepalivedConf.BuildConf()
+	if utils.IsSLB() {
+		knc := KeepalivedNotify{
+			VrUuid: utils.GetVirtualRouterUuid(),
+		}
+		knc.CreateSlbMasterScript()
+		knc.CreateSlbBackupScript()
+		keepalivedConf.BuildSlbConf()
+	} else {
+		keepalivedConf.BuildConf()
+	}
 	newCheckSum, err := getFileChecksum(KeepalivedConfigFile)
 	utils.PanicOnError(err)
 	/* if keepalived is not started, RestartKeepalived will also start keepalived */
@@ -240,7 +263,7 @@ func NonManagementUpNics() []string {
 
 		if strings.Contains(nic.Name, "eth") {
 			path := fmt.Sprintf("/sys/class/net/%s/operstate", nic.Name)
-			operstate, err := ioutil.ReadFile(path)
+			operstate, err := os.ReadFile(path)
 			if err != nil {
 				continue
 			}
@@ -276,7 +299,7 @@ func getKeepAlivedStatusTask() {
 
 					if newHaStatus == KeepAlivedStatus_Backup {
 						upNics := NonManagementUpNics()
-						if len(upNics) > 0 {
+						if len(upNics) > 0 && !utils.IsSLB() {
 							log.Warnf("nic %s is up when keepalived state is backup", upNics)
 							server.VyosLockInterface(callStatusChangeScripts)()
 						}
@@ -335,6 +358,10 @@ type vyosNicVipPairs struct {
 }
 
 func generateNotityScripts() {
+	if utils.IsSLB() {
+		/* slb don't need such script */
+		return
+	}
 	/* only vip on management nic will be added in master script and will be deleted in backup script */
 	mgmtVip := []nicVipPair{}
 	for _, p := range haVipPairs.pairs {
