@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"zstack-vyos/server"
 	"zstack-vyos/utils"
+
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -68,6 +69,11 @@ func makeNicFirewallDescription(nicname, ip string) string {
 
 func addSecondaryIpFirewall(nicname, ip string, tree *server.VyosConfigTree) {
 	if utils.IsSkipVyosIptables() {
+		/* todo: we need ip6tables */
+		if !utils.IsIpv4Address(ip) {
+			return
+		}
+
 		rule := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
 		rule.SetComment(utils.SystemTopRule).SetAction(utils.IPTABLES_ACTION_ACCEPT)
 		rule.SetDstIp(ip + "/32").SetState([]string{utils.IPTABLES_STATE_RELATED, utils.IPTABLES_STATE_ESTABLISHED})
@@ -223,6 +229,7 @@ func configureNicFirewall(nics []utils.NicInfo) {
 	if utils.IsSkipVyosIptables() {
 		for _, nic := range nics {
 			nicname, _ := utils.GetNicNameByMac(nic.Mac)
+
 			if nic.Category == "Private" {
 				err := utils.InitNicFirewall(nicname, nic.Ip, false, utils.IPTABLES_ACTION_REJECT)
 				utils.PanicOnError(err)
@@ -358,7 +365,7 @@ func configureNicByVyos(nicList []utils.NicInfo) interface{} {
 			tree.Setf("interfaces ethernet %s description '%s'", nicname, makeAlias(nic))
 		}
 
-		if !IsMaster() {
+		if !IsMaster() && !utils.IsSLB() { /* slb don't need interface down */
 			tree.Setf("interfaces ethernet %s disable", nicname)
 		}
 		tree.Apply(false)
@@ -645,6 +652,10 @@ func ConfigureNicEntryPoint() {
 	nicIps := utils.GetBootStrapNicInfo()
 	for _, nic := range nicIps {
 		nicsMap[nic.Name] = nic
+		if utils.IsSLB() {
+			/* fix http://jira.zstack.io/browse/ZSTAC-64193 */
+			utils.IpLinkSetUp(nic.Name)
+		}
 	}
 
 	server.RegisterAsyncCommandHandler(VR_CONFIGURE_NIC, server.VyosLock(configureNicHandler))

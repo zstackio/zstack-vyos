@@ -23,7 +23,7 @@ import (
 	"zstack-vyos/utils"
 
 	cidrman "github.com/EvilSuperstars/go-cidrman"
-	haproxy "github.com/bcicen/go-haproxy"
+	haproxy "github.com/ruansteve/go-haproxy"
 	"github.com/fatih/structs"
 	prom "github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
@@ -35,6 +35,7 @@ const (
 	DELETE_LB_PATH            = "/lb/delete"
 	CREATE_CERTIFICATE_PATH   = "/certificate/create"
 	DELETE_CERTIFICATE_PATH   = "/certificate/delete"
+	CREATE_CERTIFICATES_PATH   = "/certificates/create"
 
 	LB_MODE_HTTPS = "https"
 
@@ -126,6 +127,10 @@ type lbInfo struct {
 type certificateInfo struct {
 	Uuid        string `json:"uuid"`
 	Certificate string `json:"certificate"`
+}
+
+type certificatesCmd struct {
+	Certs        map[string]string `json:"certs"`
 }
 
 type deleteCertificateCmd struct {
@@ -811,6 +816,10 @@ func (this *HaproxyListener) postActionListenerServiceStart() (err error) {
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic)
 	utils.PanicOnError(err)
 	if utils.IsSkipVyosIptables() {
+		if this.lb.Vip == "" {
+			/* TODO: add ipv6 tables */
+			return nil
+		}
 		table := utils.NewIpTables(utils.FirewallTable)
 		rule, _ := this.getSynIptablesRule()
 		table.RemoveIpTableRule([]*utils.IpTableRule{rule})
@@ -901,9 +910,15 @@ func (this *HaproxyListener) stopListenerService() (err error) {
 		err = nil
 	}
 
-	t := utils.ConnectionTrackTuple{IsNat: false, IsDst: true, Ip: this.lb.Vip, Protocol: "tcp",
-		PortStart: this.lb.LoadBalancerPort, PortEnd: this.lb.LoadBalancerPort}
-	t.CleanConnTrackConnection()
+	if this.lb.Vip != "" {
+		t := utils.ConnectionTrackTuple{IsNat: false, IsDst: true, Ip: this.lb.Vip, Protocol: "tcp",
+			PortStart: this.lb.LoadBalancerPort, PortEnd: this.lb.LoadBalancerPort}
+		t.CleanConnTrackConnection()
+	} else {
+		t := utils.ConnectionTrackTuple{IsNat: false, IsDst: true, Ip: this.lb.Vip6, Protocol: "tcp",
+			PortStart: this.lb.LoadBalancerPort, PortEnd: this.lb.LoadBalancerPort}
+		t.CleanConnTrackConnection()
+	}
 
 	return err
 }
@@ -923,7 +938,8 @@ func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error
 		}
 		cleanInternalFirewallRule(tree, this.firewallDes)
 		tree.Apply(false)
-	} else {
+	} else if (this.lb.Vip != "" ) {
+		/* TODO add ip6 tables */
 		table := utils.NewIpTables(utils.FirewallTable)
 		var rules []*utils.IpTableRule
 		r, _ := this.getIptablesRule()
@@ -977,6 +993,11 @@ func (this *HaproxyListener) postActionListenerServiceStop() (ret int, err error
 func (this *HaproxyListener) getIptablesRule() ([]*utils.IpTableRule, string) {
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic)
 	utils.PanicOnError(err)
+	
+	if (this.lb.Vip == "" ) {
+		return []*utils.IpTableRule{}, nicname
+	}
+
 	rule := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
 	rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.LbRuleComment)
 	rule.SetProto(utils.IPTABLES_PROTO_TCP).SetDstPort(fmt.Sprintf("%d", this.lb.LoadBalancerPort)).SetDstIp(this.lb.Vip + "/32")
@@ -998,6 +1019,7 @@ func (this *HaproxyListener) getIcmpIptablesRule() ([]*utils.IpTableRule, string
 func (this *HaproxyListener) getSynIptablesRule() (*utils.IpTableRule, string) {
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic)
 	utils.PanicOnError(err)
+
 	rule := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
 	rule.SetAction(utils.IPTABLES_ACTION_DROP).SetComment(utils.LbRuleComment)
 	rule.SetDstIp(this.lb.Vip + "/32").SetProto(utils.IPTABLES_PROTO_TCP).SetDstPort(fmt.Sprintf("%d", this.lb.LoadBalancerPort))
@@ -1299,6 +1321,9 @@ func (this *GBListener) getIcmpIptablesRule() ([]*utils.IpTableRule, string) {
 
 func (this *GBListener) postActionListenerServiceStart() (err error) {
 	if utils.IsSkipVyosIptables() {
+		if (this.lb.Vip == "" ) { /* TODO: add ip6 tables */
+			return nil;
+		}
 		table := utils.NewIpTables(utils.FirewallTable)
 
 		rules, _ := this.getIptablesRule()
@@ -1370,7 +1395,7 @@ func (this *GBListener) getIptablesRule() ([]*utils.IpTableRule, string) {
 	nicname, err := utils.GetNicNameByMac(this.lb.PublicNic)
 	utils.PanicOnError(err)
 	var rules []*utils.IpTableRule
-
+		
 	rule := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
 	rule.SetAction(utils.IPTABLES_ACTION_ACCEPT).SetComment(utils.LbRuleComment)
 	rule.SetDstPort(this.apiPort).SetProto(utils.IPTABLES_PROTO_TCP)
@@ -1422,7 +1447,7 @@ func (this *GBListener) postActionListenerServiceStop() (ret int, err error) {
 		}
 		cleanInternalFirewallRule(tree, this.firewallDes)
 		tree.Apply(false)
-	} else {
+	} else if (this.lb.Vip != "" ) {
 		table := utils.NewIpTables(utils.FirewallTable)
 		rules, _ := this.getIptablesRule()
 		table.RemoveIpTableRule(rules)
@@ -1663,11 +1688,22 @@ func createCertificateHandler(ctx *server.CommandContext) interface{} {
 	certificate := &certificateInfo{}
 	ctx.GetCommand(certificate)
 
-	return createCertificate(certificate)
+	return createCertificate(certificate.Uuid, []byte(certificate.Certificate))
 }
 
-func createCertificate(certificate *certificateInfo) interface{} {
-	certificatePath := makeCertificatePath(certificate.Uuid)
+func createCertificatesHandler(ctx *server.CommandContext) interface{} {
+	certificates := &certificatesCmd{}
+	ctx.GetCommand(certificates)
+
+	for uuid, cert := range certificates.Certs {
+		createCertificate(uuid, []byte(cert))
+	}
+
+	return nil
+}
+
+func createCertificate(uuid string, certificate []byte) interface{} {
+	certificatePath := makeCertificatePath(uuid)
 	if e, _ := utils.PathExists(certificatePath); e {
 		/* certificate create api may be called multiple times */
 		return nil
@@ -1675,7 +1711,7 @@ func createCertificate(certificate *certificateInfo) interface{} {
 
 	err := utils.MkdirForFile(certificatePath, 0755)
 	utils.PanicOnError(err)
-	err = ioutil.WriteFile(certificatePath, []byte(certificate.Certificate), 0755)
+	err = os.WriteFile(certificatePath, certificate, 0755)
 	utils.PanicOnError(err)
 
 	return nil
@@ -2209,4 +2245,5 @@ func LbEntryPoint() {
 	server.RegisterAsyncCommandHandler(DELETE_LB_PATH, server.VyosLock(deleteLb))
 	server.RegisterAsyncCommandHandler(CREATE_CERTIFICATE_PATH, server.VyosLock(createCertificateHandler))
 	server.RegisterAsyncCommandHandler(DELETE_CERTIFICATE_PATH, server.VyosLock(deleteCertificateHandler))
+	server.RegisterAsyncCommandHandler(CREATE_CERTIFICATES_PATH, server.VyosLock(createCertificatesHandler))
 }

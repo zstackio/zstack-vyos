@@ -375,8 +375,11 @@ func NewDefaultIpTableRule(ruleSetName string, ruleNumber int) *IpTableRule {
 	return &rule
 }
 
-/* firewall comment format: "system rule@eth1.in-1001"
-   return comment, chain name, rule number when success */
+/*
+firewall comment format: "system rule@eth1.in-1001"
+
+	return comment, chain name, rule number when success
+*/
 func parseRuleNumberFromComment(comment string) (string, string, int, error) {
 	fields := strings.Split(comment, "@")
 	if len(fields) < 2 {
@@ -556,32 +559,34 @@ func InitNicFirewall(nic string, ip string, pubNic bool, defaultAction string) e
 	rule.SetAction(defaultAction)
 	rules = append(rules, rule)
 
-	rule = NewIpTableRule(localChain)
-	rule.SetAction(IPTABLES_ACTION_RETURN).SetComment(SystemTopRule)
-	rule.SetDstIp(ip + "/32").SetState([]string{IPTABLES_STATE_RELATED, IPTABLES_STATE_ESTABLISHED})
-	rules = append(rules, rule)
-
-	rule = NewIpTableRule(localChain)
-	rule.SetAction(IPTABLES_ACTION_RETURN).SetComment(SystemTopRule)
-	rule.SetDstIp(ip + "/32").SetProto(IPTABLES_PROTO_ICMP)
-	rules = append(rules, rule)
-
 	sshPort := GetSshPortFromBootInfo()
-	if IsMgtNic(nic) {
+	if IsIpv4Address(ip) {
 		rule = NewIpTableRule(localChain)
 		rule.SetAction(IPTABLES_ACTION_RETURN).SetComment(SystemTopRule)
-		rule.SetDstIp(ip + "/32").SetProto(IPTABLES_PROTO_TCP).SetDstPort(strconv.FormatFloat(sshPort, 'f', 0, 64))
+		rule.SetDstIp(ip + "/32").SetState([]string{IPTABLES_STATE_RELATED, IPTABLES_STATE_ESTABLISHED})
 		rules = append(rules, rule)
 
 		rule = NewIpTableRule(localChain)
 		rule.SetAction(IPTABLES_ACTION_RETURN).SetComment(SystemTopRule)
-		rule.SetDstIp(ip + "/32").SetProto(IPTABLES_PROTO_TCP).SetDstPort("7272")
+		rule.SetDstIp(ip + "/32").SetProto(IPTABLES_PROTO_ICMP)
 		rules = append(rules, rule)
-	} else {
-		rule = NewIpTableRule(localChain)
-		rule.SetAction(IPTABLES_ACTION_REJECT).SetRejectType(REJECT_TYPE_ICMP_UNREACHABLE)
-		rule.SetComment(SystemTopRule).SetDstIp(ip + "/32").SetProto(IPTABLES_PROTO_TCP).SetDstPort(strconv.FormatFloat(sshPort, 'f', 0, 64))
-		rules = append(rules, rule)
+
+		if IsMgtNic(nic) {
+			rule = NewIpTableRule(localChain)
+			rule.SetAction(IPTABLES_ACTION_RETURN).SetComment(SystemTopRule)
+			rule.SetDstIp(ip + "/32").SetProto(IPTABLES_PROTO_TCP).SetDstPort(strconv.FormatFloat(sshPort, 'f', 0, 64))
+			rules = append(rules, rule)
+
+			rule = NewIpTableRule(localChain)
+			rule.SetAction(IPTABLES_ACTION_RETURN).SetComment(SystemTopRule)
+			rule.SetDstIp(ip + "/32").SetProto(IPTABLES_PROTO_TCP).SetDstPort("7272")
+			rules = append(rules, rule)
+		} else {
+			rule = NewIpTableRule(localChain)
+			rule.SetAction(IPTABLES_ACTION_REJECT).SetRejectType(REJECT_TYPE_ICMP_UNREACHABLE)
+			rule.SetComment(SystemTopRule).SetDstIp(ip + "/32").SetProto(IPTABLES_PROTO_TCP).SetDstPort(strconv.FormatFloat(sshPort, 'f', 0, 64))
+			rules = append(rules, rule)
+		}
 	}
 
 	rule = NewDefaultIpTableRule(localChain, IPTABLES_RULENUMBER_MAX)

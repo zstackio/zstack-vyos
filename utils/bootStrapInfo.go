@@ -253,9 +253,10 @@ func GetBootStrapNicInfo() map[string]Nic {
 			name, ok1 := onic["deviceName"].(string)
 			mac, ok2 := onic["mac"].(string)
 			ip, ok3 := onic["ip"].(string)
-			if ok1 && ok2 && ok3 {
-				additionalNic := Nic{Name: name, Mac: mac, Ip: ip}
-				additionalNic.Catatory, _ = mgmtNic["category"].(string)
+			ip6, ok4 := onic["ip6"].(string)
+			if ok1 && ok2 && (ok3||ok4) {
+				additionalNic := Nic{Name: name, Mac: mac, Ip: ip, Ip6: ip6}
+				additionalNic.Catatory, _ = onic["category"].(string)
 				bootstrapNics[additionalNic.Name] = additionalNic
 			}
 		}
