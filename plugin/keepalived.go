@@ -391,6 +391,12 @@ func NewKeepalivedConf(hearbeatNic, LocalIp, LocalIpV6, PeerIp, PeerIpV6 string,
 	if len(vips) == 2 {
 		vipV4 = &vips[0]
 		vipV6 = &vips[1]
+	} else {
+		if utils.IsIpv4Address(vips[0].Vip) {
+			vipV4 = &vips[0]
+		} else {
+			vipV6 = &vips[0]
+		}
 	}
 
 	kc := &KeepalivedConf{
@@ -544,10 +550,17 @@ vrrp_instance vyos-ha {
 	advert_int {{.Interval}}
 	nopreempt
 
+{{ if .VipV4 }}
 	unicast_src_ip {{.LocalIp}}
 	unicast_peer {
 		{{.PeerIp}}
 	}
+{{ else if .VipV6 }}
+	unicast_src_ip {{.LocalIpV6}}
+	unicast_peer {
+		{{.PeerIpV6}}
+	}
+{{end}}
 
 	track_script {
 		monitor_zvr
