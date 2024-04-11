@@ -70,15 +70,17 @@ type qosRule struct {
 	filterId  uint32
 	filterPos uint32
 
-	ip        string
-	port      uint16
-	bandwidth uint64
-	vipUuid   string
+	ip            string
+	port          uint16
+	bandwidth     uint64
+	vipUuid       string
+	sharedQosUuid string
 }
 
 func newQosRule(ip string, port uint16, bandwidth uint64, vipUuid string) *qosRule {
 	var qosProtocol = "ip"
 	var matchIpversion = "ip"
+	var sharedQosUuid = ""
 	if !utils.IsIpv4Address(ip) {
 		qosProtocol = "ipv6"
 		matchIpversion = "ip6"
@@ -90,6 +92,7 @@ func newQosRule(ip string, port uint16, bandwidth uint64, vipUuid string) *qosRu
 		vipUuid:        vipUuid,
 		qosProtocol:    qosProtocol,
 		matchIpversion: matchIpversion,
+		sharedQosUuid:  sharedQosUuid,
 	}
 }
 
@@ -116,16 +119,28 @@ func (rule *qosRule) AddRule(nic string, direct direction) interface{} {
 	}
 
 	bash1 := utils.Bash{
-		Command: fmt.Sprintf("tc class add dev %s parent 1:0 classid 1:%x htb rate %d ceil %d burst 15k cburst 15k;"+
-			"tc qdisc add dev %s parent 1:%x sfq;",
-			nic, rule.classId, bandwidth, bandwidth,
-			nic, rule.classId),
+		Command: fmt.Sprintf("tc class add dev %s parent 1:0 classid 1:%x htb rate %d ceil %d burst 15k cburst 15k;",
+			nic, rule.classId, bandwidth, bandwidth),
 		Sudo: true,
 	}
 	bash1.Run()
-	bash1.PanicIfError()
 
-	rule.AddFilter(nic, direct)
+	// Ensure bandwidth settings are applied correctly using tc class change
+	bash2 := utils.Bash{
+		Command: fmt.Sprintf("tc class change dev %s parent 1:0 classid 1:%x htb rate %d ceil %d burst 15k cburst 15k;",
+			nic, rule.classId, bandwidth, bandwidth),
+		Sudo: true,
+	}
+	bash2.Run()
+	bash2.PanicIfError()
+
+	bash3 := utils.Bash{
+		Command: fmt.Sprintf("tc qdisc add dev %s parent 1:%x sfq;",
+			nic, rule.classId),
+		Sudo: true,
+	}
+	bash3.Run()
+	bash3.PanicIfError()
 
 	return nil
 }
@@ -175,7 +190,7 @@ func (rule *qosRule) AddFilter(nic string, direct direction) interface{} {
 		} else {
 			bash = utils.Bash{
 				Command: fmt.Sprintf(
-					"tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol %s u32 match %s src %s/32 flowid 1:%x",
+					"tc filter add dev %s parent 1:0 prio %d handle %03x::%03x protocol %s u32 match %s src %s flowid 1:%x",
 					nic, rule.prioId, rule.filterId, rule.filterPos, rule.qosProtocol, rule.matchIpversion, rule.ip, rule.classId),
 				Sudo: true,
 			}
@@ -323,7 +338,7 @@ func (vipRules *vipQosRules) VipQosAddRule(rule *qosRule, nicName string, direct
 		vipRules.filterMap.AddNumber(rule.filterPos)
 	}
 
-	rule.AddRule(nicName, direct)
+	rule.AddFilter(nicName, direct)
 
 	/* add rules to map */
 	vipRules.portRules[rule.port] = rule
@@ -364,13 +379,14 @@ func (vipRules *vipQosRules) VipQosDelRule(rule qosRule, nicName string, direct 
  * cntMap               ####    map classId to vip ip
  */
 type interfaceQosRules struct {
-	name        string
-	ifbName     string
-	direct      direction
-	rules       map[string]*vipQosRules
-	classBitmap Bitmap
-	prioBitMap  Bitmap
-	classIdMap  map[uint32]string
+	name             string
+	ifbName          string
+	direct           direction
+	rules            map[string]*vipQosRules
+	classBitmap      Bitmap
+	prioBitMap       Bitmap
+	classIdMap       map[uint32][]string
+	sharedClassIdMap map[string]uint32
 }
 
 type interfaceQosHook interface {
@@ -415,7 +431,8 @@ func (rules *interfaceQosRules) InterfaceQosRuleInit(direct direction) interface
 	rules.prioBitMap.AddNumber(1)
 	rules.prioBitMap.AddNumber(TC_MAX_CLASSID)
 	rules.rules = make(map[string]*vipQosRules)
-	rules.classIdMap = make(map[uint32]string)
+	rules.classIdMap = make(map[uint32][]string)
+	rules.sharedClassIdMap = make(map[string]uint32)
 
 	if rules.direct == INGRESS {
 		/* get interface index */
@@ -557,6 +574,27 @@ func (rules *interfaceQosRules) InterfaceQosRuleAddRule(rule *qosRule) interface
 		name = rules.ifbName
 	}
 
+	if rule.sharedQosUuid != "" {
+		if oldVipRules, vipOk := rules.rules[rule.ip]; vipOk {
+			log.Debugf("Deleting old rules for IP %s due to new sharedQosUuid", rule.ip)
+			for _, oldRule := range oldVipRules.portRules {
+				rules.InterfaceQosRuleDelRule(*oldRule)
+			}
+			if _, exists := rules.sharedClassIdMap[rule.sharedQosUuid]; !exists {
+				rules.InterfaceQosRuleInit(rules.direct)
+			}
+			log.Debugf("AddRuleToInterface create map for ip %s", rule.ip)
+			if len(rules.rules) >= TC_MAX_FILTER {
+				utils.PanicOnError(fmt.Errorf("VipQos Reach the max number %d of interface %s ifbname %s",
+					TC_MAX_FILTER, rules.name, rules.ifbName))
+			}
+			prioId := rules.prioBitMap.FindFirstAvailable()
+			rules.prioBitMap.AddNumber(prioId)
+			rules.rules[rule.ip] = newVipQosRules(make(map[uint16]*qosRule), rule.ip, prioId, rule.vipUuid)
+			rules.rules[rule.ip].VipQosRulesInit(name)
+		}
+	}
+
 	if _, vipOk := rules.rules[rule.ip]; vipOk == false {
 		log.Debugf("AddRuleToInterface create map for ip %s", rule.ip)
 		if len(rules.rules) >= TC_MAX_FILTER {
@@ -592,15 +630,22 @@ func (rules *interfaceQosRules) InterfaceQosRuleAddRule(rule *qosRule) interface
 			rules.rules[rule.ip].VipQosRulesInit(name)
 		}
 	}
-
-	classId := rules.classBitmap.FindFirstAvailable()
-	if classId == MAX_UINT32 {
-		utils.PanicOnError(fmt.Errorf("Qos class is full for interface %s ifbname %s", rules.name, rules.ifbName))
+	if sharedClassId, exists := rules.sharedClassIdMap[rule.sharedQosUuid]; exists {
+		rule.classId = sharedClassId
+		rules.classIdMap[sharedClassId] = append(rules.classIdMap[sharedClassId], rule.ip)
+	} else {
+		classId := rules.classBitmap.FindFirstAvailable()
+		if classId == MAX_UINT32 {
+			utils.PanicOnError(fmt.Errorf("Qos class is full for interface %s ifbname %s", rules.name, rules.ifbName))
+		}
+		rules.classBitmap.AddNumber(classId)
+		rule.classId = classId
+		rules.classIdMap[classId] = []string{rule.ip}
+		if rule.sharedQosUuid != "" {
+			rules.sharedClassIdMap[rule.sharedQosUuid] = classId
+		}
 	}
-	rules.classBitmap.AddNumber(classId)
-	rule.classId = classId
-	rules.classIdMap[classId] = rule.ip
-
+	rule.AddRule(name, rules.direct)
 	rules.rules[rule.ip].VipQosAddRule(rule, name, rules.direct)
 
 	log.Debugf("AddRuleToInterface rule ip %s, port %d, bandwith %d on interface %s, vip number %d",
@@ -629,9 +674,24 @@ func (rules *interfaceQosRules) InterfaceQosRuleDelRule(rule qosRule) interface{
 
 	classId := rules.rules[rule.ip].portRules[rule.port].classId
 	rules.rules[rule.ip].VipQosDelRule(*rules.rules[rule.ip].portRules[rule.port], name, rules.direct)
-	delete(rules.classIdMap, classId)
-
-	rules.classBitmap.DelNumber(classId)
+	if ips, ok := rules.classIdMap[classId]; ok {
+		for i, vip := range ips {
+			if vip == rule.ip {
+				rules.classIdMap[classId] = append(rules.classIdMap[classId][:i], rules.classIdMap[classId][i+1:]...)
+				break
+			}
+		}
+		if len(rules.classIdMap[classId]) == 0 {
+			delete(rules.classIdMap, classId)
+			rules.classBitmap.DelNumber(classId)
+			for sharedUuid, sharedClassId := range rules.sharedClassIdMap {
+				if sharedClassId == classId {
+					delete(rules.sharedClassIdMap, sharedUuid)
+					break
+				}
+			}
+		}
+	}
 	if len(rules.rules[rule.ip].portRules) == 0 {
 		rules.prioBitMap.DelNumber(rules.rules[rule.ip].prioId)
 		delete(rules.rules, rule.ip)
@@ -769,6 +829,7 @@ type vipQosSettings struct {
 	OutboundBandwidth int64  `json:"outboundBandwidth"`
 	Type              string `json:"type"`
 	HasVipQos         bool   `json:"hasVipQos"`
+	SharedQosUuid     string `json:"sharedQosUuid"`
 }
 
 type setVipCmd struct {
@@ -1136,10 +1197,12 @@ func setVipQos(ctx *server.CommandContext) interface{} {
 		utils.PanicOnError(err)
 		if setting.InboundBandwidth != 0 {
 			ingressrule := newQosRule(setting.Vip, uint16(setting.Port), uint64(setting.InboundBandwidth), setting.VipUuid)
+			ingressrule.sharedQosUuid = setting.SharedQosUuid
 			addQosRule(publicInterface, INGRESS, ingressrule)
 		}
 		if setting.OutboundBandwidth != 0 {
 			egressrule := newQosRule(setting.Vip, uint16(setting.Port), uint64(setting.OutboundBandwidth), setting.VipUuid)
+			egressrule.sharedQosUuid = setting.SharedQosUuid
 			addQosRule(publicInterface, EGRESS, egressrule)
 		}
 	}
@@ -1342,7 +1405,7 @@ func getInterfaceMonitorRules(direct direction, qosRules *interfaceQosRules) map
 	lines := strings.Split(stdout, "\n")
 	var cnt, classId uint32
 	var byteCnt, pktCnt uint64
-	var vipIp string
+	var vipIps []string
 	var vipOk bool
 	monitorRules := make(map[string]*monitoringRule)
 
@@ -1354,7 +1417,7 @@ func getInterfaceMonitorRules(direct direction, qosRules *interfaceQosRules) map
 			id, _ := strconv.ParseUint(strings.Trim(classStr[1], " "), 16, 64)
 			classId = (uint32)(id)
 			/* in case class delete fail, just skip lines for this classid */
-			vipIp, vipOk = qosRules.classIdMap[classId]
+			vipIps, vipOk = qosRules.classIdMap[classId]
 			cnt++
 			break
 		case 1:
@@ -1367,20 +1430,22 @@ func getInterfaceMonitorRules(direct direction, qosRules *interfaceQosRules) map
 			break
 		case 2:
 			if vipOk {
-				if qosRule, ok := qosRules.rules[vipIp]; ok {
-					vipUuid := qosRule.vipUuid
-					if _, ok := monitorRules[vipUuid]; !ok {
-						monitorRules[vipUuid] = &monitoringRule{}
-					}
-					monitorRule := monitorRules[vipUuid]
-					monitorRule.pkts += pktCnt
-					monitorRule.bytes += byteCnt
-					monitorRule.vipUuid = vipUuid
+				for _, vipIp := range vipIps {
+					if qosRule, ok := qosRules.rules[vipIp]; ok {
+						vipUuid := qosRule.vipUuid
+						if _, ok := monitorRules[vipUuid]; !ok {
+							monitorRules[vipUuid] = &monitoringRule{}
+						}
+						monitorRule := monitorRules[vipUuid]
+						monitorRule.pkts += pktCnt
+						monitorRule.bytes += byteCnt
+						monitorRule.vipUuid = vipUuid
 
-					if direct == INGRESS {
-						monitorRule.destination = qosRules.rules[vipIp].vip
-					} else {
-						monitorRule.source = qosRules.rules[vipIp].vip
+						if direct == INGRESS {
+							monitorRule.destination = qosRules.rules[vipIp].vip
+						} else {
+							monitorRule.source = qosRules.rules[vipIp].vip
+						}
 					}
 				}
 			}
