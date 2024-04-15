@@ -103,6 +103,23 @@ type qosRuleHook interface {
 	DelFilter(nic string, direct direction)
 }
 
+func (rule *qosRule) UpdateRule(nic string, direct direction) interface{} {
+	bandwidth := rule.bandwidth
+	if bandwidth <= 0 {
+		bandwidth = 1
+	}
+
+	bash := utils.Bash{
+		Command: fmt.Sprintf("tc class change dev %s parent 1:0 classid 1:%x htb rate %d ceil %d burst 15k cburst 15k;",
+			nic, rule.classId, bandwidth, bandwidth),
+		Sudo: true,
+	}
+	bash.Run()
+	bash.PanicIfError()
+
+	return nil
+}
+
 func (rule *qosRule) AddRule(nic string, direct direction) interface{} {
 	bash := utils.Bash{
 		Command: fmt.Sprintf("tc qdisc del dev %s parent 1:%x;"+
@@ -568,6 +585,21 @@ func (rules *interfaceQosRules) InterfaceQosRuleCleanUp() interface{} {
 	return nil
 }
 
+func (rules *interfaceQosRules) InterfaceQosRuleUpdateRule(rule *qosRule) interface{} {
+	name := rules.name
+	if rules.direct == INGRESS {
+		name = rules.ifbName
+	}
+	if sharedClassId, exists := rules.sharedClassIdMap[rule.sharedQosUuid]; exists {
+		rule.classId = sharedClassId
+	} else {
+		rule.classId = rules.rules[rule.ip].portRules[rule.port].classId
+	}
+	rule.UpdateRule(name, rules.direct)
+	rules.rules[rule.ip].portRules[rule.port].bandwidth = rule.bandwidth
+	return nil
+}
+
 func (rules *interfaceQosRules) InterfaceQosRuleAddRule(rule *qosRule) interface{} {
 	name := rules.name
 	if rules.direct == INGRESS {
@@ -578,7 +610,9 @@ func (rules *interfaceQosRules) InterfaceQosRuleAddRule(rule *qosRule) interface
 		if oldVipRules, vipOk := rules.rules[rule.ip]; vipOk {
 			log.Debugf("Deleting old rules for IP %s due to new sharedQosUuid", rule.ip)
 			for _, oldRule := range oldVipRules.portRules {
-				rules.InterfaceQosRuleDelRule(*oldRule)
+				if oldRule.ip == rule.ip {
+					rules.InterfaceQosRuleDelRule(*oldRule)
+				}
 			}
 			if _, exists := rules.sharedClassIdMap[rule.sharedQosUuid]; !exists {
 				rules.InterfaceQosRuleInit(rules.direct)
@@ -711,6 +745,14 @@ type interfaceInOutQosRules [DIRECTION_MAX]*interfaceQosRules
 
 var totalQosRules map[string]interfaceInOutQosRules
 
+func updateQosRule(publicInterface string, direct direction, qosRule *qosRule) interface{} {
+	if _, ok := totalQosRules[publicInterface]; ok {
+		log.Debugf("updateQosRule update rule of publicInterface: %s direct %d", publicInterface, direct)
+		totalQosRules[publicInterface][direct].InterfaceQosRuleUpdateRule(qosRule)
+	}
+	return nil
+}
+
 func addQosRule(publicInterface string, direct direction, qosRule *qosRule) interface{} {
 	if _, ok := totalQosRules[publicInterface]; !ok {
 		log.Debugf("init data struct for %s", publicInterface)
@@ -830,6 +872,7 @@ type vipQosSettings struct {
 	Type              string `json:"type"`
 	HasVipQos         bool   `json:"hasVipQos"`
 	SharedQosUuid     string `json:"sharedQosUuid"`
+	Update            bool   `json:"update"`
 }
 
 type setVipCmd struct {
@@ -1198,12 +1241,20 @@ func setVipQos(ctx *server.CommandContext) interface{} {
 		if setting.InboundBandwidth != 0 {
 			ingressrule := newQosRule(setting.Vip, uint16(setting.Port), uint64(setting.InboundBandwidth), setting.VipUuid)
 			ingressrule.sharedQosUuid = setting.SharedQosUuid
-			addQosRule(publicInterface, INGRESS, ingressrule)
+			if setting.Update {
+				updateQosRule(publicInterface, INGRESS, ingressrule)
+			} else {
+				addQosRule(publicInterface, INGRESS, ingressrule)
+			}
 		}
 		if setting.OutboundBandwidth != 0 {
 			egressrule := newQosRule(setting.Vip, uint16(setting.Port), uint64(setting.OutboundBandwidth), setting.VipUuid)
 			egressrule.sharedQosUuid = setting.SharedQosUuid
-			addQosRule(publicInterface, EGRESS, egressrule)
+			if setting.Update {
+				updateQosRule(publicInterface, EGRESS, egressrule)
+			} else {
+				addQosRule(publicInterface, EGRESS, egressrule)
+			}
 		}
 	}
 
