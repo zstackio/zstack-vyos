@@ -664,9 +664,25 @@ missingok
 	_, err = zvr_log_rotatoe_file.Write([]byte(zvr_rotate_conf))
 	utils.PanicOnError(err)
 
+	zvr_monitor_log_rotatoe_file, err := ioutil.TempFile(DHCPD_PATH, "zvrMonitorRotation")
+	utils.PanicOnError(err)
+	zvr_monitor_rotate_conf_tmp := `%s {
+size 10240k
+rotate 40
+compress
+copytruncate
+notifempty
+missingok
+}`
+	zvr_monitor_log_path := filepath.Join(utils.GetZvrRootPath(), "zvrMonitor.log")
+	zvr_monitor_rotate_conf := fmt.Sprintf(zvr_monitor_rotate_conf_tmp, zvr_monitor_log_path)
+	_, err = zvr_monitor_log_rotatoe_file.Write([]byte(zvr_monitor_rotate_conf))
+	utils.PanicOnError(err)
+
 	utils.SudoMoveFile(dhcp_log_file.Name(), "/etc/rsyslog.d/dhcp.conf")
 	utils.SudoMoveFile(dhcp_log_rotatoe_file.Name(), "/etc/logrotate.d/dhcp")
 	utils.SudoMoveFile(zvr_log_rotatoe_file.Name(), "/etc/logrotate.d/zvr")
+	utils.SudoMoveFile(zvr_monitor_log_rotatoe_file.Name(), "/etc/logrotate.d/zvrMonitor")
 	utils.SudoMoveFile(zvr_start_up_log_rotatoe_file.Name(), "/etc/logrotate.d/zvrstartup")
 }
 
