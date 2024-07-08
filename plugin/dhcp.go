@@ -10,9 +10,10 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
 	"zstack-vyos/server"
 	"zstack-vyos/utils"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -36,10 +37,13 @@ const (
 
 )
 
-var (
-	DHCPD_PATH       = filepath.Join(utils.GetZvrRootPath(), "dhcp3")
-	DHCP_DHCP_SCRIPT = filepath.Join(utils.GetZvrRootPath(), "keepalived/script/dhcpd.sh")
-)
+func getDhcpdPath() string {
+	return filepath.Join(utils.GetZvrRootPath(), "dhcp3")
+}
+
+func getDhcpScriptPath() string {
+	return filepath.Join(utils.GetZvrRootPath(), "keepalived/script/dhcpd.sh")
+}
 
 type dhcpInfo struct {
 	Ip                 string   `json:"ip"`
@@ -106,11 +110,11 @@ var (
 )
 
 func getDhcpServerPath(nicName string) (pid, conf, lease, tempConf string) {
-	pid = fmt.Sprintf("%s/%s/%s.pid", DHCPD_PATH, nicName, nicName)
-	conf = fmt.Sprintf("%s/%s/%s.conf", DHCPD_PATH, nicName, nicName)
-	lease = fmt.Sprintf("%s/%s/%s.lease", DHCPD_PATH, nicName, nicName)
-	tempConf = fmt.Sprintf("%s/%s/%s.tempConf", DHCPD_PATH, nicName, nicName)
-	os.Mkdir(fmt.Sprintf("%s/%s", DHCPD_PATH, nicName), os.ModePerm)
+	pid = fmt.Sprintf("%s/%s/%s.pid", getDhcpdPath(), nicName, nicName)
+	conf = fmt.Sprintf("%s/%s/%s.conf", getDhcpdPath(), nicName, nicName)
+	lease = fmt.Sprintf("%s/%s/%s.lease", getDhcpdPath(), nicName, nicName)
+	tempConf = fmt.Sprintf("%s/%s/%s.tempConf", getDhcpdPath(), nicName, nicName)
+	os.Mkdir(fmt.Sprintf("%s/%s", getDhcpdPath(), nicName), os.ModePerm)
 	return pid, conf, lease, tempConf
 }
 
@@ -193,7 +197,7 @@ func writeDhcpScriptFile() {
 		utils.PanicOnError(err)
 		err = tmpl.Execute(&buf, m)
 		utils.PanicOnError(err)
-		err = ioutil.WriteFile(DHCP_DHCP_SCRIPT, buf.Bytes(), 0755)
+		err = ioutil.WriteFile(getDhcpScriptPath(), buf.Bytes(), 0755)
 		utils.PanicOnError(err)
 	}
 }
@@ -312,7 +316,7 @@ func stopAllDhcpServers() {
 	}
 
 	bash := &utils.Bash{
-		Command: fmt.Sprintf("pkill -9 %s; rm -rf %s/*", progname, DHCPD_PATH),
+		Command: fmt.Sprintf("pkill -9 %s; rm -rf %s/*", progname, getDhcpdPath()),
 		Sudo:    true,
 	}
 	bash.Run()
@@ -611,87 +615,8 @@ func startDhcpServer(dhcp dhcpServer) {
 	addDnsNic(nicname)
 }
 
-func enableDhcpLog() {
-	dhcp_log_file, err := ioutil.TempFile(DHCPD_PATH, "rsyslog")
-	utils.PanicOnError(err)
-	conf := `$ModLoad imudp
-$UDPServerRun 514
-local3.debug     /var/log/dhcp.log`
-	_, err = dhcp_log_file.Write([]byte(conf))
-	utils.PanicOnError(err)
-
-	dhcp_log_rotatoe_file, err := ioutil.TempFile(DHCPD_PATH, "rotation")
-	utils.PanicOnError(err)
-	rotate_conf := `/var/log/dhcp.log {
-size 10240k
-rotate 20
-compress
-copytruncate
-notifempty
-missingok
-}`
-	_, err = dhcp_log_rotatoe_file.Write([]byte(rotate_conf))
-	utils.PanicOnError(err)
-
-	zvr_start_up_log_rotatoe_file, err := ioutil.TempFile(DHCPD_PATH, "zvrStartUpRotation")
-	utils.PanicOnError(err)
-	zvr_start_up_rotate_conf_tmp := `%s {
-size 10240k
-daily
-rotate 10
-compress
-copytruncate
-notifempty
-missingok
-}`
-	zvr_start_up_log_path := filepath.Join(utils.GetZvrRootPath(), "zvrstartup.log")
-	zvr_start_up_rotate_conf := fmt.Sprintf(zvr_start_up_rotate_conf_tmp, zvr_start_up_log_path)
-	_, err = zvr_start_up_log_rotatoe_file.Write([]byte(zvr_start_up_rotate_conf))
-	utils.PanicOnError(err)
-
-	zvr_log_rotatoe_file, err := ioutil.TempFile(DHCPD_PATH, "zvrRotation")
-	utils.PanicOnError(err)
-	zvr_rotate_conf_tmp := `%s {
-size 10240k
-rotate 40
-compress
-copytruncate
-notifempty
-missingok
-}`
-	zvr_log_path := filepath.Join(utils.GetZvrRootPath(), "zvr.log")
-	zvr_rotate_conf := fmt.Sprintf(zvr_rotate_conf_tmp, zvr_log_path)
-	_, err = zvr_log_rotatoe_file.Write([]byte(zvr_rotate_conf))
-	utils.PanicOnError(err)
-
-	zvr_monitor_log_rotatoe_file, err := ioutil.TempFile(DHCPD_PATH, "zvrMonitorRotation")
-	utils.PanicOnError(err)
-	zvr_monitor_rotate_conf_tmp := `%s {
-size 10240k
-rotate 40
-compress
-copytruncate
-notifempty
-missingok
-}`
-	zvr_monitor_log_path := filepath.Join(utils.GetZvrRootPath(), "zvrMonitor.log")
-	zvr_monitor_rotate_conf := fmt.Sprintf(zvr_monitor_rotate_conf_tmp, zvr_monitor_log_path)
-	_, err = zvr_monitor_log_rotatoe_file.Write([]byte(zvr_monitor_rotate_conf))
-	utils.PanicOnError(err)
-
-	utils.SudoMoveFile(dhcp_log_file.Name(), "/etc/rsyslog.d/dhcp.conf")
-	utils.SudoMoveFile(dhcp_log_rotatoe_file.Name(), "/etc/logrotate.d/dhcp")
-	utils.SudoMoveFile(zvr_log_rotatoe_file.Name(), "/etc/logrotate.d/zvr")
-	utils.SudoMoveFile(zvr_monitor_log_rotatoe_file.Name(), "/etc/logrotate.d/zvrMonitor")
-	utils.SudoMoveFile(zvr_start_up_log_rotatoe_file.Name(), "/etc/logrotate.d/zvrstartup")
-}
-
-func init() {
-	os.Mkdir(DHCPD_PATH, os.ModePerm)
-	enableDhcpLog()
-}
-
 func DhcpEntryPoint() {
+	os.Mkdir(getDhcpdPath(), os.ModePerm)
 	server.RegisterAsyncCommandHandler(ADD_DHCP_PATH, server.VyosLock(addDhcpHandler))
 	server.RegisterAsyncCommandHandler(REMOVE_DHCP_PATH, server.VyosLock(removeDhcpHandler))
 	server.RegisterAsyncCommandHandler(REFRESH_DHCP_SERVER_PATH, server.VyosLock(refreshDhcpServer))

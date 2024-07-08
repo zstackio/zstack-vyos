@@ -3,16 +3,17 @@ package plugin
 import (
 	"fmt"
 
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("ospf_iptables_test", func() {
 	var nicCmd *configureNicCmd
 
 	It("[IPTABLES]ospf : test preparing", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"ospf_iptables_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"ospf_iptables_test.log", false)
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)

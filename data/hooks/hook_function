@@ -12,7 +12,6 @@ HOOKS_PATH="${DATA_PATH}/hooks"
 FILE_LISTS_PATH="${DATA_PATH}/file-lists"
 
 CONFIG_PATH="${DATA_PATH}/config"
-BOOTUP_CONFIG_FILE="${CONFIG_PATH}/bootup-config.install"
 UPDATE_ZVR_FILE="${CONFIG_PATH}/update-zvr.install"
 FLAG_X86="X86"
 FLAG_ARM="ARM"

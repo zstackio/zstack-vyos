@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	server "zstack-vyos/server"
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-	server "zstack-vyos/server"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("configure_nic_iptables_test", func() {
@@ -16,7 +17,7 @@ var _ = Describe("configure_nic_iptables_test", func() {
 	var sinfo1, sinfo2 snatInfo
 
 	It("configure_nic_iptables_test prepare", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"configure_nic_iptables_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"configure_nic_iptables_test.log", false)
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)
@@ -153,9 +154,8 @@ var _ = Describe("configure_nic_iptables_test", func() {
 	It("configure_nic_iptables_test TestAddSecondaryIpFirewall", func() {
 		log.Debugf("############### TestAddSecondaryIpFirewall ###############")
 
-		tree := server.NewParserFromShowConfiguration().Tree
 		ipPubL3, _ := utils.GetFreePubL3Ip()
-		addSecondaryIpFirewall(utils.PubNicForUT.Name, ipPubL3, tree)
+		addSecondaryIpFirewall(utils.PubNicForUT.Name, ipPubL3)
 
 		checkSecondaryIpFirewallByIptables(utils.PubNicForUT, ipPubL3+"/32")
 

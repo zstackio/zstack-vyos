@@ -1,0 +1,109 @@
+#!/bin/bash
+
+set -x 
+
+CONFIG_FILE="/home/zstack/zvr/data/config/bootup-config_euler2203.install"
+FILE_LISTS_PATH="/home/zstack/zvr/data/file-lists"
+ZVR_BIN_PATH="/usr/local/bin"
+ZVR_ROOT_PATH="/home/zstack/zvr"
+LOG_FILE="/home/zstack/zvr/zstack-boot.log"
+RUNNER_FILE="/usr/local/zstack/.zstack_runner"
+FLAG_X86="X86"
+FLAG_ARM="ARM"
+FLAG_MIPS="MIPS"
+FLAG_GEN="GENERIC"
+ARCH=`uname -m`
+
+function log_info() {
+	echo "$(date -d today '+%Y%m%d %H:%M:%S') - $1"  >> ${LOG_FILE} 2>>${LOG_FILE}
+}
+
+function sync_boot_file {
+    file_name=$1
+    file_dst=$2
+    file_mode=$3
+    file_owner=$4
+    dst_dir=`dirname $2`
+    file_src=${FILE_LISTS_PATH}/$1
+
+    if [[ -z $1 ]] || [[ -z $2 ]] || [[ -z $3 ]] || [[ -z $4 ]]; then
+        log_info "sync_boot_file error: params no enough[$1 $2 $3 $4]"
+        return 1
+    fi
+
+    if [ ! -f "${file_src}" ]; then
+        log_info "sync_boot_file error: file [${file_src}] not exist"
+        return 1
+    fi
+
+    if [ ! -d "${dst_dir}" ]; then
+        mkdir -p ${dst_dir}
+    fi
+
+    log_info "sync_boot_file: src[${file_name}] to dst[${file_dst}], mode is:[${file_mode}], owner is:[${file_owner}]"
+    if ! diff ${file_src} ${file_dst} > /dev/null; then
+        cp -f ${file_src} ${file_dst}
+    fi
+    chmod ${file_mode} ${file_dst}
+    chown ${file_owner} ${file_dst}
+}
+
+echo "$(date -d today '+%Y%m%d %H:%M:%S') - Start Run zstack vrouter euler24.03 bootup script"  > ${LOG_FILE}
+mkdir -p /home/zstack/zvr/data
+mkdir -p /home/zstack/zvr/ssh
+mkdir -p /home/zstack/zvr/keepalived/script
+mkdir -p /etc/conntrackd
+mkdir -p /opt/vyatta/etc/config/scripts
+mkdir -p /home/zstack/.ssh
+chmod 700 /home/zstack/.ssh/
+chown zstack:zstack /home/zstack/.ssh/
+systemctl restart sshd
+systemctl stop keepalived
+ip link add dev mgmt type vrf table 250 ### reserver rt table: 250 for mgmt
+ip link set up dev mgmt
+
+sed -i "s%__ZVR_ROOT_PATH__%${ZVR_ROOT_PATH}%g"     ${CONFIG_FILE}
+sed -i "s%__BIN_PATH__%${ZVR_BIN_PATH}%g"             ${CONFIG_FILE}
+sed -i "s%__USER__%zstack%g"                               ${CONFIG_FILE}
+
+if [ ! -f "${CONFIG_FILE}" ]; then
+    log_info "can not find build-image.install, should check data directory"
+    exit 0
+fi
+
+if [ ! -f "${RUNNER_FILE}" ]; then
+    log_info "start sync generic boot file"
+    generic_file=`sed -n "/${FLAG_GEN}/,/^\[\[/p" ${CONFIG_FILE} | sed '/^[#\[]/d;/^$/d'`
+    echo "${generic_file}" | while read line; do
+        sync_boot_file ${line}
+    done
+
+    if [ "${ARCH}" == "x86_64" ]; then
+        log_info "start sync x86 boot file"
+        x86_file=`sed -n "/${FLAG_X86}/,/^\[\[/p" ${CONFIG_FILE} | sed '/^[#\[]/d;/^$/d'`
+        echo "${x86_file}" | while read line; do
+            sync_boot_file ${line}
+        done
+    elif [ "${ARCH}" == "aarch64" ]; then
+        log_info "start sync arm boot file"
+        arm_file=`sed -n "/${FLAG_ARM}/,/^\[\[/p" ${CONFIG_FILE} | sed '/^[#\[]/d;/^$/d'`
+        echo "${arm_file}" | while read line; do
+            sync_boot_file ${line}
+        done
+    elif [ "${ARCH}" == "mips64el" ]; then
+        log_info "start sync mips boot file"
+        mips_file=`sed -n "/${FLAG_ARM}/,/^\[\[/p" ${CONFIG_FILE} | sed '/^[#\[]/d;/^$/d'`
+        echo "${mips_file}" | while read line; do
+            sync_boot_file ${line}
+        done
+    else
+        log_info "ARCH:${ARCH} is not recognized,"
+    fi
+
+    touch ${RUNNER_FILE}
+else
+    log_info "${RUNNER_FILE} is exist, no need sync boot file"
+fi
+
+/usr/local/bin/zvrboot >>/home/zstack/zvr/zvrboot.log 2>&1 < /dev/null &
+exit 0

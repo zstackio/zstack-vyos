@@ -9,11 +9,16 @@ import (
 type ZStackIpRule struct {
 	Fwmark  uint64
 	From    string
-	TableId uint64
+	To		  string
+	TableId int
 }
 
-func getIpRouteTableAlias(tableId uint64) string {
-	return fmt.Sprintf("%s%d", PolicyRouteChainPrefix, tableId)
+func getIpRouteTableAlias(tableId int) string {
+	if tableId == RT_TABLES_MGMT {
+		return "mgmt"
+	} else {
+		return fmt.Sprintf("%s%d", PolicyRouteChainPrefix, tableId)
+	}
 }
 
 func (a ZStackIpRule) Equal(b ZStackIpRule) bool {
@@ -29,19 +34,27 @@ func (a ZStackIpRule) Equal(b ZStackIpRule) bool {
 		return false
 	}
 
+	if a.To != b.To {
+		return false
+	}
+
 	return true
 }
 
-func (a ZStackIpRule) addBashCommand() string {
-	if a.Fwmark == 0 {
+func (a ZStackIpRule) AddBashCommand() string {
+	if a.To != "" {
+		return fmt.Sprintf("sudo ip rule add to %s table %s", a.To, getIpRouteTableAlias(a.TableId))
+	} else if a.Fwmark == 0 {
 		return fmt.Sprintf("sudo ip rule add from %s table %s", a.From, getIpRouteTableAlias(a.TableId))
 	} else {
 		return fmt.Sprintf("sudo ip rule add fwmark %d table %s", a.Fwmark, getIpRouteTableAlias(a.TableId))
 	}
 }
 
-func (a ZStackIpRule) delBashCommand() string {
-	if a.Fwmark == 0 {
+func (a ZStackIpRule) DelBashCommand() string {
+	if a.To != "" {
+		return fmt.Sprintf("sudo ip rule del to %s table %s", a.To, getIpRouteTableAlias(a.TableId))
+	} else if a.Fwmark == 0 {
 		return fmt.Sprintf("sudo ip rule del from %s table %d", a.From, a.TableId)
 	} else {
 		return fmt.Sprintf("sudo ip rule del fwmark %d table %d", a.Fwmark, a.TableId)
@@ -61,17 +74,27 @@ func GetZStackIpRules() []ZStackIpRule {
 	o = strings.TrimSpace(o)
 	lines := strings.Split(o, "\n")
 
+	rt_tables := GetZStackRouteTables()
+	rt_tables_map := map[string]int{}
+	for _, table := range rt_tables {
+		rt_tables_map[table.Alias] = table.TableId
+	}
+
 	for _, line := range lines {
 		items := strings.Fields(line)
 
 		if items[3] == "fwmark" {
 			mark, _ := strconv.ParseUint(strings.Replace(strings.TrimSpace(items[4]), "0x", "", 1), 16, 64)
-			tableId, _ := strconv.Atoi(strings.Replace(strings.TrimSpace(items[6]), PolicyRouteChainPrefix, "", 1))
-			rule := ZStackIpRule{Fwmark: mark, From: "", TableId: uint64(tableId)}
+			tableId, _ := rt_tables_map[items[6]]
+			rule := ZStackIpRule{Fwmark: mark, From: "", TableId: tableId}
+			rules = append(rules, rule)
+		} else if items[3] == "to" {
+			tableId, _ := rt_tables_map[items[6]]
+			rule := ZStackIpRule{Fwmark: 0, To: items[4], TableId: tableId}
 			rules = append(rules, rule)
 		} else {
-			tableId, _ := strconv.Atoi(strings.Replace(strings.TrimSpace(items[4]), PolicyRouteChainPrefix, "", 1))
-			rule := ZStackIpRule{Fwmark: 0, From: items[2], TableId: uint64(tableId)}
+			tableId, _ := rt_tables_map[items[4]]
+			rule := ZStackIpRule{Fwmark: 0, From: items[2], TableId: tableId}
 			rules = append(rules, rule)
 		}
 	}
@@ -93,7 +116,7 @@ func SyncZStackIpRules(currRules, rules []ZStackIpRule) error {
 		}
 
 		if !exist {
-			newCmds = append(newCmds, crule.delBashCommand())
+			newCmds = append(newCmds, crule.DelBashCommand())
 		}
 	}
 
@@ -108,7 +131,7 @@ func SyncZStackIpRules(currRules, rules []ZStackIpRule) error {
 		}
 
 		if !exist {
-			newCmds = append(newCmds, nrule.addBashCommand())
+			newCmds = append(newCmds, nrule.AddBashCommand())
 		}
 	}
 

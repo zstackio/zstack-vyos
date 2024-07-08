@@ -3,9 +3,10 @@ package plugin
 import (
 	"fmt"
 
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("snat_iptables_test", func() {
@@ -15,7 +16,7 @@ var _ = Describe("snat_iptables_test", func() {
 	var nicCmd *configureNicCmd
 
 	It("[IPTABLES]snat : test preparing", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"snat_iptables_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"snat_iptables_test.log", false)
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)

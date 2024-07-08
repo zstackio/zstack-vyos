@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("dnat_iptables_test", func() {
@@ -22,7 +23,7 @@ var _ = Describe("dnat_iptables_test", func() {
 	)
 
 	It("[IPTABLES]DNAT : config nic for snat test", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"dnat_iptables_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"dnat_iptables_test.log", false)
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)

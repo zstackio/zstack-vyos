@@ -3,7 +3,7 @@ package utils
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"text/template"
 
@@ -12,9 +12,15 @@ import (
 
 var (
 	CROND_CONFIG_FILE      = "/etc/cron.d/zstack_cronjob"
-	CROND_CONFIG_FILE_TEMP = filepath.Join(GetZvrRootPath(), "zstack_cronjob")
-	CROND_JSON_FILE        = filepath.Join(GetZvrRootPath(), ".zstack_config/cronjob")
 )
+
+func getCrondConfigFileTemp() string {
+	return filepath.Join(GetZvrRootPath(), "zstack_cronjob")
+}
+
+func getCrondJsonFile() string {
+	return filepath.Join(GetZvrRootPath(), ".zstack_config/cronjob")
+}
 
 type CronjobMap map[int]*Cronjob
 
@@ -120,10 +126,13 @@ func (c CronjobMap) ConfigService() error {
 	)
 	cronjobAttrs := make(CronjobMap)
 
-	if err := JsonLoadConfig(CROND_JSON_FILE, &cronjobAttrs); err != nil {
-		return err
+	if err := JsonLoadConfig(getCrondJsonFile(), &cronjobAttrs); err != nil {
+		/* ignore the error */
+		log.Debugf("local cronjob failed: %v", err)
 	}
 
+	i := 0
+	newCronjobAttrs := make(CronjobMap)
 	for k, v := range c {
 		if v.isDelete {
 			log.Debugf("cronjob[%d] will be delete", k)
@@ -134,25 +143,29 @@ func (c CronjobMap) ConfigService() error {
 				continue
 			}
 			log.Debugf("cronjob[%d] will be add", k)
-			cronjobAttrs[k] = v
+			newCronjobAttrs[i] =v
+			i++
 		}
 	}
 	if tmpl, err = template.New("crond.conf").Parse(CrondTemplate); err != nil {
+		log.Debugf("CrondTemplate parse failed: %v", err)
 		return err
 	}
-	if err = tmpl.Execute(&buf, cronjobAttrs); err != nil {
+	if err = tmpl.Execute(&buf, newCronjobAttrs); err != nil {
+		log.Debugf("CrondTemplate Execute failed: %v", err)
 		return err
 	}
-	if err = ioutil.WriteFile(CROND_CONFIG_FILE_TEMP, buf.Bytes(), 0664); err != nil {
+	if err = os.WriteFile(getCrondConfigFileTemp(), buf.Bytes(), 0664); err != nil {
+		log.Debugf("CrondTemplate WriteFile failed: %v", err)
 		return err
 	}
 	bash := Bash{
-		Command: fmt.Sprintf("mv %s %s", CROND_CONFIG_FILE_TEMP, CROND_CONFIG_FILE),
+		Command: fmt.Sprintf("mv %s %s", getCrondConfigFileTemp(), CROND_CONFIG_FILE),
 		Sudo:    true,
 	}
 	bash.Run()
 
-	return JsonStoreConfig(CROND_JSON_FILE, cronjobAttrs)
+	return JsonStoreConfig(getCrondJsonFile(), cronjobAttrs)
 }
 
 func GetNtpdCommand(operation string) string {
@@ -167,9 +180,9 @@ func GetNtpdCommand(operation string) string {
 }
 
 func (c CronjobMap) RestartService() error {
-	return ServiceOperation("cron", "restart")
+	return ServiceOperation("crond", "restart")
 }
 
 func (c CronjobMap) StopService() error {
-	return ServiceOperation("cron", "stop")
+	return ServiceOperation("crond", "stop")
 }

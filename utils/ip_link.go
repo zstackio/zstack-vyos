@@ -7,6 +7,10 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
+const (
+	MGMT_VRF 	= "mgmt"
+)
+
 type IpLinkAttrs struct {
 	LinkName    string
 	LinkIndex   int
@@ -252,4 +256,25 @@ func IpLinkIsExist(linkName string) bool {
 	}
 
 	return true
+}
+
+func IpLinkSetMaster(linkName string, masterName string) error {
+	if linkName == "" {
+		return errors.New("link name can not be empty")
+	}
+	l, err := netlink.LinkByName(linkName)
+	if err != nil {
+		return err
+	}
+
+	if masterName == "" {
+		return netlink.LinkSetNoMaster(l)
+	} else {
+		master, err := netlink.LinkByName(masterName)
+		if err != nil {
+			return err
+		}
+
+		return netlink.LinkSetMaster(l, master)
+	}
 }

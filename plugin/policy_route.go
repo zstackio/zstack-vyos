@@ -161,7 +161,7 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd) {
 	for _, rt := range cmd.TableNumbers {
 		rts = append(rts, utils.ZStackRouteTable{TableId: rt,
 			Alias: fmt.Sprintf("%s%d", utils.PolicyRouteChainPrefix, rt)})
-		ipRules = append(ipRules, utils.ZStackIpRule{Fwmark: uint64(rt), TableId: uint64(rt)})
+		ipRules = append(ipRules, utils.ZStackIpRule{Fwmark: uint64(rt), TableId: rt})
 	}
 
 	entriesMap := map[int][]utils.ZStackRouteEntry{}
@@ -250,7 +250,7 @@ func applyPolicyRoutes(cmd *syncPolicyRouteCmd) {
 		}
 
 		if systemRuleSetMap[r.RuleSetName] {
-			ipRules = append(ipRules, utils.ZStackIpRule{From: r.SourceIp, TableId: uint64(r.TableNumber)})
+			ipRules = append(ipRules, utils.ZStackIpRule{From: r.SourceIp, TableId: r.TableNumber})
 			continue
 		}
 

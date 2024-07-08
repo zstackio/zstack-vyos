@@ -11,9 +11,10 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"zstack-vyos/server"
 	"zstack-vyos/utils"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -49,13 +50,21 @@ const (
 )
 
 var (
-	zvrRootPath              = utils.GetZvrRootPath()
 	AutoRestartVpn           = false
 	AutoRestartThreadCreated = false
-	ipsecStrongSWanDataPath  = filepath.Join(zvrRootPath, "data/upgrade/strongswan/")
-	haIpsecScript            = filepath.Join(zvrRootPath, "keepalived/script/ipsec.sh")
-	ipsecTempScript          = filepath.Join(zvrRootPath, "keepalived/temp/ipsec.sh")
 )
+
+func getIpsecStrongSWanDataPath() string {
+	return  filepath.Join(utils.GetZvrRootPath(), "data/upgrade/strongswan/")
+}
+
+func getHaIpsecScript() string {
+	return  filepath.Join(utils.GetZvrRootPath(), "keepalived/script/ipsec.sh")
+}
+
+func getIpsecTempScript() string {
+	return  filepath.Join(utils.GetZvrRootPath(), "keepalived/temp/ipsec.sh")
+}
 
 type ipsecInfo struct {
 	Uuid                      string   `json:"uuid"`
@@ -129,11 +138,11 @@ func writeIpsecHaScript(enable bool) {
 	}
 
 	if enable {
-		err := utils.CopyFile(ipsecTempScript, haIpsecScript)
+		err := utils.CopyFile(getIpsecTempScript(), getHaIpsecScript())
 		utils.PanicOnError(err)
 	} else {
 		conent := "echo 'no ipsec configured'"
-		err := ioutil.WriteFile(haIpsecScript, []byte(conent), 0755)
+		err := os.WriteFile(getHaIpsecScript(), []byte(conent), 0755)
 		utils.PanicOnError(err)
 	}
 }
@@ -583,12 +592,12 @@ func getStrongswanSoftwareVersion() (string, error) {
 func updateOriginVersion(version string) error {
 	log.Infof("TEMP: updateOriginVersion for version=%s.", version)
 
-	originPath := filepath.Join(ipsecStrongSWanDataPath, "origin")
+	originPath := filepath.Join(getIpsecStrongSWanDataPath(), "origin")
 	if exist, _ := utils.PathExists(originPath); !exist {
-		return errors.New("no origin version in " + ipsecStrongSWanDataPath)
+		return errors.New("no origin version in " + getIpsecStrongSWanDataPath())
 	}
 
-	versionPath := filepath.Join(ipsecStrongSWanDataPath, version)
+	versionPath := filepath.Join(getIpsecStrongSWanDataPath(), version)
 	if exist, _ := utils.PathExists(versionPath); !exist {
 		if err := os.MkdirAll(versionPath, 0755); err != nil {
 			return err
@@ -641,10 +650,10 @@ func isOriginVersion(version string) bool {
 
 func getVersionSupport() []string {
 	var supports []string
-	if exist, _ := utils.PathExists(ipsecStrongSWanDataPath); !exist {
+	if exist, _ := utils.PathExists(getIpsecStrongSWanDataPath()); !exist {
 		return supports
 	}
-	dir, err := ioutil.ReadDir(ipsecStrongSWanDataPath)
+	dir, err := ioutil.ReadDir(getIpsecStrongSWanDataPath())
 	if err != nil {
 		return supports
 	}
@@ -664,7 +673,7 @@ func getVersionSupport() []string {
 			}
 
 			supports = append(supports, name)
-			os.Chmod(filepath.Join(ipsecStrongSWanDataPath, name, ipsec_strongswan_upgrade_cmd), 0777)
+			os.Chmod(filepath.Join(getIpsecStrongSWanDataPath(), name, ipsec_strongswan_upgrade_cmd), 0777)
 		}
 	}
 
@@ -698,7 +707,7 @@ func upDownStrongswanSoftware(version string, down bool) error {
 		}
 	}()
 
-	upgradePath := filepath.Join(ipsecStrongSWanDataPath, version, ipsec_strongswan_upgrade_cmd)
+	upgradePath := filepath.Join(getIpsecStrongSWanDataPath(), version, ipsec_strongswan_upgrade_cmd)
 	if exist, _ := utils.PathExists(upgradePath); !exist {
 		return fmt.Errorf("upgrade.sh for strongswan version %s not existed", version)
 	}
@@ -947,10 +956,6 @@ func GetIpsecServiceStatus() *ServiceStatus {
 
 func GetIpsecVersionInfo() (string, string) {
 	return ipsecVerMgr.currentVersion, ipsecVerMgr.latestVersion
-}
-
-func init() {
-	initIpsecLogrotate()
 }
 
 func IPsecEntryPoint() {

@@ -16,7 +16,20 @@ ipsec.sh                __ZVR_ROOT_PATH__/keepalived/temp/ipsec.sh  0755     __U
 version                 __ZVR_ROOT_PATH__/version                   0644     __USER__:users
 zsn-crontab.sh          /usr/local/zstack/zsn-agent/bin/zsn-crontab.sh        0755     __USER__:users
 zstack-virtualrouteragent        /etc/init.d/zstack-virtualrouteragent        0755     root:root
-
+rsyslog.haproxy            /etc/rsyslog.d/haproxy.conf                     0600     root:root
+rsyslog.keepalived        /etc/rsyslog.d/keepalived.conf                     0600     root:root
+rsyslog.dhcp        /etc/rsyslog.d/dhcp.conf                     0600     root:root
+lograte.auth                /etc/logrotate.d/auth                       0600     root:root
+lograte.charon             /etc/logrotate.d/charon                      0600     root:root
+lograte.dhcp            /etc/logrotate.d/dhcp                      0600     root:root
+lograte.dnsamsq         /etc/logrotate.d/dnsamsq                       0600     root:root
+lograte.gobetween       /etc/logrotate.d/gobetween                       0600     root:root
+lograte.haproxy         /etc/logrotate.d/haproxy                       0600     root:root
+lograte.keepalived      /etc/logrotate.d/keepalived                       0600     root:root
+lograte.zsn                  /etc/logrotate.d/zsn                       0600     root:root
+lograte.zvr                 /etc/logrotate.d/zvr                       0600     root:root
+lograte.zvrMonitor      /etc/logrotate.d/zvrMonitor                       0600     root:root
+lograte.zvrstartup      /etc/logrotate.d/zvrstartup                       0600     root:root
 
 [[X86]]
 # this files just for x86_64

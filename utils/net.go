@@ -3,8 +3,8 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -92,7 +92,7 @@ func (nic Nic) String() string {
 func GetAllNics() (map[string]Nic, error) {
 	const ROOT = "/sys/class/net"
 
-	files, err := ioutil.ReadDir(ROOT)
+	files, err := os.ReadDir(ROOT)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func GetAllNics() (map[string]Nic, error) {
 		}
 
 		macfile := filepath.Join(ROOT, f.Name(), "address")
-		mac, err := ioutil.ReadFile(macfile)
+		mac, err := os.ReadFile(macfile)
 		if err != nil {
 			return nil, errors.Wrap(err, fmt.Sprintf("unable to read the mac file[%s]", macfile))
 		}

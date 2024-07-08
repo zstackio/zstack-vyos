@@ -1,0 +1,8 @@
+/home/zstack/zvr/zvr.log {
+size 10240k
+rotate 40
+compress
+copytruncate
+notifempty
+missingok
+}

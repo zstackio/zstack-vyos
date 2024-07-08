@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-	"zstack-vyos/server"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("dnat_test", func() {
@@ -23,7 +24,7 @@ var _ = Describe("dnat_test", func() {
 	)
 
 	It("config nic for dnat test", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"dnat_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"dnat_test.log", false)
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		nicCmd = &configureNicCmd{}

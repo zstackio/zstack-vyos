@@ -15,7 +15,7 @@ import (
 var _ = Describe("cronjob_test", func() {
 	var globalMap CronjobMap
 	It("[CRONJOB]: test pre env", func() {
-		InitLog(VYOS_UT_LOG_FOLDER+"cronjob_test.log", false)
+		InitLog(GetVyosUtLogDir()+"cronjob_test.log", false)
 		globalMap = make(CronjobMap)
 		cleanUpCrondConfig()
 	})

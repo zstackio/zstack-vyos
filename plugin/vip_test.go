@@ -4,16 +4,17 @@ import (
 	"fmt"
 	"strings"
 
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-	"zstack-vyos/server"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("vip_test", func() {
 	It("vip_test prepare env", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"vip_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"vip_test.log", false)
 		utils.CleanTestEnvForUT()
 	})
 

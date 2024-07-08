@@ -4,15 +4,16 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("dhcp_test", func() {
 
 	It("dhcp test preparing", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"dhcp_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"dhcp_test.log", false)
 		utils.CleanTestEnvForUT()
 	})
 

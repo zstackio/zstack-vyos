@@ -10,8 +10,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var RADVD_CONFIG_FILE_TEMP = filepath.Join(GetUserHomePath(), "radvd.conf")
-var RADVD_JSON_FILE = filepath.Join(GetZvrRootPath(), ".zstack_config/radvd")
+func getRadvdConfFileTemp() string {
+	return filepath.Join(GetUserHomePath(), "radvd.conf")
+}
+
+func getRadvdJsonFile() string {
+	return filepath.Join(GetZvrRootPath(), ".zstack_config/radvd")
+}
 
 const (
 	RADVD_BIN_PATH    = "/usr/sbin/radvd -u radvd -p /var/run/radvd/radvd.pid"
@@ -132,7 +137,7 @@ func (r RadvdAttrsMap) ConfigService() error {
 	)
 	attrsMap := make(RadvdAttrsMap)
 
-	if err := JsonLoadConfig(RADVD_JSON_FILE, &attrsMap); err != nil {
+	if err := JsonLoadConfig(getRadvdJsonFile(), &attrsMap); err != nil {
 		return err
 	}
 	for k, v := range r {
@@ -151,16 +156,16 @@ func (r RadvdAttrsMap) ConfigService() error {
 		return err
 	}
 
-	if err = ioutil.WriteFile(RADVD_CONFIG_FILE_TEMP, buf.Bytes(), 0664); err != nil {
+	if err = ioutil.WriteFile(getRadvdConfFileTemp(), buf.Bytes(), 0664); err != nil {
 		return err
 	}
 	bash := Bash{
-		Command: fmt.Sprintf("mv %s %s", RADVD_CONFIG_FILE_TEMP, RADVD_CONFIG_FILE),
+		Command: fmt.Sprintf("mv %s %s", getRadvdConfFileTemp(), RADVD_CONFIG_FILE),
 		Sudo:    true,
 	}
 	bash.Run()
 
-	if err = JsonStoreConfig(RADVD_JSON_FILE, attrsMap); err != nil {
+	if err = JsonStoreConfig(getRadvdJsonFile(), attrsMap); err != nil {
 		return err
 	}
 

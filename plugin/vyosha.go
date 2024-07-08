@@ -64,7 +64,6 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 
 	heartbeatNicNme, _ := utils.GetNicNameByMac(cmd.HeartbeatNic)
 	/* add firewall */
-	tree := server.NewParserFromShowConfiguration().Tree
 	if utils.IsSkipVyosIptables() {
 		table := utils.NewIpTables(utils.FirewallTable)
 		var rules []*utils.IpTableRule
@@ -100,6 +99,7 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 			panic(err)
 		}
 	} else {
+		tree := server.NewParserFromShowConfiguration().Tree
 		des := "Vyos-HA"
 		if fr := tree.FindFirewallRuleByDescription(heartbeatNicNme, "local", des); fr == nil {
 			tree.SetFirewallOnInterface(heartbeatNicNme, "local",
@@ -131,6 +131,7 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 			}
 			tree.SetSnatWithRuleNumber(num, "exclude")
 		}
+		tree.Apply(false)
 	}
 
 	pairs := []nicVipPair{}
@@ -149,10 +150,8 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 		if nicIp := getNicIp(nicname); nicIp == p.NicVip {
 			continue
 		}
-		addSecondaryIpFirewall(nicname, p.NicVip, tree)
+		addSecondaryIpFirewall(nicname, p.NicVip)
 	}
-
-	tree.Apply(false)
 
 	/* generate notify script first */
 	haStatusCallbackUrl = cmd.CallbackUrl
@@ -161,7 +160,7 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 	if cmd.PeerIp == "" {
 		cmd.PeerIp = cmd.LocalIp
 	}
-	checksum, err := getFileChecksum(KeepalivedConfigFile)
+	checksum, err := getFileChecksum(getKeepalivedConfigFile())
 	utils.PanicOnError(err)
 
 	keepalivedConf := NewKeepalivedConf(heartbeatNicNme, cmd.LocalIp, cmd.LocalIpV6, cmd.PeerIp, cmd.PeerIpV6, cmd.Monitors, cmd.Keepalive, pairs)
@@ -176,7 +175,7 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 	} else {
 		keepalivedConf.BuildConf()
 	}
-	newCheckSum, err := getFileChecksum(KeepalivedConfigFile)
+	newCheckSum, err := getFileChecksum(getKeepalivedConfigFile())
 	utils.PanicOnError(err)
 	/* if keepalived is not started, RestartKeepalived will also start keepalived */
 	if newCheckSum != checksum {
@@ -319,6 +318,11 @@ func getKeepAlivedStatusTask() {
 
 func keepAlivedCheckTask() {
 	if utils.IsRuingUT() {
+		return
+	}
+
+	if utils.IsEuler2203() {
+		/* open euler use systemd to manage keepalived */
 		return
 	}
 

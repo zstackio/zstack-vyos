@@ -50,6 +50,15 @@ fi
 
 ZVR_ROOT_PATH="/home/${USER}/zvr"
 
+OS="vyos 1.1.7"
+if [ -f /etc/system-release ]; then
+  OS=`cat /etc/system-release | awk '{print $1,$2,$3}'`
+fi
+
+if [ "${OS}" == "openEuler release 22.03" ]; then
+  UPDATE_ZVR_FILE="${CONFIG_PATH}/update-zvr_euler2203.install"
+fi
+
 sed -i "s%__ZVR_ROOT_PATH__%${ZVR_ROOT_PATH}%g"   ${UPDATE_ZVR_FILE}
 sed -i "s%__BIN_PATH__%${BIN_PATH}%g"             ${UPDATE_ZVR_FILE}
 sed -i "s%__USER__%${USER}%g"                     ${UPDATE_ZVR_FILE}

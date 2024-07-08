@@ -7,9 +7,10 @@ import (
 	"io/ioutil"
 	"strings"
 
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	gomega "github.com/onsi/gomega"
-	"zstack-vyos/utils"
 )
 
 type firewallJsonData struct {
@@ -29,7 +30,7 @@ var _ = Describe("firewall_ipset_test", func() {
 
 	Context("[IPTABLES]FIREWALL: env prepare", func() {
 		It("firewall_ipset prepare", func() {
-			utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"firewall_ipset_test.log", false)
+			utils.InitLog(utils.GetVyosUtLogDir()+"firewall_ipset_test.log", false)
 			utils.CleanTestEnvForUT()
 			SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 			utils.SetSkipVyosIptablesForUT(true)

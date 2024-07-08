@@ -5,6 +5,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 var handlers = make([]func(error), 0)
@@ -35,20 +37,25 @@ func checkIoError(fpath string) error {
 	patherr, ok := err.(*os.PathError)
 	if ok && (patherr.Err == syscall.ENOSPC || patherr.Err == syscall.EROFS) {
 		return err
+	} else {
+		log.Debugf("disk error: %v", err)
 	}
 
 	return nil
 }
 
 func diskmon(fpath string, onFailure func(error), interval time.Duration) {
+	log.Debugf("start disk monitor: %s", fpath)
 	for {
 		if err := checkIoError(fpath); err != nil {
+			log.Debugf("disk error: %v", err)
 			for _, f := range handlers {
 				f(err)
 			}
 			onFailure(err)
 		}
 
+		log.Debugf("disk no error")
 		time.Sleep(interval)
 	}
 }

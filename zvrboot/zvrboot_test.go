@@ -7,15 +7,16 @@ import (
 	"strings"
 	_ "strings"
 
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	_ "github.com/sirupsen/logrus"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("zvrboot_test", func() {
 	It("[REPLACE_VYOS] zvrboot: pre env", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"zvrboot_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"zvrboot_test.log", false)
 		utils.SetEnableVyosCmdForUT(false)
 		utils.SetHaStatus(utils.HAMASTER)
 	})
@@ -51,7 +52,7 @@ func checkSshMonitor() {
 
 	cronJob := testMap[1]
 	Expect(cronJob).NotTo(BeNil(), "ssh monitor should exist")
-	Expect(cronJob.ExecCommand).To(Equal(utils.Cronjob_file_ssh), "ssh monitor exec command error")
+	Expect(cronJob.ExecCommand).To(Equal(utils.GetCronjobFileSsh()), "ssh monitor exec command error")
 	Expect(cronJob.FieldMinute).To(Equal("*/1"), "ssh monitor field error")
 }
 

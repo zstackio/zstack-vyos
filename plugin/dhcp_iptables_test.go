@@ -3,16 +3,17 @@ package plugin
 import (
 	"fmt"
 
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("dhcp_iptables_test", func() {
 	var nicCmd *configureNicCmd
 
 	It("[IPTABLES]dhcp : test preparing", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"dhcp_iptables_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"dhcp_iptables_test.log", false)
 		utils.CleanTestEnvForUT()
 		utils.SetSkipVyosIptablesForUT(true)
 		nicCmd = &configureNicCmd{}

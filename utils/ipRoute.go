@@ -2,11 +2,12 @@ package utils
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -17,7 +18,9 @@ const (
 	ROUTETABLE_ID_MAIN = 254
 )
 
-var POLICY_ROUTE_TABLE_FILE_TEMP = filepath.Join(GetZvrRootPath(), ".zs_rt_tables")
+func getPolicyRouterTableFileTemp() string {
+	return filepath.Join(GetZvrRootPath(), ".zs_rt_tables")
+}
 
 type ZStackRouteTable struct {
 	TableId int
@@ -34,7 +37,7 @@ func (t ZStackRouteTable) flushCommand() string {
 
 func GetZStackRouteTables() []ZStackRouteTable {
 	var tables []ZStackRouteTable
-	content, err := ioutil.ReadFile(POLICY_ROUTE_TABLE_FILE)
+	content, err := os.ReadFile(POLICY_ROUTE_TABLE_FILE)
 	if err != nil {
 		log.Debugf("read file: %s, failed: %s", POLICY_ROUTE_TABLE_FILE, err)
 		return tables
@@ -65,7 +68,7 @@ func GetZStackRouteTables() []ZStackRouteTable {
 
 func SyncZStackRouteTables(tables []ZStackRouteTable) error {
 	bash := Bash{
-		Command: fmt.Sprintf("cp %s %s; sed -i '/zs-rt-/d' %s", POLICY_ROUTE_TABLE_FILE, POLICY_ROUTE_TABLE_FILE_TEMP, POLICY_ROUTE_TABLE_FILE_TEMP),
+		Command: fmt.Sprintf("cp %s %s; sed -i '/zs-rt-/d' %s", POLICY_ROUTE_TABLE_FILE, getPolicyRouterTableFileTemp(), getPolicyRouterTableFileTemp()),
 	}
 	ret, _, e, err := bash.RunWithReturn()
 	if err != nil || ret != 0 {
@@ -78,12 +81,12 @@ func SyncZStackRouteTables(tables []ZStackRouteTable) error {
 	}
 	if len(cmds) > 0 {
 		bash = Bash{
-			Command: fmt.Sprintf("cat <<EOF >> %s \n%s \nEOF\n sudo mv %s %s", POLICY_ROUTE_TABLE_FILE_TEMP, strings.Join(cmds, "\n"),
-				POLICY_ROUTE_TABLE_FILE_TEMP, POLICY_ROUTE_TABLE_FILE),
+			Command: fmt.Sprintf("cat <<EOF >> %s \n%s \nEOF\n sudo mv %s %s", getPolicyRouterTableFileTemp(), strings.Join(cmds, "\n"),
+				getPolicyRouterTableFileTemp(), POLICY_ROUTE_TABLE_FILE),
 		}
 	} else {
 		bash = Bash{
-			Command: fmt.Sprintf("sudo mv %s %s", POLICY_ROUTE_TABLE_FILE_TEMP, POLICY_ROUTE_TABLE_FILE),
+			Command: fmt.Sprintf("sudo mv %s %s", getPolicyRouterTableFileTemp(), POLICY_ROUTE_TABLE_FILE),
 		}
 	}
 	ret, _, e, err = bash.RunWithReturn()

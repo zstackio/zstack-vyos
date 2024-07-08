@@ -22,7 +22,7 @@ var _ = Describe("vyosHa_test", func() {
 	)
 
 	It("vyosHa test preparing", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"vyosha_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"vyosha_test.log", false)
 		utils.CleanTestEnvForUT()
 		peerIp, _ = utils.GetFreeMgtIp()
 		vipIp, _ = utils.GetFreeMgtIp()

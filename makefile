@@ -117,6 +117,7 @@ tar: clean
 	cp -f scripts/grub.cfg.5.4.80 $(PKG_TAR_DIR)
 	cp -f scripts/grub.cfg.3.13 $(PKG_TAR_DIR)
 	cp -f scripts/vyos-postconfig-bootup.script $(PKG_TAR_DIR)
+	cp -f scripts/zstack-vrouter-euler2203-bootup $(PKG_TAR_DIR)
 	tar czf $(PKG_TAR_DIR)/zvr-data.tar.gz -C $(DATA_TAR_DIR) .
 	rm -rf $(DATA_TAR_DIR)
 	tar czf $(TARGET_DIR)/zvr.tar.gz -C $(PKG_TAR_DIR) .

@@ -11,12 +11,15 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
-var RADVD_JSON_FILE	= filepath.Join(GetZvrRootPath(), ".zstack_config/radvd")
+
+func GetRadvdJsonFile() {
+	return filepath.Join(GetZvrRootPath(), ".zstack_config/radvd")
+}
 
 var _ = Describe("radvd_test", func() {
 	var globalMap RadvdAttrsMap
 	It("[RADVD]: test pre env", func() {
-		InitLog(VYOS_UT_LOG_FOLDER+"radvd_test.log", false)
+		InitLog(GetVyosUtLogDir()+"radvd_test.log", false)
 		globalMap = make(RadvdAttrsMap)
 		cleanUpConfig()
 	})
@@ -101,7 +104,7 @@ var _ = Describe("radvd_test", func() {
 
 func cleanUpConfig() {
 	bash := Bash{
-		Command: fmt.Sprintf("rm -f %s; sudo pkill -9 radvd", RADVD_JSON_FILE)
+		Command: fmt.Sprintf("rm -f %s; sudo pkill -9 radvd", GetRadvdJsonFile())
 		Sudo:    true,
 	}
 	bash.Run()
@@ -119,7 +122,7 @@ func checkRadvdProcess() bool {
 
 func checkRadvdConfig(r RadvdAttrsMap) {
 	testMap := make(RadvdAttrsMap)
-	err := JsonLoadConfig(RADVD_JSON_FILE, &testMap)
+	err := JsonLoadConfig(GetRadvdJsonFile(), &testMap)
 	Expect(err).To(BeNil(), fmt.Sprintf("load radvd json error: %+v", err))
 
 	ret := reflect.DeepEqual(r, testMap)

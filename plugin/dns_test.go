@@ -3,16 +3,17 @@ package plugin
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/gomega"
 	"zstack-vyos/server"
 	"zstack-vyos/utils"
+
+	. "github.com/onsi/ginkgo"
+	"github.com/onsi/gomega"
 )
 
 var _ = Describe("dns_test", func() {
 
 	It("dns test preparing", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"dns_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"dns_test.log", false)
 		utils.CleanTestEnvForUT()
 		configureAllNicsForUT()
 		if utils.IsSkipVyosIptables() {

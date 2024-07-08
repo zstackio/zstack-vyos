@@ -1,0 +1,9 @@
+/home/zstack/zvr/zvrstartup.log {
+size 10240k
+daily
+rotate 10
+compress
+copytruncate
+notifempty
+missingok
+}

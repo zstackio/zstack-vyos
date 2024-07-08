@@ -2,16 +2,16 @@ package utils
 
 import (
 	"bytes"
-	"io/ioutil"
+	"fmt"
 	"net"
 	"os"
 	"runtime"
 	"strings"
 	"text/template"
-	"fmt"
+
+	"path/filepath"
 
 	"github.com/pkg/errors"
-	"path/filepath"
 )
 
 const (
@@ -25,8 +25,13 @@ type SshdInfo struct {
 	Keys          []string
 }
 
-var sshConfigFileTemp 	= filepath.Join(GetUserHomePath(), "sshd_config")
-var sshKeysPath 		= filepath.Join(GetUserHomePath(), ".ssh/authorized_keys")
+func getSshConfigFileTemp() string {
+	return filepath.Join(GetUserHomePath(), "sshd_config")
+}
+
+func getSshKeysPath() string {
+	return filepath.Join(GetUserHomePath(), ".ssh/authorized_keys")
+}
 
 func NewSshServer() *SshdInfo {
 	sshAttr := SshdInfo{
@@ -69,7 +74,9 @@ func (s *SshdInfo) ConfigService() error {
 
 	text := sshdTemplate
 
-	if runtime.GOARCH == "arm64" {
+	if IsEuler2203() {
+		text = sshdTemplateEuler
+	} else if runtime.GOARCH == "arm64" {
 		text = sshdTemplateArm
 		_ = Retry(func() error {
 			var e error
@@ -89,27 +96,28 @@ func (s *SshdInfo) ConfigService() error {
 	if err = tmpl.Execute(&buf, s); err != nil {
 		return err
 	}
-	if err = ioutil.WriteFile(sshConfigFileTemp, buf.Bytes(), 0664); err != nil {
+	if err = os.WriteFile(getSshConfigFileTemp(), buf.Bytes(), 0664); err != nil {
 		return err
 	}
 	// bash := Bash{
-	// 	Command: fmt.Sprintf("mv %s %s", sshConfigFileTemp, SSHD_CONFIG_FILE),
+	// 	Command: fmt.Sprintf("mv %s %s", getSshConfigFileTemp(), SSHD_CONFIG_FILE),
 	// 	Sudo:    true,
 	// }
 	// bash.Run()
 
-	if err = CopyFile(sshConfigFileTemp, SSHD_CONFIG_FILE);err != nil {
+	if err = CopyFile(getSshConfigFileTemp(), SSHD_CONFIG_FILE);err != nil {
 		return err
 	}
 
 	if len(s.Keys) != 0 {
 		keys_str := strings.Join(s.Keys, "\n")
-		file, err := CreateFileIfNotExists(sshKeysPath, os.O_WRONLY|os.O_TRUNC, 0660)
+		file, err := CreateFileIfNotExists(getSshKeysPath(), os.O_WRONLY|os.O_TRUNC, 0600)
 		if err != nil {
 			return err
 		}
 
-		SetFileOwner(sshKeysPath, GetZvrUser(), "users")
+		SetFileOwner(getSshKeysPath(), GetZvrUser(), "users")
+		
 		defer file.Close()
 
 		if _, err := file.WriteString(keys_str); err != nil {
@@ -124,9 +132,9 @@ func (s *SshdInfo) ConfigService() error {
 }
 
 func (s *SshdInfo) RestareServer() error {
-	return ServiceOperation("ssh", "restart")
+	return ServiceOperation("sshd", "restart")
 }
 
 func (s *SshdInfo) StopService() error {
-	return ServiceOperation("ssh", "stop")
+	return ServiceOperation("sshd", "stop")
 }

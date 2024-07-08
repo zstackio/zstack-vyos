@@ -3,16 +3,17 @@ package plugin
 import (
 	"fmt"
 
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("ipsec_iptables_test", func() {
 
 	It("[IPTABLES]IPSEC : prepare", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"ipsec_iptables_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"ipsec_iptables_test.log", false)
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)

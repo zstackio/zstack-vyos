@@ -10,14 +10,16 @@ const (
 	BLACKHOLE_ROUTE = "null0"
 )
 
-var ZEBRA_JSON_FILE = filepath.Join(GetZvrZsConfigPath(), "zebra.json")
-
 type ZebraRoute struct {
 	Dst      string
 	NextHop  string
 	OutDev   string
 	Distance int
 	isDelete bool
+}
+
+func GetZebraJsonFile() string {
+	return filepath.Join(GetZvrZsConfigPath(), "zebra.json")
 }
 
 func NewZebraRoute() *ZebraRoute {

@@ -263,7 +263,7 @@ func setZebraRoutes(infos []routeInfo) {
 	)
 
 	// 1. get old routes by load json
-	if err = utils.JsonLoadConfig(utils.ZEBRA_JSON_FILE, &oldRoutes); err != nil {
+	if err = utils.JsonLoadConfig(utils.GetZebraJsonFile(), &oldRoutes); err != nil {
 		log.Debugf("load old zebra route error: %+v", err)
 	}
 
@@ -300,7 +300,7 @@ func setZebraRoutes(infos []routeInfo) {
 	}
 
 	// 4. store new routes
-	if err = utils.JsonStoreConfig(utils.ZEBRA_JSON_FILE, newRoutes); err != nil {
+	if err = utils.JsonStoreConfig(utils.GetZebraJsonFile(), newRoutes); err != nil {
 		log.Debugf("load old zebra route error: %+v", err)
 	}
 }
@@ -340,7 +340,7 @@ func configureOspfByVtysh(cmd *setOspfCmd) {
 	)
 	// 1. get old ospf cmd
 	oldCmd = utils.NewVtyshOspfCmd().SetDelete()
-	utils.JsonLoadConfig(utils.OSPF_JSON_FILE, &oldCmd)
+	utils.JsonLoadConfig(utils.GetOspfJsonFile(), &oldCmd)
 
 	// 2. get new ospf cmd
 	newCmd, err = parseOspfToVtyshCmd(cmd)
@@ -377,6 +377,6 @@ func configureOspfByVtysh(cmd *setOspfCmd) {
 	// 5. store new cmd
 	tmp, err = parseOspfToVtyshCmd(cmd)
 	utils.PanicOnError(err)
-	err = utils.JsonStoreConfig(utils.OSPF_JSON_FILE, tmp)
+	err = utils.JsonStoreConfig(utils.GetOspfJsonFile(), tmp)
 	utils.PanicOnError(err)
 }

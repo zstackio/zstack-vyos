@@ -3,16 +3,17 @@ package plugin
 import (
 	"fmt"
 
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-	"zstack-vyos/utils"
 )
 
 var _ = XDescribe("vip_linux_test", func() {
 
 	It("[REPLACE_VYOS]: pre test env", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"vip_linux_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"vip_linux_test.log", false)
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetEnableVyosCmdForUT(false)

@@ -1,17 +1,18 @@
 package plugin
 
 import (
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-	"zstack-vyos/server"
-	"zstack-vyos/utils"
 )
 
 var _ = XDescribe("ipsec_test", func() {
 
 	It("ipsec test preparing", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"ipsec_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"ipsec_test.log", false)
 		utils.CleanTestEnvForUT()
 		configureAllNicsForUT()
 	})
@@ -215,7 +216,7 @@ var _ = XDescribe("ipsec_test", func() {
 	})
 
 	It("ipsec test destroying", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"ipsec_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"ipsec_test.log", false)
 	})
 
 })

@@ -3,16 +3,17 @@ package plugin
 import (
 	"fmt"
 
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"zstack-vyos/utils"
 )
 
 var _ = XDescribe("eip_perf_test", func() {
 	var nicCmd configureNicCmd
 
 	It("[PERF]EIP : prepare env", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"eip_perf_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"eip_perf_test.log", false)
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)
 		eipMap = make(map[string]eipInfo, EipInfoMaxSize)

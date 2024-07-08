@@ -3,11 +3,12 @@ package plugin
 import (
 	"fmt"
 
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-	"zstack-vyos/server"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("vyosha_iptables_test", func() {
@@ -21,7 +22,7 @@ var _ = Describe("vyosha_iptables_test", func() {
 	)
 
 	It("[IPTABLES]VYOSHA : vyosHa test preparing", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"vyosha_iptables_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"vyosha_iptables_test.log", false)
 		utils.CleanTestEnvForUT()
 		peerIp, _ = utils.GetFreeMgtIp()
 		vipIp, _ = utils.GetFreeMgtIp()

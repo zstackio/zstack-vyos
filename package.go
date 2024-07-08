@@ -96,7 +96,7 @@ rm -rf $tmpdir
 mkdir -p $tmpdir
 tail -n $line $0 | tar x -C $tmpdir
 cd $tmpdir
-{{.Env}} bash {{.InstallScript}} ${params[*]}
+{{.Env}} bash -x {{.InstallScript}} ${params[*]}
 ret=$?
 rm -rf $tmpdir
 exit $ret

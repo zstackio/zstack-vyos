@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -x 
+
 CONFIG_FILE="/home/vyos/zvr/data/config/bootup-config.install"
 FILE_LISTS_PATH="/home/vyos/zvr/data/file-lists"
 VYATTA_BIN_PATH="/opt/vyatta/sbin"

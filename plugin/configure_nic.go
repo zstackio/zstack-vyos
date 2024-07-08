@@ -67,7 +67,7 @@ func makeNicFirewallDescription(nicname, ip string) string {
 	return fmt.Sprintf("nic-%s-secondary-ip-%s", nicname, ip)
 }
 
-func addSecondaryIpFirewall(nicname, ip string, tree *server.VyosConfigTree) {
+func addSecondaryIpFirewall(nicname, ip string) {
 	if utils.IsSkipVyosIptables() {
 		/* todo: we need ip6tables */
 		if !utils.IsIpv4Address(ip) {
@@ -89,6 +89,7 @@ func addSecondaryIpFirewall(nicname, ip string, tree *server.VyosConfigTree) {
 			log.Debugf("add secondary IP firewall failed %s", err)
 		}
 	} else {
+		tree := server.NewParserFromShowConfiguration().Tree
 		des := makeNicFirewallDescription(nicname, ip)
 		if r := tree.FindFirewallRuleByDescription(nicname, "local", des); r == nil {
 			tree.SetFirewallOnInterface(nicname, "local",
@@ -107,6 +108,7 @@ func addSecondaryIpFirewall(nicname, ip string, tree *server.VyosConfigTree) {
 			)
 		}
 		tree.AttachFirewallToInterface(nicname, "local")
+		tree.Apply(false)
 	}
 
 }
