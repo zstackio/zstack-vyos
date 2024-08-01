@@ -14,6 +14,10 @@ CURRENT_ARCH=`uname -m`
 
 case "$1" in
     "-d")
+        if [[ x"$CURRENT_ARCH" != x"x86_64" && x"$CURRENT_ARCH" != x"aarch64" ]]; then
+            exit 0
+        fi
+
         if [[ $(ipsec version | grep 5.9.4) == "" ]];then
             exit 0
         fi
@@ -28,7 +32,10 @@ case "$1" in
         elif [[ x"$CURRENT_ARCH" == x"aarch64" ]];then
             rm -rf /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock 2>/dev/null
             /usr/bin/dpkg -i ${SW_594_PATH}/strongswan-zstack_5.9.4-1_arm64.deb
+        else
+            exit 0
         fi
+
         cp ${SW_594_PATH}/ipsec.conf /usr/local/etc/ipsec.conf
         cp ${SW_594_PATH}/ipsec.secrets /usr/local/etc/ipsec.secrets
         cp ${SW_594_PATH}/strongswan.conf /usr/local/etc/strongswan.conf
