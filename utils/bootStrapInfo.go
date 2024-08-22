@@ -3,7 +3,6 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -59,9 +58,17 @@ func (n NicArray) Less(i, j int) bool { return n[i].Name < n[j].Name }
 
 var BootstrapInfo map[string]interface{} = make(map[string]interface{})
 
-var VYOS_UT_LOG_FOLDER = fmt.Sprintf("%s/vyos_ut/testLog/", GetUserHomePath())
-var bootstrapInfoPath = filepath.Join(GetZvrRootPath(), BOOTSTRAP_INFO_FILE)
-var haDefaultRouteScript = filepath.Join(GetZvrRootPath(), HA_DEFAULT_ROUTE_SCRIPT)
+func GetVyosUtLogDir() string {
+	return  fmt.Sprintf("%s/vyos_ut/testLog/", GetUserHomePath())
+}
+
+func GetBootStrapInfoPath() string {
+	return filepath.Join(GetZvrRootPath(), BOOTSTRAP_INFO_FILE)
+}
+
+func getHaDefaultRouteScript() string {
+	return filepath.Join(GetZvrRootPath(), HA_DEFAULT_ROUTE_SCRIPT)
+}
 
 func MakeIfaceAlias(nic *NicInfo) string {
 	result := ""
@@ -109,6 +116,10 @@ func GetMgmtInfoFromBootInfo() map[string]interface{} {
 }
 
 func IsSkipVyosIptables() bool {
+	if (!IsVYOS()) {
+		return true
+	}
+
 	SkipVyosIptables, ok := BootstrapInfo["SkipVyosIptables"].(bool)
 	if !ok {
 		return false
@@ -144,14 +155,14 @@ func IsConfigTcForVipQos() bool {
 }
 
 func InitBootStrapInfo() {
-	content, err := ioutil.ReadFile(bootstrapInfoPath)
+	content, err := os.ReadFile(GetBootStrapInfoPath())
 	PanicOnError(err)
 	if len(content) == 0 {
-		log.Debugf("no content in %s, can not get mgmt gateway", bootstrapInfoPath)
+		log.Debugf("no content in %s, can not get mgmt gateway", GetBootStrapInfoPath())
 	}
 
 	if err := json.Unmarshal(content, &BootstrapInfo); err != nil {
-		log.Debugf("can not parse info from %s, can not get mgmt gateway", bootstrapInfoPath)
+		log.Debugf("can not parse info from %s, can not get mgmt gateway", GetBootStrapInfoPath())
 	}
 
 	if !IsEnableVyosCmd() {
@@ -220,8 +231,9 @@ func WriteDefaultHaScript(defaultNic *Nic) {
 		conent += fmt.Sprintln(fmt.Sprintf("ip -6 route add default via %s dev %s || true", defaultNic.Gateway6, defaultNicName))
 	}
 
-	err = ioutil.WriteFile(haDefaultRouteScript, []byte(conent), 0755)
+	err = os.WriteFile(getHaDefaultRouteScript(), []byte(conent), 0755)
 	PanicOnError(err)
+	SetFileOwner(getHaDefaultRouteScript(), GetZvrUser(), GetZvrUser())
 }
 
 func IsSLB() bool {
@@ -283,6 +295,10 @@ func IsRuingUT() bool {
 }
 
 func IsEnableVyosCmd() bool {
+	if (!IsVYOS()) {
+		return false
+	}
+
 	enableVyosCmd := true
 	if v, ok := BootstrapInfo["EnableVyosCmd"]; ok {
 		enableVyosCmd = v.(bool)

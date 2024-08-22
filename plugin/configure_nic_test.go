@@ -3,11 +3,12 @@ package plugin
 import (
 	"fmt"
 
+	server "zstack-vyos/server"
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	gomega "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-	server "zstack-vyos/server"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("configure_nic_test", func() {
@@ -15,7 +16,7 @@ var _ = Describe("configure_nic_test", func() {
 	var sinfo1, sinfo2 snatInfo
 
 	It("configure_nic_test preparing", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"configure_nic_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"configure_nic_test.log", false)
 		log.Debugf("############### prea env for configure_nic_test ###############")
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
@@ -132,10 +133,8 @@ var _ = Describe("configure_nic_test", func() {
 		cmd.Nics = append(cmd.Nics, utils.PrivateNicsForUT[1])
 		configureNic(cmd)
 
-		tree := server.NewParserFromShowConfiguration().Tree
 		ipPubL3, _ := utils.GetFreePubL3Ip()
-		addSecondaryIpFirewall(utils.PubNicForUT.Name, ipPubL3, tree)
-		tree.Apply(false)
+		addSecondaryIpFirewall(utils.PubNicForUT.Name, ipPubL3)
 
 		checkSecondaryIpFirewall(utils.PubNicForUT, ipPubL3)
 
@@ -342,7 +341,7 @@ func checkSecondaryIpFirewall(nic utils.NicInfo, ip string) {
 
 func checkRadvdStatus(cmd *configureNicCmd, isDelete bool) {
 	testMap := make(utils.RadvdAttrsMap)
-	err := utils.JsonLoadConfig(utils.RADVD_JSON_FILE, &testMap)
+	err := utils.JsonLoadConfig(utils.GetRadvdJsonFile(), &testMap)
 	gomega.Expect(err).To(gomega.BeNil(), "load radvd json error: %s", err)
 
 	for _, nic := range cmd.Nics {

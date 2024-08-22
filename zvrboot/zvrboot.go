@@ -47,10 +47,17 @@ type nic struct {
 var bootstrapInfo map[string]interface{} = make(map[string]interface{})
 var nics map[string]*nic = make(map[string]*nic)
 
-var zvrRootPath = utils.GetZvrRootPath()
-var bootstrapInfoPath = filepath.Join(zvrRootPath, BOOTSTRAP_INFO_FILE)
-var networkHealthStatusPath = filepath.Join(zvrRootPath, ".duplicate")
-var zvrbootLogPath = filepath.Join(zvrRootPath, "zvrboot.log")
+func getBootstrapInfoPath() string {
+	return filepath.Join(utils.GetZvrRootPath(), BOOTSTRAP_INFO_FILE)
+}
+
+func getNetworkHealthStatusPath() string {
+	return filepath.Join(utils.GetZvrRootPath(), ".duplicate")
+}
+
+func getZvrbootLogPath() string {
+	return filepath.Join(utils.GetZvrRootPath(), "zvrboot.log")
+}
 
 func waitIptablesServiceOnline() {
 	bash := utils.Bash{
@@ -110,9 +117,9 @@ func parseEsxBootInfo() {
 			panic(errors.Wrap(err, fmt.Sprintf("unable to JSON parse:\n %s", string(content))))
 		}
 
-		err = utils.MkdirForFile(bootstrapInfoPath, 0666)
+		err = utils.MkdirForFile(getBootstrapInfoPath(), 0666)
 		utils.PanicOnError(err)
-		err = ioutil.WriteFile(bootstrapInfoPath, content, 0777)
+		err = ioutil.WriteFile(getBootstrapInfoPath(), content, 0777)
 		utils.PanicOnError(err)
 		os.Remove(TMP_LOCATION_FOR_ESX)
 		return true
@@ -132,12 +139,12 @@ func parseKvmBootInfo() {
 		if err := json.Unmarshal(content, &bootstrapInfo); err != nil {
 			panic(errors.Wrap(err, fmt.Sprintf("unable to JSON parse:\n %s", string(content))))
 		}
-		log.Debugf("%s", zvrRootPath)
-		err = utils.MkdirForFile(bootstrapInfoPath, 0666)
+		log.Debugf("%s", utils.GetZvrRootPath())
+		err = utils.MkdirForFile(getBootstrapInfoPath(), 0666)
 		utils.PanicOnError(err)
-		err = ioutil.WriteFile(bootstrapInfoPath, content, 0666)
+		err = ioutil.WriteFile(getBootstrapInfoPath(), content, 0666)
 		utils.PanicOnError(err)
-		err = os.Chmod(bootstrapInfoPath, 0777)
+		err = os.Chmod(getBootstrapInfoPath(), 0777)
 		utils.PanicOnError(err)
 		return true
 	}, time.Duration(300)*time.Second, time.Duration(1)*time.Second)
@@ -174,7 +181,7 @@ func cleanUpTmpDir() {
 }
 
 func cleanUpConfigDir() {
-	file_lists := []string{utils.ZSTACK_CONFIG_PATH, utils.CROND_CONFIG_FILE}
+	file_lists := []string{utils.GetZtackConfigPath(), utils.CROND_CONFIG_FILE}
 	for _, f := range file_lists {
 		if ok, err := utils.PathExists(f); ok || err != nil {
 			log.Debugf("cleanUpConfigDir: file [%s] will be delete", f)
@@ -195,9 +202,9 @@ func checkIpDuplicate() {
 	}
 	if !strings.EqualFold(dupinfo, "") {
 		log.Error(dupinfo)
-		err := utils.MkdirForFile(networkHealthStatusPath, 0755)
+		err := utils.MkdirForFile(getNetworkHealthStatusPath(), 0755)
 		utils.PanicOnError(err)
-		err = ioutil.WriteFile(networkHealthStatusPath, []byte(dupinfo), 0755)
+		err = ioutil.WriteFile(getNetworkHealthStatusPath(), []byte(dupinfo), 0755)
 		utils.PanicOnError(err)
 	}
 }
@@ -462,10 +469,7 @@ func configureVyos() {
 
 	// configure firewall
 	/* SkipVyosIptables is a flag to indicate how to configure firewall and nat */
-	SkipVyosIptables := false
-	if v, ok := bootstrapInfo["SkipVyosIptables"]; ok {
-		SkipVyosIptables = v.(bool)
-	}
+	SkipVyosIptables := utils.IsSkipVyosIptables()
 	log.Debugf("bootstrapInfo %+v", bootstrapInfo)
 	log.Debugf("SkipVyosIptables %+v", SkipVyosIptables)
 
@@ -585,7 +589,7 @@ func configureVyos() {
 
 	/* create a cronjob to check sshd */
 	setSysTree.Set("system task-scheduler task ssh interval 1")
-	setSysTree.Set(fmt.Sprintf("system task-scheduler task ssh executable path '%s'", utils.Cronjob_file_ssh))
+	setSysTree.Set(fmt.Sprintf("system task-scheduler task ssh executable path '%s'", utils.GetCronjobFileSsh()))
 
 	setSysTree.Apply(true)
 
@@ -666,15 +670,19 @@ func configureVyos() {
 }
 
 func startZvr() {
+	path := "/etc/init.d/zstack-virtualrouteragent"
+	if utils.IsEuler2203() {
+		path = "/usr/local/bin/zstack-virtualrouteragent"
+	}
 	b := utils.Bash{
-		Command: "bash -x /etc/init.d/zstack-virtualrouteragent restart >> /tmp/agentRestart.log 2>&1",
+		Command:  fmt.Sprintf("bash -x %s restart >> /tmp/agentRestart.log 2>&1", path),
 	}
 	b.Run()
 	b.PanicIfError()
 }
 
 func init() {
-	os.Remove(networkHealthStatusPath)
+	os.Remove(getNetworkHealthStatusPath())
 	flag.BoolVar(&utils.CommandVersion, "version", false, "version for zvr")
 }
 
@@ -687,7 +695,8 @@ func main() {
 		os.Exit(0)
 	}
 
-	utils.InitLog(zvrbootLogPath, false)
+	utils.InitVyosVersion()
+	utils.InitLog(getZvrbootLogPath(), false)
 	waitIptablesServiceOnline()
 	if isOnVMwareHypervisor() {
 		parseEsxBootInfo()
@@ -695,9 +704,8 @@ func main() {
 		waitVirtioPortOnline()
 		parseKvmBootInfo()
 	}
-	log.Debugf("zvrboot main")
+	log.Debugf("zvrboot main: os %s, kernel version: %s", utils.Vyos_version, utils.Kernel_version)
 	utils.InitBootStrapInfo()
-	utils.InitVyosVersion()
 	if utils.IsEnableVyosCmd() {
 		configureVyos()
 	} else {

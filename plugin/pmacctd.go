@@ -15,8 +15,14 @@ import (
 )
 
 var uacctd_conf_file = "/etc/pmacct/uacctd.conf"
-var uacctd_bin_file = filepath.Join(utils.GetThirdPartyBinPath(), "uacctd")
-var uacctd_conf_tmp_file = filepath.Join(utils.GetUserHomePath(), "pmacct/pmacctd.conf.tmp")
+
+func getUacctdBinFile() string {
+	return filepath.Join(utils.GetThirdPartyBinPath(), "uacctd")
+}
+
+func getUacctdConfTmpFile() string {
+	return filepath.Join(utils.GetUserHomePath(), "pmacct/pmacctd.conf.tmp")
+}
 
 const tUacctdConf = `# This file is auto-generated, don't edit with !!!
 daemonize: true
@@ -43,13 +49,13 @@ func (fc *flowConfig) buildPmacctdConf() bool {
 	err = tmpl.Execute(&buf, fc)
 	utils.PanicOnError(err)
 
-	err = ioutil.WriteFile(uacctd_conf_tmp_file, buf.Bytes(), 0644)
+	err = ioutil.WriteFile(getUacctdConfTmpFile(), buf.Bytes(), 0644)
 	utils.PanicOnError(err)
-	checksumTemp, _ := getFileChecksum(uacctd_conf_tmp_file)
+	checksumTemp, _ := getFileChecksum(getUacctdConfTmpFile())
 	checksum, _ := getFileChecksum(uacctd_conf_file)
 
 	log.Debugf("netflow old config file checksum %s, new config file checksum %s", checksum, checksumTemp)
-	utils.SudoMoveFile(uacctd_conf_tmp_file, uacctd_conf_file)
+	utils.SudoMoveFile(getUacctdConfTmpFile(), uacctd_conf_file)
 
 	return strings.Compare(checksumTemp, checksum) != 0
 }
@@ -60,7 +66,7 @@ func (fc *flowConfig) startPmacctdServers() {
 		changed := fc.buildPmacctdConf()
 		if changed {
 			bash := utils.Bash{
-				Command: fmt.Sprintf("pkill -9 uacctd; %s -f %s -d", uacctd_bin_file, uacctd_conf_file),
+				Command: fmt.Sprintf("pkill -9 uacctd; %s -f %s -d", getUacctdBinFile(), uacctd_conf_file),
 				Sudo:    true,
 			}
 			bash.Run()
@@ -69,7 +75,7 @@ func (fc *flowConfig) startPmacctdServers() {
 			log.Debugf("netflow config file not changed")
 			if pid := getUacctdPid(); pid == PID_ERROR {
 				bash := utils.Bash{
-					Command: fmt.Sprintf("%s -f %s -d", uacctd_bin_file, uacctd_conf_file),
+					Command: fmt.Sprintf("%s -f %s -d", getUacctdBinFile(), uacctd_conf_file),
 					Sudo:    true,
 				}
 				bash.Run()
@@ -139,17 +145,17 @@ func writeFlowHaScript(enable bool) {
 
 	var conent string
 	if enable {
-		conent = fmt.Sprintf("sudo pkill -9 uacctd; sudo %s -f %s", uacctd_bin_file, uacctd_conf_file)
+		conent = fmt.Sprintf("sudo pkill -9 uacctd; sudo %s -f %s", getUacctdBinFile(), uacctd_conf_file)
 	} else {
 		conent = fmt.Sprintf("sudo truncate -s 0 %s; sudo pkill -9 uacctd", uacctd_conf_file)
 	}
 
-	err := ioutil.WriteFile(VYOSHA_FLOW_SCRIPT, []byte(conent), 0755)
+	err := ioutil.WriteFile(getVyosHaFlowScript(), []byte(conent), 0755)
 	utils.PanicOnError(err)
 }
 
 func getUacctdPid() int {
-	stdout, err := exec.Command("pidof", "-x", uacctd_bin_file).Output()
+	stdout, err := exec.Command("pidof", "-x", getUacctdBinFile()).Output()
 	if err != nil {
 		log.Debugf("get uacctd pid failed %v", err)
 		return PID_ERROR
@@ -165,13 +171,13 @@ func getUacctdPid() int {
 
 	pids := strings.Fields(out)
 	if n, err := strconv.Atoi(pids[len(pids)-1]); err != nil {
-		log.Debugf("unexpected %s pid: %v", uacctd_bin_file, pids)
+		log.Debugf("unexpected %s pid: %v", getUacctdBinFile(), pids)
 		return PID_ERROR
 	} else {
 		return n
 	}
 }
 
-func init() {
-	utils.MkdirForFile(uacctd_conf_tmp_file, 0755)
+func InitPmacctd() {
+	utils.MkdirForFile(getUacctdConfTmpFile(), 0755)
 }

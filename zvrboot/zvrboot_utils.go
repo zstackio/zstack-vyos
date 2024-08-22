@@ -3,12 +3,13 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"strings"
 	"os"
+	"strings"
+
+	"zstack-vyos/utils"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"zstack-vyos/utils"
 )
 
 var (
@@ -160,9 +161,14 @@ func configureTimeZone() {
 }
 
 func configureSshMonitor() {
+	if utils.IsEuler2203() {
+		/* use systemd to restart sshd */
+		return
+	}
+	
 	log.Debugf("[configure: create sshd monitor]")
 	cronJobMap := make(utils.CronjobMap)
-	newJob := utils.NewCronjob().SetId(1).SetCommand(utils.Cronjob_file_ssh).SetMinute("*/1")
+	newJob := utils.NewCronjob().SetId(1).SetCommand(utils.GetCronjobFileSsh()).SetMinute("*/1")
 	cronJobMap[1] = newJob
 	err := cronJobMap.ConfigService()
 	utils.Assertf(err == nil, "configure ssh monitor error: %s", err)
@@ -264,7 +270,7 @@ func configureNicInfo(nic *utils.NicInfo) {
 
 func configureMgmtNic() {
 	log.Debugf("[configure: interfaces[%s] ... ", mgmtNic.Name)
-
+	
 	configureNicInfo(mgmtNic)
 }
 
@@ -328,9 +334,9 @@ func checkNicAddress() {
 		}
 		if !strings.EqualFold(dupinfo, "") {
 			log.Error(dupinfo)
-			err := utils.MkdirForFile(networkHealthStatusPath, 0755)
+			err := utils.MkdirForFile(getNetworkHealthStatusPath(), 0755)
 			utils.PanicOnError(err)
-			err = ioutil.WriteFile(networkHealthStatusPath, []byte(dupinfo), 0755)
+			err = ioutil.WriteFile(getNetworkHealthStatusPath(), []byte(dupinfo), 0755)
 			utils.PanicOnError(err)
 		}
 	}

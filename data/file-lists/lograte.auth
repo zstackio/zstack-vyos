@@ -1,0 +1,8 @@
+/var/log/auth.log {
+size 50M
+rotate 10
+compress
+copytruncate
+notifempty
+missingok
+}

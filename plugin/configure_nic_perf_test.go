@@ -1,15 +1,16 @@
 package plugin
 
 import (
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"zstack-vyos/utils"
 )
 
 var _ = XDescribe("configure_nic_perf_test", func() {
 	var nicCmd configureNicCmd
 	It("[PERF]CONFIGURE_NIC : prepare env", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"configure_nic_perf_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"configure_nic_perf_test.log", false)
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)
 	})

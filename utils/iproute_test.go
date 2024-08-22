@@ -11,7 +11,7 @@ import (
 
 var _ = XDescribe("iproute_test SetZStackRoute", func() {
 	BeforeEach(func() {
-		InitLog(VYOS_UT_LOG_FOLDER+"iproute_test.log", false)
+		InitLog(GetVyosUtLogDir()+"iproute_test.log", false)
 	})
 
 	It("test set&remove zstack route", func() {
@@ -44,7 +44,7 @@ var _ = XDescribe("iproute_test SetZStackRoute", func() {
 
 var _ = XDescribe("iproute_test SyncZStackRouteTables", func() {
 	BeforeEach(func() {
-		InitLog(VYOS_UT_LOG_FOLDER+"iproute_test.log", false)
+		InitLog(GetVyosUtLogDir()+"iproute_test.log", false)
 	})
 
 	It("test ip route table", func() {
@@ -78,7 +78,7 @@ var _ = XDescribe("iproute_test SyncZStackRouteTables", func() {
 
 var _ = XDescribe("iproute_test SyncRouteEntries", func() {
 	BeforeEach(func() {
-		InitLog(VYOS_UT_LOG_FOLDER+"iproute_test.log", false)
+		InitLog(GetVyosUtLogDir()+"iproute_test.log", false)
 	})
 
 	It("test default ip route", func() {

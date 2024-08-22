@@ -6,9 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
 	"zstack-vyos/server"
 	"zstack-vyos/utils"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -905,5 +906,7 @@ func FirewallEntryPoint() {
 	server.RegisterAsyncCommandHandler(fwDeleteRuleSetPath, server.VyosLock(deleteRuleSetHandler))
 	server.RegisterAsyncCommandHandler(fwAttachRulesetPath, server.VyosLock(attachRuleSetHandler))
 	server.RegisterAsyncCommandHandler(fwDetachRuleSetPath, server.VyosLock(detachRuleSetHandler))
-	moveLowPriorityRulesToTheBack()
+	if !utils.IsEuler2203() {
+		moveLowPriorityRulesToTheBack()
+	}
 }

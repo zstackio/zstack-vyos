@@ -743,24 +743,6 @@ func deleteIpsecNative(confMsg *ipsecInfo) error {
 	return nil
 }
 
-func initIpsecLogrotate() {
-	//  /etc/logrotate.d/charon
-	rotateConf := "/var/log/charon.log {\n" +
-		"size 50M\n" +
-		"rotate 10\n" +
-		"compress\n" +
-		"copytruncate\n" +
-		"notifempty\n" +
-		"missingok\n" +
-		"}"
-
-	if err := utils.WriteFile("/etc/logrotate.d/charon", rotateConf); err != nil {
-		utils.PanicOnError(err)
-	}
-
-	return
-}
-
 func getIpsecConns() []string {
 	var connUuids []string
 	files, _ := ioutil.ReadDir(ipsec_path_cfg_ipsecdir)

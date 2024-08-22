@@ -5,10 +5,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"zstack-vyos/server"
 	"zstack-vyos/utils"
+
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -157,13 +158,20 @@ func getRoutes(ctx *server.CommandContext) interface{} {
 	return GetRoutesRsp{RawRoutes: o}
 }
 
-func init() {
-	if !utils.IsVYOS() {
-		bash := utils.Bash{
-			Command: fmt.Sprintf("sudo systemctl start zebra"),
-		}
-		bash.Run()
+func InitRoute() {
+	if utils.IsVYOS() {
+		return
 	}
+
+	if utils.IsEuler2203() {
+		return
+	}
+	
+	/* loongarch vpc will go here */
+	bash := utils.Bash{
+		Command: fmt.Sprintf("sudo systemctl start zebra"),
+	}
+	bash.Run()
 }
 
 func RouteEntryPoint() {

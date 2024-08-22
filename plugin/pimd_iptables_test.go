@@ -2,17 +2,18 @@ package plugin
 
 import (
 	"fmt"
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("pimd_iptables_test", func() {
 	var nicCmd *configureNicCmd
 
 	It("[IPTABLES]pimd : test preparing", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"pimd_iptables_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"pimd_iptables_test.log", false)
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)

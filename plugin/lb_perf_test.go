@@ -3,15 +3,16 @@ package plugin
 import (
 	"fmt"
 
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"zstack-vyos/utils"
 )
 
 var _ = XDescribe("lb_perf_test", func() {
 	var nicCmd configureNicCmd
 	It("[PERF]LB : prepare [vyos] env", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"lb_perf_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"lb_perf_test.log", false)
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)
 		nicCmd = configureNicCmd{}

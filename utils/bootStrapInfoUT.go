@@ -15,11 +15,17 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var (
-	BOOT_CONFIG_FILE      = filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/test/boot_config.sh")
-	IPTABLES_RULE_FILE_UT = filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/iptables.rules")
-	BOOTSTRAP_INFO_UT     = filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/bootstrapinfo")
-)
+func GetBootstrapInfoUt() string {
+	return filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/bootstrapinfo")
+}
+
+func getIptablesRuleFileUt() string {
+	return filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/iptables.rules")
+}
+
+func getBootConigFile() string {
+	return filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/test/boot_config.sh")
+}
 
 var (
 	MgtNicForUT            NicInfo
@@ -55,7 +61,7 @@ func ReserveIpForUT() {
 
 func CleanTestEnvForUT() {
 	b := Bash{
-		Command: fmt.Sprintf("sg vyattacfg -c '/bin/vbash %s'", BOOT_CONFIG_FILE),
+		Command: fmt.Sprintf("sg vyattacfg -c '/bin/vbash %s'", getBootConigFile()),
 		Sudo:    true,
 	}
 	if ret, _, _, err := b.RunWithReturn(); ret != 0 || err != nil {
@@ -76,7 +82,7 @@ func CleanTestEnvForUT() {
 		IpLinkSetAlias(iface.Name, "")
 	}
 
-	file_lists := []string{ZSTACK_CONFIG_PATH, CROND_CONFIG_FILE}
+	file_lists := []string{GetZtackConfigPath(), CROND_CONFIG_FILE}
 	for _, f := range file_lists {
 		if ok, err := PathExists(f); ok || err != nil {
 			log.Debugf("cleanUpConfigDir: file [%s] will be delete", f)
@@ -96,7 +102,7 @@ func CleanTestEnvForUT() {
 
 func restoreConfigure() {
 	bash := Bash{
-		Command: fmt.Sprintf("iptables-restore < %s", IPTABLES_RULE_FILE_UT),
+		Command: fmt.Sprintf("iptables-restore -w < %s", getIptablesRuleFileUt()),
 		Sudo:    true,
 	}
 	bash.Run()
@@ -104,16 +110,16 @@ func restoreConfigure() {
 
 func InitBootStrapInfoForUT() {
 	log.Debugf("start init boot strap for ut")
-	content, err := ioutil.ReadFile(BOOTSTRAP_INFO_UT)
+	content, err := ioutil.ReadFile(GetBootstrapInfoUt())
 	if err != nil {
 		return
 	}
 	if len(content) == 0 {
-		log.Debugf("no content in %s, can not get mgmt gateway", bootstrapInfoPath)
+		log.Debugf("no content in %s, can not get mgmt gateway", GetBootstrapInfoUt())
 	}
 
 	if err := json.Unmarshal(content, &BootstrapInfo); err != nil {
-		log.Debugf("can not parse info from %s, can not get mgmt gateway", bootstrapInfoPath)
+		log.Debugf("can not parse info from %s, can not get mgmt gateway", GetBootstrapInfoUt())
 	}
 }
 

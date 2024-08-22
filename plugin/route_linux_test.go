@@ -1,9 +1,10 @@
 package plugin
 
 import (
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("route_linux_test", func() {
@@ -15,7 +16,7 @@ var _ = Describe("route_linux_test", func() {
 	)
 
 	It("[REPLACE_VYOS]: pre test env", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"route_linux_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"route_linux_test.log", false)
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetEnableVyosCmdForUT(false)

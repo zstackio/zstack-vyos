@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("ospf_linux_test", func() {
@@ -18,7 +19,7 @@ var _ = Describe("ospf_linux_test", func() {
 	)
 
 	It("[REPLACE_VYOS]: test pre env", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"ospf_linux_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"ospf_linux_test.log", false)
 		utils.CleanTestEnvForUT()
 		cleanUpOspfConfig()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)

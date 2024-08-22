@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
 	"zstack-vyos/utils"
+
+	"github.com/pkg/errors"
 )
 
 func startMockServer() {
@@ -17,7 +18,7 @@ func startMockServer() {
 		startServer()
 	}()
 
-	utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"server_test.log", false)
+	utils.InitLog(utils.GetVyosUtLogDir()+"server_test.log", false)
 
 	time.Sleep(time.Duration(2) * time.Second)
 }

@@ -2,15 +2,16 @@ package utils
 
 import (
 	"fmt"
+	"strings"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"strings"
 )
 
 var _ = Describe("vyosIptables_test", func() {
 
 	It("preparing vyosIptables_test parse", func() {
-		InitLog(VYOS_UT_LOG_FOLDER+"vyosIptables-test.log", false)
+		InitLog(GetVyosUtLogDir()+"vyosIptables-test.log", false)
 		SetSkipVyosIptablesForUT(true)
 	})
 

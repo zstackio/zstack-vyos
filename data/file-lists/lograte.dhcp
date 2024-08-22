@@ -1,0 +1,8 @@
+/var/log/dhcp.log {
+size 10240k
+rotate 20
+compress
+copytruncate
+notifempty
+missingok
+}

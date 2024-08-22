@@ -4,15 +4,16 @@ import (
 	"fmt"
 	"time"
 
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("lb_iptables_test", func() {
 
 	It("[IPTABLES]LOADBALANCER:preparing env", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"lb_iptables_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"lb_iptables_test.log", false)
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)

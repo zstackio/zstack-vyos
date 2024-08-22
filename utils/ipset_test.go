@@ -10,7 +10,7 @@ import (
 var _ = Describe("ipset test", func() {
 
 	It("preparing ipset", func() {
-		InitLog(VYOS_UT_LOG_FOLDER+"ipset-test.log", false)
+		InitLog(GetVyosUtLogDir()+"ipset-test.log", false)
 	})
 
 	It("ipset create", func() {

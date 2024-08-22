@@ -1,0 +1,43 @@
+[[GENERIC]]
+# this files for all archs
+# format: [source file]  [dst file]  [file mode]  [file owner]
+#
+sysctl.conf             /etc/sysctl.conf                                0644     root:root
+healthcheck.sh          /usr/share/healthcheck.sh                       0755     __USER__:users
+zvr-monitor.sh          __ZVR_ROOT_PATH__/ssh/zvr-monitor.sh            0755     __USER__:users
+zvr-reboot.sh           __ZVR_ROOT_PATH__/ssh/zvr-reboot.sh             0755     __USER__:users
+file-monitor.sh         __ZVR_ROOT_PATH__/ssh/file-monitor.sh           0755     __USER__:users
+zstack-virtualrouteragent        /etc/init.d/zstack-virtualrouteragent  0755     root:root
+rsyslog_euler.conf           /etc/rsyslog.conf                     0644     root:root
+rsyslog.haproxy            /etc/rsyslog.d/haproxy.conf                     0600     root:root
+rsyslog.keepalived        /etc/rsyslog.d/keepalived.conf                     0600     root:root
+rsyslog.dhcp        /etc/rsyslog.d/dhcp.conf                     0600     root:root
+lograte.auth                /etc/logrotate.d/auth                       0600     root:root
+lograte.charon             /etc/logrotate.d/charon                      0600     root:root
+lograte.dhcp            /etc/logrotate.d/dhcp                      0600     root:root
+lograte.dnsamsq         /etc/logrotate.d/dnsamsq                       0600     root:root
+lograte.gobetween       /etc/logrotate.d/gobetween                       0600     root:root
+lograte.haproxy         /etc/logrotate.d/haproxy                       0600     root:root
+lograte.keepalived      /etc/logrotate.d/keepalived                       0600     root:root
+lograte.zsn                  /etc/logrotate.d/zsn                       0600     root:root
+lograte.zvr                 /etc/logrotate.d/zvr                       0600     root:root
+lograte.zvrMonitor      /etc/logrotate.d/zvrMonitor                       0600     root:root
+lograte.zvrstartup      /etc/logrotate.d/zvrstartup                       0600     root:root
+
+[[X86]]
+# this files just for x86_64
+# format: [source file]  [dst file]  [file mode]  [file owner]
+#
+zvr_x86_64       __BIN_PATH__/zvr                       0755      __USER__:users
+
+[[ARM]]
+# this files just for aarch64
+# format: [source file]  [dst file]  [file mode]  [file owner]
+#
+
+[[MIPS]]
+# Use for add/sync files just for mips64
+# format: [source file]  [dst file]  [file mode]  [file owner]
+#
+
+[[LOONG]]

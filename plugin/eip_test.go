@@ -3,16 +3,17 @@ package plugin
 import (
 	"fmt"
 
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	gomega "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-	"zstack-vyos/server"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("eip_test", func() {
 	It("eip test preparing", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"eip_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"eip_test.log", false)
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		configureAllNicsForUT()

@@ -5,17 +5,18 @@ import (
 	"io/ioutil"
 	"strings"
 
+	"zstack-vyos/server"
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-	"zstack-vyos/server"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("lb_test", func() {
 
 	It("LB:test prepare env", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"lb_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"lb_test.log", false)
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		configureAllNicsForUT()

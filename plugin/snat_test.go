@@ -3,17 +3,18 @@ package plugin
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/gomega"
 	"zstack-vyos/server"
 	"zstack-vyos/utils"
+
+	. "github.com/onsi/ginkgo"
+	"github.com/onsi/gomega"
 )
 
 var _ = Describe("snat_test", func() {
 	var sinfo1, sinfo2 snatInfo
 
 	It("test snat pre env", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"snat_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"snat_test.log", false)
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(false)

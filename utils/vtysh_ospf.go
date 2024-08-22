@@ -21,7 +21,9 @@ const (
 	Plaintext = "Plaintext"
 )
 
-var OSPF_JSON_FILE = filepath.Join(GetZvrZsConfigPath(), "ospf.json")
+func GetOspfJsonFile() string {
+	return filepath.Join(GetZvrZsConfigPath(), "ospf.json")
+}
 
 const ospfAddTemplate = `'configure terminal
 router ospf

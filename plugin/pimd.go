@@ -3,14 +3,15 @@ package plugin
 import (
 	"bytes"
 	"fmt"
-	"github.com/fatih/structs"
-	log "github.com/sirupsen/logrus"
 	"html/template"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
 	"zstack-vyos/server"
 	"zstack-vyos/utils"
+
+	"github.com/fatih/structs"
+	log "github.com/sirupsen/logrus"
 	/*log "github.com/sirupsen/logrus"*/)
 
 const (
@@ -19,10 +20,21 @@ const (
 	GET_MROUTE_PATH   = "/pimd/route"
 )
 
-var PIMD_CONF_DIR = filepath.Join(utils.GetUserHomePath(), "pimd/")
-var PIMD_CONF_PATH = filepath.Join(utils.GetUserHomePath(), "/pimd/pimd.conf")
-var PIMD_BINARY_PATH = filepath.Join(utils.GetThirdPartyBinPath(), "pimd")
-var HA_PIMD_SCRIPT = filepath.Join(utils.GetZvrRootPath(), "keepalived/script/pimd.sh")
+func getPimdConfDir() string {
+	return filepath.Join(utils.GetUserHomePath(), "pimd/")
+}
+
+func getPimdConfPath() string {
+	return filepath.Join(utils.GetUserHomePath(), "/pimd/pimd.conf")
+}
+
+func getPimdBinPath() string {
+	return filepath.Join(utils.GetThirdPartyBinPath(), "pimd")
+}
+
+func getPimdHaScript() string {
+	return filepath.Join(utils.GetZvrRootPath(), "keepalived/script/pimd.sh")
+}
 
 type rendezvousPointInfo struct {
 	RpAddress     string `json:"rpAddress"`
@@ -64,17 +76,17 @@ func makePimdFirewallRuleDescription(name, nicname string) string {
 }
 
 func stopPimd() {
-	pid, err := utils.FindFirstPIDByPSExtern(true, PIMD_BINARY_PATH)
+	pid, err := utils.FindFirstPIDByPSExtern(true, getPimdBinPath())
 	if err == nil && pid != 0 {
 		utils.KillProcess(pid)
 	}
 
-	utils.Truncate(PIMD_CONF_PATH, 0)
+	utils.Truncate(getPimdConfPath(), 0)
 }
 
 func updatePimdConf(cmd *enablePimdCmd) bool {
 	bash := utils.Bash{
-		Command: fmt.Sprintf("mkdir -p %s", PIMD_CONF_DIR),
+		Command: fmt.Sprintf("mkdir -p %s", getPimdConfDir()),
 		NoLog:   true,
 	}
 	bash.Run()
@@ -93,17 +105,17 @@ rp-address {{.RpAddress}} {{.GroupAddress}}
 	var buf bytes.Buffer
 	var m map[string]interface{}
 
-	oldChecksum, _ := getFileChecksum(PIMD_CONF_PATH)
+	oldChecksum, _ := getFileChecksum(getPimdConfPath())
 	tmpl, err := template.New("conf").Parse(conf)
 	utils.PanicOnError(err)
 	m = structs.Map(cmd)
 	err = tmpl.Execute(&buf, m)
 	utils.PanicOnError(err)
-	err = ioutil.WriteFile(PIMD_CONF_PATH, buf.Bytes(), 0755)
+	err = ioutil.WriteFile(getPimdConfPath(), buf.Bytes(), 0755)
 	utils.PanicOnError(err)
-	newChecksum, _ := getFileChecksum(PIMD_CONF_PATH)
+	newChecksum, _ := getFileChecksum(getPimdConfPath())
 
-	log.Debugf("pimd config file: %s, old checksum:%s, new checksum:%s", PIMD_CONF_PATH, oldChecksum, newChecksum)
+	log.Debugf("pimd config file: %s, old checksum:%s, new checksum:%s", getPimdConfPath(), oldChecksum, newChecksum)
 
 	return !strings.EqualFold(oldChecksum, newChecksum)
 }
@@ -214,7 +226,7 @@ func addPimdFirewallByIptables(nics map[string]utils.Nic) error {
 }
 
 func restartPimd(force bool) {
-	pid, err := utils.FindFirstPIDByPSExtern(true, PIMD_BINARY_PATH)
+	pid, err := utils.FindFirstPIDByPSExtern(true, getPimdBinPath())
 	if err == nil && pid != 0 {
 		/* if pimd is running, restart it if force restart */
 		if !force {
@@ -225,7 +237,7 @@ func restartPimd(force bool) {
 	}
 
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo %s -c %s", PIMD_BINARY_PATH, PIMD_CONF_PATH),
+		Command: fmt.Sprintf("sudo %s -c %s", getPimdBinPath(), getPimdConfPath()),
 	}
 
 	bash.RunWithReturn()
@@ -426,7 +438,7 @@ func writePimdHaScript(enable bool) {
 		conent = "echo 'no pimd configured'"
 	}
 
-	err := ioutil.WriteFile(HA_PIMD_SCRIPT, []byte(conent), 0755)
+	err := ioutil.WriteFile(getPimdHaScript(), []byte(conent), 0755)
 	utils.PanicOnError(err)
 }
 

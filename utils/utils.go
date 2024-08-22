@@ -56,22 +56,24 @@ func ValidVersionString(version string) bool {
 	return true
 }
 
-func IsVYOS() bool {
-	// vbash is a special bash in VyOS image that removed
-	// most of the system informations, such as release info, kernel info...,
-	// so there is no elegant way to identify VyOS guest.
-	//
-	// If u think of a better way, thanks to modify it.
-	// PS: The way should be universal on different platform.
-	//     x86: vyos/generic-linux, arm64: vyos/generic-linux, loong64: generic-linux
-	if exist, _ := PathExists("/bin/vbash"); !exist {
-		return false
+func IsEuler2203() bool {
+	if (Vyos_version == EULER_22_03) {
+		return true;
+	} else {
+		return false;
 	}
-	return true
+}
+
+func IsVYOS() bool {
+	if (Vyos_version == VYOS_1_1_7 || Vyos_version == VYOS_1_2) {
+		return true;
+	} else {
+		return false;
+	}
 }
 
 func GetZvrUser() string {
-	if IsVYOS() {
+	if IsVYOS()  {
 		return "vyos"
 	}
 	return "zstack"

@@ -15,7 +15,7 @@ var _ = XDescribe("policy_route_test", func() {
 	var nicCmd *configureNicCmd
 
 	It("policy_route : test preparing", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"policy_route_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"policy_route_test.log", false)
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 	})

@@ -23,9 +23,9 @@ import (
 	"zstack-vyos/utils"
 
 	cidrman "github.com/EvilSuperstars/go-cidrman"
-	haproxy "github.com/ruansteve/go-haproxy"
 	"github.com/fatih/structs"
 	prom "github.com/prometheus/client_golang/prometheus"
+	haproxy "github.com/ruansteve/go-haproxy"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -52,20 +52,39 @@ const (
 )
 
 var (
-	ZVR_ROOT_PATH        = utils.GetZvrRootPath()
-	LB_ROOT_DIR          = filepath.Join(ZVR_ROOT_PATH, "lb/")
-	LB_CONF_DIR          = filepath.Join(ZVR_ROOT_PATH, "lb/conf/")
-	LB_PID_DIR           = filepath.Join(ZVR_ROOT_PATH, "pid/")
-	CERTIFICATE_ROOT_DIR = filepath.Join(ZVR_ROOT_PATH, "certificate/")
-	LB_SOCKET_DIR        = filepath.Join(ZVR_ROOT_PATH, "lb/sock/")
-)
-
-var (
 	haproxyVersion     = HAPROXY_VERSION_1_6_9
 	gobetweenListeners map[string]*GBListener
 	haproxyListeners   map[string]*HaproxyListener
 	EnableHaproxyLog   = true
 )
+
+func getLbRootPath() string {
+	return filepath.Join(utils.GetZvrRootPath(), "lb/")
+}
+
+func getLbConfDir() string {
+	return filepath.Join(utils.GetZvrRootPath(), "lb/conf/")
+}
+
+func getLbPidDir() string {
+	return filepath.Join(utils.GetZvrRootPath(), "pid/")
+}
+
+func getLbCertificateRootPath() string {
+	return filepath.Join(utils.GetZvrRootPath(), "certificate/")
+}
+
+func getLbSocketDir() string {
+	return filepath.Join(utils.GetZvrRootPath(), "lb/sock/")
+}
+
+func getHaproxyBindPath() string {
+	if utils.IsEuler2203() {
+		return "/usr/sbin/haproxy"
+	} else {
+		return "/opt/vyatta/sbin/haproxy"
+	}
+}
 
 const (
 	TLS_CIPHER_POLICY_DEFAULT             = "tls_cipher_policy_default"
@@ -664,8 +683,12 @@ backend {{ .ServerGroupUuid}}
 		m["SessionPersistence"] = "disable"
 	}
 
+	user := "zstack"
+	if utils.IsVYOS() {
+		user = "vyos"
+	}
 	bash := utils.Bash{
-		Command: fmt.Sprintf("sudo id -u vyos"),
+		Command: fmt.Sprintf("sudo id -u " + user),
 	}
 	_, result, _, _ := bash.RunWithReturn()
 	result = strings.Replace(result, "\n", "", -1)
@@ -673,8 +696,12 @@ backend {{ .ServerGroupUuid}}
 	utils.PanicOnError(er)
 	m["uid"] = result
 
+	group := "zstack"
+	if utils.IsVYOS() {
+		group = "vyos"
+	}
 	b := utils.Bash{
-		Command: fmt.Sprintf("sudo id -g vyos"),
+		Command: fmt.Sprintf("sudo id -g " + group),
 	}
 	_, re, _, _ := b.RunWithReturn()
 	re = strings.Replace(re, "\n", "", -1)
@@ -705,13 +732,13 @@ func (this *HaproxyListener) startListenerService() (ret int, err error) {
 	var bash utils.Bash
 	if len(pids) > 0 {
 		bash = utils.Bash{
-			Command: fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -N %s -f %s -p %s -sf %s",
-				this.maxConnect, this.confPath, this.pidPath, strings.Join(pids, " ")),
+			Command: fmt.Sprintf("sudo %s -D -N %s -f %s -p %s -sf %s",
+			getHaproxyBindPath(), this.maxConnect, this.confPath, this.pidPath, strings.Join(pids, " ")),
 		}
 	} else {
 		bash = utils.Bash{
-			Command: fmt.Sprintf("sudo /opt/vyatta/sbin/haproxy -D -N %s -f %s -p %s",
-				this.maxConnect, this.confPath, this.pidPath),
+			Command: fmt.Sprintf("sudo %s  -D -N %s -f %s -p %s",
+			getHaproxyBindPath(), this.maxConnect, this.confPath, this.pidPath),
 		}
 	}
 	var stderr string
@@ -1189,8 +1216,12 @@ func setPidRLimit(confpath string) error {
 }
 
 func startGobetween(confpath, pidpath string) (int, error) {
+	goBetweenPath := "/opt/vyatta/sbin/gobetween"
+	if (utils.IsEuler2203()) {
+		goBetweenPath = "/usr/local/bin/gobetween"
+	}
 	bash := utils.Bash{
-		Command: fmt.Sprintf("/opt/vyatta/sbin/gobetween -c %s >/dev/null 2>&1&echo $! >%s; cat %s", confpath, pidpath, pidpath),
+		Command: fmt.Sprintf("%s -c %s >/dev/null 2>&1&echo $! >%s; cat %s", goBetweenPath, confpath, pidpath, pidpath),
 		Sudo:    true,
 	}
 
@@ -1489,26 +1520,26 @@ func (this *GBListener) getMaxSession() int {
 }
 
 func makeLbAclConfFilePath(lb lbInfo) string {
-	return filepath.Join(LB_ROOT_DIR, "conf", fmt.Sprintf("listener-%v-acl.cfg", lb.ListenerUuid))
+	return filepath.Join(getLbRootPath(), "conf", fmt.Sprintf("listener-%v-acl.cfg", lb.ListenerUuid))
 }
 
 func makeLbPidFilePath(lb lbInfo) string {
-	pidPath := filepath.Join(LB_ROOT_DIR, "pid", fmt.Sprintf("lb-%s-listener-%s.pid", lb.LbUuid, lb.ListenerUuid))
+	pidPath := filepath.Join(getLbRootPath(), "pid", fmt.Sprintf("lb-%s-listener-%s.pid", lb.LbUuid, lb.ListenerUuid))
 	fd, _ := utils.CreateFileIfNotExists(pidPath, os.O_WRONLY|os.O_APPEND, 0666)
 	fd.Close()
 	return pidPath
 }
 
 func makeLbConfFilePath(lb lbInfo) string {
-	return filepath.Join(LB_ROOT_DIR, "conf", fmt.Sprintf("lb-%v-listener-%v.cfg", lb.LbUuid, lb.ListenerUuid))
+	return filepath.Join(getLbRootPath(), "conf", fmt.Sprintf("lb-%v-listener-%v.cfg", lb.LbUuid, lb.ListenerUuid))
 }
 
 func makeCertificatePath(certificateUuid string) string {
-	return filepath.Join(CERTIFICATE_ROOT_DIR, fmt.Sprintf("certificate-%s.pem", certificateUuid))
+	return filepath.Join(getLbCertificateRootPath(), fmt.Sprintf("certificate-%s.pem", certificateUuid))
 }
 
 func makeLbSocketPath(lb lbInfo) string {
-	return filepath.Join(LB_SOCKET_DIR, fmt.Sprintf("%s.sock", lb.ListenerUuid))
+	return filepath.Join(getLbSocketDir(), fmt.Sprintf("%s.sock", lb.ListenerUuid))
 }
 
 type refreshLbCmd struct {
@@ -1569,7 +1600,7 @@ func setLb(lb lbInfo) {
 
 func getCertificateList() []string {
 	bash := utils.Bash{
-		Command: fmt.Sprintf("find %s -name '*.pem'", CERTIFICATE_ROOT_DIR),
+		Command: fmt.Sprintf("find %s -name '*.pem'", getLbCertificateRootPath()),
 	}
 
 	if ret, res, _, err := bash.RunWithReturn(); ret != 0 || err != nil {
@@ -1581,7 +1612,7 @@ func getCertificateList() []string {
 
 func isCertificateUsed(certificateFile string) bool {
 	bash := utils.Bash{
-		Command: fmt.Sprintf("grep -r %s %s", certificateFile, LB_CONF_DIR),
+		Command: fmt.Sprintf("grep -r %s %s", certificateFile, getLbConfDir()),
 	}
 
 	if ret, res, _, err := bash.RunWithReturn(); ret != 0 || err != nil {
@@ -1617,7 +1648,7 @@ info - 6 (default)
 debug - 7
 */
 func doRefreshLogLevel(level string) {
-	lb_log_file, err := ioutil.TempFile(LB_CONF_DIR, "rsyslog")
+	lb_log_file, err := ioutil.TempFile(getLbConfDir(), "rsyslog")
 	utils.PanicOnError(err)
 	conf := fmt.Sprintf(`$ModLoad imudp
 $UDPServerRun 514
@@ -2165,76 +2196,27 @@ func (this *GBListener) getLbCounters(listenerUuid string, listener Listener) <-
 	return ch
 }
 
-func enableLbLog() {
-	lb_log_file, err := ioutil.TempFile(LB_CONF_DIR, "rsyslog")
-	utils.PanicOnError(err)
-	conf := `$ModLoad imudp
-$UDPServerRun 514
-local1.info     /var/log/haproxy.log`
-	_, err = lb_log_file.Write([]byte(conf))
-	utils.PanicOnError(err)
-
-	lb_log_rotatoe_file, err := ioutil.TempFile(LB_CONF_DIR, "rotation")
-	utils.PanicOnError(err)
-	rotate_conf := `/var/log/haproxy.log {
-size 50M
-#daily
-rotate 10
-compress
-copytruncate
-notifempty
-missingok
-}
-/var/log/gobetween*.log {
-size 50M
-#daily
-rotate 10
-compress
-copytruncate
-notifempty
-missingok
-}`
-	_, err = lb_log_rotatoe_file.Write([]byte(rotate_conf))
-	utils.PanicOnError(err)
-
-	/* add log rotate for /var/log/auth.log */
-	auth_rotatoe_file, err := ioutil.TempFile(LB_CONF_DIR, "auth")
-	utils.PanicOnError(err)
-	auth_rotate_conf := `/var/log/auth.log {
-size 50M
-rotate 10
-compress
-copytruncate
-notifempty
-missingok
-}`
-	_, err = auth_rotatoe_file.Write([]byte(auth_rotate_conf))
-	utils.PanicOnError(err)
-	utils.SudoMoveFile(lb_log_file.Name(), "/etc/rsyslog.d/haproxy.conf")
-	utils.SudoMoveFile(lb_log_rotatoe_file.Name(), "/etc/logrotate.d/haproxy")
-	utils.SudoMoveFile(auth_rotatoe_file.Name(), "/etc/logrotate.d/auth")
-}
-
-func init() {
-	os.Mkdir(LB_ROOT_DIR, os.ModePerm)
-	os.Mkdir(LB_CONF_DIR, os.ModePerm)
-	os.Mkdir(LB_PID_DIR, os.ModePerm)
-	os.Chmod(LB_PID_DIR, os.ModePerm)
-	os.Mkdir(LB_SOCKET_DIR, os.ModePerm|os.ModeSocket)
+func InitLb() {
+	os.Mkdir(getLbRootPath(), os.ModePerm)
+	os.Mkdir(getLbConfDir(), os.ModePerm)
+	os.Mkdir(getLbPidDir(), os.ModePerm)
+	os.Chmod(getLbPidDir(), os.ModePerm)
+	os.Mkdir(getLbSocketDir(), os.ModePerm|os.ModeSocket)
 	LbListeners = make(map[string]Listener, LISTENER_MAP_SIZE)
-	enableLbLog()
 	RegisterPrometheusCollector(NewLbPrometheusCollector())
 
 	bash := utils.Bash{
-		Command: fmt.Sprintf("/opt/vyatta/sbin/haproxy -ver | grep version"),
+		/* for vyos 1.1.7, it return "2.1.0 "
+		    for openEuler 22.03, it return "2.6.6-274d1a4 "
+		*/
+		Command: fmt.Sprintf(getHaproxyBindPath() + " -ver | grep version | awk '{print $3}'"),
 	}
 
 	if ret, out, _, err := bash.RunWithReturn(); ret == 0 && err == nil {
-		if strings.Contains(out, HAPROXY_VERSION_2_1_0) {
-			haproxyVersion = HAPROXY_VERSION_2_1_0
-		}
+		haproxyVersion = out[:5]
 	}
 
+	log.Debug("haproxyVersion :" + haproxyVersion)
 	gobetweenListeners = map[string]*GBListener{}
 	haproxyListeners = map[string]*HaproxyListener{}
 }

@@ -17,7 +17,9 @@ const (
 	FLOW_METER_GET_COUNTER = "/flowmeter/count"
 )
 
-var VYOSHA_FLOW_SCRIPT = filepath.Join(utils.GetZvrRootPath(), "keepalived/script/flow.sh")
+func getVyosHaFlowScript() string {
+	return filepath.Join(utils.GetZvrRootPath(), "keepalived/script/flow.sh")
+}
 
 type FlowType string
 type FlowVersion string
@@ -154,7 +156,7 @@ func writeFlowHaScriptForVyos(enable bool) {
 		conent = "echo 'no flow configured'"
 	}
 
-	err := ioutil.WriteFile(VYOSHA_FLOW_SCRIPT, []byte(conent), 0755)
+	err := ioutil.WriteFile(getVyosHaFlowScript(), []byte(conent), 0755)
 	utils.PanicOnError(err)
 }
 

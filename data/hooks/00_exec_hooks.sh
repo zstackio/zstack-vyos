@@ -19,7 +19,7 @@ for f in *.sh; do
             ;;
         *)
             chmod +x $f
-            timeout 30 /bin/bash $f >> ${LOG_FILE} 2>&1
+            timeout 30 /bin/bash -x $f >> ${LOG_FILE} 2>&1
             ;;
     esac
 done

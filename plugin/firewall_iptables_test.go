@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	"zstack-vyos/utils"
+
 	. "github.com/onsi/ginkgo"
 	gomega "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-	"zstack-vyos/utils"
 )
 
 var _ = Describe("firewall_iptables_test", func() {
@@ -15,7 +16,7 @@ var _ = Describe("firewall_iptables_test", func() {
 	//var ruleInfo1, ruleInfo2, ruleInfo
 	It("[IPTABLES]FIREWALL : prepare", func() {
 		eipMap = make(map[string]eipInfo, EipInfoMaxSize)
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"firewall_iptables_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"firewall_iptables_test.log", false)
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)

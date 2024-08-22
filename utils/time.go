@@ -2,8 +2,9 @@ package utils
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 func LoopRunUntilSuccessOrTimeout(fn func() bool, timeout, interval time.Duration) error {
@@ -22,13 +23,13 @@ func LoopRunUntilSuccessOrTimeout(fn func() bool, timeout, interval time.Duratio
 			if r {
 				return nil
 			}
-			go func() {
-				ch <- fn()
-			}()
 		case now := <-tk.C:
 			if now.After(expiredTime) {
 				return errors.New(fmt.Sprintf("timeout after %v", timeout))
 			}
+			go func() {
+				ch <- fn()
+			}()
 		}
 	}
 }

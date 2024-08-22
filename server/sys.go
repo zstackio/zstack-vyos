@@ -2,19 +2,23 @@ package server
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"zstack-vyos/utils"
+
+	"github.com/sirupsen/logrus"
 )
 
 var (
 	vyosScriptLock = &sync.Mutex{}
-	fileLockPath   = filepath.Join(utils.GetZvrRootPath(), ".vyosfilelock")
 )
+
+func getFileLockPath() string {
+	return filepath.Join(utils.GetZvrRootPath(), ".vyosfilelock")
+}
 
 func FindNicNameByMacFromConfiguration(mac, configuration string) (string, bool) {
 	parser := NewParserFromConfiguration(configuration)
@@ -186,7 +190,7 @@ func VyosLock(fn CommandHandler) CommandHandler {
 		vyosScriptLock.Lock()
 		defer vyosScriptLock.Unlock()
 
-		if vyosFileLock, err := utils.LockFileExcl(fileLockPath); err == nil {
+		if vyosFileLock, err := utils.LockFileExcl(getFileLockPath()); err == nil {
 			defer vyosFileLock.Unlock()
 		}
 
@@ -199,7 +203,7 @@ func VyosLockInterface(fn func()) func() {
 		vyosScriptLock.Lock()
 		defer vyosScriptLock.Unlock()
 
-		if vyosFileLock, err := utils.LockFileExcl(fileLockPath); err == nil {
+		if vyosFileLock, err := utils.LockFileExcl(getFileLockPath()); err == nil {
 			defer vyosFileLock.Unlock()
 		}
 

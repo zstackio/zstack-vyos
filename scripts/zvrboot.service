@@ -1,0 +1,10 @@
+[Unit]
+Description=start zvrboot
+After=network.target
+[Service]
+Type=oneshot
+ExecStart=/etc/init.d/zstack/zstack-zvr-bootup.script
+Restart=no
+RemainAfterExit=yes
+[Install]
+WantedBy=multi-user.target

@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"zstack-vyos/server"
 	"zstack-vyos/utils"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 var _ = XDescribe("route_test", func() {
@@ -20,7 +21,7 @@ var _ = XDescribe("route_test", func() {
 	)
 
 	It("prepare for route set", func() {
-		utils.InitLog(utils.VYOS_UT_LOG_FOLDER+"route_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"route_test.log", false)
 		utils.CleanTestEnvForUT()
 		utils.InitVyosVersion()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
