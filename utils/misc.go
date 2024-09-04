@@ -183,6 +183,10 @@ func ServiceOperation(name string, operation string) error {
 		}
 		command = fmt.Sprintf("/etc/init.d/%s %s", name, operation)
 	} else {
+		/* ntp service name on arm vyos is ntp */
+		if name == "ntpd"  && IsVYOS() {
+			name = "ntp"
+		}
 		command = fmt.Sprintf("systemctl %s %s", operation, name)
 	}
 
