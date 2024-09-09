@@ -89,6 +89,12 @@ func (nic Nic) String() string {
 	return string(s)
 }
 
+type nicArray []Nic
+
+func (a nicArray) Len() int           { return len(a) }
+func (a nicArray) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a nicArray) Less(i, j int) bool { return a[i].Name > a[j].Name }
+
 func GetAllNics() (map[string]Nic, error) {
 	const ROOT = "/sys/class/net"
 
@@ -103,7 +109,7 @@ func GetAllNics() (map[string]Nic, error) {
 			continue
 		}
 
-		if f.Name() == "gre0" || f.Name() == "pimreg" {
+		if f.Name() == "gre0" || f.Name() == "pimreg" || f.Name() == "mgmt" || strings.Contains(f.Name(), "ipsec") {
 			continue
 		}
 
@@ -251,13 +257,94 @@ func SetZStackRoute(ip string, nic string, gw string) error {
 	return nil
 }
 
+func GetOutingNicForIp(ip string) (string, error) {
+	ipn := net.ParseIP(ip)
+	if ipn == nil {
+		return "", fmt.Errorf("invalid ip: %s", ip)
+	}
+
+	/* 这个接口可以获取信息如下：
+	2024-10-10 18:02:59 DEBUG   IP 地址: 127.0.0.1
+	2024-10-10 18:02:59 DEBUG   子网掩码: 255.0.0.0
+	2024-10-10 18:02:59 DEBUG   IP 地址: ::1
+	2024-10-10 18:02:59 DEBUG   子网掩码: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+	2024-10-10 18:02:59 DEBUG   IP 地址: 172.25.116.190
+	2024-10-10 18:02:59 DEBUG   子网掩码: 255.255.0.0
+	2024-10-10 18:02:59 DEBUG   IP 地址: fe80::f85b:a0ff:fe50:6600
+	2024-10-10 18:02:59 DEBUG   子网掩码: ffff:ffff:ffff:ffff::
+	*/
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return "", err
+	}
+
+	for _, iface := range interfaces {
+		addrs, _ := iface.Addrs()
+
+		for _, addr := range addrs {
+			switch v := addr.(type) {
+			case *net.IPNet:
+				if v.Contains(ipn) {
+					return iface.Name, nil
+				}
+			}
+		}
+	}
+
+	return "", fmt.Errorf("can not found interface contain %s", ip)
+}
+
 func GetNicForRoute(ip string) string {
+
+	dev := ""
+	if IsRuingUT() {
+		for _, nic := range PrivateNicsForUT {
+			log.Debugf("PrivateNicForUT %+v", nic)
+			cidr, _ := GetNetworkNumber(nic.Ip, nic.Netmask)
+			ip := net.ParseIP(nic.Ip)
+			_, cidrNet, _ := net.ParseCIDR(cidr)
+			if cidrNet.Contains(ip) {
+				dev = nic.Name
+				break
+			}
+		}
+	} else {
+		dev, _ = GetOutingNicForIp(ip)
+	}
+	if dev != "" {
+		return dev
+	}
+
+	/* exmaple:
+	# ip r
+	default via 172.25.0.1 dev eth0  默认路由
+	169.254.169.254 via 172.25.116.191 dev eth0 proto static 静态路由
+	172.25.0.0/16 dev eth0 proto kernel scope link src 172.25.116.190 直连路由
+	# ip -o r get 169.254.169.254     ###静态路由
+	169.254.169.254 via 172.25.116.191 dev eth0 src 172.25.116.190 uid 0 \    cache
+	# ip -o r get 172.25.116.189        ###直连路由
+	172.25.116.189 dev eth0 src 172.25.116.190 uid 0 \    cache
+	# ip -o r get 192.168.3.10      ###默认路由
+	192.168.3.10 via 172.25.0.1 dev eth0 src 172.25.116.190 uid 0 \    cache
+	*/
 	bash := Bash{
-		Command: fmt.Sprintf("ip -o r get %s | awk '{print $3}'", ip),
+		Command: fmt.Sprintf("ip -o r get %s", ip),
 	}
 	_, o, _, err := bash.RunWithReturn()
-	PanicOnError(err)
-	return o
+	if err != nil {
+		return ""
+	}
+
+	dev = ""
+	items := strings.Split(o, " ")
+	for i, item := range items {
+		if item == "dev" {
+			dev = items[i+1]
+			break
+		}
+	}
+
+	return dev
 }
 
 func RemoveZStackRoute(ip string) error {

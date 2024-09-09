@@ -8,7 +8,7 @@ import (
 )
 
 func setTestBashTestEnv() {
-	InitLog(GetVyosUtLogDir()+"bash_test.log", false)
+	InitLog(GetVyosUtLogDir()+"bash_test.log", IsRuingUT())
 }
 
 func TestBash(t *testing.T) {

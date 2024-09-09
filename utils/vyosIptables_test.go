@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("vyosIptables_test", func() {
 
 	It("preparing vyosIptables_test parse", func() {
-		InitLog(GetVyosUtLogDir()+"vyosIptables-test.log", false)
+		InitLog(GetVyosUtLogDir()+"vyosIptables-test.log", IsRuingUT())
 		SetSkipVyosIptablesForUT(true)
 	})
 

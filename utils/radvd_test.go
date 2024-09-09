@@ -8,7 +8,7 @@ import (
 	"text/template"
 
 	log "github.com/sirupsen/logrus"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -19,7 +19,7 @@ func GetRadvdJsonFile() {
 var _ = Describe("radvd_test", func() {
 	var globalMap RadvdAttrsMap
 	It("[RADVD]: test pre env", func() {
-		InitLog(GetVyosUtLogDir()+"radvd_test.log", false)
+		InitLog(GetVyosUtLogDir()+"radvd_test.log", utils.IsRuingUT())
 		globalMap = make(RadvdAttrsMap)
 		cleanUpConfig()
 	})

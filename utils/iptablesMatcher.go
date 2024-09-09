@@ -53,7 +53,12 @@ type IpTableMatcher struct {
 	mark             int
 	markType         IptablesMarkType
 	srcIpSet         string
+	srcIpPortSet     string
 	dstIpSet         string
+	dstIpPortSet     string
+	ipvs             bool
+	ipvsVaddr        string
+	ipvsVport        string
 }
 
 var icmpTypeToCode = map[string]string{
@@ -192,8 +197,33 @@ func (r *IpTableRule) SetSrcIpset(srcIpSet string) *IpTableRule {
 	return r
 }
 
+func (r *IpTableRule) SetSrcIpPortset(srcIpPortSet string) *IpTableRule {
+	r.srcIpPortSet = srcIpPortSet
+	return r
+}
+
 func (r *IpTableRule) SetDstIpset(dstIpSet string) *IpTableRule {
 	r.dstIpSet = dstIpSet
+	return r
+}
+
+func (r *IpTableRule) SetDstIpPortset(dstIpPortSet string) *IpTableRule {
+	r.dstIpPortSet = dstIpPortSet
+	return r
+}
+
+func (r *IpTableRule) SetIpvs(ipvs bool) *IpTableRule {
+	r.ipvs = ipvs
+	return r
+}
+
+func (r *IpTableRule) SetIpvsVaddr(ipvsVaddr string) *IpTableRule {
+	r.ipvsVaddr = ipvsVaddr
+	return r
+}
+
+func (r *IpTableRule) SetIpvsVport(ipvsVport string) *IpTableRule {
+	r.ipvsVport = ipvsVport
 	return r
 }
 
@@ -265,8 +295,28 @@ func (r *IpTableRule) GetSrcIpset() string {
 	return r.srcIpSet
 }
 
+func (r *IpTableRule) GetSrcIpPortset() string {
+	return r.srcIpPortSet
+}
+
 func (r *IpTableRule) GetDstIpset() string {
 	return r.dstIpSet
+}
+
+func (r *IpTableRule) GetDstIpPortset() string {
+	return r.dstIpPortSet
+}
+
+func (r *IpTableRule) GetIpvs() bool {
+	return r.ipvs
+}
+
+func (r *IpTableRule) GetIpvsVport() string {
+	return r.ipvsVport
+}
+
+func (r *IpTableRule) GetIpvsVaddr() string {
+	return r.ipvsVaddr
 }
 
 func (r *IpTableRule) isMatcherEqual(o *IpTableRule) error {
@@ -331,8 +381,28 @@ func (r *IpTableRule) isMatcherEqual(o *IpTableRule) error {
 		return fmt.Errorf("not match, old srcIp Ipset: %s, new srcIp Ipset: %s", r.srcIpSet, o.srcIpSet)
 	}
 
+	if r.srcIpPortSet != o.srcIpPortSet {
+		return fmt.Errorf("not match, old srcIpPortSet Ipset: %s, new srcIpPortSet Ipset: %s", r.srcIpPortSet, o.srcIpPortSet)
+	}
+
 	if r.dstIpSet != o.dstIpSet {
 		return fmt.Errorf("not match, old dst Ipset: %s, new dst Ipset: %s", r.dstIpSet, o.dstIpSet)
+	}
+
+	if r.dstIpPortSet != o.dstIpPortSet {
+		return fmt.Errorf("not match, old dst dstIpPortSet: %s, new dst dstIpPortSet: %s", r.dstIpPortSet, o.dstIpPortSet)
+	}
+
+	if r.ipvs != o.ipvs {
+		return fmt.Errorf("not match, old ipvs: %s, new ipvs: %s", r.ipvs, o.ipvs)
+	}
+
+	if r.ipvsVaddr != o.ipvsVaddr {
+		return fmt.Errorf("not match, old ipvsVaddr: %s, new ipvsVaddr: %s", r.ipvsVaddr, o.ipvsVaddr)
+	}
+
+	if r.ipvsVport != o.ipvsVport {
+		return fmt.Errorf("not match, old ipvsVport: %s, new ipvsVport: %s", r.ipvsVport, o.ipvsVport)
 	}
 
 	if len(r.states) != len(o.states) {
@@ -528,12 +598,40 @@ func (r *IpTableRule) matcherString() string {
 		}
 	}
 
+	if r.srcIpPortSet != "" {
+		items := strings.Fields(r.srcIpPortSet)
+		if items[0] == "!" {
+			rules = append(rules, "-m set ! --match-set "+items[1]+" src,src")
+		} else {
+			rules = append(rules, "-m set --match-set "+r.srcIpPortSet+" src,src")
+		}
+	}
+
 	if r.dstIpSet != "" {
 		items := strings.Fields(r.dstIpSet)
 		if items[0] == "!" {
 			rules = append(rules, "-m set ! --match-set "+items[1]+" dst")
 		} else {
 			rules = append(rules, "-m set --match-set "+r.dstIpSet+" dst")
+		}
+	}
+
+	if r.dstIpPortSet != "" {
+		items := strings.Fields(r.dstIpPortSet)
+		if items[0] == "!" {
+			rules = append(rules, "-m set ! --match-set "+items[1]+" dst,dst")
+		} else {
+			rules = append(rules, "-m set --match-set "+r.dstIpPortSet+" dst,dst")
+		}
+	}
+
+	if r.ipvs {
+		rules = append(rules, "-m ipvs --ipvs")
+		if r.ipvsVaddr != "" {
+			rules = append(rules, "--vaddr "+r.ipvsVaddr)
+		}
+		if r.ipvsVport != "" {
+			rules = append(rules, "--vport  "+r.ipvsVport)
 		}
 	}
 
@@ -739,14 +837,42 @@ func (r *IpTableRule) parseIpTablesMatcher(line string, chains []*IpTableChain) 
 				} else {
 					r.srcIpSet = ipset
 				}
-			} else {
+			} else if items[i] == "src,src" {
+				if notMatch {
+					r.srcIpPortSet = "! " + ipset
+				} else {
+					r.srcIpPortSet = ipset
+				}
+			} else if items[i] == "dst" {
 				if notMatch {
 					r.dstIpSet = "! " + ipset
 				} else {
 					r.dstIpSet = ipset
 				}
+			} else if items[i] == "dst,dst" {
+				if notMatch {
+					r.dstIpPortSet = "! " + ipset
+				} else {
+					r.dstIpPortSet = ipset
+				}
 			}
 			notMatch = false
+			break
+
+		case "--ipvs": /* --ipvs */
+			r.ipvs = true
+			break
+
+		case "--vaddr": /* --vaddr 192.168.100.30/32 */
+			i++
+			r.ipvsVaddr = items[i]
+			i++
+			break
+
+		case "--vport": /* --vaddr 192.168.100.30/32 */
+			i++
+			r.ipvsVport = items[i]
+			i++
 			break
 
 		case "--tcp-flags": /* --tcp-flags SYN,RST SYN,RST */

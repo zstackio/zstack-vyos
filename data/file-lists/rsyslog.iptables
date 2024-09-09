@@ -1,0 +1,2 @@
+:msg, contains, "ipvs-log" /var/log/ipvs.log
+& stop

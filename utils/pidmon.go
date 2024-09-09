@@ -51,3 +51,11 @@ func (pm *PidMon) Start() error {
 func (pm *PidMon) Stop() {
 	pm.ok = false
 }
+
+func (pm *PidMon) Destroy() {
+	pm.ok = false
+
+	if ProcessExists(pm.pid) == nil {
+		KillProcess(pm.pid)
+	}
+}

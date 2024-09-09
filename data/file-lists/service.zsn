@@ -1,0 +1,9 @@
+[Unit]
+Description=zstack network agent
+After=zvrboot.service
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/zstack-network-agent start
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target

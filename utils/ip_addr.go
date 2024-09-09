@@ -2,10 +2,10 @@ package utils
 
 import (
 	"errors"
+	log "github.com/sirupsen/logrus"
 	"strings"
 
 	"github.com/vishvananda/netlink"
-
 )
 
 // Equivalent to `ip addr add $ipString dev $linkName`
@@ -20,27 +20,31 @@ func IpAddrAdd(linkName string, ipString string) error {
 		return errors.New("link name or address can not be empty")
 	}
 	if l, err = netlink.LinkByName(linkName); err != nil {
+		log.Debugf("IpAddrAdd unknow linkeName %s", linkName)
 		return err
 	}
 
 	if addr, err = netlink.ParseAddr(ipString); err != nil {
+		log.Debugf("IpAddrAdd error ip %s", ipString)
 		return err
 	}
 
 	if err = netlink.AddrAdd(l, addr); err != nil {
+		log.Debugf("IpAddrAdd error %v", err)
 		if ok, _ := IpAddrIsExist(linkName, ipString); ok {
+			log.Debugf("add existed %v", ipString)
 			return nil
 		}
 	}
-	
-	// bash :=  Bash{
-	// 	Command: fmt.Sprintf("sudo ip addr add %s dev %s", ipString, linkName),
-	// }
 
-	// if ret, _, _, err := bash.RunWithReturn(); ret == 0 && err == nil {
-	// 	return nil
-	// }
-	return err
+	/*
+		bash := Bash{
+			Command: fmt.Sprintf("ip addr show dev %s", linkName),
+			Sudo:    true,
+		}
+		err = bash.Run()*/
+
+	return nil
 }
 
 // Equivalent to `ip addr del $ipString dev $linkName`
@@ -127,6 +131,7 @@ func IpAddrIsExist(linkName string, ipString string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	log.Debugf("%s address list: %v", linkName, addr_list)
 	if len(addr_list) > 0 {
 		for _, addr := range addr_list {
 			if addr == ipString {

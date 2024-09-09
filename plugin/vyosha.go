@@ -20,7 +20,7 @@ const (
 	RESTART_KEEPALIVED_PATH = "/restartKeepalived"
 )
 
-type setVyosHaCmd struct {
+type SetVyosHaCmd struct {
 	Keepalive    int          `json:"keepalive"`
 	HeartbeatNic string       `json:"heartbeatNic"`
 	LocalIp      string       `json:"localIp"`
@@ -28,11 +28,11 @@ type setVyosHaCmd struct {
 	PeerIp       string       `json:"peerIp"`
 	PeerIpV6     string       `json:"peerIpV6"`
 	Monitors     []string     `json:"monitors"`
-	Vips         []macVipPair `json:"vips"`
+	Vips         []MacVipPair `json:"vips"`
 	CallbackUrl  string       `json:"callbackUrl"`
 }
 
-type macVipPair struct {
+type MacVipPair struct {
 	NicMac    string `json:"nicMac"`
 	NicVip    string `json:"nicVip"`
 	Netmask   string `json:"netmask"`
@@ -51,18 +51,20 @@ type syncVpcRouterHaRsp struct {
 }
 
 func setVyosHaHandler(ctx *server.CommandContext) interface{} {
-	cmd := &setVyosHaCmd{}
+	cmd := &SetVyosHaCmd{}
 	ctx.GetCommand(cmd)
 
-	return setVyosHa(cmd)
+	return SetVyosHa(cmd)
 }
 
-func setVyosHa(cmd *setVyosHaCmd) interface{} {
+func SetVyosHa(cmd *SetVyosHaCmd) interface{} {
 	if cmd.PeerIp == "" {
 		cmd.PeerIp = cmd.LocalIp
 	}
 
-	heartbeatNicNme, _ := utils.GetNicNameByMac(cmd.HeartbeatNic)
+	heartbeatNicNme, err := utils.GetNicNameByMac(cmd.HeartbeatNic)
+	utils.PanicOnError(err)
+
 	/* add firewall */
 	if utils.IsSkipVyosIptables() {
 		table := utils.NewIpTables(utils.FirewallTable)
@@ -160,7 +162,7 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 	if cmd.PeerIp == "" {
 		cmd.PeerIp = cmd.LocalIp
 	}
-	checksum, err := getFileChecksum(getKeepalivedConfigFile())
+	checksum, err := getFileChecksum(GetKeepalivedConfigFile())
 	utils.PanicOnError(err)
 
 	keepalivedConf := NewKeepalivedConf(heartbeatNicNme, cmd.LocalIp, cmd.LocalIpV6, cmd.PeerIp, cmd.PeerIpV6, cmd.Monitors, cmd.Keepalive, pairs)
@@ -175,7 +177,7 @@ func setVyosHa(cmd *setVyosHaCmd) interface{} {
 	} else {
 		keepalivedConf.BuildConf()
 	}
-	newCheckSum, err := getFileChecksum(getKeepalivedConfigFile())
+	newCheckSum, err := getFileChecksum(GetKeepalivedConfigFile())
 	utils.PanicOnError(err)
 	/* if keepalived is not started, RestartKeepalived will also start keepalived */
 	if newCheckSum != checksum {
@@ -207,10 +209,13 @@ func syncVpcRouterHaHandler(ctx *server.CommandContext) interface{} {
 	var haStatus string
 	if !utils.IsHaEnabled() {
 		haStatus = utils.NOHA
-	} else if IsMaster() {
-		haStatus = utils.HAMASTER
 	} else {
-		haStatus = utils.HABACKUP
+		time.Sleep(time.Duration(5) * time.Second)
+		if IsMaster() {
+			haStatus = utils.HAMASTER
+		} else {
+			haStatus = utils.HABACKUP
+		}
 	}
 	return syncVpcRouterHaRsp{HaStatus: haStatus}
 }
@@ -278,10 +283,6 @@ func NonManagementUpNics() []string {
 }
 
 func getKeepAlivedStatusTask() {
-	if utils.IsRuingUT() {
-		return
-	}
-
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	defer func() { getKeepAlivedStatusStart = false; log.Errorf("!!!!!!!!!keepalived status check task exited") }()
@@ -292,6 +293,7 @@ func getKeepAlivedStatusTask() {
 		case <-ticker.C:
 			if utils.IsHaEnabled() {
 				newHaStatus := getKeepAlivedStatus()
+				log.Debugf("get keepalived status %s", newHaStatus.string())
 				if newHaStatus == KeepAlivedStatus_Unknown || newHaStatus == keepAlivedStatus {
 					/* sometime keepalived is in backup state, but nic is up,
 					   we need to call notify script to correct it */
@@ -317,10 +319,6 @@ func getKeepAlivedStatusTask() {
 }
 
 func keepAlivedCheckTask() {
-	if utils.IsRuingUT() {
-		return
-	}
-
 	if utils.IsEuler2203() {
 		/* open euler use systemd to manage keepalived */
 		return
@@ -362,6 +360,10 @@ type vyosNicVipPairs struct {
 }
 
 func generateNotityScripts() {
+	if utils.IsRuingUT() {
+		return
+	}
+
 	if utils.IsSLB() {
 		/* slb don't need such script */
 		return
@@ -445,8 +447,11 @@ func InitHaNicState() {
 		Command: strings.Join(cmds, ";"),
 	}
 
-	b.Run()
-	b.PanicIfError()
+	err := b.Run()
+	if err != nil {
+		/* it will failed for vyos 1.1.7, kernel 3.13 */
+		log.Debugf("set ip_nonlocal_bind failed, %+v", err)
+	}
 }
 
 var haVipPairs = vyosNicVipPairs{

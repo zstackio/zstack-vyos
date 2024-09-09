@@ -3,7 +3,7 @@ package utils
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -56,7 +56,7 @@ var _ = Describe("ip_link_test", func() {
 		IpLinkSetUp(linkName)
 	})
 	It("test ip-link add/del deivce", func() {
-		err = IpLinkAdd("test1", "ifb")
+		err = IpLinkAdd("test1", IpLinkTypeIfb.String())
 		Expect(err).To(BeNil(), fmt.Sprintf("ip link add device[test1] error: %s", err))
 		isExist := IpLinkIsExist("test1")
 		Expect(isExist).To(BeTrue(), "device[test1] should exist")

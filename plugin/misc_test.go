@@ -147,7 +147,7 @@ func cleanPluginMaps() {
 	haproxyListeners = map[string]*HaproxyListener{}
 
 	// ipsec map
-	ipsecMap = make(map[string]ipsecInfo, IPSecInfoMaxSize)
+	ipsecMap = make(map[string]IpsecInfo, IPSecInfoMaxSize)
 
 	// nic map
 	nicIps := utils.GetBootStrapNicInfo()

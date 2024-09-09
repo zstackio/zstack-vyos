@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 func JsonDecodeHttpRequest(req *http.Request, val interface{}) (err error) {
@@ -36,6 +37,7 @@ func JsonLoadConfig(filepath string, v interface{}) error {
 		return err
 	}
 	if len(f) == 0 {
+		log.Debugf("file %s is empty", filepath)
 		return nil
 	}
 

@@ -110,6 +110,8 @@ type ipsecConf struct {
 	Secret      string
 	Margintime  string
 	Number      string
+	RekeyTime   string
+	IkeVersion  int
 }
 
 var (
@@ -176,13 +178,18 @@ func getPrefixByIdType(idType string) string {
 	return ""
 }
 
-func getNativeConf(ipsecMsg *ipsecInfo) (error, *ipsecConf) {
+func getStrongswanConnConf(ipsecMsg *IpsecInfo) (error, *ipsecConf) {
 
 	conf := &ipsecConf{}
 	conf.ConnName = ipsecMsg.Uuid
 	conf.Authby = ipsecMsg.AuthMode
 	conf.Secret = ipsecMsg.AuthKey
 	conf.Keyexchange = ipsecMsg.IkeVersion
+	if ipsecMsg.IkeVersion == "ikev1" {
+		conf.IkeVersion = 1
+	} else {
+		conf.IkeVersion = 2
+	}
 	conf.Left = ipsecMsg.Vip
 	if ipsecMsg.PeerAddress != "" {
 		conf.Right = ipsecMsg.PeerAddress
@@ -197,11 +204,17 @@ func getNativeConf(ipsecMsg *ipsecInfo) (error, *ipsecConf) {
 	} else {
 		conf.Ike = ipsecMsg.IkeEncryptionAlgorithm + "-" + ipsecMsg.IkeAuthAlgorithm + "!"
 	}
+	if utils.IsEuler2203() {
+		conf.Ike = strings.Trim(conf.Ike, "!")
+	}
 
 	if regularDH, ok := dhGroupMap[ipsecMsg.Pfs]; ok {
 		conf.Esp = ipsecMsg.PolicyEncryptionAlgorithm + "-" + ipsecMsg.PolicyAuthAlgorithm + "-" + regularDH + "!"
 	} else {
 		conf.Esp = ipsecMsg.PolicyEncryptionAlgorithm + "-" + ipsecMsg.PolicyAuthAlgorithm + "!"
+	}
+	if utils.IsEuler2203() {
+		conf.Esp = strings.Trim(conf.Esp, "!")
 	}
 
 	conf.IdType = ipsecMsg.IdType
@@ -241,9 +254,11 @@ func getNativeConf(ipsecMsg *ipsecInfo) (error, *ipsecConf) {
 	if ipsecMsg.LifeTime > 0 {
 		conf.Lifetime = strconv.Itoa(ipsecMsg.LifeTime)
 		conf.Margintime = strconv.Itoa(ipsecMsg.LifeTime / 10)
+		conf.RekeyTime = strconv.Itoa(ipsecMsg.LifeTime * 9 / 10)
 	} else {
 		conf.Lifetime = "3600"
 		conf.Margintime = "360"
+		conf.RekeyTime = "3240"
 	}
 
 	// default value
@@ -627,11 +642,11 @@ func reloadIpsecConnCfgAndSecret(cfgUuid string, restartConnOpt, downOpt, reload
 	return nil
 }
 
-func modifyIpsecNative(confMsg *ipsecInfo) error {
+func modifyIpsecNative(confMsg *IpsecInfo) error {
 	downOpt := false
 	reloadOpt := false
 	restartConnOpt := false
-	err, conf := getNativeConf(confMsg) // 转换配置
+	err, conf := getStrongswanConnConf(confMsg) // 转换配置
 	if err != nil {
 		log.Error(err.Error())
 		return err
@@ -710,7 +725,7 @@ func backupIpsecConfigFile(fileCfg, fileCfgBak, connId string) error {
 	return nil
 }
 
-func updateIpsecStateNative(confMsg *ipsecInfo) error {
+func updateIpsecStateNative(confMsg *IpsecInfo) error {
 	var err error
 	fileCfg := getIpsecConfFile(confMsg.Uuid)
 	fileCfgBak := getIpsecBackupFile(fileCfg)
@@ -724,7 +739,7 @@ func updateIpsecStateNative(confMsg *ipsecInfo) error {
 	return err
 }
 
-func deleteIpsecNative(confMsg *ipsecInfo) error {
+func deleteIpsecNative(confMsg *IpsecInfo) error {
 	downOpt := false
 	reloadOpt := false
 	restartConnOpt := false
@@ -771,16 +786,20 @@ func ageIpsecConns(conns map[string]string) {
 }
 
 func getIpsecConnsState() map[string]string {
-	ipsecStateMap := make(map[string]string)
-	connUuids := getIpsecConns()
-	for _, conn := range connUuids {
-		if ret, _ := isIpsecConnUp(conn); ret {
-			ipsecStateMap[conn] = IPSEC_STATE_UP
-		} else {
-			ipsecStateMap[conn] = IPSEC_STATE_DOWN
+	if utils.IsEuler2203() {
+		return getAllIpsecConnStatus()
+	} else {
+		ipsecStateMap := make(map[string]string)
+		connUuids := getIpsecConns()
+		for _, conn := range connUuids {
+			if ret, _ := isIpsecConnUp(conn); ret {
+				ipsecStateMap[conn] = IPSEC_STATE_UP
+			} else {
+				ipsecStateMap[conn] = IPSEC_STATE_DOWN
+			}
 		}
+		return ipsecStateMap
 	}
-	return ipsecStateMap
 }
 
 func getIpsecConnsStatistic() []IPSecStatistic {
@@ -840,7 +859,7 @@ func (driver *ipsecStrongSWan) ExistConnWorking() bool {
 	return false
 }
 
-func (driver *ipsecStrongSWan) CreateIpsecConns(cmd *createIPsecCmd) error {
+func (driver *ipsecStrongSWan) CreateIpsecConns(cmd *CreateIPsecCmd) error {
 
 	/* use ipsec command to config ipsec */
 	if err := startIpsec(); err != nil {
@@ -857,7 +876,7 @@ func (driver *ipsecStrongSWan) CreateIpsecConns(cmd *createIPsecCmd) error {
 	return nil
 }
 
-func (driver *ipsecStrongSWan) DeleteIpsecConns(cmd *deleteIPsecCmd) error {
+func (driver *ipsecStrongSWan) DeleteIpsecConns(cmd *DeleteIPsecCmd) error {
 	for _, conf := range cmd.Infos {
 		if err := deleteIpsecNative(&conf); err != nil {
 			log.Error("delete ipsec connection err: " + err.Error())
@@ -887,7 +906,7 @@ func (driver *ipsecStrongSWan) ModifyIpsecConns(cmd *updateIPsecCmd) error {
 	return nil
 }
 
-func (driver *ipsecStrongSWan) SyncIpsecConns(cmd *syncIPsecCmd) []string {
+func (driver *ipsecStrongSWan) SyncIpsecConns(cmd *SyncIPsecCmd) []string {
 	if len(cmd.Infos) == 0 {
 		stopIpsec()
 		return nil

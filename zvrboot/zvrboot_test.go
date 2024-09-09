@@ -9,14 +9,14 @@ import (
 
 	"zstack-vyos/utils"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	_ "github.com/sirupsen/logrus"
 )
 
 var _ = Describe("zvrboot_test", func() {
 	It("[REPLACE_VYOS] zvrboot: pre env", func() {
-		utils.InitLog(utils.GetVyosUtLogDir()+"zvrboot_test.log", false)
+		utils.InitLog(utils.GetVyosUtLogDir()+"zvrboot_test.log", utils.IsRuingUT())
 		utils.SetEnableVyosCmdForUT(false)
 		utils.SetHaStatus(utils.HAMASTER)
 	})

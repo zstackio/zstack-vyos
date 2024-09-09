@@ -17,21 +17,21 @@ const (
 	GET_ROUTES  = "/getroutes"
 )
 
-type routeInfo struct {
+type RouteInfo struct {
 	Destination string `json:"destination"`
 	Target      string `json:"target"`
 	Distance    int    `json:"distance"`
 }
 
 type SyncRoutesCmd struct {
-	Routes []routeInfo `json:"routes"`
+	Routes []RouteInfo `json:"routes"`
 }
 
 type GetRoutesRsp struct {
 	RawRoutes string `json:"rawRoutes"`
 }
 
-type routeArray []routeInfo
+type routeArray []RouteInfo
 
 func (a routeArray) Len() int      { return len(a) }
 func (a routeArray) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
@@ -50,15 +50,15 @@ func syncRoutes(ctx *server.CommandContext) interface{} {
 	ctx.GetCommand(cmd)
 
 	if !utils.IsEnableVyosCmd() {
-		setZebraRoutes(cmd.Routes)
+		SetZebraRoutes(cmd.Routes)
 	} else {
-		setRoutes(cmd.Routes)
+		SetRoutes(cmd.Routes)
 	}
 	return nil
 }
 
-func getCurrentStaticRoutes(tree *server.VyosConfigTree) (routes []routeInfo) {
-	var infos []routeInfo
+func getCurrentStaticRoutes(tree *server.VyosConfigTree) (routes []RouteInfo) {
+	var infos []RouteInfo
 	rnode := tree.Get("protocols static route")
 	if rnode == nil {
 		return infos
@@ -69,7 +69,7 @@ func getCurrentStaticRoutes(tree *server.VyosConfigTree) (routes []routeInfo) {
 			for _, n := range nhop.Children() {
 				dis := n.GetChildrenValue("distance")
 				distance, _ := strconv.Atoi(dis)
-				var info = routeInfo{Destination: r.Name(), Target: n.Name(), Distance: distance}
+				var info = RouteInfo{Destination: r.Name(), Target: n.Name(), Distance: distance}
 				infos = append(infos, info)
 			}
 		}
@@ -78,14 +78,14 @@ func getCurrentStaticRoutes(tree *server.VyosConfigTree) (routes []routeInfo) {
 		if bh != nil {
 			dis := bh.GetChildrenValue("distance")
 			distance, _ := strconv.Atoi(dis)
-			var info = routeInfo{Destination: r.Name(), Target: "", Distance: distance}
+			var info = RouteInfo{Destination: r.Name(), Target: "", Distance: distance}
 			infos = append(infos, info)
 		}
 	}
 	return infos
 }
 
-func setRoutes(infos []routeInfo) {
+func SetRoutes(infos []RouteInfo) {
 	tree := server.NewParserFromShowConfiguration().Tree
 	oldStaticRoutes := getCurrentStaticRoutes(tree)
 	log.Debugf("old static routes: %+v", oldStaticRoutes)
@@ -141,7 +141,7 @@ func setRoutes(infos []routeInfo) {
 	tree.Apply(false)
 }
 
-func getLinuxRoutes() (ret int, output string, stderr string, err error) {
+func GetLinuxRoutes() (ret int, output string, stderr string, err error) {
 	// Note(WeiW): add "vtysh -c "show ip route " >/dev/null" to get correct return code
 	bash := utils.Bash{
 		Command: fmt.Sprintf("vtysh -c 'show ip route' | tail -n +4; vtysh -c 'show ip route' >/dev/null"),
@@ -150,7 +150,7 @@ func getLinuxRoutes() (ret int, output string, stderr string, err error) {
 }
 
 func getRoutes(ctx *server.CommandContext) interface{} {
-	ret, o, _, err := getLinuxRoutes()
+	ret, o, _, err := GetLinuxRoutes()
 	utils.PanicOnError(err)
 	if ret != 0 {
 		utils.PanicOnError(errors.Errorf(("get route from zebra error")))
@@ -166,7 +166,7 @@ func InitRoute() {
 	if utils.IsEuler2203() {
 		return
 	}
-	
+
 	/* loongarch vpc will go here */
 	bash := utils.Bash{
 		Command: fmt.Sprintf("sudo systemctl start zebra"),

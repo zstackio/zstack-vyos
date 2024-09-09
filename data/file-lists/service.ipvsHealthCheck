@@ -1,0 +1,15 @@
+[Unit]
+Description=ipvs backend server health check daemon
+After=syslog.target zvrboot.service
+
+[Service]
+Type=simple
+PIDFile=/var/run/ipvs_health_check.pid
+KillMode=process
+ExecStart=/usr/local/bin/ipvsHealthCheck -f /etc/ipvs/healthcheck.conf -log /var/log/ipvs_health_check.log -p /var/run/ipvs_health_check.pid
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

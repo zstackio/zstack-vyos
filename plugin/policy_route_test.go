@@ -29,8 +29,8 @@ var _ = XDescribe("policy_route_test", func() {
 		configureNic(nicCmd)
 
 		log.Debugf("###########test system policy route")
-		var cmd syncPolicyRouteCmd
-		cmd.RuleSets = []policyRuleSetInfo{
+		var cmd SyncPolicyRouteCmd
+		cmd.RuleSets = []PolicyRuleSetInfo{
 			{RuleSetName: "ZS-PR-RS-180", System: true},
 			{RuleSetName: "ZS-PR-RS-181", System: true},
 		}
@@ -47,28 +47,28 @@ var _ = XDescribe("policy_route_test", func() {
 		addr4 := fmt.Sprintf("%v/%v", utils.PrivateNicsForUT[1].Ip, cidr)
 		_, cidr4, _ := net.ParseCIDR(addr4)
 
-		cmd.Rules = []policyRuleInfo{
+		cmd.Rules = []PolicyRuleInfo{
 			{RuleSetName: "ZS-PR-RS-181", RuleNumber: 1, SourceIp: cidr1.String(), TableNumber: 181, State: "enable"},
 		}
 		cmd.TableNumbers = []int{181}
-		cmd.Routes = []policyRouteInfo{
+		cmd.Routes = []PolicyRouteInfo{
 			{TableNumber: 181, DestinationCidr: cidr1.String(), NextHopIp: utils.AdditionalPubNicsForUT[0].Gateway},
 			{TableNumber: 181, DestinationCidr: cidr3.String(), NextHopIp: utils.PrivateNicsForUT[0].Gateway, OutNicMic: utils.PrivateNicsForUT[0].Mac},
 			{TableNumber: 181, DestinationCidr: cidr4.String(), NextHopIp: utils.PrivateNicsForUT[1].Gateway, OutNicMic: utils.PrivateNicsForUT[1].Mac},
 			{TableNumber: 181, DestinationCidr: "0.0.0.0/0", NextHopIp: utils.AdditionalPubNicsForUT[0].Gateway},
 		}
-		cmd.Refs = []policyRuleSetNicRef{
+		cmd.Refs = []PolicyRuleSetNicRef{
 			{RuleSetName: "ZS-PR-RS-181", Mac: utils.AdditionalPubNicsForUT[0].Mac},
 		}
 		cmd.MarkConntrack = true
 
-		applyPolicyRoutes(&cmd)
+		ApplyPolicyRoutes(&cmd)
 		checkSystemPolicyRouteIpRule(true)
 		checkSystemPolicyRouteRouteEntry(true)
 		checkSystemPolicyRouteIptables(true)
 
-		delCmd := syncPolicyRouteCmd{}
-		applyPolicyRoutes(&delCmd)
+		delCmd := SyncPolicyRouteCmd{}
+		ApplyPolicyRoutes(&delCmd)
 		checkSystemPolicyRouteIpRule(false)
 		checkSystemPolicyRouteRouteEntry(false)
 		checkSystemPolicyRouteIptables(false)
@@ -77,8 +77,8 @@ var _ = XDescribe("policy_route_test", func() {
 	It("policy_route : test policy route for service chain", func() {
 		log.Debugf("###########test policy route for service chain")
 		/* this case refer to http://confluence.zstack.io/pages/viewpage.action?pageId=111070432 */
-		var cmd syncPolicyRouteCmd
-		cmd.RuleSets = []policyRuleSetInfo{
+		var cmd SyncPolicyRouteCmd
+		cmd.RuleSets = []PolicyRuleSetInfo{
 			{RuleSetName: "ZS-PR-RS-1", System: false},
 			{RuleSetName: "ZS-PR-RS-2", System: false},
 		}
@@ -87,29 +87,29 @@ var _ = XDescribe("policy_route_test", func() {
 		addr3 := fmt.Sprintf("%v/%v", utils.PrivateNicsForUT[0].Ip, cidr)
 		_, cidr3, _ := net.ParseCIDR(addr3)
 
-		cmd.Rules = []policyRuleInfo{
+		cmd.Rules = []PolicyRuleInfo{
 			{RuleSetName: "ZS-PR-RS-1", RuleNumber: 1001, TableNumber: 100, State: "enable"},
 			{RuleSetName: "ZS-PR-RS-2", RuleNumber: 1002, TableNumber: 101, State: "enable", DestIp: addr3},
 		}
 		cmd.TableNumbers = []int{100, 101}
-		cmd.Routes = []policyRouteInfo{
+		cmd.Routes = []PolicyRouteInfo{
 			{TableNumber: 100, DestinationCidr: "0.0.0.0/0", NextHopIp: utils.PrivateNicsForUT[1].Gateway + "0"},
 			{TableNumber: 100, DestinationCidr: cidr3.String(), NextHopIp: utils.PrivateNicsForUT[0].Gateway, OutNicMic: utils.PrivateNicsForUT[0].Mac},
 			{TableNumber: 101, DestinationCidr: cidr3.String(), NextHopIp: utils.PrivateNicsForUT[1].Gateway + "0"},
 		}
-		cmd.Refs = []policyRuleSetNicRef{
+		cmd.Refs = []PolicyRuleSetNicRef{
 			{RuleSetName: "ZS-PR-RS-1", Mac: utils.PrivateNicsForUT[0].Mac},
 			{RuleSetName: "ZS-PR-RS-2", Mac: utils.AdditionalPubNicsForUT[0].Mac},
 		}
 		cmd.MarkConntrack = false
 
-		applyPolicyRoutes(&cmd)
+		ApplyPolicyRoutes(&cmd)
 		checkServiceChainIpRule(true)
 		checkServiceChainRouteEntry(true)
 		checkServiceChainIptables(true)
 
-		delCmd := syncPolicyRouteCmd{}
-		applyPolicyRoutes(&delCmd)
+		delCmd := SyncPolicyRouteCmd{}
+		ApplyPolicyRoutes(&delCmd)
 		checkServiceChainIpRule(false)
 		checkServiceChainRouteEntry(false)
 		checkServiceChainIptables(false)

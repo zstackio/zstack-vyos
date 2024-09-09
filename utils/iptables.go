@@ -26,6 +26,8 @@ type IpTablesHelper interface {
 
 var vyosIptableHelper VyosIpTableHelper
 
+var iptablesWithLock = false
+
 type IpTableRule struct {
 	priority      int
 	ruleNumber    int
@@ -155,7 +157,7 @@ func (t *IpTables) parseIpTableChain(line string) (*IpTableChain, error) {
 		return nil, fmt.Errorf("iptable chain parse error %s", line)
 	}
 
-	chain := &IpTableChain{Name: items[0], Action: items[1]}
+	chain := &IpTableChain{Name: items[0], Action: strings.TrimSpace(items[1])}
 	t.Chains = append(t.Chains, chain)
 	return chain, nil
 }
@@ -270,8 +272,10 @@ func (t *IpTables) addIpTableRule(rule *IpTableRule) {
 			continue
 		} else if r.priority == rule.priority {
 			if r.IsRuleEqual(rule) == nil {
-				rules = append(rules, rule)
-				added = true
+				if !added {
+					rules = append(rules, rule)
+					added = true
+				}
 			} else {
 				rules = append(rules, r)
 			}
@@ -451,8 +455,8 @@ func (t *IpTables) restore() error {
 	}
 	content = append(content, "COMMIT\n")
 
-	if _, err = tmpFile.Write([]byte(strings.Join(content, "\n"))); err != nil {
-		log.Debugf("write to temp file failed %s, Rules: %s", err.Error(), strings.Join(content, "\n"))
+	if _, err = tmpFile.Write([]byte(strings.Join(content, ""))); err != nil {
+		log.Debugf("write to temp file failed %s, Rules: %s", content, err.Error())
 		return err
 	}
 
@@ -462,10 +466,14 @@ func (t *IpTables) restore() error {
 	}
 
 	var cmdStr string
+	flags := ""
+	if iptablesWithLock {
+		flags = "-w"
+	}
 	if t.IpVersion == IP_VERSION_6 {
-		cmdStr = fmt.Sprintf("ip6tables-restore -w --table=%s < %s", t.Name, tmpFile.Name())
+		cmdStr = fmt.Sprintf("ip6tables-restore %s --table=%s < %s", flags, t.Name, tmpFile.Name())
 	} else {
-		cmdStr = fmt.Sprintf("iptables-restore -w --table=%s < %s", t.Name, tmpFile.Name())
+		cmdStr = fmt.Sprintf("iptables-restore %s --table=%s < %s", flags, t.Name, tmpFile.Name())
 	}
 
 	cmd := Bash{
@@ -473,16 +481,15 @@ func (t *IpTables) restore() error {
 		Sudo:    true,
 	}
 
-	//log.Debugf("iptables-restore content: %s", content)
 	_, _, _, err = cmd.RunWithReturn()
 	if err != nil {
 		log.Debugf("%s content: %s\n\n%s failed: %+v", cmdStr, strings.Join(content, "\n"), cmdStr, err)
 
 		var errorCmdStr string
 		if t.IpVersion == IP_VERSION_6 {
-			errorCmdStr = fmt.Sprintf("ip6tables-restore -w --table=%s < %s 2>&1 | grep 'Error occurred at line' | awk '{print $(NF)}' | xargs -I {} sed -n '{}p' %s", t.Name, tmpFile.Name(), tmpFile.Name())
+			errorCmdStr = fmt.Sprintf("ip6tables-restore %s --table=%s < %s 2>&1 | grep 'Error occurred at line' | awk '{print $(NF)}' | xargs -I {} sed -n '{}p' %s", flags, t.Name, tmpFile.Name(), tmpFile.Name())
 		} else {
-			errorCmdStr = fmt.Sprintf("iptables-restore -w --table=%s < %s 2>&1 | grep 'Error occurred at line' | awk '{print $(NF)}' | xargs -I {} sed -n '{}p' %s", t.Name, tmpFile.Name(), tmpFile.Name())
+			errorCmdStr = fmt.Sprintf("iptables-restore %s --table=%s < %s 2>&1 | grep 'Error occurred at line' | awk '{print $(NF)}' | xargs -I {} sed -n '{}p' %s", flags, t.Name, tmpFile.Name(), tmpFile.Name())
 		}
 
 		bash := Bash{
@@ -546,4 +553,18 @@ func (t *IpTables) Flush(chainName string) error {
 	t.Chains = []*IpTableChain{}
 	t.Rules = []*IpTableRule{}
 	return nil
+}
+
+func InitIptablesFlags() {
+	bash := Bash{
+		Command: fmt.Sprintf("iptables -w -nL > /dev/null"),
+		Sudo:    true,
+	}
+
+	ret, _, _, err := bash.RunWithReturn()
+	if ret != 0 || err != nil {
+		iptablesWithLock = false
+	} else {
+		iptablesWithLock = true
+	}
 }

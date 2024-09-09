@@ -2,10 +2,36 @@ package utils
 
 import (
 	"errors"
+	"fmt"
 	"net"
+	"strings"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
+
+type IplInkType int
+const (
+	IpLinkTypeIfb IplInkType = iota + 1
+	IpLinkTypeIfbBridge
+	IpLinkTypeMacVtap
+	IpLinkTypeVeth
+)
+
+func (linkType IplInkType) String() string {
+	switch linkType {
+	case IpLinkTypeIfb:
+		return "ifb"
+	case IpLinkTypeIfbBridge:
+		return "bridge"
+	case IpLinkTypeMacVtap:
+		return "macvtap"
+	case IpLinkTypeVeth:
+		return "veth"
+	default:
+		return "Unknown"	
+	}
+}
 
 const (
 	MGMT_VRF 	= "mgmt"
@@ -32,30 +58,120 @@ func IpLinkAdd(linkName string, linkType string) error {
 		return errors.New("link name or type can not be empty")
 	}
 	linkAttr := netlink.NewLinkAttrs()
-	if linkType == "bridge" {
-		linkAttr.Name = linkName
-		bridge := &netlink.Bridge{LinkAttrs: linkAttr}
-		if err = netlink.LinkAdd(bridge); err != nil {
-			if IpLinkIsExist(linkName) {
-				return nil
+	switch linkType {
+		case IpLinkTypeIfbBridge.String(): {
+			linkAttr.Name = linkName
+			bridge := &netlink.Bridge{LinkAttrs: linkAttr}
+			if err = netlink.LinkAdd(bridge); err != nil {
+				if IpLinkIsExist(linkName) {
+					return nil
+				}
 			}
+	
+			return err
+		} 
+
+		case IpLinkTypeIfb.String(): {
+			linkAttr.Name = linkName
+			ifb := &netlink.Ifb{LinkAttrs: linkAttr}
+			if err = netlink.LinkAdd(ifb); err != nil {
+				if IpLinkIsExist(linkName) {
+					return nil
+				}
+			}
+
+			return err
 		}
 
-		return err
-	}
-	if linkType == "ifb" {
-		linkAttr.Name = linkName
-		ifb := &netlink.Ifb{LinkAttrs: linkAttr}
-		if err = netlink.LinkAdd(ifb); err != nil {
-			if IpLinkIsExist(linkName) {
-				return nil
-			}
+	case IpLinkTypeMacVtap.String(): {
+		var linkMap map[string]Nic
+		if linkMap, err = GetAllNics(); err != nil {
+			log.Debugf("failed to get all links: %v", err)
+			return err
+		} 
+
+		var linkNames  []string
+		for _, l := range linkMap {
+			linkNames = append(linkNames, l.Name)
 		}
 
-		return err
+		parentLink := ""
+		for _, link := range linkNames {
+			log.Debugf("link name: %s", link)
+			if strings.Contains(link, "eth") ||  strings.Contains(link, "ens"){
+				parentLink = link
+				break
+			}
+		}
+		if parentLink == "" {
+			log.Debugf("can not find link name start with: eth or ens:")
+			return fmt.Errorf("can not find link name start with: eth or ens:")
+		}
+		
+		pl, _  := netlink.LinkByName(parentLink)
+		macvtap := &netlink.Macvtap {
+			Macvlan: netlink.Macvlan{
+				LinkAttrs: netlink.LinkAttrs{
+					Name: linkName,
+					ParentIndex: pl.Attrs().Index,
+				},
+				Mode: netlink.MACVLAN_MODE_BRIDGE,
+			},
+		}
+
+		if err := netlink.LinkAdd(macvtap); err != nil {
+			log.Debugf("Failed to add macvtap device: %v", err)
+			if !strings.Contains(err.Error(), "file exists") {
+				return err
+			}
+		}
+		
+		if err := netlink.LinkSetUp(macvtap); err != nil {
+			log.Debugf("Failed to set macvtap device up: %v", err)
+			return err
+		}
+
+		return nil
 	}
 
-	return errors.New("type is not support")
+	case IpLinkTypeVeth.String(): {
+		peerName := linkName + "-peer"
+		veth := &netlink.Veth{
+			LinkAttrs: netlink.LinkAttrs{
+				Name: linkName,
+			},
+			PeerName: peerName,
+		}
+		
+		if _, err = netlink.LinkByName(linkName); err == nil {
+			IpLinkDel(linkName)
+		}
+
+		if _, err = netlink.LinkByName(peerName); err == nil {
+			IpLinkDel(peerName)
+		}
+		
+		if err := netlink.LinkAdd(veth); err != nil {
+			log.Debugf("Failed to add veth pair: %v", err)
+			return err
+		}
+		
+		if err := netlink.LinkSetUp(veth); err != nil {
+			log.Debugf("Failed to up veth pair: %v", err)
+			return err
+		}
+		
+		if err := IpLinkSetUp(peerName); err != nil {
+			log.Debugf("Failed to up veth pair: %v", err)
+			return err
+		}
+		
+		return nil
+	}
+		
+	default:
+		return errors.New("type is not support")
+	}
 }
 
 // Equivalent to `ip link del $linkName`
@@ -122,6 +238,18 @@ func IpLinkSetMAC(linkName string, macAddr string) error {
 	}
 
 	return netlink.LinkSetHardwareAddr(l, hardAddr)
+}
+
+func IpLinkGetMAC(linkName string) (string, error) {
+	if linkName == "" {
+		return "", errors.New("link name can not be empty")
+	}
+	iface, err := net.InterfaceByName(linkName)
+	if err != nil {
+		return "", err
+	}
+
+	return iface.HardwareAddr.String(), nil
 }
 
 // Equivalent to `ip link set $linkName mtu $mtu`

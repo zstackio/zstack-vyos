@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"sort"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 )
 
 var _ = XDescribe("iproute_test SetZStackRoute", func() {
 	BeforeEach(func() {
-		InitLog(GetVyosUtLogDir()+"iproute_test.log", false)
+		InitLog(GetVyosUtLogDir()+"iproute_test.log", IsRuingUT())
 	})
 
 	It("test set&remove zstack route", func() {
@@ -44,7 +44,7 @@ var _ = XDescribe("iproute_test SetZStackRoute", func() {
 
 var _ = XDescribe("iproute_test SyncZStackRouteTables", func() {
 	BeforeEach(func() {
-		InitLog(GetVyosUtLogDir()+"iproute_test.log", false)
+		InitLog(GetVyosUtLogDir()+"iproute_test.log", IsRuingUT())
 	})
 
 	It("test ip route table", func() {
@@ -78,7 +78,7 @@ var _ = XDescribe("iproute_test SyncZStackRouteTables", func() {
 
 var _ = XDescribe("iproute_test SyncRouteEntries", func() {
 	BeforeEach(func() {
-		InitLog(GetVyosUtLogDir()+"iproute_test.log", false)
+		InitLog(GetVyosUtLogDir()+"iproute_test.log", IsRuingUT())
 	})
 
 	It("test default ip route", func() {

@@ -95,7 +95,11 @@ func getRuleFromIpTableRule(r *utils.IpTableRule) ruleInfo {
 		rule.SourceIp = getRuleIpInfoFromIpTableRule(r.GetSrcIpRange())
 	}
 
-	rule.Protocol = strings.ToUpper(r.GetProto())
+	if utils.IsEuler2203() && r.GetProto() == "ipv4" {
+		rule.Protocol = strings.ToUpper("ipencap")
+	} else {
+		rule.Protocol = strings.ToUpper(r.GetProto())
+	}
 	rule.SourcePort = r.GetSrcPort()
 	rule.DestPort = r.GetDstPort()
 	rule.AllowStates = strings.Join(r.GetState(), ",")
@@ -125,7 +129,11 @@ func getIpTableRuleFromRule(ruleSetName string, r ruleInfo) *utils.IpTableRule {
 	rule.SetAction(strings.ToUpper(r.Action))
 	/* all does not need be filled in iptables */
 	if strings.ToLower(r.Protocol) != "all" {
-		rule.SetProto(r.Protocol)
+		if utils.IsEuler2203() && strings.ToLower(r.Protocol) == "ipencap" {
+			rule.SetProto("ipv4")
+		} else {
+			rule.SetProto(r.Protocol)
+		}
 	}
 
 	if r.DestPort != "" {

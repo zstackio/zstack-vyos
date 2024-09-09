@@ -37,6 +37,12 @@ func (r *IpTableRule) SetAction(Action string) *IpTableRule {
 	return r
 }
 
+func (r *IpTableRule) SetActionLog(logprefix string) *IpTableRule {
+	r.action = IPTABLES_ACTION_LOG
+	r.logPrefix = logprefix
+	return r
+}
+
 func (r *IpTableRule) SetDnatTargetIp(targetIp string) *IpTableRule {
 	r.dnatTargetIp = targetIp
 	return r

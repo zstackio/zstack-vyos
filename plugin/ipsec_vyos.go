@@ -93,7 +93,9 @@ func isVpnAllPeersUp() bool {
 	return true
 }
 
-/* /opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl is a tool to change ipsec config, it has options:
+/*
+	/opt/vyatta/bin/sudo-users/vyatta-vpn-op.pl is a tool to change ipsec config, it has options:
+
 clear-vpn-ipsec-process
 show-vpn-debug
 show-vpn-debug-detail
@@ -139,7 +141,7 @@ func restartVpnAfterConfig() {
 	}
 }
 
-func createIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
+func createIPsec(tree *server.VyosConfigTree, info IpsecInfo) {
 	nicname, err := utils.GetNicNameByMac(info.PublicNic)
 	utils.PanicOnError(err)
 
@@ -216,7 +218,7 @@ func restoreIpRuleForMainRouteTable() {
 	}
 }
 
-func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
+func deleteIPsec(tree *server.VyosConfigTree, info IpsecInfo) {
 
 	tree.Deletef("vpn ipsec ike-group %s", info.Uuid)
 	tree.Deletef("vpn ipsec esp-group %s", info.Uuid)
@@ -234,7 +236,7 @@ func deleteIPsec(tree *server.VyosConfigTree, info ipsecInfo) {
 	}
 }
 
-func updateIPsecConnectionState(tree *server.VyosConfigTree, info ipsecInfo) {
+func updateIPsecConnectionState(tree *server.VyosConfigTree, info IpsecInfo) {
 	if info.State == ipsecState_disable {
 		for i, _ := range info.PeerCidrs {
 			tree.Setf("vpn ipsec site-to-site peer %v tunnel %v disable", info.PeerAddress, i+1)
@@ -335,7 +337,7 @@ func (driver *ipsecVyos) DriverType() string {
 	return ipsec_driver_vyos
 }
 
-func getPeerConns(ipsec *ipsecInfo) []string {
+func getPeerConns(ipsec *IpsecInfo) []string {
 	var conns []string
 	tunnelNo := 1
 	for _, _ = range ipsec.LocalCidrs {
@@ -347,7 +349,7 @@ func getPeerConns(ipsec *ipsecInfo) []string {
 	return conns
 }
 
-func ipsecDownConns(ipsec *ipsecInfo) {
+func ipsecDownConns(ipsec *IpsecInfo) {
 	conns := getPeerConns(ipsec)
 	for _, conn := range conns {
 		log.Infof(fmt.Sprintf("TEMP: ipsecDownConns %s", conn))
@@ -372,7 +374,7 @@ func (driver *ipsecVyos) ExistConnWorking() bool {
 	return false
 }
 
-func (driver *ipsecVyos) CreateIpsecConns(cmd *createIPsecCmd) error {
+func (driver *ipsecVyos) CreateIpsecConns(cmd *CreateIPsecCmd) error {
 	/* use vyos cli to config ipsec */
 	AutoRestartVpn = cmd.AutoRestartVpn
 
@@ -386,7 +388,7 @@ func (driver *ipsecVyos) CreateIpsecConns(cmd *createIPsecCmd) error {
 	return nil
 }
 
-func (driver *ipsecVyos) DeleteIpsecConns(cmd *deleteIPsecCmd) error {
+func (driver *ipsecVyos) DeleteIpsecConns(cmd *DeleteIPsecCmd) error {
 	/* use vyos cli to config ipsec */
 	tree := server.GenVyosConfigTree()
 	for _, info := range cmd.Infos {
@@ -417,7 +419,7 @@ func (driver *ipsecVyos) ModifyIpsecConns(cmd *updateIPsecCmd) error {
 	return nil
 }
 
-func (driver *ipsecVyos) SyncIpsecConns(cmd *syncIPsecCmd) []string {
+func (driver *ipsecVyos) SyncIpsecConns(cmd *SyncIPsecCmd) []string {
 	/* use vyos cli to config ipsec */
 	AutoRestartVpn = cmd.AutoRestartVpn
 

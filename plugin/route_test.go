@@ -16,7 +16,7 @@ var _ = XDescribe("route_test", func() {
 		nextHopInPubL3                     string
 		nextHopInPubL32                    string
 		nextHopInmgt                       string
-		r0, r1, r2, r3, r4, r5, r6, r7, r8 routeInfo
+		r0, r1, r2, r3, r4, r5, r6, r7, r8 RouteInfo
 		nicCmd                             *configureNicCmd
 	)
 
@@ -30,15 +30,15 @@ var _ = XDescribe("route_test", func() {
 		nextHopInPubL32, _ = utils.GetFreePubL3Ip()
 		nextHopInmgt, _ = utils.GetFreeMgtIp()
 
-		r0 = routeInfo{Destination: "172.16.0.0/12", Target: utils.GetMgtGateway(), Distance: 1}
-		r1 = routeInfo{Destination: "1.1.1.0/24", Target: nextHopInPubL3, Distance: 100}
-		r2 = routeInfo{Destination: "1.1.2.0/24", Target: nextHopInPubL3, Distance: 110}
-		r3 = routeInfo{Destination: "1.1.3.0/24", Target: nextHopInmgt, Distance: 120}
-		r4 = routeInfo{Destination: "1.1.4.0/24", Target: nextHopInmgt, Distance: 130}
-		r5 = routeInfo{Destination: "1.1.5.0/24", Target: "", Distance: 80}
-		r6 = routeInfo{Destination: "1.1.6.0/24", Target: "", Distance: 90}
-		r7 = routeInfo{Destination: "1.1.1.0/24", Target: nextHopInPubL32, Distance: 100}
-		r8 = routeInfo{Destination: "1.1.3.0/24", Target: nextHopInmgt, Distance: 130}
+		r0 = RouteInfo{Destination: "172.16.0.0/12", Target: utils.GetMgtGateway(), Distance: 1}
+		r1 = RouteInfo{Destination: "1.1.1.0/24", Target: nextHopInPubL3, Distance: 100}
+		r2 = RouteInfo{Destination: "1.1.2.0/24", Target: nextHopInPubL3, Distance: 110}
+		r3 = RouteInfo{Destination: "1.1.3.0/24", Target: nextHopInmgt, Distance: 120}
+		r4 = RouteInfo{Destination: "1.1.4.0/24", Target: nextHopInmgt, Distance: 130}
+		r5 = RouteInfo{Destination: "1.1.5.0/24", Target: "", Distance: 80}
+		r6 = RouteInfo{Destination: "1.1.6.0/24", Target: "", Distance: 90}
+		r7 = RouteInfo{Destination: "1.1.1.0/24", Target: nextHopInPubL32, Distance: 100}
+		r8 = RouteInfo{Destination: "1.1.3.0/24", Target: nextHopInmgt, Distance: 130}
 
 		nicCmd = &configureNicCmd{}
 		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
@@ -52,34 +52,34 @@ var _ = XDescribe("route_test", func() {
 	})
 
 	It("route set", func() {
-		routes := []routeInfo{r0, r1, r2, r3, r4, r5, r6}
-		setRoutes(routes)
-		checkRoutes(routes, []routeInfo{})
+		routes := []RouteInfo{r0, r1, r2, r3, r4, r5, r6}
+		SetRoutes(routes)
+		checkRoutes(routes, []RouteInfo{})
 	})
 
 	It("route set again", func() {
-		routes := []routeInfo{r0, r1, r2, r3, r4, r5, r6}
-		setRoutes(routes)
-		checkRoutes(routes, []routeInfo{})
+		routes := []RouteInfo{r0, r1, r2, r3, r4, r5, r6}
+		SetRoutes(routes)
+		checkRoutes(routes, []RouteInfo{})
 	})
 
 	It("route change", func() {
-		routes := []routeInfo{r0, r2, r4, r5, r6, r7, r8}
-		routesDelete := []routeInfo{r1, r3}
-		setRoutes(routes)
+		routes := []RouteInfo{r0, r2, r4, r5, r6, r7, r8}
+		routesDelete := []RouteInfo{r1, r3}
+		SetRoutes(routes)
 		checkRoutes(routes, routesDelete)
 	})
 
 	It("route add", func() {
-		routes := []routeInfo{r0, r1, r2, r3, r4, r5, r6}
-		setRoutes(routes)
-		checkRoutes(routes, []routeInfo{})
+		routes := []RouteInfo{r0, r1, r2, r3, r4, r5, r6}
+		SetRoutes(routes)
+		checkRoutes(routes, []RouteInfo{})
 	})
 
 	It("route delte", func() {
-		routes1 := []routeInfo{r0}
-		setRoutes(routes1)
-		checkRoutes(routes1, []routeInfo{r1, r2, r3, r4, r5, r6})
+		routes1 := []RouteInfo{r0}
+		SetRoutes(routes1)
+		checkRoutes(routes1, []RouteInfo{r1, r2, r3, r4, r5, r6})
 	})
 
 	It("release after route delte", func() {
@@ -88,7 +88,7 @@ var _ = XDescribe("route_test", func() {
 
 })
 
-func checkRoutes(routes []routeInfo, routesDeleted []routeInfo) {
+func checkRoutes(routes []RouteInfo, routesDeleted []RouteInfo) {
 	tree := server.NewParserFromShowConfiguration().Tree
 	currentRoutes := getCurrentStaticRoutes(tree)
 
@@ -117,7 +117,7 @@ func checkRoutes(routes []routeInfo, routesDeleted []routeInfo) {
 	}
 
 	/* check linux ip route */
-	ret, o, _, err := getLinuxRoutes()
+	ret, o, _, err := GetLinuxRoutes()
 	Expect(ret != 0 || err != nil).To(BeFalse(), "get linux router failed", err)
 
 	for _, r1 := range routes {
