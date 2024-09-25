@@ -14,6 +14,9 @@ const (
 	FirewallTable = "filter"
 	NatTable      = "nat"
 	MangleTable   = "mangle"
+
+	IP_VERSION_4 = 4
+	IP_VERSION_6 = 6
 )
 
 type IpTablesHelper interface {
@@ -91,9 +94,10 @@ func NewIpTablesChain(name string) *IpTableChain {
 }
 
 type IpTables struct {
-	Name   string
-	Chains []*IpTableChain
-	Rules  []*IpTableRule
+	Name      string
+	Chains    []*IpTableChain
+	Rules     []*IpTableRule
+	IpVersion int
 
 	/* these fields only used for parse rules from iptables-save*/
 	lastChainName      string
@@ -101,7 +105,11 @@ type IpTables struct {
 }
 
 func NewIpTables(name string) *IpTables {
-	table := &IpTables{Name: name, priorityOfLastRule: 0, lastChainName: ""}
+	return NewIpTablesByIpVersion(name, IP_VERSION_4)
+}
+
+func NewIpTablesByIpVersion(name string, ipVersion int) *IpTables {
+	table := &IpTables{Name: name, IpVersion: ipVersion, priorityOfLastRule: 0, lastChainName: ""}
 	err := table.save()
 	PanicOnError(err)
 
@@ -407,7 +415,11 @@ func (t *IpTables) Found(chainname, comment string) []*IpTableRule {
 }
 
 func (t *IpTables) getPrefix() string {
-	return "iptables -t " + t.Name + " "
+	if t.IpVersion == IP_VERSION_6 {
+		return "ip6tables -t " + t.Name + " "
+	} else {
+		return "iptables -t " + t.Name + " "
+	}
 }
 
 func (t *IpTables) Apply() error {
@@ -440,7 +452,7 @@ func (t *IpTables) restore() error {
 	content = append(content, "COMMIT\n")
 
 	if _, err = tmpFile.Write([]byte(strings.Join(content, "\n"))); err != nil {
-		log.Debugf("write to temp file failed %s, Rules: %s", content, err.Error())
+		log.Debugf("write to temp file failed %s, Rules: %s", err.Error(), strings.Join(content, "\n"))
 		return err
 	}
 
@@ -449,17 +461,32 @@ func (t *IpTables) restore() error {
 		return err
 	}
 
+	var cmdStr string
+	if t.IpVersion == IP_VERSION_6 {
+		cmdStr = fmt.Sprintf("ip6tables-restore -w --table=%s < %s", t.Name, tmpFile.Name())
+	} else {
+		cmdStr = fmt.Sprintf("iptables-restore -w --table=%s < %s", t.Name, tmpFile.Name())
+	}
+
 	cmd := Bash{
-		Command: fmt.Sprintf("iptables-restore  -w --table=%s < %s", t.Name, tmpFile.Name()),
+		Command: cmdStr,
 		Sudo:    true,
 	}
 
 	//log.Debugf("iptables-restore content: %s", content)
 	_, _, _, err = cmd.RunWithReturn()
 	if err != nil {
-		log.Debugf("iptables-restore -w content: %s\n\niptables-restore failed: %+v", content, err)
+		log.Debugf("%s content: %s\n\n%s failed: %+v", cmdStr, strings.Join(content, "\n"), cmdStr, err)
+
+		var errorCmdStr string
+		if t.IpVersion == IP_VERSION_6 {
+			errorCmdStr = fmt.Sprintf("ip6tables-restore -w --table=%s < %s 2>&1 | grep 'Error occurred at line' | awk '{print $(NF)}' | xargs -I {} sed -n '{}p' %s", t.Name, tmpFile.Name(), tmpFile.Name())
+		} else {
+			errorCmdStr = fmt.Sprintf("iptables-restore -w --table=%s < %s 2>&1 | grep 'Error occurred at line' | awk '{print $(NF)}' | xargs -I {} sed -n '{}p' %s", t.Name, tmpFile.Name(), tmpFile.Name())
+		}
+
 		bash := Bash{
-			Command: fmt.Sprintf("iptables-restore -w --table=%s < %s 2>&1 | grep 'Error occurred at line' | awk '{print $(NF)}' | xargs -i sed -n '{}p' %s", t.Name, tmpFile.Name(), tmpFile.Name()),
+			Command: errorCmdStr,
 			Sudo:    true,
 		}
 		_, outStr, _, _ := bash.RunWithReturn()
@@ -471,16 +498,23 @@ func (t *IpTables) restore() error {
 }
 
 func (t *IpTables) save() error {
+	var cmdStr string
+	if t.IpVersion == IP_VERSION_6 {
+		cmdStr = fmt.Sprintf("ip6tables-save -t %s", t.Name)
+	} else {
+		cmdStr = fmt.Sprintf("iptables-save -t %s", t.Name)
+	}
+
 	cmd := Bash{
-		Command: fmt.Sprintf("iptables-save -t " + t.Name),
+		Command: cmdStr,
 		Sudo:    true,
 		NoLog:   true,
 	}
 
 	ret, o, _, err := cmd.RunWithReturn()
 	if ret != 0 || err != nil {
-		log.Debugf("iptables-save failed ret = %d, err: %s", ret, err)
-		return fmt.Errorf("iptables-save failed ret = %d, err: %s", ret, err)
+		log.Debugf("%s failed ret = %d, err: %s", cmdStr, ret, err)
+		return fmt.Errorf("%s failed ret = %d, err: %s", cmdStr, ret, err)
 	}
 	//log.Debugf("current iptables %s", o)
 
@@ -490,16 +524,23 @@ func (t *IpTables) save() error {
 }
 
 func (t *IpTables) Flush(chainName string) error {
+	var cmdStr string
+	if t.IpVersion == IP_VERSION_6 {
+		cmdStr = fmt.Sprintf("ip6tables -t %s -F %s", t.Name, chainName)
+	} else {
+		cmdStr = fmt.Sprintf("iptables -t %s -F %s", t.Name, chainName)
+	}
+
 	cmd := Bash{
-		Command: fmt.Sprintf("iptables-save -t " + t.Name + " -F " + chainName),
+		Command: cmdStr,
 		Sudo:    true,
 		NoLog:   true,
 	}
 
 	ret, _, _, err := cmd.RunWithReturn()
 	if ret != 0 || err != nil {
-		log.Debugf("iptables-save failed ret = %d, err: %s", ret, err)
-		return fmt.Errorf("iptables-save failed ret = %d, err: %s", ret, err)
+		log.Debugf("%s failed ret = %d, err: %s", cmdStr, ret, err)
+		return fmt.Errorf("%s failed ret = %d, err: %s", cmdStr, ret, err)
 	}
 
 	t.Chains = []*IpTableChain{}

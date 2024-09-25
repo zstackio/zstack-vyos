@@ -10,6 +10,8 @@ import (
 const (
 	IPSET_TYPE_HASH_IP  = "hash:ip"
 	IPSET_TYPE_HASH_NET = "hash:net"
+	IPSET_FAMILY_INET   = "inet"
+	IPSET_FAMILY_INET6  = "inet6"
 )
 
 /*
@@ -41,6 +43,7 @@ type IpSet struct {
 	Name      string   `xml:"name,attr"`
 	IpSetType string   `xml:"type"`
 	Member    []string `xml:"members>member"`
+	Family    string   // 新增字段，用于指定地址族（inet 或 inet6）
 }
 
 func GetCurrentIpSet() ([]*IpSet, error) {
@@ -65,12 +68,26 @@ func GetCurrentIpSet() ([]*IpSet, error) {
 }
 
 func NewIPSet(name, ipsetType string) *IpSet {
-	return &IpSet{Name: name, IpSetType: ipsetType}
+	return NewIPSetByFamily(name, ipsetType, IPSET_FAMILY_INET)
+}
+
+func NewIPSetByFamily(name, ipsetType, family string) *IpSet {
+	return &IpSet{Name: name, IpSetType: ipsetType, Family: family}
 }
 
 func (s *IpSet) Create() error {
+	var cmdStr string
+	if s.Family != "" {
+		if s.Family == IPSET_FAMILY_INET6 && IsVYOS() {
+			return fmt.Errorf("VyOS ipset not support family %s, use openEuler upgrade it", s.Family)
+		}
+		cmdStr = fmt.Sprintf("ipset create %s %s family %s -exist; ipset flush %s", s.Name, s.IpSetType, s.Family, s.Name)
+	} else {
+		cmdStr = fmt.Sprintf("ipset create %s %s -exist; ipset flush %s", s.Name, s.IpSetType, s.Name)
+	}
+
 	cmd := Bash{
-		Command: fmt.Sprintf("ipset create %s %s -exist; ipset flush %s", s.Name, s.IpSetType, s.Name),
+		Command: cmdStr,
 		Sudo:    true,
 	}
 
@@ -172,7 +189,7 @@ func (s *IpSet) Swap(dst *IpSet) bool {
 	}
 
 	cmd := Bash{
-		Command: fmt.Sprintf("ipset swap %s %s -exist ", s.Name, dst.Name),
+		Command: fmt.Sprintf("ipset swap %s %s -exist", s.Name, dst.Name),
 		Sudo:    true,
 	}
 	ret, _, _, err := cmd.RunWithReturn()
