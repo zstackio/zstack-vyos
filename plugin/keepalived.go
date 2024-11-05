@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -39,8 +40,9 @@ const (
 const PID_ERROR = -1
 
 const (
-	KEEPALIVED_GARP_PATH = "/keepalived/garp"
-	KEEPALIVED_STATE_PATH = "/tmp/keepalived_state"
+	KEEPALIVED_GARP_PATH   = "/keepalived/garp"
+	KEEPALIVED_STATE_PATH  = "/tmp/keepalived_state"
+	KEEPALIVED_DEMOTE_PATH = "/keepalived/demote"
 )
 
 func (s KeepAlivedStatus) string() string {
@@ -72,36 +74,36 @@ func getKeepalivedConfigPath() string {
 }
 
 func getKeepalivedScriptPath() string {
-	return filepath.Join(getKeepalivedRootPath(), "script/");
-}       
+	return filepath.Join(getKeepalivedRootPath(), "script/")
+}
 
 func getKeepalivedConfigFile() string {
 	return filepath.Join(getKeepalivedRootPath(), "conf/keepalived.conf")
 }
 
-func	getConntrackdConfigFile() string {
+func getConntrackdConfigFile() string {
 	return filepath.Join(getKeepalivedRootPath(), "conf/conntrackd.conf")
-}           
+}
 
 func getKeepalivedScriptMasterDoGARP() string {
 	return filepath.Join(getKeepalivedRootPath(), "script/garp.sh")
-}    
+}
 
 func getKeepalivedScriptMasterDoIpv6Dad() string {
 	return filepath.Join(getKeepalivedRootPath(), "script/ipv6Dad.sh")
-} 
+}
 
 func getKeepalivedScriptNotifyMaster() string {
 	return filepath.Join(getKeepalivedRootPath(), "script/notifyMaster")
-}    
+}
 
-func getKeepalivedScriptNotifyBackup()  string {
+func getKeepalivedScriptNotifyBackup() string {
 	return filepath.Join(getKeepalivedRootPath(), "script/notifyBackup")
-} 
-	
+}
+
 func getConntrackScriptPrimaryBackup() string {
 	return filepath.Join(getKeepalivedRootPath(), "script/primary-backup.sh")
-}   
+}
 
 type KeepalivedNotify struct {
 	VyosHaVipPairs      []nicVipPair
@@ -306,7 +308,6 @@ func (k *KeepalivedNotify) generateGarpScript() error {
 	err = tmpl.Execute(&buf, k)
 	utils.PanicOnError(err)
 
-	
 	if utils.IsEuler2203() {
 		os.WriteFile(getKeepalivedScriptMasterDoGARP(), buf.Bytes(), 0700)
 		return utils.SetFileOwner(getKeepalivedScriptMasterDoGARP(), utils.GetZvrUser(), utils.GetZvrUser())
@@ -387,7 +388,6 @@ func (k *KeepalivedNotify) CreateBackupScript() error {
 		err = os.WriteFile(getKeepalivedScriptNotifyBackup(), buf.Bytes(), 0755)
 		utils.PanicOnError(err)
 	}
-	
 
 	log.Debugf("%s: %s", getKeepalivedScriptNotifyBackup(), buf.String())
 
@@ -466,7 +466,7 @@ type KeepalivedConf struct {
 	Vips                []nicVipPair
 	VipV4               *nicVipPair
 	VipV6               *nicVipPair
-	MaxAutoPriority     int 
+	MaxAutoPriority     int
 }
 
 func NewKeepalivedConf(hearbeatNic, LocalIp, LocalIpV6, PeerIp, PeerIpV6 string, MonitorIps []string, Interval int, vips []nicVipPair) *KeepalivedConf {
@@ -820,7 +820,6 @@ func (k *KeepalivedConf) BuildConf() error {
 	return os.WriteFile(getConntrackdConfigFile(), buf.Bytes(), 0644)
 }
 
-
 func doRestartKeepalived(action KeepAlivedProcessAction) error {
 	if utils.IsEuler2203() {
 		pid := getKeepalivedPid()
@@ -996,7 +995,7 @@ func getKeepAlivedStatus() KeepAlivedStatus {
 	if err != nil || ret != 0 {
 		log.Debugf("get keepalived status %s", e)
 	}
-	
+
 	switch strings.TrimSpace(string(state)) {
 	case "MASTER":
 		return KeepAlivedStatus_Master
@@ -1010,6 +1009,46 @@ func getKeepAlivedStatus() KeepAlivedStatus {
 }
 
 var garp_counter uint32
+
+func demoteKeepalivedHandler(ctx *server.CommandContext) interface{} {
+	if keepAlivedStatus != KeepAlivedStatus_Master {
+		return fmt.Errorf("Current status is not Master, cannot demote")
+	}
+
+	updateKeepalivedPriority(50)
+	doRestartKeepalived(KeepAlivedProcess_Restart)
+	log.Infof("Keepalived restarted with priority 50")
+
+	keepAlivedStatus = KeepAlivedStatus_Backup
+	callStatusChangeScripts()
+
+	time.Sleep(10 * time.Second)
+
+	updateKeepalivedPriority(100)
+	doRestartKeepalived(KeepAlivedProcess_Reload)
+
+	log.Infof("Keepalived status demoted to Backup and priority restored to 100")
+	return nil
+}
+
+func updateKeepalivedPriority(priority int) {
+	confFile := getKeepalivedConfigFile()
+
+	content, err := os.ReadFile(confFile)
+	if err != nil {
+		log.Errorf("Failed to read Keepalived config file: %v", err)
+		return
+	}
+
+	re := regexp.MustCompile(`priority\s+\d+`)
+
+	newContent := re.ReplaceAllString(string(content), fmt.Sprintf("priority %d", priority))
+
+	err = os.WriteFile(confFile, []byte(newContent), 0644)
+	if err != nil {
+		log.Errorf("Failed to write updated Keepalived config file: %v", err)
+	}
+}
 
 func garpHandler(ctx *server.CommandContext) interface{} {
 	if atomic.AddUint32(&garp_counter, 1) > 1 {
@@ -1044,6 +1083,7 @@ func KeepalivedEntryPoint() {
 	})
 
 	server.RegisterSyncCommandHandler(KEEPALIVED_GARP_PATH, garpHandler)
+	server.RegisterSyncCommandHandler(KEEPALIVED_DEMOTE_PATH, demoteKeepalivedHandler)
 }
 
 func (k *KeepalivedConf) BuildSlbConf() error {

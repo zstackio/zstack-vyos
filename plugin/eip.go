@@ -9,11 +9,15 @@ import (
 )
 
 const (
-	VR_CREATE_EIP  = "/createeip"
-	VR_REMOVE_EIP  = "/removeeip"
-	VR_SYNC_EIP    = "/synceip"
-	EipInfoMaxSize = 512
-	EIP_IPSET_NAME = "eip-group"
+	VR_CREATE_EIP       = "/createeip"
+	VR_REMOVE_EIP       = "/removeeip"
+	VR_SYNC_EIP         = "/synceip"
+	EipInfoMaxSize      = 512
+	EIP_IPSET_NAME      = "eip-group"
+	EIP_IPV6_IPSET_NAME = "eip-ipv6-group"
+
+	IP_VERSION_4 = "ipv4"
+	IP_VERSION_6 = "ipv6"
 )
 
 type eipInfo struct {
@@ -23,10 +27,12 @@ type eipInfo struct {
 	PublicMac          string `json:"publicMac"`
 	SnatInboundTraffic bool   `json:"snatInboundTraffic"`
 	NeedCleanGuestIp   bool   `json:"needCleanGuestIp"`
+	IpVersion          string `json:"ipVersion"`
 }
 
 var eipMap map[string]eipInfo
 var eipIpset *utils.IpSet
+var eipIpv6Ipset *utils.IpSet
 
 type setEipCmd struct {
 	Eip eipInfo `json:"eip"`
@@ -94,6 +100,9 @@ func checkEipIpTableRules(eipList []eipInfo) error {
 		nicName, err := utils.GetNicNameByMac(eip.PublicMac)
 		if err != nil {
 			return err
+		}
+		if eip.IpVersion == IP_VERSION_6 {
+			return fmt.Errorf("checkEipIpTableRules: ipv6 not support with VyOS, use openEuler upgrade it")
 		}
 		rule := utils.NewIpTableRule(utils.RULESET_DNAT.String())
 		rule.SetAction(utils.IPTABLES_ACTION_DNAT)
@@ -369,29 +378,66 @@ func syncEipByIptables() error {
 			return err
 		}
 	}
+	if eipIpv6Ipset == nil {
+		eipIpv6Ipset = utils.NewIPSetByFamily(EIP_IPV6_IPSET_NAME, utils.IPSET_TYPE_HASH_IP, utils.IPSET_FAMILY_INET6)
+		if err := eipIpv6Ipset.Create(); err != nil {
+			log.Debugf("create eip ipv6 ipset failed %s", err)
+			return err
+		}
+	}
+
 	ipsetMemberMap := make(map[string]string)
 	guestIpMap := make(map[string]string)
+	ipsetMemberIpv6Map := make(map[string]string)
 	for _, member := range eipIpset.Member {
 		ipsetMemberMap[member] = member
+	}
+	for _, member := range eipIpv6Ipset.Member {
+		ipsetMemberIpv6Map[member] = member
 	}
 
 	var toAddMemeber []string
 	var toDelMemeber []string
+	var toAddIpv6Memeber []string
+	var toDelIpv6Memeber []string
 	for _, eip := range eipMap {
-		if _, ok := ipsetMemberMap[eip.GuestIp]; !ok {
-			toAddMemeber = append(toAddMemeber, eip.GuestIp)
+		if eip.IpVersion == IP_VERSION_6 {
+			if _, ok := ipsetMemberIpv6Map[eip.GuestIp]; !ok {
+				toAddIpv6Memeber = append(toAddIpv6Memeber, eip.GuestIp)
+				log.Debugf("1.add member %s to toAddIpv6Memeber, eip.IpVersion is %s", eip.GuestIp, eip.IpVersion)
+			}
+		} else {
+			if _, ok := ipsetMemberMap[eip.GuestIp]; !ok {
+				toAddMemeber = append(toAddMemeber, eip.GuestIp)
+				log.Debugf("1.add member %s to toAddMemeber, eip.IpVersion is %s", eip.GuestIp, eip.IpVersion)
+			}
 		}
 		guestIpMap[eip.GuestIp] = eip.GuestIp
+		log.Debugf("0.add member %s guestIpMap", eip.GuestIp)
 	}
 	for _, member := range eipIpset.Member {
 		if _, ok := guestIpMap[member]; !ok {
 			toDelMemeber = append(toDelMemeber, member)
+			log.Debugf("2.add member %s to toDelMemeber", member)
+		}
+	}
+	for _, member := range eipIpv6Ipset.Member {
+		if _, ok := guestIpMap[member]; !ok {
+			toDelIpv6Memeber = append(toDelIpv6Memeber, member)
+			log.Debugf("3.add member %s to toDelIpv6Memeber", member)
 		}
 	}
 
 	if len(toAddMemeber) != 0 {
 		if err := eipIpset.AddMember(toAddMemeber); err != nil {
 			log.Debugf("add member %s to eip ipset failed %v", toAddMemeber, err)
+			return err
+		}
+	}
+
+	if len(toAddIpv6Memeber) != 0 {
+		if err := eipIpv6Ipset.AddMember(toAddIpv6Memeber); err != nil {
+			log.Debugf("add member %s to eip ipv6 ipset failed %v", toAddIpv6Memeber, err)
 			return err
 		}
 	}
@@ -403,28 +449,52 @@ func syncEipByIptables() error {
 		}
 	}
 
-	table := utils.NewIpTables(utils.FirewallTable)
+	if len(toDelIpv6Memeber) != 0 {
+		if err := eipIpv6Ipset.DeleteMember(toDelIpv6Memeber); err != nil {
+			log.Debugf("remove member %s from eip ipv6 ipset failed %v", toDelIpv6Memeber, err)
+			return err
+		}
+	}
+
+	filterTable := utils.NewIpTables(utils.FirewallTable)
+	filterIpv6Table := utils.NewIpTablesByIpVersion(utils.FirewallTable, utils.IP_VERSION_6)
 	natTable := utils.NewIpTables(utils.NatTable)
-	table.RemoveIpTableRuleByComments(utils.EipRuleComment)
+	natIpv6Table := utils.NewIpTablesByIpVersion(utils.NatTable, utils.IP_VERSION_6)
+
+	filterTable.RemoveIpTableRuleByComments(utils.EipRuleComment)
+	filterIpv6Table.RemoveIpTableRuleByComments(utils.EipRuleComment)
 	natTable.RemoveIpTableRuleByComments(utils.EipRuleComment)
+	natIpv6Table.RemoveIpTableRuleByComments(utils.EipRuleComment)
 
 	var natRules []*utils.IpTableRule
+	var natIpv6Rules []*utils.IpTableRule
 	var filterRule []*utils.IpTableRule
+	var filterIpv6Rule []*utils.IpTableRule
 
 	for _, eip := range eipMap {
 		/* nat rule */
 		nicname, err := utils.GetNicNameByMac(eip.PublicMac)
 		rule := utils.NewIpTableRule(utils.RULESET_DNAT.String())
 		rule.SetAction(utils.IPTABLES_ACTION_DNAT).SetComment(utils.EipRuleComment)
-		rule.SetDstIp(eip.VipIp + "/32").SetDnatTargetIp(eip.GuestIp)
 		rule.SetCompareTarget(true)
-		natRules = append(natRules, rule)
+		if eip.IpVersion == IP_VERSION_6 {
+			rule.SetDstIp(eip.VipIp + "/128").SetDnatTargetIp(eip.GuestIp)
+			natIpv6Rules = append(natIpv6Rules, rule)
+		} else {
+			rule.SetDstIp(eip.VipIp + "/32").SetDnatTargetIp(eip.GuestIp)
+			natRules = append(natRules, rule)
+		}
 
 		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
 		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.EipRuleComment)
-		rule.SetOutNic(nicname).SetSrcIp(eip.GuestIp + "/32").SetSnatTargetIp(eip.VipIp)
 		rule.SetCompareTarget(true)
-		natRules = append(natRules, rule)
+		if eip.IpVersion == IP_VERSION_6 {
+			rule.SetOutNic(nicname).SetSrcIp(eip.GuestIp + "/128").SetSnatTargetIp(eip.VipIp)
+			natIpv6Rules = append(natIpv6Rules, rule)
+		} else {
+			rule.SetOutNic(nicname).SetSrcIp(eip.GuestIp + "/32").SetSnatTargetIp(eip.VipIp)
+			natRules = append(natRules, rule)
+		}
 
 		prinicname, err := utils.GetNicNameByMac(eip.PrivateMac)
 		utils.PanicOnError(err)
@@ -435,28 +505,53 @@ func syncEipByIptables() error {
 
 			rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
 			rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.EipRuleComment)
-			rule.SetOutNic(prinicname).SetDstIp(eip.GuestIp + "/32").SetSnatTargetIp(gwip)
-			natRules = append(natRules, rule)
+			if eip.IpVersion == IP_VERSION_6 {
+				rule.SetOutNic(prinicname).SetDstIp(eip.GuestIp + "/128").SetSnatTargetIp(gwip)
+				natIpv6Rules = append(natIpv6Rules, rule)
+			} else {
+				rule.SetOutNic(prinicname).SetDstIp(eip.GuestIp + "/32").SetSnatTargetIp(gwip)
+				natRules = append(natRules, rule)
+			}
 		}
 
 		/* firewall rule */
 		rule = utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_IN))
 		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.EipRuleComment)
-		rule.SetDstIpset(EIP_IPSET_NAME).SetState([]string{utils.IPTABLES_STATE_NEW, utils.IPTABLES_STATE_RELATED, utils.IPTABLES_STATE_ESTABLISHED})
-		filterRule = append(filterRule, rule)
+		if eip.IpVersion == IP_VERSION_6 {
+			filterIpv6Table.AddChain(utils.GetRuleSetName(prinicname, utils.RULESET_IN))
+			rule.SetSrcIpset(EIP_IPV6_IPSET_NAME).SetState([]string{utils.IPTABLES_STATE_NEW, utils.IPTABLES_STATE_RELATED, utils.IPTABLES_STATE_ESTABLISHED})
+			filterIpv6Rule = append(filterIpv6Rule, rule)
+		} else {
+			rule.SetDstIpset(EIP_IPSET_NAME).SetState([]string{utils.IPTABLES_STATE_NEW, utils.IPTABLES_STATE_RELATED, utils.IPTABLES_STATE_ESTABLISHED})
+			filterRule = append(filterRule, rule)
+		}
 
 		rule = utils.NewIpTableRule(utils.GetRuleSetName(prinicname, utils.RULESET_IN))
 		rule.SetAction(utils.IPTABLES_ACTION_RETURN).SetComment(utils.EipRuleComment)
-		rule.SetSrcIpset(EIP_IPSET_NAME).SetState([]string{utils.IPTABLES_STATE_NEW, utils.IPTABLES_STATE_RELATED, utils.IPTABLES_STATE_ESTABLISHED})
-		filterRule = append(filterRule, rule)
+		if eip.IpVersion == IP_VERSION_6 {
+			filterIpv6Table.AddChain(utils.GetRuleSetName(nicname, utils.RULESET_IN))
+			rule.SetSrcIpset(EIP_IPV6_IPSET_NAME).SetState([]string{utils.IPTABLES_STATE_NEW, utils.IPTABLES_STATE_RELATED, utils.IPTABLES_STATE_ESTABLISHED})
+			filterIpv6Rule = append(filterIpv6Rule, rule)
+		} else {
+			rule.SetSrcIpset(EIP_IPSET_NAME).SetState([]string{utils.IPTABLES_STATE_NEW, utils.IPTABLES_STATE_RELATED, utils.IPTABLES_STATE_ESTABLISHED})
+			filterRule = append(filterRule, rule)
+		}
 	}
 
-	table.AddIpTableRules(filterRule)
-	err := table.Apply()
+	filterTable.AddIpTableRules(filterRule)
+	err := filterTable.Apply()
+	utils.PanicOnError(err)
+
+	filterIpv6Table.AddIpTableRules(filterIpv6Rule)
+	err = filterIpv6Table.Apply()
 	utils.PanicOnError(err)
 
 	natTable.AddIpTableRules(natRules)
 	err = natTable.Apply()
+	utils.PanicOnError(err)
+
+	natIpv6Table.AddIpTableRules(natIpv6Rules)
+	err = natIpv6Table.Apply()
 	utils.PanicOnError(err)
 
 	return nil
@@ -532,10 +627,18 @@ func syncEip(cmd *syncEipCmd) interface{} {
 func EipEntryPoint() {
 	eipMap = make(map[string]eipInfo, EipInfoMaxSize)
 	eipIpset = nil
+	eipIpv6Ipset = nil
 	ipsets, _ := utils.GetCurrentIpSet()
 	for _, ipset := range ipsets {
 		if ipset.Name == EIP_IPSET_NAME {
 			eipIpset = ipset
+			break
+		}
+	}
+	ipv6Ipsets, _ := utils.GetCurrentIpSet()
+	for _, ipset := range ipv6Ipsets {
+		if ipset.Name == EIP_IPV6_IPSET_NAME {
+			eipIpv6Ipset = ipset
 			break
 		}
 	}

@@ -23,6 +23,15 @@ lograte.zsn                  /etc/logrotate.d/zsn                       0600    
 lograte.zvr                 /etc/logrotate.d/zvr                       0600     root:root
 lograte.zvrMonitor      /etc/logrotate.d/zvrMonitor                       0600     root:root
 lograte.zvrstartup      /etc/logrotate.d/zvrstartup                       0600     root:root
+zs-tools/config_linux.py           /usr/local/zstack/zs-tools/config_linux.py           0755 __USER__:users
+zs-tools/log.py                    /usr/local/zstack/zs-tools/log.py                    0755 __USER__:users
+zs-tools/net_config.py             /usr/local/zstack/zs-tools/net_config.py             0755 __USER__:users
+zs-tools/nic_info_linux.sh         /usr/local/zstack/zs-tools/nic_info_linux.sh         0755 __USER__:users
+zs-tools/set_hostname_linux.py     /usr/local/zstack/zs-tools/set_hostname_linux.py     0755 __USER__:users
+zs-tools/set_hostname_linux_el6.py /usr/local/zstack/zs-tools/set_hostname_linux_el6.py 0755 __USER__:users
+zs-tools/shell.py                  /usr/local/zstack/zs-tools/shell.py                  0755 __USER__:users
+zs-tools/utils.py                  /usr/local/zstack/zs-tools/utils.py                  0755 __USER__:users
+zs-tools/guesttools                /usr/local/zstack/guesttools                         0755 __USER__:users
 
 [[X86]]
 # this files just for x86_64
