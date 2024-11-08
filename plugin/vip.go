@@ -121,6 +121,8 @@ func (rule *qosRule) UpdateRule(nic string, direct direction) interface{} {
 }
 
 func (rule *qosRule) AddRule(nic string, direct direction) interface{} {
+	checkQdisc(nic)
+
 	bash := utils.Bash{
 		Command: fmt.Sprintf("tc qdisc del dev %s parent 1:%x;"+
 			"tc class del dev %s parent 1:0 classid 1:%x;",
@@ -163,6 +165,8 @@ func (rule *qosRule) AddRule(nic string, direct direction) interface{} {
 }
 
 func (rule *qosRule) DelRule(nic string, direct direction) interface{} {
+	checkQdisc(nic)
+
 	bash := utils.Bash{
 		Command: fmt.Sprintf("tc filter del dev %s parent 1:0 prio %d handle %03x::%03x protocol ip u32;"+
 			"tc qdisc del dev %s parent 1:%x sfq;"+
@@ -523,6 +527,8 @@ func (rules *interfaceQosRules) InterfaceQosRuleInit(direct direction) interface
 		utils.Assertf(ignore, "Failed to del rules from dev %s", name)
 	}
 
+	checkQdisc(name)
+
 	bash1 := utils.Bash{
 		Command: fmt.Sprintf("sudo tc qdisc replace dev %s root handle 1: htb default 1;"+
 			"sudo tc class add dev %s parent 1:0 classid 1:1 htb rate 10gbit ceil 10gbit;"+
@@ -876,9 +882,10 @@ type vipQosSettings struct {
 }
 
 type setVipCmd struct {
-	SyncVip bool        `json:"syncVip"`
-	Vips    []vipInfo   `json:"vips"`
-	NicIps  []nicIpInfo `json:"nicIps"`
+	SyncVip       bool        `json:"syncVip"`
+	ResetQosRules bool        `json:"resetQosRules"`
+	Vips          []vipInfo   `json:"vips"`
+	NicIps        []nicIpInfo `json:"nicIps"`
 }
 
 type removeVipCmd struct {
@@ -942,6 +949,23 @@ func getLinuxNicVips(nicName string) []string {
 func setVipHandler(ctx *server.CommandContext) interface{} {
 	cmd := &setVipCmd{}
 	ctx.GetCommand(cmd)
+
+	if cmd.ResetQosRules {
+		clearedNics := make(map[string]bool)
+		for _, vip := range cmd.Vips {
+			nicName, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
+			utils.PanicOnError(err)
+			if _, cleared := clearedNics[nicName]; cleared {
+				continue
+			}
+			if _, exists := totalQosRules[nicName]; !exists {
+				continue
+			}
+			delete(totalQosRules, nicName)
+			clearedNics[nicName] = true
+			log.Debugf("clear QoS rules for interface %s due to ResetQosRules flag", nicName)
+		}
+	}
 
 	if !utils.IsEnableVyosCmd() {
 		return setVipByLinux(cmd)
@@ -1529,6 +1553,20 @@ func getMonitoringRules(direct direction) map[string]*monitoringRule {
 	}
 
 	return monitoringRules
+}
+
+func checkQdisc(nic string) {
+	bash := utils.Bash{
+		Command: fmt.Sprintf("tc qdisc show dev %s | grep 'mq'", nic),
+	}
+	_, _, errOut, _ := bash.RunWithReturn()
+	if strings.Contains(errOut, "mq") {
+		resetBash := utils.Bash{
+			Command: fmt.Sprintf("tc qdisc replace dev %s root handle 1: htb default 1", nic),
+			Sudo:    true,
+		}
+		resetBash.Run()
+	}
 }
 
 func init() {
