@@ -8,14 +8,14 @@ import (
 	"reflect"
 	"text/template"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("cronjob_test", func() {
 	var globalMap CronjobMap
 	It("[CRONJOB]: test pre env", func() {
-		InitLog(GetVyosUtLogDir()+"cronjob_test.log", false)
+		InitLog(GetVyosUtLogDir()+"cronjob_test.log", IsRuingUT())
 		globalMap = make(CronjobMap)
 		cleanUpCrondConfig()
 	})

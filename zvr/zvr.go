@@ -43,6 +43,7 @@ func loadPlugins() {
 	plugin.FirewallEntryPoint()
 	plugin.PerformanceEntryPoint()
 	plugin.MiscEntryPoint()
+	plugin.InitStrongswanService()
 }
 
 func initPlugins() {
@@ -311,9 +312,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	utils.InitLog(options.LogFile, utils.IsRuingUT())
 	utils.InitVyosVersion()
-	utils.InitLog(options.LogFile, false)
 	log.Debugf("zvr main: os %s, kernel version: %s", utils.Vyos_version, utils.Kernel_version)
+	utils.InitIptablesFlags()
 	go restartRsyslog()
 	utils.InitBootStrapInfo()
 	checkIptablesRules()
@@ -324,6 +326,7 @@ func main() {
 	plugin.InitMisc()
 	plugin.InitRoute()
 	plugin.InitPmacctd()
+	plugin.InitIpvs()
 	loadPlugins()
 	setupRotates()
 	server.VyosLockInterface(configureZvrFirewall)()

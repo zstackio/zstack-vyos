@@ -8,10 +8,11 @@ import (
 	"strings"
 	"unicode"
 
-	prom "github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 	"zstack-vyos/server"
 	"zstack-vyos/utils"
+
+	prom "github.com/prometheus/client_golang/prometheus"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -471,7 +472,7 @@ func (rules *interfaceQosRules) InterfaceQosRuleInit(direct direction) interface
 
 		if !utils.IsEnableVyosCmd() {
 			if !utils.IpLinkIsExist(rules.ifbName) {
-				err := utils.IpLinkAdd(rules.ifbName, "ifb")
+				err := utils.IpLinkAdd(rules.ifbName, utils.IpLinkTypeIfb.String())
 				utils.PanicOnError(err)
 			}
 			_ = utils.IpLinkSetUp(rules.ifbName)
@@ -946,6 +947,46 @@ func getLinuxNicVips(nicName string) []string {
 	return linuxIps
 }
 
+func addVipFirewalRuleByIptables(cmd *setVipCmd) error {
+	table := utils.NewIpTables(utils.FirewallTable)
+	var rules []*utils.IpTableRule
+
+	for _, vip := range cmd.Vips {
+		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
+		utils.PanicOnError(err)
+
+		vipDes := makeVipRuleDescription(vip)
+		rule := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
+		rule.SetAction(utils.IPTABLES_ACTION_ACCEPT).SetComment(vipDes)
+		rule.SetDstIp(vip.Ip + "/32").SetProto(utils.IPTABLES_PROTO_ICMP)
+		rules = append(rules, rule)
+	}
+
+	table.AddIpTableRules(rules)
+	return table.Apply()
+}
+
+func addVipFirewalRuleByVyos(cmd *setVipCmd) error {
+	tree := server.NewParserFromShowConfiguration().Tree
+
+	for _, vip := range cmd.Vips {
+		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
+		utils.PanicOnError(err)
+
+		vipDes := makeVipRuleDescription(vip)
+		if r := tree.FindFirewallRuleByDescription(nicname, "local", vipDes); r == nil {
+			tree.SetFirewallOnInterface(nicname, "local",
+				fmt.Sprintf("destination address %v", vip.Ip),
+				fmt.Sprintf("description %v", vipDes),
+				"protocol icmp",
+				"action accept")
+		}
+	}
+
+	tree.Apply(false)
+	return nil
+}
+
 func setVipHandler(ctx *server.CommandContext) interface{} {
 	cmd := &setVipCmd{}
 	ctx.GetCommand(cmd)
@@ -965,6 +1006,12 @@ func setVipHandler(ctx *server.CommandContext) interface{} {
 			clearedNics[nicName] = true
 			log.Debugf("clear QoS rules for interface %s due to ResetQosRules flag", nicName)
 		}
+	}
+
+	if utils.IsSkipVyosIptables() {
+		addVipFirewalRuleByIptables(cmd)
+	} else {
+		addVipFirewalRuleByVyos(cmd)
 	}
 
 	if !utils.IsEnableVyosCmd() {
@@ -1185,9 +1232,56 @@ func getDeleteFailVip(info []vipInfo) []vipInfo {
 	return toDeletelVip
 }
 
+func makeVipRuleDescription(info vipInfo) string {
+	return fmt.Sprintf("vip-%s", info.VipUuid)
+}
+
+func delVipFirewalRuleByIptables(cmd *removeVipCmd) error {
+	table := utils.NewIpTables(utils.FirewallTable)
+	var rules []*utils.IpTableRule
+
+	for _, vip := range cmd.Vips {
+		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
+		utils.PanicOnError(err)
+
+		vipDes := makeVipRuleDescription(vip)
+		rule := utils.NewIpTableRule(utils.GetRuleSetName(nicname, utils.RULESET_LOCAL))
+		rule.SetAction(utils.IPTABLES_ACTION_ACCEPT).SetComment(vipDes)
+		rule.SetDstIp(vip.Ip + "/32").SetProto(utils.IPTABLES_PROTO_ICMP)
+		rules = append(rules, rule)
+	}
+
+	table.RemoveIpTableRule(rules)
+
+	return nil
+}
+
+func delVipFirewalRuleByVyos(cmd *removeVipCmd) error {
+	tree := server.NewParserFromShowConfiguration().Tree
+
+	for _, vip := range cmd.Vips {
+		nicname, err := utils.GetNicNameByMac(vip.OwnerEthernetMac)
+		utils.PanicOnError(err)
+
+		vipDes := makeVipRuleDescription(vip)
+		if r := tree.FindFirewallRuleByDescription(nicname, "local", vipDes); r != nil {
+			r.Delete()
+		}
+	}
+
+	tree.Apply(false)
+	return nil
+}
+
 func removeVipHandler(ctx *server.CommandContext) interface{} {
 	cmd := &removeVipCmd{}
 	ctx.GetCommand(cmd)
+
+	if utils.IsSkipVyosIptables() {
+		delVipFirewalRuleByIptables(cmd)
+	} else {
+		delVipFirewalRuleByVyos(cmd)
+	}
 
 	if !utils.IsEnableVyosCmd() {
 		return removeVipByLinux(cmd)
@@ -1456,10 +1550,14 @@ func (c *vipCollector) Update(ch chan<- prom.Metric) error {
 output example
 # tc -s class show dev eth0 | grep -A 1 'class htb'
 class htb 1:1 root leaf 8003: prio 0 rate 10000Mbit ceil 10000Mbit burst 0b cburst 0b
- Sent 353013 bytes 2725 pkt (dropped 0, overlimits 0 requeues 0)
+
+	Sent 353013 bytes 2725 pkt (dropped 0, overlimits 0 requeues 0)
+
 --
 class htb 1:2 root leaf 8004: prio 0 rate 100000Kbit ceil 100000Kbit burst 15337b cburst 15337b
- Sent 29400 bytes 300 pkt (dropped 0, overlimits 0 requeues 0)
+
+	Sent 29400 bytes 300 pkt (dropped 0, overlimits 0 requeues 0)
+
 --
 */
 func getInterfaceMonitorRules(direct direction, qosRules *interfaceQosRules) map[string]*monitoringRule {

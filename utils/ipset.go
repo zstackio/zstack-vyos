@@ -3,36 +3,42 @@ package utils
 import (
 	"encoding/xml"
 	"fmt"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 )
 
 const (
-	IPSET_TYPE_HASH_IP  = "hash:ip"
-	IPSET_TYPE_HASH_NET = "hash:net"
-	IPSET_FAMILY_INET   = "inet"
-	IPSET_FAMILY_INET6  = "inet6"
+	IPSET_TYPE_HASH_IP      = "hash:ip"
+	IPSET_TYPE_HASH_NET     = "hash:net"
+	IPSET_FAMILY_INET       = "inet"
+	IPSET_FAMILY_INET6      = "inet6"
+	IPSET_TYPE_HASH_IP_PORT = "hash:ip,port"
 )
 
 /*
-  # sudo ipset list -o xml
+	# sudo ipset list -o xml
+
 <ipset name="eth3.in-1001-source">
-  <type>hash:ip</type>
-  <header>
-    <family>inet</family>
-    <hashsize>1024</hashsize>
-    <maxelem>65536</maxelem>
-    <memsize>344</memsize>
-    <references>0</references>
-  </header>
-  <members>
-    <member>1.1.1.1</member>
-    <member>2.2.2.1</member>
-    <member>1.1.1.2</member>
-  </members>
+
+	<type>hash:ip</type>
+	<header>
+	  <family>inet</family>
+	  <hashsize>1024</hashsize>
+	  <maxelem>65536</maxelem>
+	  <memsize>344</memsize>
+	  <references>0</references>
+	</header>
+	<members>
+	  <member>1.1.1.1</member>
+	  <member>2.2.2.1</member>
+	  <member>1.1.1.2</member>
+	</members>
+
 </ipset>
 <ipset name="eth3.in-1003-source">
-  <type>hash:ip</type>
+
+	<type>hash:ip</type>
 */
 type IpSetList struct {
 	XMLName xml.Name `xml:"ipsets"`
@@ -47,6 +53,38 @@ type IpSet struct {
 }
 
 func GetCurrentIpSet() ([]*IpSet, error) {
+	/* example for euler
+	# ipset list ipvs-set -o xml
+	<ipsets>
+	<ipset name="ipvs-set">
+	<type>hash:ip,port</type>
+	<revision>5</revision>
+	<header><family>inet</family><hashsize>1024</hashsize><maxelem>65536</maxelem>
+	<memsize>296</memsize>
+	<references>1</references>
+	<numentries>0</numentries>
+	</header>
+	<members>
+	</members>
+	</ipset>
+	</ipsets>
+
+	example for vyos 1.1.7
+	# ipset list -o xml
+	<ipset name="ipvs-set">
+	  <type>hash:ip,port</type>
+	  <header>
+	    <family>inet</family>
+	    <hashsize>1024</hashsize>
+	    <maxelem>65536</maxelem>
+	    <memsize>256</memsize>
+	    <references>3</references>
+	  </header>
+	  <members>
+	    <member>192.168.2.100,udp:8080</member>
+	  </members>
+	</ipset>
+	*/
 	cmd := Bash{
 		Command: fmt.Sprintf("ipset list -o xml"),
 		Sudo:    true,
@@ -58,13 +96,50 @@ func GetCurrentIpSet() ([]*IpSet, error) {
 		return nil, err
 	}
 
-	o = "<ipsets>\n" + o + "</ipsets>\n"
+	lines := strings.Split(string(o), "\n")
+	result := []string{}
+	hasIpsets := false
+	for _, line := range lines {
+		if strings.Contains(line, "ipsets") {
+			hasIpsets = true
+		}
+		if strings.Contains(line, "ipset") {
+			result = append(result, line)
+		}
+		if strings.Contains(line, "type") {
+			result = append(result, line)
+		}
+		if strings.Contains(line, "members") {
+			result = append(result, line)
+		}
+	}
+	if hasIpsets {
+		o = strings.Join(result, "\n")
+	} else {
+		o = "<ipsets>\n" + strings.Join(result, "\n") + "</ipsets>\n"
+	}
 	var ipSets IpSetList
 	if err := xml.Unmarshal([]byte(o), &ipSets); err != nil {
+		log.Debugf("ipset list unmarshal failed %v", err)
 		return nil, err
 	}
 
 	return ipSets.Ipsets, nil
+}
+
+func GetIpSet(name string) *IpSet {
+	ipsets, err := GetCurrentIpSet()
+	if err != nil {
+		return nil
+	}
+
+	for _, set := range ipsets {
+		if set.Name == name {
+			return set
+		}
+	}
+
+	return nil
 }
 
 func NewIPSet(name, ipsetType string) *IpSet {
@@ -132,6 +207,29 @@ func (s *IpSet) AddMember(members []string) error {
 	}
 
 	return nil
+}
+
+func FlushIpset(ipsetName string) error {
+	cmd := Bash{
+		Command: fmt.Sprintf("ipset flush %s", ipsetName),
+		Sudo:    true,
+	}
+
+	return cmd.Run()
+}
+
+func (s *IpSet) CheckMember(members string) bool {
+	cmd := Bash{
+		Command: fmt.Sprintf("ipset test %s %s", s.Name, members),
+		Sudo:    true,
+	}
+
+	ret, _, _, err := cmd.RunWithReturn()
+	if err != nil || ret != 0 {
+		return false
+	}
+
+	return true
 }
 
 func (s *IpSet) DeleteMember(members []string) error {

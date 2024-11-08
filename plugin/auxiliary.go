@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"fmt"
+	"strings"
 
 	"zstack-vyos/utils"
 
@@ -69,7 +70,7 @@ func configureNicByLinux(nicList []utils.NicInfo) interface{} {
 	return nil
 }
 
-func configureNicDefaultActionByLinux(cmd *configureNicCmd) interface{} {
+func configureNicDefaultActionByLinux(cmd *ConfigureNicCmd) interface{} {
 	var nicname string
 	for _, nic := range cmd.Nics {
 		err := utils.Retry(func() error {
@@ -254,7 +255,7 @@ func removeVipByLinux(cmd *removeVipCmd) interface{} {
 	return nil
 }
 
-func setZebraRoutes(infos []routeInfo) {
+func SetZebraRoutes(infos []RouteInfo) {
 	var (
 		newEntry  *utils.ZebraRoute
 		newRoutes []*utils.ZebraRoute
@@ -277,7 +278,9 @@ func setZebraRoutes(infos []routeInfo) {
 
 		if err = newEntry.Apply(); err != nil {
 			log.Debugf("apply route[%+v] error: %+v", r, err)
-			utils.PanicOnError(err)
+			if !strings.Contains(err.Error(), "File exists") {
+				utils.PanicOnError(err)
+			}
 		}
 
 		newRoutes = append(newRoutes, newEntry)

@@ -54,7 +54,7 @@ func RegisterRemoveNicCallback(cb removeNicCallback) {
 	removeNicCallbacks = append(removeNicCallbacks, cb)
 }
 
-type configureNicCmd struct {
+type ConfigureNicCmd struct {
 	Nics []utils.NicInfo `json:"nics"`
 }
 
@@ -221,10 +221,10 @@ func configureLBFirewallRuleByIpTables(dev string) error {
 }
 
 func configureNicHandler(ctx *server.CommandContext) interface{} {
-	cmd := &configureNicCmd{}
+	cmd := &ConfigureNicCmd{}
 	ctx.GetCommand(cmd)
 
-	return configureNic(cmd)
+	return ConfigureNic(cmd)
 }
 
 func configureNicFirewall(nics []utils.NicInfo) {
@@ -386,7 +386,8 @@ func configureNicByVyos(nicList []utils.NicInfo) interface{} {
 	return nil
 }
 
-func configureNic(cmd *configureNicCmd) interface{} {
+func ConfigureNic(cmd *ConfigureNicCmd) interface{} {
+	log.Debugf("configure nic cmd: %+v", cmd)
 	if !utils.IsEnableVyosCmd() {
 		if err := configureNicByLinux(cmd.Nics); err != nil {
 			return err
@@ -474,13 +475,13 @@ func checkNicIsUp(nicname string, panicIfDown bool) error {
 }
 
 func removeNicHandler(ctx *server.CommandContext) interface{} {
-	cmd := &configureNicCmd{}
+	cmd := &ConfigureNicCmd{}
 	ctx.GetCommand(cmd)
 
-	return removeNic(cmd)
+	return RemoveNic(cmd)
 }
 
-func removeNic(cmd *configureNicCmd) interface{} {
+func RemoveNic(cmd *ConfigureNicCmd) interface{} {
 	if utils.IsEnableVyosCmd() {
 		tree := server.NewParserFromShowConfiguration().Tree
 		for _, nic := range cmd.Nics {
@@ -557,7 +558,7 @@ func removeNic(cmd *configureNicCmd) interface{} {
 }
 
 func configureNicFirewallDefaultAction(ctx *server.CommandContext) interface{} {
-	cmd := &configureNicCmd{}
+	cmd := &ConfigureNicCmd{}
 	ctx.GetCommand(cmd)
 
 	if !utils.IsEnableVyosCmd() {
@@ -566,7 +567,7 @@ func configureNicFirewallDefaultAction(ctx *server.CommandContext) interface{} {
 	return configureNicDefaultAction(cmd)
 }
 
-func configureNicDefaultAction(cmd *configureNicCmd) interface{} {
+func configureNicDefaultAction(cmd *ConfigureNicCmd) interface{} {
 	tree := server.NewParserFromShowConfiguration().Tree
 	var nicname string
 	for _, nic := range cmd.Nics {

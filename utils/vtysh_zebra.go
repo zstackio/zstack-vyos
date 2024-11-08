@@ -46,7 +46,7 @@ func (z *ZebraRoute) SetDev(devName string) *ZebraRoute {
 	return z
 }
 
-//If the param is "null0", then zebra installs a blackhole route
+// If the param is "null0", then zebra installs a blackhole route
 func (z *ZebraRoute) SetNextHop(nexthop string) *ZebraRoute {
 	z.NextHop = nexthop
 

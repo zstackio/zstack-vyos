@@ -59,7 +59,7 @@ func (n NicArray) Less(i, j int) bool { return n[i].Name < n[j].Name }
 var BootstrapInfo map[string]interface{} = make(map[string]interface{})
 
 func GetVyosUtLogDir() string {
-	return  fmt.Sprintf("%s/vyos_ut/testLog/", GetUserHomePath())
+	return fmt.Sprintf("%s/vyos_ut/testLog/", GetUserHomePath())
 }
 
 func GetBootStrapInfoPath() string {
@@ -102,9 +102,9 @@ func GetSshKey() string {
 	return ""
 }
 
-func GetAdditionalNic() []interface{} {
+func GetAdditionalNic() map[string]interface{} {
 	if additionalNics, ok := BootstrapInfo["additionalNics"]; ok {
-		return additionalNics.([]interface{})
+		return additionalNics.(map[string]interface{})
 	}
 
 	return nil
@@ -116,7 +116,7 @@ func GetMgmtInfoFromBootInfo() map[string]interface{} {
 }
 
 func IsSkipVyosIptables() bool {
-	if (!IsVYOS()) {
+	if !IsVYOS() {
 		return true
 	}
 
@@ -266,7 +266,7 @@ func GetBootStrapNicInfo() map[string]Nic {
 			mac, ok2 := onic["mac"].(string)
 			ip, ok3 := onic["ip"].(string)
 			ip6, ok4 := onic["ip6"].(string)
-			if ok1 && ok2 && (ok3||ok4) {
+			if ok1 && ok2 && (ok3 || ok4) {
 				additionalNic := Nic{Name: name, Mac: mac, Ip: ip, Ip6: ip6}
 				additionalNic.Catatory, _ = onic["category"].(string)
 				bootstrapNics[additionalNic.Name] = additionalNic
@@ -291,11 +291,23 @@ func GetHaStatus() (status string) {
 }
 
 func IsRuingUT() bool {
-	return strings.Contains(os.Args[0], fmt.Sprintf("%s/vyos_ut/zstack-vyos/", GetUserHomePath()))
+	info, err := os.Stat("/home/vyos/vyos_ut/")
+	if err != nil {
+		log.Debugf("not running in ut")
+		return false
+	}
+
+	if info.IsDir() {
+		log.Debugf("running in ut")
+		return true
+	} else {
+		log.Debugf("not running in ut")
+		return false
+	}
 }
 
 func IsEnableVyosCmd() bool {
-	if (!IsVYOS()) {
+	if !IsVYOS() {
 		return false
 	}
 

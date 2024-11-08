@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -92,6 +93,24 @@ func SyncZStackRouteTables(tables []ZStackRouteTable) error {
 	ret, _, e, err = bash.RunWithReturn()
 	if err != nil || ret != 0 {
 		return fmt.Errorf("copy temp route table file failed: %s", e)
+	}
+
+	if IsEuler2203() {
+		// enable policy route, must disable rp_filter
+		if len(tables) > 0 {
+			bash = Bash{
+				Command: "sysctl -a | grep -w \"rp_filter\" | awk '{print $1}' | xargs -I{} sysctl -w {}=0",
+			}
+			err := bash.Run()
+			PanicOnError(err)
+		} else {
+			// disable policy route, restore rp_filter
+			bash = Bash{
+				Command: "sysctl -a | grep -w \"rp_filter\" | awk '{print $1}' | xargs -I{} sysctl -w {}=1",
+			}
+			err := bash.Run()
+			PanicOnError(err)
+		}
 	}
 
 	return nil
@@ -213,6 +232,70 @@ func (e ZStackRouteEntry) deleteCommand() string {
 	}
 }
 
+func GetCurrentRouteEntriesEuler2203(tableId int) []ZStackRouteEntry {
+	var entries []ZStackRouteEntry
+	var cmd string
+	if tableId == ROUTETABLE_ID_MAIN {
+		cmd = fmt.Sprintf("vtysh -c 'show run' | | grep  'ip route' | grep -v 'table'")
+	} else {
+		cmd = fmt.Sprintf("vtysh -c 'show run' | grep 'table %d'", tableId)
+	}
+
+	bash := Bash{
+		Command: cmd,
+		Sudo:    true,
+	}
+	/*
+		# vtysh -c 'show run' | grep 'table 181'
+		ip route 0.0.0.0/0 192.168.100.1 table 181
+		ip route 192.168.1.0/24 eth3 table 181
+		ip route 192.168.2.0/24 eth4 table 181
+		ip route 192.168.100.0/24 192.168.100.109 table 181
+
+		# vtysh -c 'show run' | grep  'ip route' | grep -v 'table'
+		ip route 1.1.1.0/24 192.168.100.2 128
+		ip route 1.1.2.0/24 192.168.100.3 128
+		ip route 2.2.2.0/24 1.1.1.100 128
+		ip route 3.3.3.0/24 Null0 128
+	*/
+	ret, result, _, err := bash.RunWithReturn()
+	if err == nil && ret == 0 {
+		result = strings.TrimSpace(result)
+		lines := strings.Split(result, "\n")
+		for _, line := range lines {
+			if line == "" {
+				continue
+			}
+
+			items := strings.Fields(line)
+			dst := items[2]
+			var nh, dev string
+			var metric int
+			if addr, err := netip.ParseAddr(items[3]); err == nil {
+				nh = addr.String()
+			} else {
+				dev = items[3]
+			}
+
+			if items[4] != "table" {
+				metric, _ = strconv.Atoi(items[4])
+			}
+
+			e := ZStackRouteEntry{
+				TableId:         tableId,
+				DestinationCidr: dst,
+				NextHopIp:       nh,
+				NicName:         dev,
+				Distance:        metric,
+			}
+			entries = append(entries, e)
+		}
+	}
+
+	return entries
+
+}
+
 func GetCurrentRouteEntries(tableId int) []ZStackRouteEntry {
 	/* some table can not be operate
 	vyos@vyos:~/vyos_ut/zstack-vyos$ vtysh -c 'show ip route table 0'
@@ -241,6 +324,10 @@ func GetCurrentRouteEntries(tableId int) []ZStackRouteEntry {
 
 	if (tableId > ROUTETABLE_ID_MAX || tableId < ROUTETABLE_ID_MIN) && tableId != ROUTETABLE_ID_MAIN {
 		panic("valid route table id range [1, 250]")
+	}
+
+	if IsEuler2203() {
+		return GetCurrentRouteEntriesEuler2203(tableId)
 	}
 
 	var entries []ZStackRouteEntry
@@ -295,11 +382,8 @@ func GetCurrentRouteEntries(tableId int) []ZStackRouteEntry {
 					Distance:        distance,
 				}
 				entries = append(entries, e)
-			} else {
-				nicName := items[len(items)-1] /* ethx or bh */
-				if nicName == "bh" {
-					nicName = "null0"
-				}
+			} else if items[3] == "unreachable" {
+				nicName := "null0"
 				e := ZStackRouteEntry{
 					TableId:         tableId,
 					DestinationCidr: items[1],
@@ -307,6 +391,17 @@ func GetCurrentRouteEntries(tableId int) []ZStackRouteEntry {
 					Distance:        distance,
 				}
 				entries = append(entries, e)
+			} else if items[3] == "is" {
+				nicName := items[6][:len(items[6])-1]
+				e := ZStackRouteEntry{
+					TableId:         tableId,
+					DestinationCidr: items[1],
+					NicName:         nicName,
+					Distance:        distance,
+				}
+				entries = append(entries, e)
+			} else {
+				log.Errorf("unknow route format: %s", line)
 			}
 		}
 	}

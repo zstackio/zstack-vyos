@@ -19,8 +19,8 @@ var _ = XDescribe("ipsec_test", func() {
 
 	It("test create/delete ipsec", func() {
 		log.Debugf("#####test create/delete ipsec#######")
-		cmd := &createIPsecCmd{}
-		info := &ipsecInfo{}
+		cmd := &CreateIPsecCmd{}
+		info := &IpsecInfo{}
 
 		info.Uuid = "b7d5e47f11124661bf59905dfafe99a2"
 		info.Vip = "172.24.3.157"
@@ -40,7 +40,7 @@ var _ = XDescribe("ipsec_test", func() {
 		info.ExcludeSnat = true
 
 		cmd.AutoRestartVpn = false
-		cmd.Infos = []ipsecInfo{*info}
+		cmd.Infos = []IpsecInfo{*info}
 
 		log.Debugf("#####test create ipsec#######")
 		vyos := server.NewParserFromShowConfiguration()
@@ -62,8 +62,8 @@ var _ = XDescribe("ipsec_test", func() {
 
 	It("test update ipsec", func() {
 		log.Debugf("#####test update ipsec#######")
-		cmd := &createIPsecCmd{}
-		info := &ipsecInfo{}
+		cmd := &CreateIPsecCmd{}
+		info := &IpsecInfo{}
 
 		info.Uuid = "b7d5e47f11124661bf59905dfafe99a2"
 		info.Vip = "172.24.3.157"
@@ -83,7 +83,7 @@ var _ = XDescribe("ipsec_test", func() {
 		info.ExcludeSnat = true
 
 		cmd.AutoRestartVpn = false
-		cmd.Infos = []ipsecInfo{*info}
+		cmd.Infos = []IpsecInfo{*info}
 
 		vyos := server.NewParserFromShowConfiguration()
 		tree := vyos.Tree
@@ -109,10 +109,10 @@ var _ = XDescribe("ipsec_test", func() {
 	})
 
 	It("test create native ipsec1", func() {
-		cmd := &createIPsecCmd{}
+		cmd := &CreateIPsecCmd{}
 		cmd.AutoRestartVpn = false
 
-		info := &ipsecInfo{}
+		info := &IpsecInfo{}
 		info.Uuid = "sheng-test1"
 		info.Vip = "172.25.3.157"
 		info.LocalCidrs = []string{"192.168.100.0/24", "192.168.101.0/24", "192.168.102.0/24"}
@@ -167,10 +167,10 @@ var _ = XDescribe("ipsec_test", func() {
 	})
 
 	It("test update native ipsec1", func() {
-		cmd := &createIPsecCmd{}
+		cmd := &CreateIPsecCmd{}
 		cmd.AutoRestartVpn = false
 
-		info := &ipsecInfo{}
+		info := &IpsecInfo{}
 		info.Uuid = "sheng-test1"
 		info.Vip = "172.25.3.157"
 		info.LocalCidrs = []string{"192.168.100.0/24"}
@@ -201,10 +201,10 @@ var _ = XDescribe("ipsec_test", func() {
 	})
 
 	It("test delete native ipsec1", func() {
-		cmd := &createIPsecCmd{}
+		cmd := &CreateIPsecCmd{}
 		cmd.AutoRestartVpn = false
 
-		info := &ipsecInfo{}
+		info := &IpsecInfo{}
 		info.Uuid = "sheng-test2"
 		cmd.Infos = append(cmd.Infos, *info)
 

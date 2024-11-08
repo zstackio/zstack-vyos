@@ -117,7 +117,6 @@ func ReadPid(pidPath string) (int, error) {
 	}
 
 	pid = strings.TrimSpace(pid)
-	log.Debugf("haproxy pid: %s", pid)
 	return strconv.Atoi(pid)
 }
 

@@ -1,35 +1,18 @@
 package utils
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"io/ioutil"
-	"math/rand"
 	"net"
-	"path/filepath"
 	"sort"
-	"strconv"
-	"strings"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 )
 
-func GetBootstrapInfoUt() string {
-	return filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/bootstrapinfo")
-}
-
-func getIptablesRuleFileUt() string {
-	return filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/iptables.rules")
-}
-
-func getBootConigFile() string {
-	return filepath.Join(GetUserHomePath(), "vyos_ut/zstack-vyos/test/boot_config.sh")
-}
-
 var (
 	MgtNicForUT            NicInfo
 	PubNicForUT            NicInfo
+	PriNicForUT            NicInfo
 	PrivateNicsForUT       []NicInfo
 	AdditionalPubNicsForUT []NicInfo
 	reservedIpForMgt       []string
@@ -37,91 +20,6 @@ var (
 	freeIpsForMgt          []string
 	freeIpsForPubL3        []string
 )
-
-func init() {
-	if !IsRuingUT() {
-		return
-	}
-
-	InitBootStrapInfoForUT()
-	ParseBootStrapNicInfo()
-	ReserveIpForUT()
-	rand.Seed(time.Now().UnixNano())
-}
-
-func ReserveIpForUT() {
-	for _, ip := range reservedIpForMgt {
-		freeIpsForMgt = append(freeIpsForMgt, ip)
-	}
-
-	for _, ip := range reservedIpForPubL3 {
-		freeIpsForPubL3 = append(freeIpsForPubL3, ip)
-	}
-}
-
-func CleanTestEnvForUT() {
-	b := Bash{
-		Command: fmt.Sprintf("sg vyattacfg -c '/bin/vbash %s'", getBootConigFile()),
-		Sudo:    true,
-	}
-	if ret, _, _, err := b.RunWithReturn(); ret != 0 || err != nil {
-		log.Debugf("clean vyos commit err, ret: %d, err : %+v", ret, err)
-	}
-
-	ifaces, err := net.Interfaces()
-	PanicOnError(err)
-	for _, iface := range ifaces {
-		if iface.Name == "eth0" || iface.Name == "lo" {
-			continue
-		}
-		if strings.HasPrefix(iface.Name, "ifb") {
-			IpLinkDel(iface.Name)
-			continue
-		}
-		IpAddrFlush(iface.Name)
-		IpLinkSetAlias(iface.Name, "")
-	}
-
-	file_lists := []string{GetZtackConfigPath(), CROND_CONFIG_FILE}
-	for _, f := range file_lists {
-		if ok, err := PathExists(f); ok || err != nil {
-			log.Debugf("cleanUpConfigDir: file [%s] will be delete", f)
-			if err := DeleteAllFiles(f); err != nil {
-				log.Debugf("cleanUpConfigDir: delete file [%s] error: %+v", f, err)
-			}
-		}
-	}
-
-	BootstrapInfo = make(map[string]interface{})
-
-	InitBootStrapInfoForUT()
-	ParseBootStrapNicInfo()
-	ReserveIpForUT()
-	restoreConfigure()
-}
-
-func restoreConfigure() {
-	bash := Bash{
-		Command: fmt.Sprintf("iptables-restore -w < %s", getIptablesRuleFileUt()),
-		Sudo:    true,
-	}
-	bash.Run()
-}
-
-func InitBootStrapInfoForUT() {
-	log.Debugf("start init boot strap for ut")
-	content, err := ioutil.ReadFile(GetBootstrapInfoUt())
-	if err != nil {
-		return
-	}
-	if len(content) == 0 {
-		log.Debugf("no content in %s, can not get mgmt gateway", GetBootstrapInfoUt())
-	}
-
-	if err := json.Unmarshal(content, &BootstrapInfo); err != nil {
-		log.Debugf("can not parse info from %s, can not get mgmt gateway", GetBootstrapInfoUt())
-	}
-}
 
 func parseNicForUT(m map[string]interface{}) (NicInfo, error) {
 	nicInfo := NicInfo{}
@@ -278,84 +176,6 @@ func ParseBootStrapNicInfo() {
 	for _, ip := range ips {
 		reservedIpForPubL3 = append(reservedIpForPubL3, ip.(string))
 	}
-	return
-}
-
-func GetRandomIpForSubnet(sourceIp string) string {
-	sips := strings.Split(sourceIp, ".")
-	num, _ := strconv.Atoi(sips[3])
-	/* normal case, gateway will be the first or last ip address */
-	lastIp := rand.Int()&0x3F + 10
-	if lastIp == num {
-		lastIp = rand.Int()&0xFF + 10
-	}
-
-	sips[3] = fmt.Sprintf("%d", lastIp)
-	return strings.Join(sips, ".")
-}
-
-func GetFreeMgtIp() (string, error) {
-	if len(freeIpsForMgt) <= 0 {
-		return "", fmt.Errorf("not enough mgt ip")
-	}
-
-	if len(freeIpsForMgt) == 1 {
-		ip := freeIpsForMgt[0]
-		freeIpsForMgt = []string{}
-		return ip, nil
-	}
-
-	ip := freeIpsForMgt[len(freeIpsForMgt)-1]
-	freeIpsForMgt = freeIpsForMgt[:len(freeIpsForMgt)-1]
-	return ip, nil
-}
-
-func ReleaseMgtIp(ip string) {
-	exist := false
-	for _, ipa := range freeIpsForMgt {
-		if ip == ipa {
-			exist = true
-			break
-		}
-	}
-
-	if !exist {
-		freeIpsForMgt = append(freeIpsForMgt, ip)
-	}
-}
-
-func GetFreePubL3Ip() (string, error) {
-	if len(freeIpsForPubL3) <= 0 {
-		return "", fmt.Errorf("not enough pubL3 ip")
-	}
-
-	if len(freeIpsForPubL3) == 1 {
-		ip := freeIpsForPubL3[0]
-		freeIpsForPubL3 = []string{}
-		return ip, nil
-	}
-
-	ip := freeIpsForPubL3[len(freeIpsForPubL3)-1]
-	freeIpsForPubL3 = freeIpsForPubL3[:len(freeIpsForPubL3)-1]
-	return ip, nil
-}
-
-func ReleasePubL3Ip(ip string) {
-	exist := false
-	for _, ipa := range freeIpsForPubL3 {
-		if ip == ipa {
-			exist = true
-			break
-		}
-	}
-
-	if !exist {
-		freeIpsForPubL3 = append(freeIpsForPubL3, ip)
-	}
-}
-
-func GetMgtGateway() string {
-	return BootstrapInfo["mgtGateway"].(string)
 }
 
 func SetEnableVyosCmdForUT(enable bool) {
@@ -363,5 +183,58 @@ func SetEnableVyosCmdForUT(enable bool) {
 		BootstrapInfo["EnableVyosCmd"] = true
 	} else {
 		BootstrapInfo["EnableVyosCmd"] = false
+	}
+}
+
+func StartUdpServer(ip string, port int, ctx context.Context) error {
+	addr := net.ParseIP(ip)
+	if addr == nil {
+		log.Debugf("failed to parse IP address: %s", ip)
+		return fmt.Errorf("failed to parse IP address: %s", ip)
+	}
+
+	var conn *net.UDPConn
+	var err error
+	if addr.To4() == nil {
+		udpAddr, err := net.ResolveUDPAddr("udp6", fmt.Sprintf("[%s]:%d", ip, port))
+		if err != nil {
+			log.Debugf("Error resolving address: %v", err)
+			return fmt.Errorf("Error resolving address: %v", err)
+		}
+
+		conn, err = net.ListenUDP("udp6", udpAddr)
+		if err != nil {
+			log.Debugf("failed to listen on UDP: %v", err)
+			return fmt.Errorf("failed to listen on UDP: %v", err)
+		}
+	} else {
+		conn, err = net.ListenUDP("udp", &net.UDPAddr{IP: addr, Port: port})
+		if err != nil {
+			log.Debugf("failed to listen on UDP: %v", err)
+			return err
+		}
+	}
+	defer conn.Close()
+
+	log.Debugf("[udp server] started on %s:%d", ip, port)
+	buffer := make([]byte, 1024)
+	for {
+		select {
+		case <-ctx.Done():
+			log.Debugf("server[%s:%d] done", ip, port)
+			return nil
+		default:
+			_, remoteAddr, err := conn.ReadFromUDP(buffer)
+			if err != nil {
+				log.Debugf("failed to read from UDP: %v", err)
+				continue
+			}
+
+			_, err = conn.WriteToUDP(buffer[:4], remoteAddr)
+			if err != nil {
+				log.Debugf("failed to write to UDP: %v", err)
+				continue
+			}
+		}
 	}
 }

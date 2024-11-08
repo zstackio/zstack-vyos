@@ -18,7 +18,7 @@ func startMockServer() {
 		startServer()
 	}()
 
-	utils.InitLog(utils.GetVyosUtLogDir()+"server_test.log", false)
+	utils.InitLog(utils.GetVyosUtLogDir()+"server_test.log", utils.IsRuingUT())
 
 	time.Sleep(time.Duration(2) * time.Second)
 }

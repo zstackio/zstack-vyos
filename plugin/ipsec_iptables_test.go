@@ -17,7 +17,7 @@ var _ = Describe("ipsec_iptables_test", func() {
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)
-		ipsecMap = make(map[string]ipsecInfo, IPSecInfoMaxSize)
+		ipsecMap = make(map[string]IpsecInfo, IPSecInfoMaxSize)
 	})
 
 	It("[IPTABLES]IPSEC : test create ipsec", func() {
@@ -25,11 +25,11 @@ var _ = Describe("ipsec_iptables_test", func() {
 		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
 		configureNic(nicCmd)
 		IpsecInit()
-		createIPsecCmd1 := &createIPsecCmd{}
-		syncIPsecCmd1 := syncIPsecCmd{}
-		deleteIPsecCmd1 := deleteIPsecCmd{}
+		createIPsecCmd1 := &CreateIPsecCmd{}
+		syncIPsecCmd1 := SyncIPsecCmd{}
+		deleteIPsecCmd1 := DeleteIPsecCmd{}
 
-		info := ipsecInfo{}
+		info := IpsecInfo{}
 		info.Uuid = "b7d5e47f11124661bf59905dfafe99a2"
 		info.Vip = "172.24.3.157"
 		info.LocalCidrs = []string{"192.169.100.0/24"}
@@ -48,13 +48,13 @@ var _ = Describe("ipsec_iptables_test", func() {
 		info.ExcludeSnat = true
 
 		createIPsecCmd1.AutoRestartVpn = false
-		createIPsecCmd1.Infos = []ipsecInfo{info}
+		createIPsecCmd1.Infos = []IpsecInfo{info}
 		syncIPsecCmd1.AutoRestartVpn = false
-		syncIPsecCmd1.Infos = []ipsecInfo{info}
-		deleteIPsecCmd1.Infos = []ipsecInfo{info}
+		syncIPsecCmd1.Infos = []IpsecInfo{info}
+		deleteIPsecCmd1.Infos = []IpsecInfo{info}
 
 		log.Debugf("#####test create ipsec#######")
-		createIPsecConnection(createIPsecCmd1)
+		CreateIPsecConnection(createIPsecCmd1)
 		checkSyncIpSecRulesByIptables()
 
 		nicInfo := nicTypeInfo{Mac: utils.PubNicForUT.Mac, NicType: "public"}
@@ -64,11 +64,11 @@ var _ = Describe("ipsec_iptables_test", func() {
 		checkFirewallRuleOfIpSec(info, nicInfo, grsp.Refs)
 
 		log.Debugf("#####test sync ipsec#######")
-		syncIPsecConnection(&syncIPsecCmd1)
+		SyncIPsecConnection(&syncIPsecCmd1)
 		checkSyncIpSecRulesByIptables()
 
 		log.Debugf("#####test delete ipsec#######")
-		deleteIPsecConnection(&deleteIPsecCmd1)
+		DeleteIPsecConnection(&deleteIPsecCmd1)
 		checkSyncIpSecRulesByIptables()
 
 		restoreIpRuleForMainRouteTable()
@@ -81,7 +81,7 @@ var _ = Describe("ipsec_iptables_test", func() {
 	})
 })
 
-func checkFirewallRuleOfIpSec(ipsInfo ipsecInfo, nicInfo nicTypeInfo, refs []ethRuleSetRef) {
+func checkFirewallRuleOfIpSec(ipsInfo IpsecInfo, nicInfo nicTypeInfo, refs []ethRuleSetRef) {
 	for _, ref := range refs {
 		if ref.Forward == "in" {
 			r1 := ref.RuleSetInfo.Rules[1]

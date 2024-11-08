@@ -3,14 +3,14 @@ package utils
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("ipset test", func() {
 
 	It("preparing ipset", func() {
-		InitLog(GetVyosUtLogDir()+"ipset-test.log", false)
+		InitLog(GetVyosUtLogDir()+"ipset-test.log", IsRuingUT())
 	})
 
 	It("ipset create", func() {

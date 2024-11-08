@@ -12,12 +12,12 @@ const (
 	POLICY_ROUTE_TABLE_CHAIN = "zs-rt-"
 )
 
-type policyRuleSetInfo struct {
+type PolicyRuleSetInfo struct {
 	RuleSetName string `json:"ruleSetName"`
 	System      bool   `json:"system"`
 }
 
-type policyRuleInfo struct {
+type PolicyRuleInfo struct {
 	RuleSetName string `json:"ruleSetName"`
 	RuleNumber  int    `json:"ruleNumber"`
 	DestPort    string `json:"destPort"`
@@ -29,7 +29,7 @@ type policyRuleInfo struct {
 	TableNumber int    `json:"tableNumber"`
 }
 
-type policyRouteInfo struct {
+type PolicyRouteInfo struct {
 	TableNumber     int    `json:"tableNumber"`
 	DestinationCidr string `json:"destinationCidr"`
 	NextHopIp       string `json:"nextHopIp"`
@@ -37,22 +37,22 @@ type policyRouteInfo struct {
 	Distance        int    `json:"distance"`
 }
 
-type policyRuleSetNicRef struct {
+type PolicyRuleSetNicRef struct {
 	RuleSetName string `json:"ruleSetName"`
 	Mac         string `json:"mac"`
 }
 
-type syncPolicyRouteCmd struct {
-	RuleSets      []policyRuleSetInfo   `json:"ruleSets"`
-	Rules         []policyRuleInfo      `json:"rules"`
+type SyncPolicyRouteCmd struct {
+	RuleSets      []PolicyRuleSetInfo   `json:"ruleSets"`
+	Rules         []PolicyRuleInfo      `json:"rules"`
 	TableNumbers  []int                 `json:"tableNumbers"`
-	Routes        []policyRouteInfo     `json:"routes"`
-	Refs          []policyRuleSetNicRef `json:"refs"`
+	Routes        []PolicyRouteInfo     `json:"routes"`
+	Refs          []PolicyRuleSetNicRef `json:"refs"`
 	MarkConntrack bool                  `json:"markConntrack"`
 }
 
 /*
-func (r *policyRuleInfo) toRules() []string {
+func (r *PolicyRuleInfo) toRules() []string {
 	rules := make([]string, 0)
 	if r.State == "disable" {
 		rules = append(rules, fmt.Sprintf("disable"))
@@ -113,7 +113,7 @@ func deletePolicyRoutes() {
 	tree.Apply(false)
 }
 
-func applyPolicyRoutes(cmd *syncPolicyRouteCmd) {
+func ApplyPolicyRoutes(cmd *SyncPolicyRouteCmd) {
 	tree := server.NewParserFromShowConfiguration().Tree
 	for _, ruleSet := range cmd.RuleSets {
 		tree.CreatePolicyRouteRuleSet(ruleSet.RuleSetName)
@@ -147,13 +147,13 @@ func getPolicyRouteTableChainNameByString(tableId string) string {
 }
 
 func syncPolicyRoute(ctx *server.CommandContext) interface{} {
-	cmd := &syncPolicyRouteCmd{}
+	cmd := &SyncPolicyRouteCmd{}
 	ctx.GetCommand(cmd)
-	applyPolicyRoutes(cmd)
+	ApplyPolicyRoutes(cmd)
 	return nil
 }
 
-func applyPolicyRoutes(cmd *syncPolicyRouteCmd) {
+func ApplyPolicyRoutes(cmd *SyncPolicyRouteCmd) {
 	var rts []utils.ZStackRouteTable
 	var ipRules []utils.ZStackIpRule
 	currRules := utils.GetZStackIpRules()

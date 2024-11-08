@@ -41,7 +41,9 @@ const (
 	ipsecState_enable  = "Enabled"
 
 	strongswanVersion_5_9_4           = "5.9.4"
+	strongswanVersion_5_9_7           = "5.9.7"
 	ipsec_driver_strongswan_withipsec = "strongswan_withipsec"
+	ipsec_driver_strongswan_euler     = "strongswan_euler"
 	ipsec_driver_vyos                 = "vyos"
 	ipsec_strongswan_upgrade_cmd      = "upgrade.sh"
 	ipsec_path_version                = "/usr/local/etc/ipsec.version"
@@ -55,18 +57,18 @@ var (
 )
 
 func getIpsecStrongSWanDataPath() string {
-	return  filepath.Join(utils.GetZvrRootPath(), "data/upgrade/strongswan/")
+	return filepath.Join(utils.GetZvrRootPath(), "data/upgrade/strongswan/")
 }
 
 func getHaIpsecScript() string {
-	return  filepath.Join(utils.GetZvrRootPath(), "keepalived/script/ipsec.sh")
+	return filepath.Join(utils.GetZvrRootPath(), "keepalived/script/ipsec.sh")
 }
 
 func getIpsecTempScript() string {
-	return  filepath.Join(utils.GetZvrRootPath(), "keepalived/temp/ipsec.sh")
+	return filepath.Join(utils.GetZvrRootPath(), "keepalived/temp/ipsec.sh")
 }
 
-type ipsecInfo struct {
+type IpsecInfo struct {
 	Uuid                      string   `json:"uuid"`
 	State                     string   `json:"state"`
 	LocalCidrs                []string `json:"localCidrs"`
@@ -94,22 +96,22 @@ type ipsecInfo struct {
 	LifeTime                  int      `json:"lifeTime"`
 }
 
-type createIPsecCmd struct {
-	Infos          []ipsecInfo `json:"infos"`
+type CreateIPsecCmd struct {
+	Infos          []IpsecInfo `json:"infos"`
 	AutoRestartVpn bool        `json:"autoRestartVpn"`
 }
 
-type deleteIPsecCmd struct {
-	Infos []ipsecInfo `json:"infos"`
+type DeleteIPsecCmd struct {
+	Infos []IpsecInfo `json:"infos"`
 }
 
-type syncIPsecCmd struct {
-	Infos          []ipsecInfo `json:"infos"`
+type SyncIPsecCmd struct {
+	Infos          []IpsecInfo `json:"infos"`
 	AutoRestartVpn bool        `json:"autoRestartVpn"`
 }
 
 type updateIPsecCmd struct {
-	Infos []ipsecInfo `json:"infos"`
+	Infos []IpsecInfo `json:"infos"`
 }
 
 type getIPsecLogCmd struct {
@@ -125,15 +127,22 @@ type syncIPsecRsp struct {
 }
 
 type updateIpsecVersionCmd struct {
-	Infos          []ipsecInfo `json:"infos"`
+	Infos          []IpsecInfo `json:"infos"`
 	AutoRestartVpn bool        `json:"autoRestartVpn"`
 	Version        string      `json:"targetVersion"`
 }
 
-var ipsecMap map[string]ipsecInfo
+var ipsecMap map[string]IpsecInfo
 
 func writeIpsecHaScript(enable bool) {
 	if !utils.IsHaEnabled() {
+		return
+	}
+
+	if utils.IsEuler2203() {
+		conent := "systemctl restart strongswan"
+		err := os.WriteFile(getHaIpsecScript(), []byte(conent), 0755)
+		utils.PanicOnError(err)
 		return
 	}
 
@@ -248,7 +257,7 @@ func syncIpSecRulesByIptables() {
 	utils.PanicOnError(err)
 }
 
-func setIPSecRule(tree *server.VyosConfigTree, info *ipsecInfo) {
+func setIPSecRule(tree *server.VyosConfigTree, info *IpsecInfo) {
 	nicname, err := utils.GetNicNameByMac(info.PublicNic)
 	utils.PanicOnError(err)
 
@@ -353,7 +362,7 @@ func setIPSecRule(tree *server.VyosConfigTree, info *ipsecInfo) {
 	return
 }
 
-func delIPSecRule(tree *server.VyosConfigTree, info *ipsecInfo) {
+func delIPSecRule(tree *server.VyosConfigTree, info *IpsecInfo) {
 	nicname, err := utils.GetNicNameByMac(info.PublicNic)
 	utils.PanicOnError(err)
 
@@ -419,7 +428,7 @@ func delIPSecRule(tree *server.VyosConfigTree, info *ipsecInfo) {
 
 }
 
-func createIPsecConnection(cmd *createIPsecCmd) interface{} {
+func CreateIPsecConnection(cmd *CreateIPsecCmd) interface{} {
 	for _, info := range cmd.Infos {
 		ipsecMap[info.Uuid] = info
 	}
@@ -442,7 +451,7 @@ func createIPsecConnection(cmd *createIPsecCmd) interface{} {
 	return nil
 }
 
-func syncIPsecConnection(cmd *syncIPsecCmd) interface{} {
+func SyncIPsecConnection(cmd *SyncIPsecCmd) interface{} {
 	for _, info := range cmd.Infos {
 		ipsecMap[info.Uuid] = info
 	}
@@ -469,7 +478,7 @@ func syncIPsecConnection(cmd *syncIPsecCmd) interface{} {
 	return syncIPsecRsp{DownIpsecConns: DownIpsecConns}
 }
 
-func deleteIPsecConnection(cmd *deleteIPsecCmd) interface{} {
+func DeleteIPsecConnection(cmd *DeleteIPsecCmd) interface{} {
 	for _, info := range cmd.Infos {
 		delete(ipsecMap, info.Uuid)
 	}
@@ -514,21 +523,21 @@ func getIpsecLogHandler(ctx *server.CommandContext) interface{} {
 }
 
 func createIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
-	cmd := &createIPsecCmd{}
+	cmd := &CreateIPsecCmd{}
 	ctx.GetCommand(cmd)
-	return createIPsecConnection(cmd)
+	return CreateIPsecConnection(cmd)
 }
 
 func syncIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
-	cmd := &syncIPsecCmd{}
+	cmd := &SyncIPsecCmd{}
 	ctx.GetCommand(cmd)
-	return syncIPsecConnection(cmd)
+	return SyncIPsecConnection(cmd)
 }
 
 func deleteIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
-	cmd := &deleteIPsecCmd{}
+	cmd := &DeleteIPsecCmd{}
 	ctx.GetCommand(cmd)
-	return deleteIPsecConnection(cmd)
+	return DeleteIPsecConnection(cmd)
 }
 
 func updateIPsecConnectionHandler(ctx *server.CommandContext) interface{} {
@@ -558,10 +567,10 @@ type ipsecVersionMgr struct {
 type ipsecDriver interface {
 	DriverType() string
 	ExistConnWorking() bool
-	CreateIpsecConns(cmd *createIPsecCmd) error
-	DeleteIpsecConns(cmd *deleteIPsecCmd) error
+	CreateIpsecConns(cmd *CreateIPsecCmd) error
+	DeleteIpsecConns(cmd *DeleteIPsecCmd) error
 	ModifyIpsecConns(cmd *updateIPsecCmd) error
-	SyncIpsecConns(cmd *syncIPsecCmd) []string
+	SyncIpsecConns(cmd *SyncIPsecCmd) []string
 	GetIpsecLog(cmd *getIPsecLogCmd) string
 }
 
@@ -571,6 +580,10 @@ var (
 )
 
 func getStrongswanSoftwareVersion() (string, error) {
+	if utils.IsEuler2203() {
+		return strongswanVersion_5_9_7, nil
+	}
+
 	bash := &utils.Bash{Command: ipsecVersion, Sudo: true}
 	_, out, _, err := bash.RunWithReturn()
 	if err != nil {
@@ -586,8 +599,9 @@ func getStrongswanSoftwareVersion() (string, error) {
 }
 
 /*
-   the ipsec version that comes with vyos:
-      vyos117=4.5.2, vyos12=5.7.2
+the ipsec version that comes with vyos:
+
+	vyos117=4.5.2, vyos12=5.7.2
 */
 func updateOriginVersion(version string) error {
 	log.Infof("TEMP: updateOriginVersion for version=%s.", version)
@@ -649,6 +663,10 @@ func isOriginVersion(version string) bool {
 }
 
 func getVersionSupport() []string {
+	if utils.IsEuler2203() {
+		return []string{strongswanVersion_5_9_7}
+	}
+
 	var supports []string
 	if exist, _ := utils.PathExists(getIpsecStrongSWanDataPath()); !exist {
 		return supports
@@ -693,9 +711,11 @@ func getIpsecDriver(version string) string {
 		} else {
 			return ipsec_driver_vyos
 		}
+	} else if utils.IsEuler2203() {
+		return ipsec_driver_strongswan_euler
+	} else {
+		return ipsec_driver_vyos
 	}
-
-	return ipsec_driver_vyos
 }
 
 func upDownStrongswanSoftware(version string, down bool) error {
@@ -754,7 +774,7 @@ func autoUpgradeStrongswan() error {
 		return nil
 	}
 
-	if utils.Kernel_version == utils.Kernel_3_13_11 {
+	if utils.Kernel_version == utils.Kernel_3_13_11 || utils.IsEuler2203() {
 		log.Errorf("current vyos kernel [%s] not support upgrade strongswan", utils.Kernel_version)
 		return err
 	}
@@ -789,16 +809,18 @@ func autoUpgradeStrongswan() error {
 	return nil
 }
 
-/* 手动升级、降级：
-    1、删除当前版本 ipsec配置；
-	2、降级当前版本软件
-    3、修改内存版本信息
-	4、升级指定版本软件
-	5、创建指定版本 ipsec配置
+/*
+	 手动升级、降级：
+	    1、删除当前版本 ipsec配置；
+		2、降级当前版本软件
+	    3、修改内存版本信息
+		4、升级指定版本软件
+		5、创建指定版本 ipsec配置
 */
 func updateIpsecVersion(cmd *updateIpsecVersionCmd) error {
-	if utils.Kernel_version == utils.Kernel_3_13_11 {
-		return fmt.Errorf("current vyos kernel [%s] not support upgrade strongswan", utils.Kernel_version)
+	if utils.Kernel_version == utils.Kernel_3_13_11 || utils.IsEuler2203() {
+		return fmt.Errorf("current vyos kernel [%s:%s] not support upgrade strongswan",
+			utils.Vyos_version, utils.Kernel_version)
 	}
 
 	log.Infof("TEMP: start update strongswan version from %s to %s.",
@@ -817,7 +839,7 @@ func updateIpsecVersion(cmd *updateIpsecVersionCmd) error {
 		return err
 	}
 
-	err = ipsecVerMgr.currentDriver.DeleteIpsecConns(&deleteIPsecCmd{cmd.Infos})
+	err = ipsecVerMgr.currentDriver.DeleteIpsecConns(&DeleteIPsecCmd{cmd.Infos})
 	if err != nil {
 		return err
 	}
@@ -826,7 +848,7 @@ func updateIpsecVersion(cmd *updateIpsecVersionCmd) error {
 
 	defer func(driver ipsecDriver) {
 		if err != nil {
-			driver.CreateIpsecConns(&createIPsecCmd{Infos: cmd.Infos, AutoRestartVpn: cmd.AutoRestartVpn})
+			driver.CreateIpsecConns(&CreateIPsecCmd{Infos: cmd.Infos, AutoRestartVpn: cmd.AutoRestartVpn})
 		}
 	}(ipsecVerMgr.currentDriver)
 
@@ -859,7 +881,7 @@ func updateIpsecVersion(cmd *updateIpsecVersionCmd) error {
 		}
 	}()
 
-	err = ipsecVerMgr.currentDriver.CreateIpsecConns(&createIPsecCmd{Infos: cmd.Infos, AutoRestartVpn: cmd.AutoRestartVpn})
+	err = ipsecVerMgr.currentDriver.CreateIpsecConns(&CreateIPsecCmd{Infos: cmd.Infos, AutoRestartVpn: cmd.AutoRestartVpn})
 	if err != nil {
 		return err
 	}
@@ -909,6 +931,7 @@ func IpsecInit() error {
 	ipsecDriverList = make(map[string]ipsecDriver)
 	ipsecDriverList[ipsec_driver_strongswan_withipsec] = &ipsecStrongSWan{}
 	ipsecDriverList[ipsec_driver_vyos] = &ipsecVyos{}
+	ipsecDriverList[ipsec_driver_strongswan_euler] = &EulerStrongSWan{}
 
 	version, err := getCurrentVersionInuse()
 	if err != nil {
@@ -959,7 +982,7 @@ func GetIpsecVersionInfo() (string, string) {
 }
 
 func IPsecEntryPoint() {
-	ipsecMap = make(map[string]ipsecInfo, IPSecInfoMaxSize)
+	ipsecMap = make(map[string]IpsecInfo, IPSecInfoMaxSize)
 	server.RegisterAsyncCommandHandler(CREATE_IPSEC_CONNECTION, server.VyosLock(createIPsecConnectionHandler))
 	server.RegisterAsyncCommandHandler(DELETE_IPSEC_CONNECTION, server.VyosLock(deleteIPsecConnectionHandler))
 	server.RegisterAsyncCommandHandler(SYNC_IPSEC_CONNECTION, server.VyosLock(syncIPsecConnectionHandler))

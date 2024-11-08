@@ -11,7 +11,7 @@ var _ = Describe("route_linux_test", func() {
 	var (
 		nextHopInPubL3                     string
 		nextHopInmgt                       string
-		r0, r1, r2, r3, r4, r5, r6, r7, r8 routeInfo
+		r0, r1, r2, r3, r4, r5, r6, r7, r8 RouteInfo
 		nicCmd                             *configureNicCmd
 	)
 
@@ -23,15 +23,15 @@ var _ = Describe("route_linux_test", func() {
 		utils.SetSkipVyosIptables(true)
 		nextHopInPubL3, _ = utils.GetFreePubL3Ip()
 		nextHopInmgt, _ = utils.GetFreeMgtIp()
-		r0 = routeInfo{Destination: "172.16.90.0/24", Target: utils.GetMgtGateway(), Distance: 1}
-		r1 = routeInfo{Destination: "1.1.1.0/24", Target: nextHopInPubL3, Distance: 100}
-		r2 = routeInfo{Destination: "1.1.2.0/24", Target: nextHopInPubL3, Distance: 110}
-		r3 = routeInfo{Destination: "1.1.3.0/24", Target: nextHopInmgt, Distance: 120}
-		r4 = routeInfo{Destination: "1.1.4.0/24", Target: nextHopInmgt, Distance: 130}
-		r5 = routeInfo{Destination: "1.1.5.0/24", Target: "", Distance: 80}
-		r6 = routeInfo{Destination: "1.1.6.0/24", Target: "", Distance: 90}
-		r7 = routeInfo{Destination: "7.7.7.0/24", Target: "7.7.7.7", Distance: 150}
-		r8 = routeInfo{Destination: "8.8.8.0/24", Target: "8.8.8.8", Distance: 151}
+		r0 = RouteInfo{Destination: "172.16.90.0/24", Target: utils.GetMgtGateway(), Distance: 1}
+		r1 = RouteInfo{Destination: "1.1.1.0/24", Target: nextHopInPubL3, Distance: 100}
+		r2 = RouteInfo{Destination: "1.1.2.0/24", Target: nextHopInPubL3, Distance: 110}
+		r3 = RouteInfo{Destination: "1.1.3.0/24", Target: nextHopInmgt, Distance: 120}
+		r4 = RouteInfo{Destination: "1.1.4.0/24", Target: nextHopInmgt, Distance: 130}
+		r5 = RouteInfo{Destination: "1.1.5.0/24", Target: "", Distance: 80}
+		r6 = RouteInfo{Destination: "1.1.6.0/24", Target: "", Distance: 90}
+		r7 = RouteInfo{Destination: "7.7.7.0/24", Target: "7.7.7.7", Distance: 150}
+		r8 = RouteInfo{Destination: "8.8.8.0/24", Target: "8.8.8.8", Distance: 151}
 
 		nicCmd = &configureNicCmd{}
 		nicCmd.Nics = append(nicCmd.Nics, utils.PubNicForUT)
@@ -39,27 +39,27 @@ var _ = Describe("route_linux_test", func() {
 	})
 
 	It("[REPLACE_VYOS]: test add route", func() {
-		routes := []routeInfo{r0, r1, r2, r3, r4, r5, r6}
-		setZebraRoutes(routes)
+		routes := []RouteInfo{r0, r1, r2, r3, r4, r5, r6}
+		SetZebraRoutes(routes)
 		checkRoutesByLinux(routes, nil)
 	})
 
 	It("[REPLACE_VYOS]: test del route", func() {
-		routes1 := []routeInfo{r0, r5, r6}
-		setZebraRoutes(routes1)
-		deleteRoutes := []routeInfo{r1, r2, r3, r4}
+		routes1 := []RouteInfo{r0, r5, r6}
+		SetZebraRoutes(routes1)
+		deleteRoutes := []RouteInfo{r1, r2, r3, r4}
 		checkRoutesByLinux(routes1, deleteRoutes)
-		setZebraRoutes([]routeInfo{})
+		SetZebraRoutes([]RouteInfo{})
 		checkRoutesByLinux(nil, routes1)
 	})
 
 	It("[REPLACE_VYOS]: test add unreachable route", func() {
-		routes1 := []routeInfo{r1, r2, r3, r4, r5, r6}
-		setZebraRoutes(routes1)
-		checkRoutesByLinux(routes1, []routeInfo{})
-		routes2 := []routeInfo{r7, r2, r3, r8, r5, r6, r1, r4}
-		setZebraRoutes(routes2)
-		checkRoutesByLinux(routes2, []routeInfo{})
+		routes1 := []RouteInfo{r1, r2, r3, r4, r5, r6}
+		SetZebraRoutes(routes1)
+		checkRoutesByLinux(routes1, []RouteInfo{})
+		routes2 := []RouteInfo{r7, r2, r3, r8, r5, r6, r1, r4}
+		SetZebraRoutes(routes2)
+		checkRoutesByLinux(routes2, []RouteInfo{})
 	})
 
 	It("[REPLACE_VYOS]: clean test env", func() {
@@ -67,7 +67,7 @@ var _ = Describe("route_linux_test", func() {
 	})
 })
 
-func checkRoutesByLinux(routes []routeInfo, routesDeleted []routeInfo) {
+func checkRoutesByLinux(routes []RouteInfo, routesDeleted []RouteInfo) {
 	jsonRoutes := []*utils.ZebraRoute{}
 	err := utils.JsonLoadConfig(utils.ZEBRA_JSON_FILE, &jsonRoutes)
 	Expect(err).To(BeNil(), "load route config error: %+v", err)
