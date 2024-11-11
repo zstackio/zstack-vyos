@@ -59,7 +59,13 @@ func (n NicArray) Less(i, j int) bool { return n[i].Name < n[j].Name }
 var BootstrapInfo map[string]interface{} = make(map[string]interface{})
 
 func GetVyosUtLogDir() string {
-	return fmt.Sprintf("%s/vyos_ut/testLog/", GetUserHomePath())
+	if _, err := PathExists("/home/zstack"); err == nil {
+		MkdirForFile("/home/zstack/vyos_ut/testLog/", 0777)
+		return fmt.Sprintf("/home/zstack/vyos_ut/testLog/")
+	} else {
+		MkdirForFile("/home/vyos/vyos_ut/testLog/", 0777)
+		return fmt.Sprintf("/home/vyos/vyos_ut/testLog/")
+	}
 }
 
 func GetBootStrapInfoPath() string {
@@ -291,18 +297,34 @@ func GetHaStatus() (status string) {
 }
 
 func IsRuingUT() bool {
-	info, err := os.Stat("/home/vyos/vyos_ut/")
-	if err != nil {
+	info1, err1 := os.Stat("/home/vyos/vyos_ut/")
+	info2, err2 := os.Stat("/home/zstack/vyos_ut/")
+	if err1 != nil && err2 != nil {
+		// there is no vyos_ut folder, nor home/vyos/vyos_ut/
 		log.Debugf("not running in ut")
 		return false
-	}
-
-	if info.IsDir() {
-		log.Debugf("running in ut")
-		return true
+	} else if err2 != nil {
+		///home/zstack/vyos_ut/ not existed
+		if info1.IsDir() {
+			log.Debugf("running in ut")
+			return true
+		} else {
+			log.Debugf("not running in ut")
+			return false
+		}
+	} else if err1 != nil {
+		///home/vyos/vyos_ut/ not existed
+		if info2.IsDir() {
+			log.Debugf("running in ut")
+			return true
+		} else {
+			log.Debugf("not running in ut")
+			return false
+		}
 	} else {
-		log.Debugf("not running in ut")
-		return false
+		//both existed
+		log.Debugf("this should not happend")
+		return true
 	}
 }
 
