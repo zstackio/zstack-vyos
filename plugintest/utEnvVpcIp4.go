@@ -420,7 +420,8 @@ func (env *VpcIp4Env) SetupIpsec() {
 	}
 
 	plugin.IPsecEntryPoint()
-	plugin.IpsecInit()
+	err := plugin.IpsecInit()
+	utils.PanicOnError(err)
 	env.ipsec1.Uuid = "a6c89c57c0684cb4926b346b68eaee3a"
 	env.ipsec1.PublicNic = env.PriNicForUT.Mac
 	env.ipsec1.Vip = "192.168.2.101"
