@@ -125,7 +125,7 @@ func (driver *EulerStrongSWan) CreateIpsecConns(cmd *CreateIPsecCmd) error {
 		utils.PanicOnError(err)
 
 		b := utils.Bash{
-			Command: fmt.Sprintf("nohup swanctl -i -i %s -c %s > /dev/null 2>&1 &", conn.ConnName, conn.ConnName),
+			Command: fmt.Sprintf("swanctl -q;nohup swanctl -i -i %s -c %s > /dev/null 2>&1 &", conn.ConnName, conn.ConnName),
 			Sudo:    true,
 		}
 		err = b.Run()
@@ -148,7 +148,7 @@ func (driver *EulerStrongSWan) DeleteIpsecConns(cmd *DeleteIPsecCmd) error {
 		}
 
 		b := utils.Bash{
-			Command: fmt.Sprintf("nohup swanctl -t --ike %s > /dev/null 2>&1 &", conf.ConnName),
+			Command: fmt.Sprintf("swanctl -q;nohup swanctl -t --ike %s > /dev/null 2>&1 &", conf.ConnName),
 			Sudo:    true,
 		}
 
@@ -212,7 +212,7 @@ func (driver *EulerStrongSWan) SyncIpsecConns(cmd *SyncIPsecCmd) []string {
 
 	for connName, _ := range md5ChangedConnMap {
 		b := utils.Bash{
-			Command: fmt.Sprintf("nohup swanctl -i -i %s -c %s > /dev/null 2>&1 &", connName, connName),
+			Command: fmt.Sprintf("swanctl -q;nohup swanctl -i -i %s -c %s > /dev/null 2>&1 &", connName, connName),
 			Sudo:    true,
 		}
 		err := b.Run()
@@ -309,7 +309,7 @@ func checkIpsecConnectStatusTask() {
 			for conn, status := range ipsecStateMap {
 				if status == IPSEC_STATE_DOWN {
 					b := utils.Bash{
-						Command: fmt.Sprintf("nohup swanctl -i -i %s -c %s > /dev/null 2>&1 &", conn, conn),
+						Command: fmt.Sprintf("swanctl -q;nohup swanctl -i -i %s -c %s > /dev/null 2>&1 &", conn, conn),
 						Sudo:    true,
 					}
 					err := b.Run()
