@@ -11,14 +11,14 @@ import (
 )
 
 var _ = Describe("snat_test", func() {
-	var sinfo1, sinfo2 snatInfo
+	var sinfo1, sinfo2 SnatInfo
 
 	It("test snat pre env", func() {
 		utils.InitLog(utils.GetVyosUtLogDir()+"snat_test.log", false)
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(false)
-		sinfo1 = snatInfo{
+		sinfo1 = SnatInfo{
 			PublicNicMac:  utils.PubNicForUT.Mac,
 			PublicIp:      utils.PubNicForUT.Ip,
 			PrivateNicMac: utils.PrivateNicsForUT[0].Mac,
@@ -26,7 +26,7 @@ var _ = Describe("snat_test", func() {
 			SnatNetmask:   utils.PrivateNicsForUT[0].Netmask,
 		}
 
-		sinfo2 = snatInfo{
+		sinfo2 = SnatInfo{
 			PublicNicMac:  utils.PubNicForUT.Mac,
 			PublicIp:      utils.PubNicForUT.Ip,
 			PrivateNicMac: utils.PrivateNicsForUT[1].Mac,
@@ -36,25 +36,25 @@ var _ = Describe("snat_test", func() {
 	})
 
 	It("test set snat", func() {
-		cmd := &setSnatCmd{Snat: sinfo1}
-		setSnat(cmd)
+		cmd := &SetSnatCmd{Snat: sinfo1}
+		SetSnat(cmd)
 		checkSnatRuleSet(utils.PubNicForUT, utils.PrivateNicsForUT[0])
 		checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[0], true)
 
 		// setsnat again, config not changed
-		setSnat(cmd)
+		SetSnat(cmd)
 		checkSnatRuleSet(utils.PubNicForUT, utils.PrivateNicsForUT[0])
 		checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[0], true)
 
-		cmd = &setSnatCmd{Snat: sinfo2}
-		setSnat(cmd)
+		cmd = &SetSnatCmd{Snat: sinfo2}
+		SetSnat(cmd)
 		checkSnatRuleSet(utils.PubNicForUT, utils.PrivateNicsForUT[1])
 		checkSnatRuleSet(utils.PubNicForUT, utils.PrivateNicsForUT[0])
 		checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[0], true)
 		checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[1], true)
 
-		rcmd := removeSnatCmd{NatInfo: []snatInfo{sinfo2, sinfo1}}
-		removeSnat(&rcmd)
+		rcmd := RemoveSnatCmd{NatInfo: []SnatInfo{sinfo2, sinfo1}}
+		RemoveSnat(&rcmd)
 		checkSnatRuleDel(utils.PrivateNicsForUT[0])
 		checkSnatRuleDel(utils.PrivateNicsForUT[1])
 		checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[0], false)
@@ -62,20 +62,20 @@ var _ = Describe("snat_test", func() {
 	})
 
 	It("test set snat state", func() {
-		cmd := &setSnatStateCmd{Snats: []snatInfo{sinfo1, sinfo2}}
+		cmd := &SetSnatStateCmd{Snats: []SnatInfo{sinfo1, sinfo2}}
 
 		sinfo1.State = true
 		sinfo2.State = true
-		cmd = &setSnatStateCmd{Snats: []snatInfo{sinfo1, sinfo2}}
+		cmd = &SetSnatStateCmd{Snats: []SnatInfo{sinfo1, sinfo2}}
 		cmd.Enable = true
-		setSnatState(cmd)
+		SetSnatState(cmd)
 		checkSnatRuleSet(utils.PubNicForUT, utils.PrivateNicsForUT[0])
 		checkSnatRuleSet(utils.PubNicForUT, utils.PrivateNicsForUT[1])
 		checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[0], true)
 		checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[1], true)
 
 		// set snat enable again
-		setSnatState(cmd)
+		SetSnatState(cmd)
 		checkSnatRuleSet(utils.PubNicForUT, utils.PrivateNicsForUT[0])
 		checkSnatRuleSet(utils.PubNicForUT, utils.PrivateNicsForUT[1])
 		checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[0], true)
@@ -84,16 +84,16 @@ var _ = Describe("snat_test", func() {
 		// set snat disable
 		sinfo1.State = false
 		sinfo2.State = false
-		cmd = &setSnatStateCmd{Snats: []snatInfo{sinfo1, sinfo2}}
+		cmd = &SetSnatStateCmd{Snats: []SnatInfo{sinfo1, sinfo2}}
 		cmd.Enable = false
-		setSnatState(cmd)
+		SetSnatState(cmd)
 		checkSnatRuleDel(utils.PrivateNicsForUT[0])
 		checkSnatRuleDel(utils.PrivateNicsForUT[1])
 		checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[0], false)
 		checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[1], false)
 
 		// set snat disable again
-		setSnatState(cmd)
+		SetSnatState(cmd)
 		checkSnatRuleDel(utils.PrivateNicsForUT[0])
 		checkSnatRuleDel(utils.PrivateNicsForUT[1])
 		checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[0], false)
@@ -101,14 +101,14 @@ var _ = Describe("snat_test", func() {
 	})
 
 	It("test sync snat state", func() {
-		cmd := &syncSnatCmd{Snats: []snatInfo{sinfo1, sinfo2}}
+		cmd := &SyncSnatCmd{Snats: []SnatInfo{sinfo1, sinfo2}}
 
 		// sync snat with disable flag, if snat is not enabled
 		sinfo1.State = false
 		sinfo2.State = false
-		cmd = &syncSnatCmd{Snats: []snatInfo{sinfo1, sinfo2}}
+		cmd = &SyncSnatCmd{Snats: []SnatInfo{sinfo1, sinfo2}}
 		cmd.Enable = false
-		syncSnat(cmd)
+		SyncSnat(cmd)
 		checkSnatRuleDel(utils.PrivateNicsForUT[0])
 		checkSnatRuleDel(utils.PrivateNicsForUT[1])
 		checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[0], false)
@@ -116,16 +116,16 @@ var _ = Describe("snat_test", func() {
 
 		sinfo1.State = true
 		sinfo2.State = true
-		cmd = &syncSnatCmd{Snats: []snatInfo{sinfo1, sinfo2}}
+		cmd = &SyncSnatCmd{Snats: []SnatInfo{sinfo1, sinfo2}}
 		cmd.Enable = true
-		syncSnat(cmd)
+		SyncSnat(cmd)
 		checkSnatRuleSet(utils.PubNicForUT, utils.PrivateNicsForUT[0])
 		checkSnatRuleSet(utils.PubNicForUT, utils.PrivateNicsForUT[1])
 		checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[0], true)
 		checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[1], true)
 
 		// sync snat again
-		syncSnat(cmd)
+		SyncSnat(cmd)
 		checkSnatRuleSet(utils.PubNicForUT, utils.PrivateNicsForUT[0])
 		checkSnatRuleSet(utils.PubNicForUT, utils.PrivateNicsForUT[1])
 		checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[0], true)
@@ -134,9 +134,9 @@ var _ = Describe("snat_test", func() {
 		// sync snat disable
 		sinfo1.State = false
 		sinfo2.State = false
-		cmd = &syncSnatCmd{Snats: []snatInfo{sinfo1, sinfo2}}
+		cmd = &SyncSnatCmd{Snats: []SnatInfo{sinfo1, sinfo2}}
 		cmd.Enable = false
-		syncSnat(cmd)
+		SyncSnat(cmd)
 		checkSnatRuleDel(utils.PrivateNicsForUT[0])
 		checkSnatRuleDel(utils.PrivateNicsForUT[1])
 		checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[0], false)
@@ -144,14 +144,14 @@ var _ = Describe("snat_test", func() {
 	})
 
 	It("test sync snat state again", func() {
-		cmd := &syncSnatCmd{Snats: []snatInfo{sinfo1, sinfo2}}
+		cmd := &SyncSnatCmd{Snats: []SnatInfo{sinfo1, sinfo2}}
 
 		for i := 0; i < 10; i++ {
 			sinfo1.State = true
 			sinfo2.State = true
-			cmd = &syncSnatCmd{Snats: []snatInfo{sinfo1, sinfo2}}
+			cmd = &SyncSnatCmd{Snats: []SnatInfo{sinfo1, sinfo2}}
 			cmd.Enable = true
-			syncSnat(cmd)
+			SyncSnat(cmd)
 			checkSnatRuleSet(utils.PubNicForUT, utils.PrivateNicsForUT[0])
 			checkSnatRuleSet(utils.PubNicForUT, utils.PrivateNicsForUT[1])
 			checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[0], true)
@@ -160,9 +160,9 @@ var _ = Describe("snat_test", func() {
 			// sync snat disable
 			sinfo1.State = false
 			sinfo2.State = false
-			cmd = &syncSnatCmd{Snats: []snatInfo{sinfo1, sinfo2}}
+			cmd = &SyncSnatCmd{Snats: []SnatInfo{sinfo1, sinfo2}}
 			cmd.Enable = false
-			syncSnat(cmd)
+			SyncSnat(cmd)
 			checkSnatRuleDel(utils.PrivateNicsForUT[0])
 			checkSnatRuleDel(utils.PrivateNicsForUT[1])
 			checkSnatVyosIpTables(utils.PubNicForUT, utils.PrivateNicsForUT[0], false)

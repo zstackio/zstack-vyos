@@ -59,8 +59,6 @@ chmod 700 /home/zstack/.ssh/
 chown zstack:zstack /home/zstack/.ssh/
 systemctl restart sshd
 systemctl stop keepalived
-ip link add dev mgmt type vrf table 250 ### reserver rt table: 250 for mgmt
-ip link set up dev mgmt
 
 sed -i "s%__ZVR_ROOT_PATH__%${ZVR_ROOT_PATH}%g"     ${CONFIG_FILE}
 sed -i "s%__BIN_PATH__%${ZVR_BIN_PATH}%g"             ${CONFIG_FILE}

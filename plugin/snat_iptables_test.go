@@ -10,9 +10,9 @@ import (
 )
 
 var _ = Describe("snat_iptables_test", func() {
-	var sinfo1 snatInfo
-	var sinfo2 snatInfo
-	var rmCmd *removeSnatCmd
+	var sinfo1 SnatInfo
+	var sinfo2 SnatInfo
+	var rmCmd *RemoveSnatCmd
 	var nicCmd *configureNicCmd
 
 	It("[IPTABLES]snat : test preparing", func() {
@@ -20,7 +20,7 @@ var _ = Describe("snat_iptables_test", func() {
 		utils.CleanTestEnvForUT()
 		SetKeepalivedStatusForUt(KeepAlivedStatus_Master)
 		utils.SetSkipVyosIptablesForUT(true)
-		sinfo1 = snatInfo{
+		sinfo1 = SnatInfo{
 			PublicNicMac:     utils.PubNicForUT.Mac,
 			PublicIp:         utils.PubNicForUT.Ip,
 			PrivateNicMac:    utils.PrivateNicsForUT[0].Mac,
@@ -29,7 +29,7 @@ var _ = Describe("snat_iptables_test", func() {
 			PrivateGatewayIp: utils.PrivateNicsForUT[0].Gateway,
 			State:            true,
 		}
-		sinfo2 = snatInfo{
+		sinfo2 = SnatInfo{
 			PublicNicMac:     utils.PubNicForUT.Mac,
 			PublicIp:         utils.PubNicForUT.Ip,
 			PrivateNicMac:    utils.PrivateNicsForUT[1].Mac,
@@ -38,7 +38,7 @@ var _ = Describe("snat_iptables_test", func() {
 			PrivateGatewayIp: utils.PrivateNicsForUT[1].Gateway,
 			State:            true,
 		}
-		rmCmd = &removeSnatCmd{NatInfo: []snatInfo{sinfo1, sinfo2}}
+		rmCmd = &RemoveSnatCmd{NatInfo: []SnatInfo{sinfo1, sinfo2}}
 		nicCmd = &configureNicCmd{}
 	})
 
@@ -47,50 +47,50 @@ var _ = Describe("snat_iptables_test", func() {
 		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[0])
 		nicCmd.Nics = append(nicCmd.Nics, utils.PrivateNicsForUT[1])
 		configureNic(nicCmd)
-		cmd1 := &setSnatCmd{Snat: sinfo1}
-		cmd2 := &setSnatCmd{Snat: sinfo2}
-		setSnat(cmd1)
+		cmd1 := &SetSnatCmd{Snat: sinfo1}
+		cmd2 := &SetSnatCmd{Snat: sinfo2}
+		SetSnat(cmd1)
 		checkSnatRuleSetIptables(cmd1)
 
-		setSnat(cmd2)
+		SetSnat(cmd2)
 		checkSnatRuleSetIptables(cmd2)
 
-		removeSnat(rmCmd)
+		RemoveSnat(rmCmd)
 		checkSnatRuleDelIptables(rmCmd)
 	})
 
 	It("[IPTABLES]snat : test set snat state", func() {
-		stateCmd := &setSnatStateCmd{Snats: []snatInfo{sinfo1, sinfo2}, Enable: true}
-		setSnatState(stateCmd)
+		stateCmd := &SetSnatStateCmd{Snats: []SnatInfo{sinfo1, sinfo2}, Enable: true}
+		SetSnatState(stateCmd)
 		checkSyncSnatByIptables(stateCmd.Snats, stateCmd.Enable)
 
-		removeSnat(rmCmd)
+		RemoveSnat(rmCmd)
 		checkSnatRuleDelIptables(rmCmd)
 	})
 
 	It("[IPTABLES]snat : test sync snat", func() {
-		syncCmd := &syncSnatCmd{Snats: []snatInfo{sinfo1, sinfo2}, Enable: true}
-		syncSnat(syncCmd)
+		syncCmd := &SyncSnatCmd{Snats: []SnatInfo{sinfo1, sinfo2}, Enable: true}
+		SyncSnat(syncCmd)
 		checkSyncSnatByIptables(syncCmd.Snats, syncCmd.Enable)
 
-		removeSnat(rmCmd)
+		RemoveSnat(rmCmd)
 		checkSnatRuleDelIptables(rmCmd)
 	})
 
 	It("[IPTABLES]snat : test sync non-public networksnat", func() {
-		syncCmd := &syncSnatCmd{Snats: []snatInfo{sinfo1, sinfo2}, Enable: true}
-		syncSnat(syncCmd)
+		syncCmd := &SyncSnatCmd{Snats: []SnatInfo{sinfo1, sinfo2}, Enable: true}
+		SyncSnat(syncCmd)
 		checkSyncSnatByIptables(syncCmd.Snats, true)
 
-		setState := &setSnatStateCmd{Snats: []snatInfo{sinfo1, sinfo2}, Enable: true}
-		setSnatState(setState)
+		setState := &SetSnatStateCmd{Snats: []SnatInfo{sinfo1, sinfo2}, Enable: true}
+		SetSnatState(setState)
 		checkSyncSnatByIptables(syncCmd.Snats, true)
 
-		setState1 := &setSnatStateCmd{Snats: []snatInfo{sinfo1, sinfo2}, Enable: false}
-		setSnatState(setState1)
+		setState1 := &SetSnatStateCmd{Snats: []SnatInfo{sinfo1, sinfo2}, Enable: false}
+		SetSnatState(setState1)
 		checkSyncSnatByIptables(syncCmd.Snats, false)
 
-		removeSnat(rmCmd)
+		RemoveSnat(rmCmd)
 		checkSnatRuleDelIptables(rmCmd)
 	})
 
@@ -99,7 +99,7 @@ var _ = Describe("snat_iptables_test", func() {
 	})
 })
 
-func checkSnatRuleSetIptables(cmd *setSnatCmd) {
+func checkSnatRuleSetIptables(cmd *SetSnatCmd) {
 	s := cmd.Snat
 	outNic, err := utils.GetNicNameByMac(s.PublicNicMac)
 	utils.PanicOnError(err)
@@ -122,7 +122,7 @@ func checkSnatRuleSetIptables(cmd *setSnatCmd) {
 	res = table.Check(rule)
 	Expect(res).To(BeTrue(), fmt.Sprintf("firewall rule [%s] check failed", rule.String()))
 }
-func checkSnatRuleDelIptables(cmd *removeSnatCmd) {
+func checkSnatRuleDelIptables(cmd *RemoveSnatCmd) {
 	table := utils.NewIpTables(utils.NatTable)
 	for _, s := range cmd.NatInfo {
 		publicNic, err := utils.GetNicNameByMac(s.PublicNicMac)
@@ -147,7 +147,7 @@ func checkSnatRuleDelIptables(cmd *removeSnatCmd) {
 	}
 }
 
-func checkSyncSnatByIptables(Snats []snatInfo, state bool) {
+func checkSyncSnatByIptables(Snats []SnatInfo, state bool) {
 	table := utils.NewIpTables(utils.NatTable)
 	for _, s := range Snats {
 		outNic, err := utils.GetNicNameByMac(s.PublicNicMac)

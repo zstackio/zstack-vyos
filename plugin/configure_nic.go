@@ -60,7 +60,7 @@ type ConfigureNicCmd struct {
 
 type ChangeDefaultNicCmd struct {
 	NewNic utils.NicInfo `json:"newNic"`
-	Snats  []snatInfo    `json:"snats"`
+	Snats  []SnatInfo    `json:"snats"`
 }
 
 func makeNicFirewallDescription(nicname, ip string) string {
@@ -235,6 +235,8 @@ func configureNicFirewall(nics []utils.NicInfo) {
 			if nic.Category == "Private" {
 				err := utils.InitNicFirewall(nicname, nic.Ip, false, utils.IPTABLES_ACTION_REJECT)
 				utils.PanicOnError(err)
+
+				utils.AddSnatRuleForPrivateNic(nicname, nic.Ip, nic.Netmask)
 			} else {
 				err := utils.InitNicFirewall(nicname, nic.Ip, true, utils.IPTABLES_ACTION_REJECT)
 				utils.PanicOnError(err)
@@ -523,6 +525,8 @@ func RemoveNic(cmd *ConfigureNicCmd) interface{} {
 			utils.PanicOnError(err)
 			err = utils.IpAddrFlush(nicname)
 			utils.PanicOnError(err)
+
+			utils.RemoveSnatRuleForPrivateNic(nicname, nic.Ip, nic.Netmask)
 		}
 	}
 

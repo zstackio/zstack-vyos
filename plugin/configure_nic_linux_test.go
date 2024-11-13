@@ -12,7 +12,7 @@ import (
 
 var _ = Describe("configure_nic_linux_test", func() {
 	var cmd *configureNicCmd
-	var sinfo1, sinfo2 snatInfo
+	var sinfo1, sinfo2 SnatInfo
 
 	It("[REPLACE_VYOS]: test pre env", func() {
 		utils.InitLog(utils.GetVyosUtLogDir()+"configure_nic_linux_test.log", false)
@@ -49,7 +49,7 @@ var _ = Describe("configure_nic_linux_test", func() {
 		Expect(err).To(BeNil(), "configureNic error: %+v", err)
 		checkConfiureNicByLinux(cmd)
 
-		sinfo1 = snatInfo{
+		sinfo1 = SnatInfo{
 			PublicNicMac:  utils.AdditionalPubNicsForUT[0].Mac,
 			PublicIp:      utils.AdditionalPubNicsForUT[0].Ip,
 			PrivateNicMac: utils.PrivateNicsForUT[0].Mac,
@@ -57,7 +57,7 @@ var _ = Describe("configure_nic_linux_test", func() {
 			SnatNetmask:   utils.PrivateNicsForUT[0].Netmask,
 		}
 
-		sinfo2 = snatInfo{
+		sinfo2 = SnatInfo{
 			PublicNicMac:  utils.AdditionalPubNicsForUT[0].Mac,
 			PublicIp:      utils.AdditionalPubNicsForUT[0].Ip,
 			PrivateNicMac: utils.PrivateNicsForUT[1].Mac,
@@ -66,13 +66,13 @@ var _ = Describe("configure_nic_linux_test", func() {
 		}
 		ccmd := &ChangeDefaultNicCmd{}
 		ccmd.NewNic = utils.AdditionalPubNicsForUT[0]
-		ccmd.Snats = []snatInfo{sinfo1, sinfo2}
+		ccmd.Snats = []SnatInfo{sinfo1, sinfo2}
 		err = changeDefaultNicByLinux(ccmd)
 		Expect(err).To(BeNil(), "changeDefaultNicByLinux error: %+v", err)
 		checkChangeDefaultNicByLinux(utils.PubNicForUT, utils.AdditionalPubNicsForUT[0])
 
-		rcmd := removeSnatCmd{NatInfo: []snatInfo{sinfo2, sinfo1}}
-		removeSnat(&rcmd)
+		rcmd := RemoveSnatCmd{NatInfo: []SnatInfo{sinfo2, sinfo1}}
+		RemoveSnat(&rcmd)
 	})
 	It("[REPLACE_VYOS]: test remove nic by linux", func() {
 		utils.CleanTestEnvForUT()

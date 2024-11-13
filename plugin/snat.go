@@ -16,7 +16,7 @@ const (
 	SET_SNAT_STATE_PATH = "/setsnatservicestate"
 )
 
-type snatInfo struct {
+type SnatInfo struct {
 	PublicNicMac     string `json:"publicNicMac"`
 	PublicIp         string `json:"publicIp"`
 	PrivateNicMac    string `json:"privateNicMac"`
@@ -26,21 +26,21 @@ type snatInfo struct {
 	State            bool   `json:"state"`
 }
 
-type setSnatCmd struct {
-	Snat snatInfo `json:"snat"`
+type SetSnatCmd struct {
+	Snat SnatInfo `json:"snat"`
 }
 
-type removeSnatCmd struct {
-	NatInfo []snatInfo `json:"natInfo"`
+type RemoveSnatCmd struct {
+	NatInfo []SnatInfo `json:"natInfo"`
 }
 
-type syncSnatCmd struct {
-	Snats  []snatInfo `json:"snats"`
+type SyncSnatCmd struct {
+	Snats  []SnatInfo `json:"snats"`
 	Enable bool       `json:"enable"`
 }
 
-type setSnatStateCmd struct {
-	Snats  []snatInfo `json:"snats"`
+type SetSnatStateCmd struct {
+	Snats  []SnatInfo `json:"snats"`
 	Enable bool       `json:"enabled"`
 }
 
@@ -50,7 +50,7 @@ type setNetworkServiceRsp struct {
 
 var SNAT_RULE_NUMBER = 9999
 
-func getNicSNATRuleNumberByConfig(tree *server.VyosConfigTree, snat snatInfo) (pubNicRuleNo int, priNicRuleNo int) {
+func getNicSNATRuleNumberByConfig(tree *server.VyosConfigTree, snat SnatInfo) (pubNicRuleNo int, priNicRuleNo int) {
 	rules := tree.Get("nat source rule")
 	ruleId1 := ""
 	ruleId2 := ""
@@ -97,16 +97,16 @@ func getNicSNATRuleNumber(nicNo int) (pubNicRuleNo int, priNicRuleNo int) {
 	return
 }
 
-//Deprecated
+// Deprecated
 func setSnatHandler(ctx *server.CommandContext) interface{} {
-	cmd := &setSnatCmd{}
+	cmd := &SetSnatCmd{}
 	ctx.GetCommand(cmd)
 
-	return setSnat(cmd)
+	return SetSnat(cmd)
 }
 
-//Deprecated
-func setSnat(cmd *setSnatCmd) interface{} {
+// Deprecated
+func SetSnat(cmd *SetSnatCmd) interface{} {
 	s := cmd.Snat
 	outNic, err := utils.GetNicNameByMac(s.PublicNicMac)
 	utils.PanicOnError(err)
@@ -125,12 +125,6 @@ func setSnat(cmd *setSnatCmd) interface{} {
 		rule := utils.NewIpTableRule(utils.RULESET_SNAT.String())
 		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
 		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(outNic).SetSnatTargetIp(s.PublicIp)
-		rules = append(rules, rule)
-
-		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
-		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
-		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s-%s", s.PrivateGatewayIp, s.PrivateGatewayIp)).
-			SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
 		rules = append(rules, rule)
 
 		table.AddIpTableRules(rules)
@@ -157,7 +151,7 @@ func setSnat(cmd *setSnatCmd) interface{} {
 				fmt.Sprintf("outbound-interface %s", inNic),
 				fmt.Sprintf("source address %v", address),
 				"destination address !224.0.0.0/8",
-				fmt.Sprintf("translation address %s", s.PublicIp),
+				fmt.Sprintf("translation address %s", s.PrivateGatewayIp),
 			)
 			setted = true
 		}
@@ -171,13 +165,13 @@ func setSnat(cmd *setSnatCmd) interface{} {
 }
 
 func removeSnatHandler(ctx *server.CommandContext) interface{} {
-	cmd := &removeSnatCmd{}
+	cmd := &RemoveSnatCmd{}
 	ctx.GetCommand(&cmd)
 
-	return removeSnat(cmd)
+	return RemoveSnat(cmd)
 }
 
-func removeSnat(cmd *removeSnatCmd) interface{} {
+func RemoveSnat(cmd *RemoveSnatCmd) interface{} {
 	if utils.IsSkipVyosIptables() {
 
 		table := utils.NewIpTables(utils.NatTable)
@@ -198,6 +192,7 @@ func removeSnat(cmd *removeSnatCmd) interface{} {
 			rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
 			rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s-%s", s.PrivateGatewayIp, s.PrivateGatewayIp)).
 				SetOutNic(priNic).SetSnatTargetIp(s.PublicIp)
+
 			table.RemoveIpTableRule([]*utils.IpTableRule{rule})
 		}
 
@@ -235,7 +230,7 @@ func hasRuleNumberForAddress(tree *server.VyosConfigTree, address string, ruleNo
 	return true
 }
 
-func setSnatStateByIptables(Snats []snatInfo, state bool) {
+func setSnatStateByIptables(Snats []SnatInfo, state bool) {
 	table := utils.NewIpTables(utils.NatTable)
 
 	var rules []*utils.IpTableRule
@@ -252,10 +247,13 @@ func setSnatStateByIptables(Snats []snatInfo, state bool) {
 		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(outNic).SetSnatTargetIp(s.PublicIp)
 		rules = append(rules, rule)
 
-		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
-		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
-		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s-%s", s.PrivateGatewayIp, s.PrivateGatewayIp)).
-			SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
+		if state == false {
+			rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
+			rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
+			rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s-%s", s.PrivateGatewayIp, s.PrivateGatewayIp)).
+				SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
+		}
+
 		rules = append(rules, rule)
 	}
 
@@ -269,7 +267,7 @@ func setSnatStateByIptables(Snats []snatInfo, state bool) {
 	utils.PanicOnError(err)
 }
 
-func syncSnatByIptables(Snats []snatInfo, state bool) {
+func syncSnatByIptables(Snats []SnatInfo, state bool) {
 
 	/* delete all snat rules */
 	table := utils.NewIpTables(utils.NatTable)
@@ -288,20 +286,12 @@ func syncSnatByIptables(Snats []snatInfo, state bool) {
 		}
 		outNic, err := utils.GetNicNameByMac(s.PublicNicMac)
 		utils.PanicOnError(err)
-		inNic, err := utils.GetNicNameByMac(s.PrivateNicMac)
-		utils.PanicOnError(err)
 		address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask)
 		utils.PanicOnError(err)
 
 		rule := utils.NewIpTableRule(utils.RULESET_SNAT.String())
 		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
 		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetOutNic(outNic).SetSnatTargetIp(s.PublicIp)
-		rules = append(rules, rule)
-
-		rule = utils.NewIpTableRule(utils.RULESET_SNAT.String())
-		rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
-		rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s-%s", s.PrivateGatewayIp, s.PrivateGatewayIp)).
-			SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
 		rules = append(rules, rule)
 	}
 
@@ -310,7 +300,7 @@ func syncSnatByIptables(Snats []snatInfo, state bool) {
 	utils.PanicOnError(err)
 }
 
-func applySnatRules(Snats []snatInfo, state bool) bool {
+func applySnatRules(Snats []SnatInfo, state bool) bool {
 	tree := server.NewParserFromShowConfiguration().Tree
 
 	update := false
@@ -357,7 +347,7 @@ func applySnatRules(Snats []snatInfo, state bool) bool {
 						fmt.Sprintf("outbound-interface %s", inNic),
 						fmt.Sprintf("source address %v", address),
 						"destination address !224.0.0.0/8",
-						fmt.Sprintf("translation address %s", s.PublicIp),
+						fmt.Sprintf("translation address %s", s.PrivateGatewayIp),
 					)
 				}
 				update = true
@@ -381,13 +371,13 @@ func applySnatRules(Snats []snatInfo, state bool) bool {
 }
 
 func setSnatStateHandler(ctx *server.CommandContext) interface{} {
-	cmd := &setSnatStateCmd{}
+	cmd := &SetSnatStateCmd{}
 	ctx.GetCommand(cmd)
 
-	return setSnatState(cmd)
+	return SetSnatState(cmd)
 }
 
-func setSnatState(cmd *setSnatStateCmd) interface{} {
+func SetSnatState(cmd *SetSnatStateCmd) interface{} {
 	if utils.IsSkipVyosIptables() {
 		setSnatStateByIptables(cmd.Snats, cmd.Enable)
 	} else {
@@ -411,13 +401,13 @@ func setSnatState(cmd *setSnatStateCmd) interface{} {
 }
 
 func syncSnatHandler(ctx *server.CommandContext) interface{} {
-	cmd := &syncSnatCmd{}
+	cmd := &SyncSnatCmd{}
 	ctx.GetCommand(cmd)
 
-	return syncSnat(cmd)
+	return SyncSnat(cmd)
 }
 
-func syncSnat(cmd *syncSnatCmd) interface{} {
+func SyncSnat(cmd *SyncSnatCmd) interface{} {
 	if utils.IsSkipVyosIptables() {
 		syncSnatByIptables(cmd.Snats, cmd.Enable)
 	} else {

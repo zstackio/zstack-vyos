@@ -387,6 +387,25 @@ func SetZvrRouteProtoIdentifier() {
 }
 
 func GetNicNumber(nic string) (int, error) {
+	if IsRuingUT() {
+		switch nic {
+		case "ut-mgt":
+			return 1, nil
+		case "ut-pub":
+			return 2, nil
+		case "ut-pub1":
+			return 3, nil
+		case "ut-pub2":
+			return 4, nil
+		case "ut-pri":
+			return 5, nil
+		case "ut-pri1":
+			return 6, nil
+		case "ut-pri2":
+			return 7, nil
+		}
+		return -1, fmt.Errorf("nic %s not existed", nic)
+	}
 	num, err := strconv.ParseInt(strings.Split(nic, "eth")[1], 10, 64)
 	if err != nil {
 		return -1, err

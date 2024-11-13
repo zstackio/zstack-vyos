@@ -568,3 +568,29 @@ func InitIptablesFlags() {
 		iptablesWithLock = true
 	}
 }
+
+func AddSnatRuleForPrivateNic(nicName, ip, netmask string) {
+	table := NewIpTables(NatTable)
+	address, err := GetNetworkNumber(ip, netmask)
+	PanicOnError(err)
+
+	rule := NewIpTableRule(RULESET_SNAT.String())
+	rule.SetAction(IPTABLES_ACTION_SNAT).SetComment(PrivateNicSNATComment)
+	rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s-%s", ip, ip)).
+		SetOutNic(nicName).SetSnatTargetIp(ip)
+	table.AddIpTableRules([]*IpTableRule{rule})
+	table.Apply()
+}
+
+func RemoveSnatRuleForPrivateNic(nicName, ip, netmask string) {
+	table := NewIpTables(NatTable)
+	address, err := GetNetworkNumber(ip, netmask)
+	PanicOnError(err)
+
+	rule := NewIpTableRule(RULESET_SNAT.String())
+	rule.SetAction(IPTABLES_ACTION_SNAT).SetComment(PrivateNicSNATComment)
+	rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s-%s", ip, ip)).
+		SetOutNic(nicName).SetSnatTargetIp(ip)
+	table.RemoveIpTableRule([]*IpTableRule{rule})
+	table.Apply()
+}

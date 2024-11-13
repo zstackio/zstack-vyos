@@ -165,7 +165,7 @@ func configureSshMonitor() {
 		/* use systemd to restart sshd */
 		return
 	}
-	
+
 	log.Debugf("[configure: create sshd monitor]")
 	cronJobMap := make(utils.CronjobMap)
 	newJob := utils.NewCronjob().SetId(1).SetCommand(utils.GetCronjobFileSsh()).SetMinute("*/1")
@@ -266,11 +266,14 @@ func configureNicInfo(nic *utils.NicInfo) {
 		log.Debugf("InitNicFirewall for nic: %s failed", err.Error())
 	}
 
+	if nic.Category == "Private" {
+		utils.AddSnatRuleForPrivateNic(nic.Name, nic.Ip, nic.Netmask)
+	}
 }
 
 func configureMgmtNic() {
 	log.Debugf("[configure: interfaces[%s] ... ", mgmtNic.Name)
-	
+
 	configureNicInfo(mgmtNic)
 }
 

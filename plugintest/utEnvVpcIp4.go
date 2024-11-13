@@ -88,6 +88,9 @@ type VpcIp4Env struct {
 	UtEnv
 
 	ipsec1 plugin.IpsecInfo
+
+	snat1, snat2, snat3, snat4 plugin.SnatInfo
+	setSnatState               plugin.SetSnatStateCmd
 }
 
 func NewVpcIpv4Env() *VpcIp4Env {
@@ -459,5 +462,49 @@ func (env *VpcIp4Env) DestroyIpsec() {
 		utils.PanicOnError(err)
 
 		os.ReadDir(plugin.SwanConnectionConfPath)
+	}
+}
+
+func (env *VpcIp4Env) SetupSnat() {
+	env.setSnatState.Enable = true
+
+	env.snat1 = plugin.SnatInfo{
+		PublicNicMac:     env.PubNicForUT.Mac,
+		PublicIp:         env.PubNicForUT.Ip,
+		PrivateNicMac:    env.PriNicForUT.Mac,
+		PrivateNicIp:     env.PriNicForUT.Ip,
+		PrivateGatewayIp: env.PriNicForUT.Gateway,
+		SnatNetmask:      env.PriNicForUT.Netmask,
+		State:            true,
+	}
+
+	env.snat2 = plugin.SnatInfo{
+		PublicNicMac:     env.PubNicForUT.Mac,
+		PublicIp:         env.PubNicForUT.Ip,
+		PrivateNicMac:    env.PriNicForUT1.Mac,
+		PrivateNicIp:     env.PriNicForUT1.Ip,
+		PrivateGatewayIp: env.PriNicForUT1.Gateway,
+		SnatNetmask:      env.PriNicForUT1.Netmask,
+		State:            true,
+	}
+
+	env.snat3 = plugin.SnatInfo{
+		PublicNicMac:     env.additionalPubNicForUT1.Mac,
+		PublicIp:         env.additionalPubNicForUT1.Ip,
+		PrivateNicMac:    env.PriNicForUT.Mac,
+		PrivateNicIp:     env.PriNicForUT.Ip,
+		PrivateGatewayIp: env.PriNicForUT.Gateway,
+		SnatNetmask:      env.PriNicForUT.Netmask,
+		State:            true,
+	}
+
+	env.snat4 = plugin.SnatInfo{
+		PublicNicMac:     env.additionalPubNicForUT1.Mac,
+		PublicIp:         env.additionalPubNicForUT1.Ip,
+		PrivateNicMac:    env.PriNicForUT1.Mac,
+		PrivateNicIp:     env.PriNicForUT1.Ip,
+		PrivateGatewayIp: env.PriNicForUT1.Gateway,
+		SnatNetmask:      env.PriNicForUT1.Netmask,
+		State:            true,
 	}
 }

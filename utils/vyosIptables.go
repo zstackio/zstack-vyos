@@ -23,6 +23,7 @@ const (
 	IpsecRuleComment       = "IPSec rule"
 	LbRuleComment          = "lb rule"
 	SNATComment            = "snat rule"
+	PrivateNicSNATComment  = "private-local rule"
 	PolicyRouteComment     = "policy route rule"
 	IpvsComment            = "ipvs-rule"
 	IpvsFullNatComment     = "ipvs-full-nat"
