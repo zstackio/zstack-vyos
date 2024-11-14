@@ -2398,6 +2398,7 @@ func (this *HaproxyListener) getLbCounters(listenerUuid string, listener Listene
 		stats, err := client.Stats()
 		if err != nil {
 			log.Infof("client.Stats failed %v", err)
+			return
 		}
 
 		for _, stat := range stats {
@@ -2512,6 +2513,7 @@ func (this *GBListener) getLbCounters(listenerUuid string, listener Listener) <-
 		port := this.apiPort
 		if stats, err = getGoBetweenStat(port, listenerUuid); err != nil {
 			log.Debugf("get getGoBetweenStat stats failed because %+v", err)
+			return
 		}
 
 		for _, stat := range stats.Backends {
