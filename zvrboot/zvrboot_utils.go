@@ -24,38 +24,55 @@ func renameNic() {
 		actual   string
 		swap     string
 	}
-	devNames := make([]*deviceName, 0)
+	err := utils.Retry(func() error {
+		devNames := make([]*deviceName, 0)
 
-	for _, nic := range nicsMap {
-		nicname, err := utils.GetNicNameByMac(nic.Mac)
-		utils.PanicOnError(err)
-		if nicname != nic.Name {
-			devNames = append(devNames, &deviceName{
-				expected: nic.Name,
-				actual:   nicname,
-			})
+		for _, nic := range nicsMap {
+			nicname, err := utils.GetNicNameByMac(nic.Mac)
+			utils.PanicOnError(err)
+			if nicname != nic.Name {
+				devNames = append(devNames, &deviceName{
+					expected: nic.Name,
+					actual:   nicname,
+				})
+			}
 		}
-	}
-	if len(devNames) == 0 {
-		return
-	}
+		if len(devNames) == 0 {
+			return nil
+		}
 
-	for i, devname := range devNames {
-		devnum := 1000 + i
-		devname.swap = fmt.Sprintf("eth%v", devnum)
+		for i, devname := range devNames {
+			devnum := 1000 + i
+			devname.swap = fmt.Sprintf("eth%v", devnum)
 
-		err := utils.IpLinkSetDown(devname.actual)
-		utils.Assertf(err == nil, "IpLinkSetDown[%s] error: %s", devname.actual, err)
-		err = utils.IpLinkSetName(devname.actual, devname.swap)
-		utils.Assertf(err == nil, "IpLinkSetName[%s, %s] error: %s", devname.actual, devname.swap, err)
-	}
+			err := utils.IpLinkSetDown(devname.actual)
+			if err != nil {
+				return fmt.Errorf("set actual link[%s] down: %v", devname.actual, err)
+			}
 
-	for _, devname := range devNames {
-		err := utils.IpLinkSetName(devname.swap, devname.expected)
-		utils.Assertf(err == nil, "IpLinkSetName[%s, %s] error: %s", devname.swap, devname.expected, err)
-		err = utils.IpLinkSetUp(devname.expected)
-		utils.Assertf(err == nil, "IpLinkSetUp[%s] error: %s", devname.actual, err)
-	}
+			err = utils.IpLinkSetName(devname.actual, devname.swap)
+			if err != nil {
+				return fmt.Errorf("change actual link[%s] name to swap name[%s]: %v",
+					devname.actual, devname.swap, err)
+			}
+		}
+
+		for _, devname := range devNames {
+			err := utils.IpLinkSetName(devname.swap, devname.expected)
+			if err != nil {
+				return fmt.Errorf("change swap name[%s] to expected name[%s]: %v",
+					devname.swap, devname.expected, err)
+			}
+			err = utils.IpLinkSetUp(devname.expected)
+			if err != nil {
+				return fmt.Errorf("set expected link[%s] up: %v", devname.expected, err)
+			}
+		}
+		return nil
+	}, 3, 1)
+
+	utils.PanicOnError(err)
+
 }
 
 func parseNicInfo(targetNic map[string]interface{}) *utils.NicInfo {
