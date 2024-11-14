@@ -264,8 +264,21 @@ func SetZebraRoutes(infos []RouteInfo) {
 	)
 
 	// 1. get old routes by load json
-	if err = utils.JsonLoadConfig(utils.GetZebraJsonFile(), &oldRoutes); err != nil {
-		log.Debugf("load old zebra route error: %+v", err)
+	if utils.IsEuler2203() {
+		routes := utils.GetCurrentRouteEntriesEuler2203(utils.ROUTETABLE_ID_MAIN)
+		for _, route := range routes {
+			zr := utils.ZebraRoute{
+				Dst:      route.DestinationCidr,
+				NextHop:  route.NextHopIp,
+				OutDev:   route.NicName,
+				Distance: route.Distance,
+			}
+			oldRoutes = append(oldRoutes, &zr)
+		}
+	} else {
+		if err = utils.JsonLoadConfig(utils.GetZebraJsonFile(), &oldRoutes); err != nil {
+			log.Debugf("load old zebra route error: %+v", err)
+		}
 	}
 
 	// 2. apply new entry by vtysh
@@ -303,8 +316,10 @@ func SetZebraRoutes(infos []RouteInfo) {
 	}
 
 	// 4. store new routes
-	if err = utils.JsonStoreConfig(utils.GetZebraJsonFile(), newRoutes); err != nil {
-		log.Debugf("load old zebra route error: %+v", err)
+	if !utils.IsEuler2203() {
+		if err = utils.JsonStoreConfig(utils.GetZebraJsonFile(), newRoutes); err != nil {
+			log.Debugf("load old zebra route error: %+v", err)
+		}
 	}
 }
 

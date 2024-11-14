@@ -25,7 +25,7 @@ const (
 	IPVS_LOG_CHAIN_NAME      = "ipvs-log"
 	IPVS_FULL_NAT_CHAIN_NAME = "ipvs-full-nat"
 	IPVS_LOG_IPSET_NAME      = "ipvs-set"
-	IPVS_LOG_IPSET6_NAME     = "ipvs-set"
+	IPVS_LOG_IPSET6_NAME     = "ipvs6-set"
 	IPVS_LOG_PREFIX          = "ipvs-log"
 
 	IPVS_HEALTH_CHECK_BIN_FILE      = "/usr/local/bin/ipvsHealthCheck"

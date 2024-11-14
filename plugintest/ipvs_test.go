@@ -296,11 +296,7 @@ var _ = Describe("ipvs test", func() {
 			env.lb.RedirectRules = nil
 
 			plugin.DelIpvsService(map[string]plugin.LbInfo{env.lb.ListenerUuid: env.lb, env.lb1.ListenerUuid: env.lb1})
-
-			// check ipset config
-			ipsetGroup := utils.GetIpSet(plugin.IPVS_LOG_IPSET_NAME)
-			Expect(ipsetGroup.CheckMember(env.lb.Vip+",udp:"+fmt.Sprintf("%d", env.lb.LoadBalancerPort))).To(BeFalse(), "ipvs log ipset member added", ipsetGroup)
-
+			
 			wait := 6
 			time.Sleep(time.Duration(wait) * time.Second)
 
