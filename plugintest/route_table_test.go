@@ -38,7 +38,7 @@ var _ = Describe("routingTable test", func() {
 		})
 
 		It("linux routingTable test:", func() {
-			routes := []plugin.RouteInfo{r1, r2, r3, r4, r5, r6, r7, r8}
+			routes := []plugin.RouteInfo{r1, r2, r3, r4, r5, r6}
 			plugin.SetZebraRoutes(routes)
 
 			rts := utils.GetCurrentRouteEntries(utils.ROUTETABLE_ID_MAIN)
@@ -58,6 +58,9 @@ var _ = Describe("routingTable test", func() {
 			Expect(r7exised).To(BeFalse(), "r7 added")
 			r8exised := IsRouteExisted(rts, r8)
 			Expect(r8exised).To(BeFalse(), "r8 added")
+
+			routes = []plugin.RouteInfo{r7, r8}
+			plugin.SetZebraRoutes(routes)
 
 			plugin.GetLinuxRoutes()
 

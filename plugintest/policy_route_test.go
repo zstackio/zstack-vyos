@@ -2,6 +2,7 @@ package plugintest
 
 import (
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"net"
 	"zstack-vyos/plugin"
 
@@ -151,6 +152,7 @@ func checkSystemPolicyRouteIpRule(exist bool, env *VpcIp4Env) {
 func checkSystemPolicyRouteRouteEntry(exist bool, env *VpcIp4Env) {
 	routes := utils.GetCurrentRouteEntries(181)
 
+	log.Debugf("routes: %+v", routes)
 	cidr, err := utils.NetmaskToCIDR(env.PriNicForUT.Netmask)
 	utils.PanicOnError(err)
 	addr1 := fmt.Sprintf("%v/%v", env.PriNicForUT.Ip, cidr)
@@ -168,9 +170,9 @@ func checkSystemPolicyRouteRouteEntry(exist bool, env *VpcIp4Env) {
 
 	expectRoutes := []utils.ZStackRouteEntry{
 		{TableId: 181, DestinationCidr: "0.0.0.0/0", NextHopIp: env.additionalPubNicForUT1.Gateway},
-		{TableId: 181, DestinationCidr: cidr1.String(), NicName: env.PriNicForUT.Name},
-		{TableId: 181, DestinationCidr: cidr2.String(), NicName: env.PriNicForUT1.Name},
-		{TableId: 181, DestinationCidr: cidr3.String(), NicName: env.additionalPubNicForUT1.Name},
+		{TableId: 181, DestinationCidr: cidr1.String(), NextHopIp: env.PriNicForUT.Gateway},
+		{TableId: 181, DestinationCidr: cidr2.String(), NextHopIp: env.PriNicForUT1.Gateway},
+		{TableId: 181, DestinationCidr: cidr3.String(), NextHopIp: env.additionalPubNicForUT1.Gateway},
 	}
 
 	for _, r := range expectRoutes {

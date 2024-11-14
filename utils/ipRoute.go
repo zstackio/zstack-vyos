@@ -236,7 +236,7 @@ func GetCurrentRouteEntriesEuler2203(tableId int) []ZStackRouteEntry {
 	var entries []ZStackRouteEntry
 	var cmd string
 	if tableId == ROUTETABLE_ID_MAIN {
-		cmd = fmt.Sprintf("vtysh -c 'show run' | | grep  'ip route' | grep -v 'table'")
+		cmd = fmt.Sprintf("vtysh -c 'show run' | grep  'ip route' | grep -v 'table'")
 	} else {
 		cmd = fmt.Sprintf("vtysh -c 'show run' | grep 'table %d'", tableId)
 	}
@@ -277,7 +277,7 @@ func GetCurrentRouteEntriesEuler2203(tableId int) []ZStackRouteEntry {
 				dev = items[3]
 			}
 
-			if items[4] != "table" {
+			if len(items) == 5 {
 				metric, _ = strconv.Atoi(items[4])
 			}
 
