@@ -18,7 +18,7 @@ const (
 	TIME_ZONE_FILE  = "/etc/timezone"
 	LOCAL_TIME_FILE = "/etc/localtime"
 
-	EULER_22_03 = "openEuler 22.03 "
+	EULER_22_03 = "openEuler 22.03"
 )
 
 var (
