@@ -518,8 +518,6 @@ func parseListenerPrameter(lb LbInfo) (map[string]interface{}, error) {
 	}
 
 	m["Vips"] = vips
-	log.Debugf("refresh lb vips %+v", vips)
-	log.Debugf("refresh lb httpvertsion %+v", m["HttpVersions"])
 	return m, nil
 }
 
@@ -1363,7 +1361,7 @@ type deleteLbCmd struct {
 }
 
 func makeLbFirewallRuleDescription(lb LbInfo) string {
-	return fmt.Sprintf("%s-%v-%v", utils.IpvsComment, lb.LbUuid, lb.ListenerUuid)
+	return fmt.Sprintf("LB-%v-%v", lb.LbUuid, lb.ListenerUuid)
 }
 
 func makeLbFirewallLocalICMPRuleDescription(lb LbInfo) string {
