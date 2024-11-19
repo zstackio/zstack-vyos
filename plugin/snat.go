@@ -79,7 +79,7 @@ func getNicSNATRuleNumberByConfig(tree *server.VyosConfigTree, snat SnatInfo) (p
 			tAddr := r.Get("translation address")
 			outIf := r.Get("outbound-interface")
 			if sAddr != nil && sAddr.Value() == address &&
-				tAddr != nil && tAddr.Value() == snat.PublicIp &&
+				tAddr != nil && tAddr.Value() == snat.PrivateGatewayIp &&
 				outIf != nil && outIf.Value() == inNic {
 				ruleId2 = r.Name()
 				break
