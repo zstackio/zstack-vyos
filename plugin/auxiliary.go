@@ -266,12 +266,17 @@ func SetZebraRoutes(infos []RouteInfo) {
 	// 1. get old routes by load json
 	if utils.IsEuler2203() {
 		routes := utils.GetCurrentRouteEntriesEuler2203(utils.ROUTETABLE_ID_MAIN)
+		log.Debugf("old routes: %+v", routes)
 		for _, route := range routes {
 			zr := utils.ZebraRoute{
 				Dst:      route.DestinationCidr,
 				NextHop:  route.NextHopIp,
 				OutDev:   route.NicName,
 				Distance: route.Distance,
+			}
+			if zr.OutDev == "Null0" {
+				zr.NextHop = ""
+				zr.OutDev = ""
 			}
 			oldRoutes = append(oldRoutes, &zr)
 		}
@@ -281,7 +286,33 @@ func SetZebraRoutes(infos []RouteInfo) {
 		}
 	}
 
-	// 2. apply new entry by vtysh
+	// 2. delete old entry that is not in new routes
+	for _, old := range oldRoutes {
+		found := false
+		for _, new := range infos {
+			if new.Destination != old.Dst {
+				continue
+			}
+
+			if new.Target != old.NextHop {
+				continue
+			}
+
+			found = true
+			break
+		}
+
+		if !found {
+			if old.NextHop == "" {
+				old.NextHop = "Null0"
+			}
+			if err = old.SetDelete().Apply(); err != nil {
+				log.Debugf("delete old route entry[%+v] error: %+v", old, err)
+			}
+		}
+	}
+
+	// 3. apply new entry by vtysh
 	for _, r := range infos {
 		if r.Target == "" {
 			newEntry = utils.NewZebraRoute().SetDst(r.Destination).SetDistance(r.Distance).SetNextHop(utils.BLACKHOLE_ROUTE)
@@ -297,22 +328,6 @@ func SetZebraRoutes(infos []RouteInfo) {
 		}
 
 		newRoutes = append(newRoutes, newEntry)
-	}
-
-	// 3. delete old entry that is not in new routes
-	for _, old := range oldRoutes {
-		isDelete := true
-		for _, new := range newRoutes {
-			if *old == *new {
-				isDelete = false
-			}
-		}
-
-		if isDelete {
-			if err = old.SetDelete().Apply(); err != nil {
-				log.Debugf("delete old route entry[] error: %+v", old)
-			}
-		}
 	}
 
 	// 4. store new routes
