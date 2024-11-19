@@ -111,6 +111,10 @@ func GetIpvsSchedulerTypeFromString(sch string) IpvsSchedulerType {
 	}
 }
 
+func makeIpvsFirewallRuleDescription(lb LbInfo) string {
+	return fmt.Sprintf("%s-%v-%v", utils.IpvsComment, lb.LbUuid, lb.ListenerUuid)
+}
+
 type IpvsBackendServer struct {
 	/* for ipvsadm, ConnectionType is configure for each backend server */
 	ConnectionType string // "dr", "tunnel", "nat"
@@ -473,7 +477,7 @@ func refreshIpvsFirewallRuleByVyos(services map[string]*IpvsFrontendService) err
 	changed := false
 	for _, fs := range services {
 		changed = true
-		des := makeLbFirewallRuleDescription(fs.LbInfo)
+		des := makeIpvsFirewallRuleDescription(fs.LbInfo)
 		nicname, err := utils.GetNicNameByMac(fs.PublicNic)
 		utils.PanicOnError(err)
 		proto := utils.IPTABLES_PROTO_UDP

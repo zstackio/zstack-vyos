@@ -301,7 +301,6 @@ func IsRuingUT() bool {
 	info2, err2 := os.Stat("/home/zstack/vyos_ut/")
 	if err1 != nil && err2 != nil {
 		// there is no vyos_ut folder, nor home/vyos/vyos_ut/
-		log.Debugf("not running in ut")
 		return false
 	} else if err2 != nil {
 		///home/zstack/vyos_ut/ not existed
@@ -309,7 +308,6 @@ func IsRuingUT() bool {
 			log.Debugf("running in ut")
 			return true
 		} else {
-			log.Debugf("not running in ut")
 			return false
 		}
 	} else if err1 != nil {
@@ -318,7 +316,6 @@ func IsRuingUT() bool {
 			log.Debugf("running in ut")
 			return true
 		} else {
-			log.Debugf("not running in ut")
 			return false
 		}
 	} else {
