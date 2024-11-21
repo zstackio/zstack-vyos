@@ -130,6 +130,8 @@ func SetSnat(cmd *SetSnatCmd) interface{} {
 		table.AddIpTableRules(rules)
 		err := table.Apply()
 		utils.PanicOnError(err)
+
+		utils.AddSnatRuleForPrivateNic(inNic, s.PrivateNicIp, s.SnatNetmask)
 	} else {
 		// make source nat rule as the latest rule
 		// in case there are EIP rules
@@ -252,9 +254,8 @@ func setSnatStateByIptables(Snats []SnatInfo, state bool) {
 			rule.SetAction(utils.IPTABLES_ACTION_SNAT).SetComment(utils.SNATComment)
 			rule.SetDstIp("! 224.0.0.0/8").SetSrcIp(address).SetSrcIpRange(fmt.Sprintf("! %s-%s", s.PrivateGatewayIp, s.PrivateGatewayIp)).
 				SetOutNic(inNic).SetSnatTargetIp(s.PublicIp)
+			rules = append(rules, rule)
 		}
-
-		rules = append(rules, rule)
 	}
 
 	if state == false {
@@ -265,6 +266,13 @@ func setSnatStateByIptables(Snats []SnatInfo, state bool) {
 
 	err := table.Apply()
 	utils.PanicOnError(err)
+
+	if state {
+		for _, s := range Snats {
+			inNic, _ := utils.GetNicNameByMac(s.PrivateNicMac)
+			utils.AddSnatRuleForPrivateNic(inNic, s.PrivateNicIp, s.SnatNetmask)
+		}
+	}
 }
 
 func syncSnatByIptables(Snats []SnatInfo, state bool) {
@@ -298,6 +306,11 @@ func syncSnatByIptables(Snats []SnatInfo, state bool) {
 	table.AddIpTableRules(rules)
 	err := table.Apply()
 	utils.PanicOnError(err)
+
+	for _, s := range Snats {
+		inNic, _ := utils.GetNicNameByMac(s.PrivateNicMac)
+		utils.AddSnatRuleForPrivateNic(inNic, s.PrivateNicIp, s.SnatNetmask)
+	}
 }
 
 func applySnatRules(Snats []SnatInfo, state bool) bool {
