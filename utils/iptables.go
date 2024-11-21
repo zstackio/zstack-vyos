@@ -570,6 +570,10 @@ func InitIptablesFlags() {
 }
 
 func AddSnatRuleForPrivateNic(nicName, ip, netmask string) {
+	if ip == "" || strings.Contains(ip, ":") {
+		/* TODO: add ipv6 support */
+		return
+	}
 	table := NewIpTables(NatTable)
 	address, err := GetNetworkNumber(ip, netmask)
 	PanicOnError(err)
@@ -583,6 +587,11 @@ func AddSnatRuleForPrivateNic(nicName, ip, netmask string) {
 }
 
 func RemoveSnatRuleForPrivateNic(nicName, ip, netmask string) {
+	if ip == "" || strings.Contains(ip, ":") {
+		/* TODO: add ipv6 support */
+		return
+	}
+
 	table := NewIpTables(NatTable)
 	address, err := GetNetworkNumber(ip, netmask)
 	PanicOnError(err)
