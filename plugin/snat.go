@@ -50,7 +50,7 @@ type setNetworkServiceRsp struct {
 
 var SNAT_RULE_NUMBER = 9999
 
-func getNicSNATRuleNumberByConfig(tree *server.VyosConfigTree, snat SnatInfo) (pubNicRuleNo int, priNicRuleNo int) {
+func getNicSNATRuleNumberByConfig(tree *server.VyosConfigTree, snat SnatInfo, checkPubIp bool) (pubNicRuleNo int, priNicRuleNo int) {
 	rules := tree.Get("nat source rule")
 	ruleId1 := ""
 	ruleId2 := ""
@@ -70,6 +70,11 @@ func getNicSNATRuleNumberByConfig(tree *server.VyosConfigTree, snat SnatInfo) (p
 				break
 			}
 		}
+		PrivateSnatIp := snat.PrivateGatewayIp
+		if checkPubIp {
+			PrivateSnatIp = snat.PublicIp
+		}
+
 		for _, r := range rules.Children() {
 			inNic, err := utils.GetNicNameByMac(snat.PrivateNicMac)
 			utils.PanicOnError(err)
@@ -79,7 +84,7 @@ func getNicSNATRuleNumberByConfig(tree *server.VyosConfigTree, snat SnatInfo) (p
 			tAddr := r.Get("translation address")
 			outIf := r.Get("outbound-interface")
 			if sAddr != nil && sAddr.Value() == address &&
-				tAddr != nil && tAddr.Value() == snat.PrivateGatewayIp &&
+				tAddr != nil && tAddr.Value() == PrivateSnatIp &&
 				outIf != nil && outIf.Value() == inNic {
 				ruleId2 = r.Name()
 				break
@@ -204,7 +209,7 @@ func RemoveSnat(cmd *RemoveSnatCmd) interface{} {
 		tree := server.NewParserFromShowConfiguration().Tree
 
 		for _, s := range cmd.NatInfo {
-			pubNicRuleNo, priNicRuleNo := getNicSNATRuleNumberByConfig(tree, s)
+			pubNicRuleNo, priNicRuleNo := getNicSNATRuleNumberByConfig(tree, s, false)
 			if rs := tree.Get(fmt.Sprintf("nat source rule %v", pubNicRuleNo)); rs == nil {
 				log.Debugf(fmt.Sprintf("nat source rule %v not found", pubNicRuleNo))
 			} else {
@@ -327,7 +332,7 @@ func applySnatRules(Snats []SnatInfo, state bool) bool {
 		address, err := utils.GetNetworkNumber(s.PrivateNicIp, s.SnatNetmask)
 		utils.PanicOnError(err)
 
-		pubNicRuleNo, priNicRuleNo := getNicSNATRuleNumberByConfig(tree, s)
+		pubNicRuleNo, priNicRuleNo := getNicSNATRuleNumberByConfig(tree, s, false)
 		if s.State == true {
 			newPubNicRuleNo, newPriNicRuleNo := getNicSNATRuleNumber(nicNumber)
 
@@ -366,7 +371,7 @@ func applySnatRules(Snats []SnatInfo, state bool) bool {
 				update = true
 			}
 		} else {
-			pubNicRuleNo, priNicRuleNo = getNicSNATRuleNumberByConfig(tree, s)
+			pubNicRuleNo, priNicRuleNo = getNicSNATRuleNumberByConfig(tree, s, false)
 			if rs := tree.Getf("nat source rule %v", pubNicRuleNo); rs != nil {
 				update = true
 				rs.Delete()
@@ -376,6 +381,13 @@ func applySnatRules(Snats []SnatInfo, state bool) bool {
 				update = true
 				rs.Delete()
 			}
+		}
+
+		/* TO remove old rule before 5.3.0 */
+		_, priNicRuleNo = getNicSNATRuleNumberByConfig(tree, s, true)
+		if rs := tree.Getf("nat source rule %v", priNicRuleNo); rs != nil {
+			update = true
+			rs.Delete()
 		}
 	}
 
