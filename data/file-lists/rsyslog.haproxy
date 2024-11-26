@@ -1,3 +1,1 @@
-$ModLoad imudp
-$UDPServerRun 514
 local1.info     /var/log/haproxy.log
