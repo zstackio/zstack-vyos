@@ -311,8 +311,13 @@ func createEip(cmd *setEipCmd) interface{} {
 
 	if utils.IsSkipVyosIptables() {
 		eipMap[eip.VipIp] = eip
+		for _, e := range eipMap {
+			if e.IpVersion == IP_VERSION_6 && utils.IsVYOS() {
+				utils.PanicOnError(fmt.Errorf("attach eip ipv6 not support with VyOS, use openEuler upgrade it"))
+			}
+		}
 		if err := syncEipByIptables(); err != nil {
-			panic(err)
+			utils.PanicOnError(err)
 		}
 	} else {
 		tree := server.NewParserFromShowConfiguration().Tree
@@ -348,7 +353,7 @@ func removeEip(cmd *removeEipCmd) interface{} {
 	if utils.IsSkipVyosIptables() {
 		delete(eipMap, eip.VipIp)
 		if err := syncEipByIptables(); err != nil {
-			panic(err)
+			utils.PanicOnError(err)
 		}
 	} else {
 		err := utils.Retry(func() error {
@@ -378,7 +383,7 @@ func syncEipByIptables() error {
 			return err
 		}
 	}
-	if eipIpv6Ipset == nil {
+	if eipIpv6Ipset == nil && !utils.IsVYOS() {
 		eipIpv6Ipset = utils.NewIPSetByFamily(EIP_IPV6_IPSET_NAME, utils.IPSET_TYPE_HASH_IP, utils.IPSET_FAMILY_INET6)
 		if err := eipIpv6Ipset.Create(); err != nil {
 			log.Debugf("create eip ipv6 ipset failed %s", err)
@@ -392,8 +397,10 @@ func syncEipByIptables() error {
 	for _, member := range eipIpset.Member {
 		ipsetMemberMap[member] = member
 	}
-	for _, member := range eipIpv6Ipset.Member {
-		ipsetMemberIpv6Map[member] = member
+	if eipIpv6Ipset != nil {
+		for _, member := range eipIpv6Ipset.Member {
+			ipsetMemberIpv6Map[member] = member
+		}
 	}
 
 	var toAddMemeber []string
@@ -404,27 +411,25 @@ func syncEipByIptables() error {
 		if eip.IpVersion == IP_VERSION_6 {
 			if _, ok := ipsetMemberIpv6Map[eip.GuestIp]; !ok {
 				toAddIpv6Memeber = append(toAddIpv6Memeber, eip.GuestIp)
-				log.Debugf("1.add member %s to toAddIpv6Memeber, eip.IpVersion is %s", eip.GuestIp, eip.IpVersion)
 			}
 		} else {
 			if _, ok := ipsetMemberMap[eip.GuestIp]; !ok {
 				toAddMemeber = append(toAddMemeber, eip.GuestIp)
-				log.Debugf("1.add member %s to toAddMemeber, eip.IpVersion is %s", eip.GuestIp, eip.IpVersion)
 			}
 		}
 		guestIpMap[eip.GuestIp] = eip.GuestIp
-		log.Debugf("0.add member %s guestIpMap", eip.GuestIp)
+		log.Debugf("add member %s guestIpMap", eip.GuestIp)
 	}
 	for _, member := range eipIpset.Member {
 		if _, ok := guestIpMap[member]; !ok {
 			toDelMemeber = append(toDelMemeber, member)
-			log.Debugf("2.add member %s to toDelMemeber", member)
 		}
 	}
-	for _, member := range eipIpv6Ipset.Member {
-		if _, ok := guestIpMap[member]; !ok {
-			toDelIpv6Memeber = append(toDelIpv6Memeber, member)
-			log.Debugf("3.add member %s to toDelIpv6Memeber", member)
+	if eipIpv6Ipset != nil {
+		for _, member := range eipIpv6Ipset.Member {
+			if _, ok := guestIpMap[member]; !ok {
+				toDelIpv6Memeber = append(toDelIpv6Memeber, member)
+			}
 		}
 	}
 
