@@ -46,8 +46,9 @@ const (
 
 	LISTENER_MAP_SIZE = 128
 	//reserve some sockets for haproxy if specify the parameter "ulimit-n"
-	RESERVE_SOCK_COUNT = 100
-	MAX_SOCK_COUNT     = 20971520
+	RESERVE_SOCK_COUNT       = 200
+	RESERVE_SOCK_COUNT_EULER = 5000
+	MAX_SOCK_COUNT           = 20971520
 
 	LB_LOCAL_ICMP_FIREWALL_RULE_NUMBER = 2000
 	HAPROXY_VERSION_1_6_9              = "1.6.9"
@@ -525,6 +526,9 @@ func getListenerMaxCocurrenceSocket(maxConnect string) string {
 	maxSocket, err := strconv.Atoi(maxConnect)
 	utils.PanicOnError(err)
 	maxSocket = maxSocket*2 + RESERVE_SOCK_COUNT
+	if utils.IsEuler2203() {
+		maxSocket = maxSocket*2 + RESERVE_SOCK_COUNT_EULER
+	}
 
 	if maxSocket > MAX_SOCK_COUNT {
 		log.Errorf("invalid prameter maxconn %v,please check it", maxConnect)
